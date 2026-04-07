@@ -5,6 +5,8 @@ node_modules
 .env
 .testresults
 
-SECURITY-QUICKREF.md
-SECURITY-RESULTS.md
-SECURITY-TESTS-SUMMARY.txt
+*-QUICKREF.md
+*-RESULTS.md
+*-SUMMARY.md
+*-ANALYSIS.md
+*-TESTS-SUMMARY.txt
