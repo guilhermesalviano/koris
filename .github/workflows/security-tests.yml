@@ -34,9 +34,15 @@ jobs:
 
       - name: Run security tests
         run: pnpm test tests/security --reporter=verbose
+        env:
+          NODE_ENV: test
+          VITEST: true
 
       - name: Generate coverage report
         run: pnpm test:coverage -- tests/security
+        env:
+          NODE_ENV: test
+          VITEST: true
         continue-on-error: true
 
       - name: Upload coverage to Codecov

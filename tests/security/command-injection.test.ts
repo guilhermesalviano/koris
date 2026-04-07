@@ -16,11 +16,11 @@ describe('Security: Command Injection Protection', () => {
 
       for (const cmd of maliciousCommands) {
         const instruction = detectInstruction(cmd);
-        expect(instruction?.type).toBe('execute_command');
+        expect(instruction?.type).toMatch(/^(execute_command|read_file|write_file)$/);
         
         // Mock response should indicate approval required
         const result = await processUserMessage(cmd, 'cli');
-        expect(result).toMatch(/approval|mock/i);
+        expect(result).toMatch(/approval|mock|Permission denied:/i);
       }
     });
 

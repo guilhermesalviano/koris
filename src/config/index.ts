@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import path from 'path';
 
+// Check if running in test environment
+const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+
 export const config = {
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
   ENVIRONMENT: process.env.ENVIRONMENT || 'development',
@@ -14,7 +17,9 @@ export const config = {
   },
 } as const;
 
-if (!config.TELEGRAM.BOT_TOKEN) {
+// Only validate token in production/development, not in tests
+if (!isTest && !config.TELEGRAM.BOT_TOKEN) {
   console.error('ERROR: TELEGRAM_BOT_TOKEN is required');
+  console.error('Please set TELEGRAM_BOT_TOKEN in your .env file or environment variables');
   process.exit(1);
 }

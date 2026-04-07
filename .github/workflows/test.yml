@@ -31,6 +31,9 @@ jobs:
       
       - name: Run tests
         run: pnpm test
+        env:
+          NODE_ENV: test
+          VITEST: true
       
       - name: Upload test results
         if: always()
