@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "dist/src/index.js",
+  "packageManager": "pnpm@10.18.3",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:cli": "tsx watch src/index.ts --cli",

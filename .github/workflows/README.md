@@ -43,8 +43,7 @@ act push
 ## Matrix Testing
 
 Tests run on multiple Node.js versions:
-- Node.js 18.x (LTS)
-- Node.js 20.x (Latest LTS)
+- Node.js 22.x (LTS)
 
 This ensures compatibility across different Node versions.
 
