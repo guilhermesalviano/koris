@@ -4,6 +4,9 @@
   "description": "",
   "main": "dist/src/index.js",
   "packageManager": "pnpm@10.18.3",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:cli": "tsx watch src/index.ts --cli",

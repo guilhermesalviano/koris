@@ -1,6 +1,6 @@
 # opencrawdio 🤖
 
-[![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D24.0.0-brightgreen.svg)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-10.x-orange.svg)](https://pnpm.io/)
 [![Tests](https://github.com/guilhermesalviano/opencrawdio/workflows/Tests/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions)
 [![Lint](https://github.com/guilhermesalviano/opencrawdio/workflows/Lint/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions)
@@ -91,7 +91,7 @@ See [TESTS.md](TESTS.md) for detailed testing guide.
 ### CI/CD
 
 GitHub Actions automatically run tests on every commit:
-- ✅ Unit tests on Node.js 20.x
+- ✅ Unit tests on Node.js 24.x
 - ✅ TypeScript type checking
 - ✅ Build verification
 

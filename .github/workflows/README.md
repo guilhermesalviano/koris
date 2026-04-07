@@ -67,7 +67,7 @@ Edit the matrix in `test.yml`:
 ```yaml
 strategy:
   matrix:
-    node-version: [20.x, 22.x]
+    node-version: [24.x]
 ```
 
 ### Add code coverage reporting
