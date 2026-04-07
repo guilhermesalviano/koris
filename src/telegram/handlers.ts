@@ -1,8 +1,8 @@
-import TelegramBot from 'node-telegram-bot-api';
+import { TelegramMessage, InlineKeyboardMarkup } from './client';
 import { getBot } from './bot';
 import { processUserMessage } from '../agent/processor';
 
-export async function handleMessage(msg: TelegramBot.Message): Promise<void> {
+export async function handleMessage(msg: TelegramMessage): Promise<void> {
   const chatId = msg.chat.id;
   const text = msg.text;
 
@@ -20,7 +20,7 @@ export async function handleMessage(msg: TelegramBot.Message): Promise<void> {
   }
 }
 
-async function handleCommand(msg: TelegramBot.Message): Promise<void> {
+async function handleCommand(msg: TelegramMessage): Promise<void> {
   const bot = getBot();
   const chatId = msg.chat.id;
   const text = msg.text || '';
@@ -78,7 +78,7 @@ export async function sendWithApproval(
   callbackData: string
 ): Promise<void> {
   const bot = getBot();
-  const keyboard = {
+  const keyboard: InlineKeyboardMarkup = {
     inline_keyboard: [
       [
         { text: '✅ Approve', callback_data: `approve:${callbackData}` },

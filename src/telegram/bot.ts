@@ -1,4 +1,4 @@
-import TelegramBot from 'node-telegram-bot-api';
+import { TelegramBot } from './client';
 import { config } from '../config';
 import { handleMessage } from './handlers';
 
