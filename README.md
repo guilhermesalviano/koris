@@ -1,9 +1,9 @@
 # opencrawdio 🤖
 
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org/)
+[![pnpm](https://img.shields.io/badge/pnpm-10.x-orange.svg)](https://pnpm.io/)
 [![Tests](https://github.com/guilhermesalviano/opencrawdio/workflows/Tests/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions)
 [![Lint](https://github.com/guilhermesalviano/opencrawdio/workflows/Lint/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
-[![pnpm](https://img.shields.io/badge/pnpm-9.x-orange.svg)](https://pnpm.io/)
 
 An AI-powered coding agent similar to Cline/Claude Code that uses Ollama for local AI inference and Telegram as the user interface.
 
@@ -96,14 +96,6 @@ GitHub Actions automatically run tests on every commit:
 - ✅ Build verification
 
 See [.github/workflows/README.md](.github/workflows/README.md) for workflow details.
-
-
-## Status Badges
-
-```markdown
-[![Tests](https://github.com/guilhermesalviano/opencrawdio/workflows/Tests/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions)
-[![Lint](https://github.com/guilhermesalviano/opencrawdio/workflows/Lint/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions)
-```
 
 ## Configuration
 
