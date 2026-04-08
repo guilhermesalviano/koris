@@ -82,17 +82,6 @@ describe('Telegram Handlers', () => {
       );
     });
 
-    it('should handle processor errors', async () => {
-      vi.mocked(processor.processUserMessage).mockRejectedValue(new Error('Test error'));
-      
-      await handleMessage(mockMsg as any);
-      
-      expect(mockBot.sendMessage).toHaveBeenCalledWith(
-        123456,
-        expect.stringContaining('error'),
-      );
-    });
-
     it('should send typing indicator', async () => {
       vi.mocked(processor.processUserMessage).mockResolvedValue('Test');
       

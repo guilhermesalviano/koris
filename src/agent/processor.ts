@@ -2,6 +2,7 @@
 import { handleCommand as handleCentralizedCommand, isCommand } from './commands';
 import { listDirectory } from '../sub-instructions/list-directory';
 import { readFile } from '../sub-instructions/read-file';
+import { search } from '../sub-instructions/search';
 import { detectInstruction } from '../sub-instructions/detect-instruction';
 import { Instruction } from '../types';
 
@@ -54,7 +55,7 @@ async function handleInstruction(instruction: Instruction, originalMessage: stri
       return mockExecuteCommand(instruction.params);
 
     case 'search':
-      return mockSearch(instruction.params);
+      return search(instruction.params);
 
     default:
       return `Unknown instruction type`;
@@ -86,19 +87,4 @@ Expected output: [mock output]
 _This is a mock response. Real command execution will be implemented with proper sandboxing._`;
 }
 
-function mockSearch(query: string): string {
-  return `🔍 *Searching for: "${query}"*
 
-Found 3 matches:
-
-1. **src/config.ts:12**
-   \`const config = { ${query}: value }\`
-
-2. **src/telegram/bot.ts:25**
-   \`// Relevant code containing ${query}\`
-
-3. **README.md:34**
-   \`Documentation about ${query}\`
-
-_This is a mock response. Real search will use grep/ripgrep._`;
-}

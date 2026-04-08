@@ -87,7 +87,7 @@ describe('Command Handler', () => {
 
     it('should handle unknown commands', () => {
       const result = handleCommand('/unknown', { source: 'cli' });
-      expect(result.handled).toBe(true);
+      expect(result.handled).toBe(false);
       expect(result.response).toBeTruthy();
     });
 

@@ -8,7 +8,7 @@ function detectInstruction(message: string): Instruction | null {
 
   // Read file patterns
   if (lower.includes('read') || lower.includes('show me') || lower.includes('cat')) {
-    const fileMatch = message.match(/(?:read|show|cat)\s+["']?([^\s"']+)["']?/i);
+    const fileMatch = message.match(/(?:read|show(?:\s+me)?|cat)\s+["']?([^\s"']+)["']?/i);
     if (fileMatch?.[1]) {
       return { type: 'read_file', params: fileMatch[1] };
     }
@@ -16,7 +16,7 @@ function detectInstruction(message: string): Instruction | null {
 
   // Write file patterns
   if (lower.includes('write') || lower.includes('create file') || lower.includes('save')) {
-    const fileMatch = message.match(/(?:write|create|save).*?["']?([^\s"']+)["']?/i);
+    const fileMatch = message.match(/(?:write|create(?:\s+file)?|save)\s+["']?([^\s"']+)["']?/i);
     if (fileMatch?.[1]) {
       return { type: 'write_file', params: fileMatch[1] };
     }
