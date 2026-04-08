@@ -19,7 +19,7 @@ describe('Security: Command Injection Protection', () => {
         expect(instruction?.type).toMatch(/^(execute_command|read_file|write_file)$/);
         
         // Mock response should indicate approval required
-        const result = await processUserMessage(cmd, 'cli');
+        const result = await processUserMessage(cmd, 'tui');
         expect(result).toMatch(/approval|mock|Permission denied:/i);
       }
     });
@@ -32,7 +32,7 @@ describe('Security: Command Injection Protection', () => {
       ];
 
       for (const attack of attacks) {
-        const result = await processUserMessage(attack, 'cli');
+        const result = await processUserMessage(attack, 'tui');
         // Should be caught as command execution requiring approval
         expect(result).toMatch(/approval|mock/i);
       }
@@ -80,7 +80,7 @@ describe('Security: Command Injection Protection', () => {
       ];
 
       for (const attack of attacks) {
-        const result = await processUserMessage(attack, 'cli');
+        const result = await processUserMessage(attack, 'tui');
         // All command execution should require approval
         expect(result).toMatch(/approval|mock/i);
       }

@@ -12,7 +12,7 @@ describe('Security: Authorization and Access Control', () => {
       ];
 
       for (const op of destructiveOps) {
-        const result = await processUserMessage(op, 'cli');
+        const result = await processUserMessage(op, 'tui');
         // Should indicate approval is required
         expect(result).toMatch(/approval|mock/i);
       }
@@ -26,7 +26,7 @@ describe('Security: Authorization and Access Control', () => {
       ];
 
       for (const cmd of systemCommands) {
-        const result = await processUserMessage(cmd, 'cli');
+        const result = await processUserMessage(cmd, 'tui');
         expect(result).toMatch(/approval|mock/i);
       }
     });
@@ -39,7 +39,7 @@ describe('Security: Authorization and Access Control', () => {
       ];
 
       for (const cmd of networkCommands) {
-        const result = await processUserMessage(cmd, 'cli');
+        const result = await processUserMessage(cmd, 'tui');
         expect(result).toMatch(/approval|mock/i);
       }
     });
@@ -49,7 +49,7 @@ describe('Security: Authorization and Access Control', () => {
     it('should respect file system permissions', () => {
       // Test reading a file that doesn't have read permissions
       // This is environment-specific, but should fail gracefully
-      const result = processUserMessage('read /root/.bashrc', 'cli');
+      const result = processUserMessage('read /root/.bashrc', 'tui');
       expect(result).toBeDefined();
     });
 
@@ -61,7 +61,7 @@ describe('Security: Authorization and Access Control', () => {
       ];
 
       for (const op of systemDirs) {
-        const result = await processUserMessage(op, 'cli');
+        const result = await processUserMessage(op, 'tui');
         // Should either require approval or deny
         expect(result).toMatch(/approval|mock|permission/i);
       }
@@ -77,7 +77,7 @@ describe('Security: Authorization and Access Control', () => {
       ];
 
       for (const file of otherUserFiles) {
-        const result = await processUserMessage(file, 'cli');
+        const result = await processUserMessage(file, 'tui');
         expect(result).toMatch(/not found|permission denied|error/i);
       }
     });
@@ -114,7 +114,7 @@ describe('Security: Authorization and Access Control', () => {
       ];
 
       for (const cmd of privEscalation) {
-        const result = await processUserMessage(cmd, 'cli');
+        const result = await processUserMessage(cmd, 'tui');
         // Should require approval at minimum
         expect(result).toMatch(/approval|mock/i);
       }
@@ -122,19 +122,19 @@ describe('Security: Authorization and Access Control', () => {
   });
 
   describe('Session isolation', () => {
-    it('should not leak data between CLI and Telegram sessions', async () => {
-      // CLI session
-      const cliResult1 = await processUserMessage('/status', 'cli');
+    it('should not leak data between TUI and Telegram sessions', async () => {
+      // TUI session
+      const tuiResult1 = await processUserMessage('/status', 'tui');
       
       // Telegram session
       const telegramResult1 = await processUserMessage('/status', 'telegram');
       
       // Results should be appropriate for each source
-      expect(cliResult1).toBeDefined();
+      expect(tuiResult1).toBeDefined();
       expect(telegramResult1).toBeDefined();
       
       // Telegram should use Markdown formatting
-      // CLI should use ANSI colors (in actual implementation)
+      // TUI should use ANSI colors (in actual implementation)
     });
   });
 
@@ -147,7 +147,7 @@ describe('Security: Authorization and Access Control', () => {
       ];
 
       for (const cmd of blacklistedCommands) {
-        const result = await processUserMessage(cmd, 'cli');
+        const result = await processUserMessage(cmd, 'tui');
         // Should either require approval or block entirely
         expect(result).toBeDefined();
       }

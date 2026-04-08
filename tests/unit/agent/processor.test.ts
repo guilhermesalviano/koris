@@ -4,12 +4,12 @@ import { processUserMessage } from '../../../src/agent/processor';
 describe('Message Processor', () => {
   describe('Command Handling', () => {
     it('should handle /start command', async () => {
-      const result = await processUserMessage('/start', 'cli');
+      const result = await processUserMessage('/start', 'tui');
       expect(result).toContain('Welcome');
     });
 
     it('should handle /help command', async () => {
-      const result = await processUserMessage('/help', 'cli');
+      const result = await processUserMessage('/help', 'tui');
       expect(result).toContain('Available Commands:');
     });
 
@@ -18,54 +18,54 @@ describe('Message Processor', () => {
       expect(result).toContain('Status');
     });
 
-    it('should return empty response for /exit in CLI', async () => {
-      const result = await processUserMessage('/exit', 'cli');
+    it('should return empty response for /exit in TUI', async () => {
+      const result = await processUserMessage('/exit', 'tui');
       expect(result).toContain('Goodbye!');
     });
 
-    it('should format commands differently for Telegram vs CLI', async () => {
-      const cliResult = await processUserMessage('/help', 'cli');
+    it('should format commands differently for Telegram vs TUI', async () => {
+      const tuiResult = await processUserMessage('/help', 'tui');
       const telegramResult = await processUserMessage('/help', 'telegram');
       
-      // CLI uses ANSI colors, Telegram uses Markdown
-      expect(cliResult).not.toEqual(telegramResult);
+      // TUI uses ANSI colors, Telegram uses Markdown
+      expect(tuiResult).not.toEqual(telegramResult);
       expect(telegramResult).toContain('*');
     });
   });
 
   describe('Instruction Detection', () => {
     it('should detect read_file instruction', async () => {
-      const result = await processUserMessage('read package.json', 'cli');
+      const result = await processUserMessage('read package.json', 'tui');
       expect(result).toContain('package.json');
     });
 
     it('should detect list_dir instruction', async () => {
-      const result = await processUserMessage('list src/', 'cli');
+      const result = await processUserMessage('list src/', 'tui');
       expect(result).toContain('Directory');
     });
 
     it('should detect list_dir for current directory', async () => {
-      const result = await processUserMessage('list .', 'cli');
+      const result = await processUserMessage('list .', 'tui');
       expect(result).toContain('Directory');
     });
 
     it('should detect write_file instruction', async () => {
-      const result = await processUserMessage('write test.txt', 'cli');
+      const result = await processUserMessage('write test.txt', 'tui');
       expect(result).toContain('create/update file');
     });
 
     it('should detect execute_command instruction', async () => {
-      const result = await processUserMessage('run npm test', 'cli');
+      const result = await processUserMessage('run npm test', 'tui');
       expect(result).toContain('execute command');
     });
 
     it('should detect search instruction', async () => {
-      const result = await processUserMessage('search for config', 'cli');
+      const result = await processUserMessage('search for config', 'tui');
       expect(result).toContain('Searching');
     });
 
     it('should handle unknown instructions', async () => {
-      const result = await processUserMessage('Hello world', 'cli');
+      const result = await processUserMessage('Hello world', 'tui');
       expect(result).toContain('received your message');
     });
   });
@@ -93,13 +93,13 @@ describe('Message Processor', () => {
 
   describe('Mock Responses', () => {
     it('should return mock response for write_file', async () => {
-      const result = await processUserMessage('write newfile.ts', 'cli');
+      const result = await processUserMessage('write newfile.ts', 'tui');
       expect(result).toContain('mock response');
       expect(result).toContain('approval');
     });
 
     it('should return mock response for execute_command', async () => {
-      const result = await processUserMessage('run npm install', 'cli');
+      const result = await processUserMessage('run npm install', 'tui');
       expect(result).toContain('mock response');
       expect(result).toContain('approval');
     });
@@ -112,10 +112,10 @@ describe('Message Processor', () => {
       expect(result).toContain('*'); // Telegram uses Markdown
     });
 
-    it('should accept cli as source', async () => {
-      const result = await processUserMessage('/status', 'cli');
+    it('should accept tui as source', async () => {
+      const result = await processUserMessage('/status', 'tui');
       expect(result).toBeTruthy();
-      expect(result).not.toContain('*'); // CLI doesn't use Markdown
+      expect(result).not.toContain('*'); // TUI doesn't use Markdown
     });
   });
 });

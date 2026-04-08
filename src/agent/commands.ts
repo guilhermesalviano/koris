@@ -1,7 +1,7 @@
 import readline from 'readline';
 
 export interface CommandContext {
-  source: 'telegram' | 'cli';
+  source: 'telegram' | 'tui';
   session?: {
     messageCount: number;
     startTime: Date;
@@ -15,9 +15,6 @@ export interface CommandResult {
   handled: boolean;
 }
 
-/**
- * Centralized command handler for both CLI and Telegram
- */
 export function handleCommand(command: string, context: CommandContext): CommandResult {
   const cmd = command.toLowerCase().split(' ')[0];
 
@@ -110,7 +107,7 @@ Send me any message to interact!`
   /stats    - Show session statistics
   /status   - Check bot status
   /reset    - Reset session statistics
-  /exit     - Exit the CLI
+  /exit     - Exit the TUI
 
 Instructions I understand:
 
@@ -216,8 +213,8 @@ function handleExit(context: CommandContext): CommandResult {
   };
 }
 
-function formatMessage(message: string, source: 'telegram' | 'cli'): string {
-  // Telegram uses Markdown, CLI uses plain text
+function formatMessage(message: string, source: 'telegram' | 'tui'): string {
+  // Telegram uses Markdown, TUI uses plain text
   if (source === 'telegram') {
     return message;
   }
@@ -234,10 +231,10 @@ export function isCommand(message: string): boolean {
 /**
  * Get list of available commands
  */
-export function getAvailableCommands(source: 'telegram' | 'cli'): string[] {
+export function getAvailableCommands(source: 'telegram' | 'tui'): string[] {
   const commonCommands = ['/start', '/help', '/clear'];
   
-  if (source === 'cli') {
+  if (source === 'tui') {
     return [...commonCommands, '/stats', '/status', '/reset', '/exit', '/quit', '/bye'];
   }
   

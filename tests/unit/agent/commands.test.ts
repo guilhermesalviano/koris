@@ -22,39 +22,39 @@ describe('Command Handler', () => {
 
   describe('handleCommand', () => {
     it('should handle /start command', () => {
-      const result = handleCommand('/start', { source: 'cli' });
+      const result = handleCommand('/start', { source: 'tui' });
       expect(result.handled).toBe(true);
       expect(result.response).toContain('Welcome');
       expect(result.action).toBe('none');
     });
 
     it('should handle /help command', () => {
-      const result = handleCommand('/help', { source: 'cli' });
+      const result = handleCommand('/help', { source: 'tui' });
       expect(result.handled).toBe(true);
       expect(result.response).toContain('Commands'); // Changed from lowercase
     });
 
     it('should handle /status command', () => {
-      const result = handleCommand('/status', { source: 'cli' });
+      const result = handleCommand('/status', { source: 'tui' });
       expect(result.handled).toBe(true);
       // Response depends on session, so just check it exists
       expect(result.response).toBeTruthy();
     });
 
     it('should handle /clear command', () => {
-      const result = handleCommand('/clear', { source: 'cli' });
+      const result = handleCommand('/clear', { source: 'tui' });
       expect(result.handled).toBe(true);
       expect(result.action).toBe('clear');
     });
 
     it('should handle /reset command', () => {
-      const result = handleCommand('/reset', { source: 'cli' });
+      const result = handleCommand('/reset', { source: 'tui' });
       expect(result.handled).toBe(true);
       expect(result.action).toBe('reset');
     });
 
-    it('should handle /exit command for CLI', () => {
-      const result = handleCommand('/exit', { source: 'cli' });
+    it('should handle /exit command for TUI', () => {
+      const result = handleCommand('/exit', { source: 'tui' });
       expect(result.handled).toBe(true);
       expect(result.action).toBe('exit');
     });
@@ -66,9 +66,9 @@ describe('Command Handler', () => {
       expect(result.action).toBe('none');
     });
 
-    it('should handle /stats command for CLI', () => {
+    it('should handle /stats command for TUI', () => {
       const context = {
-        source: 'cli' as const,
+        source: 'tui' as const,
         session: {
           messageCount: 5,
           startTime: new Date(Date.now() - 60000), // 1 minute ago
@@ -86,23 +86,23 @@ describe('Command Handler', () => {
     });
 
     it('should handle unknown commands', () => {
-      const result = handleCommand('/unknown', { source: 'cli' });
+      const result = handleCommand('/unknown', { source: 'tui' });
       expect(result.handled).toBe(false);
       expect(result.response).toBeTruthy();
     });
 
-    it('should format responses differently for CLI vs Telegram', () => {
-      const cliResult = handleCommand('/help', { source: 'cli' });
+    it('should format responses differently for TUI vs Telegram', () => {
+      const tuiResult = handleCommand('/help', { source: 'tui' });
       const telegramResult = handleCommand('/help', { source: 'telegram' });
       
-      expect(cliResult.response).not.toEqual(telegramResult.response);
+      expect(tuiResult.response).not.toEqual(telegramResult.response);
       expect(telegramResult.response).toContain('*'); // Telegram uses Markdown
     });
   });
 
   describe('getAvailableCommands', () => {
-    it('should return array of commands for CLI', () => {
-      const commands = getAvailableCommands('cli');
+    it('should return array of commands for TUI', () => {
+      const commands = getAvailableCommands('tui');
       expect(Array.isArray(commands)).toBe(true);
       expect(commands.length).toBeGreaterThan(0);
     });
@@ -114,12 +114,12 @@ describe('Command Handler', () => {
     });
 
     it('should return common commands for both interfaces', () => {
-      const cliCommands = getAvailableCommands('cli');
+      const tuiCommands = getAvailableCommands('tui');
       const telegramCommands = getAvailableCommands('telegram');
       
       // Common commands
-      expect(cliCommands).toContain('/start');
-      expect(cliCommands).toContain('/help');
+      expect(tuiCommands).toContain('/start');
+      expect(tuiCommands).toContain('/help');
       
       expect(telegramCommands).toContain('/start');
       expect(telegramCommands).toContain('/help');
@@ -128,7 +128,7 @@ describe('Command Handler', () => {
 
   describe('CommandResult Structure', () => {
     it('should return proper CommandResult structure', () => {
-      const result = handleCommand('/start', { source: 'cli' });
+      const result = handleCommand('/start', { source: 'tui' });
       expect(result).toHaveProperty('response');
       expect(result).toHaveProperty('action');
       expect(result).toHaveProperty('handled');
@@ -136,10 +136,10 @@ describe('Command Handler', () => {
     });
 
     it('should have correct action types', () => {
-      const exitResult = handleCommand('/exit', { source: 'cli' });
-      const clearResult = handleCommand('/clear', { source: 'cli' });
-      const resetResult = handleCommand('/reset', { source: 'cli' });
-      const helpResult = handleCommand('/help', { source: 'cli' });
+      const exitResult = handleCommand('/exit', { source: 'tui' });
+      const clearResult = handleCommand('/clear', { source: 'tui' });
+      const resetResult = handleCommand('/reset', { source: 'tui' });
+      const helpResult = handleCommand('/help', { source: 'tui' });
       
       expect(exitResult.action).toBe('exit');
       expect(clearResult.action).toBe('clear');

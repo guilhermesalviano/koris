@@ -1,6 +1,6 @@
 # opencrawdio Tests
 
-Comprehensive test suite for CLI and Telegram interfaces.
+Comprehensive test suite for TUI and Telegram interfaces.
 
 ## Running Tests
 

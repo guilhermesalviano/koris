@@ -114,7 +114,7 @@ describe('Security: Credential and Secret Exposure', () => {
       ];
 
       for (const cmd of sensitiveCommands) {
-        const result = await processUserMessage(cmd, 'cli');
+        const result = await processUserMessage(cmd, 'tui');
         // Command should be processed but sensitive data should not be logged
         expect(result).toBeDefined();
       }
@@ -136,7 +136,7 @@ describe('Security: Credential and Secret Exposure', () => {
 
   describe('Database credential protection', () => {
     it('should not expose database URLs in error messages', async () => {
-      const result = await processUserMessage('read database.config.js', 'cli');
+      const result = await processUserMessage('read database.config.js', 'tui');
       // Should not contain connection strings
       expect(result).not.toMatch(/postgresql:\/\//);
       expect(result).not.toMatch(/mongodb:\/\//);

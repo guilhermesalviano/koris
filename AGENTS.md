@@ -4,13 +4,13 @@
 
 ## Architecture Overview
 
-opencrawdio is a multi-interface AI agent system that processes user messages and executes coding tasks. The system supports both CLI and Telegram Bot interfaces with a unified backend.
+opencrawdio is a multi-interface AI agent system that processes user messages and executes coding tasks. The system supports both TUI and Telegram Bot interfaces with a unified backend.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    User Interfaces                      │
 ├──────────────────────┬──────────────────────────────────┤
-│   CLI Interface      │     Telegram Bot                 │
+│   TUI Interface      │     Telegram Bot                 │
 │   (interface.ts)     │     (bot.ts)                     │
 └──────────┬───────────┴────────────┬─────────────────────┘
            │                        │
@@ -37,13 +37,13 @@ opencrawdio is a multi-interface AI agent system that processes user messages an
 **Purpose**: Central hub for processing all user messages regardless of interface.
 
 **Functions**:
-- `processUserMessage(message: string, source: 'telegram' | 'cli'): Promise<string>`
+- `processUserMessage(message: string, source: 'telegram' | 'tui'): Promise<string>`
   - Main entry point for all message processing
   - Routes to appropriate handler (commands vs instructions)
   - Returns formatted response string
 
 **Message Flow**:
-1. Receives message from interface (CLI or Telegram)
+1. Receives message from interface (TUI or Telegram)
 2. Checks if message is a command (starts with `/`)
 3. If command: delegates to centralized command handler
 4. If not command: detects instruction type and handles accordingly
@@ -59,28 +59,28 @@ opencrawdio is a multi-interface AI agent system that processes user messages an
 
 ### 2. Command Handler (`src/agent/commands.ts`)
 
-**Purpose**: Centralized command handling for both CLI and Telegram interfaces.
+**Purpose**: Centralized command handling for both TUI and Telegram interfaces.
 
 **Key Functions**:
 - `handleCommand(command: string, context: CommandContext): CommandResult`
 - `isCommand(message: string): boolean`
-- `getAvailableCommands(source: 'telegram' | 'cli'): string[]`
+- `getAvailableCommands(source: 'telegram' | 'tui'): string[]`
 
 **Available Commands**:
-| Command | CLI | Telegram | Description |
+| Command | tui | Telegram | Description |
 |---------|-----|----------|-------------|
 | `/start` | ✅ | ✅ | Welcome message |
 | `/help` | ✅ | ✅ | Show available commands |
 | `/status` | ✅ | ✅ | Show bot/session status |
-| `/stats` | ✅ | ❌ | Show CLI session statistics |
+| `/stats` | ✅ | ❌ | Show tui session statistics |
 | `/clear` | ✅ | ✅ | Clear screen/history |
 | `/reset` | ✅ | ✅ | Reset session |
-| `/exit` | ✅ | ❌ | Exit CLI (not applicable for Telegram) |
+| `/exit` | ✅ | ❌ | Exit tui (not applicable for Telegram) |
 
 **CommandContext Interface**:
 ```typescript
 interface CommandContext {
-  source: 'telegram' | 'cli';
+  source: 'telegram' | 'tui';
   session?: {
     messageCount: number;
     startTime: Date;
@@ -98,7 +98,7 @@ interface CommandResult {
 }
 ```
 
-### 3. CLI Interface (`src/cli/interface.ts`)
+### 3. tui Interface (`src/tui/interface.ts`)
 
 **Purpose**: Terminal-based interface with rich formatting and session management.
 
@@ -203,7 +203,7 @@ case '/mycommand':
 function handleMyCommand(context: CommandContext): CommandResult {
   const message = context.source === 'telegram'
     ? `*Telegram formatted response*`
-    : `CLI formatted response`;
+    : `tui formatted response`;
   
   return {
     response: message,
@@ -249,7 +249,7 @@ function mockMyNewType(params: string): string {
 
 When integrating Ollama, replace mock implementations with real tool calls:
 
-1. Create Ollama client wrapper in `src/agent/ollama.ts`
+1. Create Ollama tuient wrapper in `src/agent/ollama.ts`
 2. Define tool schemas for Ollama function calling
 3. Replace `mockReadFile`, `mockWriteFile`, etc. with real implementations
 4. Add conversation history management
@@ -288,10 +288,10 @@ Logger is configured in `src/infrastructure/logger.ts`:
 
 ## Usage Examples
 
-### CLI Usage
+### tui Usage
 ```bash
-# Start CLI
-npm run dev:cli
+# Start tui
+npm run dev:tui
 
 # Example session
 > /help
@@ -326,11 +326,11 @@ Bot: ✅ Bot Status [...]
 # Build project
 npm run build
 
-# Test CLI
-npm run dev:cli
+# Test tui
+npm run dev:tui
 
 # Test with production build
-npm run start:cli
+npm run start:tui
 ```
 
 ### Future: Automated Testing
@@ -348,7 +348,7 @@ npm run start:cli
 
 ## Performance Notes
 
-- CLI interface uses async processing with visual feedback
+- tui interface uses async processing with visual feedback
 - Telegram bot should use webhook mode for production (currently polling)
 - Consider implementing message queuing for high-volume scenarios
 - Response caching could improve repeated queries
@@ -356,7 +356,7 @@ npm run start:cli
 ## Dependencies
 
 ### Core
-- `readline` - CLI interface
+- `readline` - tui interface
 - `node-telegram-bot-api` - Telegram integration
 - `winston` - Structured logging
 - `dotenv` - Environment configuration
@@ -374,8 +374,8 @@ src/
 │   ├── processor.ts      # Main message processing logic
 │   ├── commands.ts       # Centralized command handler
 │   └── [future: ollama.ts, tools.ts]
-├── cli/
-│   └── interface.ts      # CLI interface with readline
+├── tui/
+│   └── interface.ts      # tui interface with readline
 ├── telegram/
 │   ├── bot.ts           # Telegram bot setup
 │   └── handlers.ts      # Telegram message handlers
@@ -390,10 +390,10 @@ src/
 
 When modifying the agent system:
 
-1. **Maintain interface consistency**: Ensure both CLI and Telegram interfaces work correctly
+1. **Maintain interface consistency**: Ensure both tui and Telegram interfaces work correctly
 2. **Update this document**: Keep agent capabilities and patterns documented
 3. **Follow TypeScript patterns**: Use proper types and interfaces
-4. **Test both interfaces**: Verify changes work in CLI and Telegram
+4. **Test both interfaces**: Verify changes work in tui and Telegram
 5. **Handle errors gracefully**: Provide user-friendly error messages
 
 ## AI Assistant Guidelines
@@ -401,10 +401,10 @@ When modifying the agent system:
 **When working on this codebase:**
 
 1. **Use centralized command handler** (`src/agent/commands.ts`) for all command-related changes
-2. **Respect interface separation**: CLI-specific code in `cli/`, Telegram in `telegram/`
-3. **Update command responses**: Ensure proper formatting for both Telegram (Markdown) and CLI (ANSI colors)
+2. **Respect interface separation**: tui-specific code in `tui/`, Telegram in `telegram/`
+3. **Update command responses**: Ensure proper formatting for both Telegram (Markdown) and tui (ANSI colors)
 4. **Mock before integrate**: Keep mock implementations until Ollama integration is ready
-5. **Maintain session state**: CLI has session state, Telegram should track per-user state
+5. **Maintain session state**: tui has session state, Telegram should track per-user state
 
 **Common patterns to follow:**
 - Use `handleCommand()` for slash commands

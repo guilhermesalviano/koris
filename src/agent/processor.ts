@@ -13,9 +13,9 @@ import { Instruction } from '../types';
 export async function processUserMessage(
   // logger: ILogger,
   message: string,
-  source: 'telegram' | 'cli'
+  source: 'telegram' | 'tui'
 ): Promise<string> {
-  // Only log for telegram source to avoid breaking CLI interface
+  // Only log for telegram source to avoid breaking TUI interface
   console.log(`Processing message from ${source}: "${message}"`);
 
   // Handle commands using centralized handler

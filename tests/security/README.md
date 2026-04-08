@@ -4,7 +4,7 @@ Comprehensive security test suite for the opencrawdio project.
 
 ## Overview
 
-This test suite validates the security posture of opencrawdio across multiple attack vectors and vulnerabilities common in file-based agents and CLI applications.
+This test suite validates the security posture of opencrawdio across multiple attack vectors and vulnerabilities common in file-based agents and TUI applications.
 
 ## Test Categories
 
@@ -121,7 +121,7 @@ Validates access control and permission enforcement:
 - User isolation (no cross-user file access)
 - Rate limiting resilience (100 concurrent requests)
 - Privilege escalation prevention
-- Session isolation (CLI vs Telegram)
+- Session isolation (TUI vs Telegram)
 - Command blacklist (fork bombs, disk wiping)
 
 **Key Security Concerns:**

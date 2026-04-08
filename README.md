@@ -10,7 +10,7 @@ An AI-powered coding agent similar to Cline/Claude Code that uses Ollama for loc
 ## Features
 
 - 🤖 AI coding agent powered by Ollama (local LLM)
-- 💬 Dual interface: Telegram bot + CLI
+- 💬 Dual interface: Telegram bot + TUI
 - 📁 Mock file operations (read, write, list) - *Real implementation coming*
 - ⚙️ Mock command execution - *Real implementation coming*
 - 🔍 Mock code search - *Real implementation coming*
@@ -45,8 +45,8 @@ An AI-powered coding agent similar to Cline/Claude Code that uses Ollama for loc
    # Telegram mode
    pnpm dev
    
-   # OR CLI mode (no Telegram needed)
-   pnpm dev:cli
+   # OR TUI mode (no Telegram needed)
+   pnpm dev:tui
    ```
 
 ## Development
@@ -55,8 +55,8 @@ An AI-powered coding agent similar to Cline/Claude Code that uses Ollama for loc
 # Development with hot reload (Telegram mode)
 pnpm dev
 
-# Development with CLI mode
-pnpm dev:cli
+# Development with TUI mode
+pnpm dev:tui
 
 # Build TypeScript
 pnpm build
@@ -64,8 +64,8 @@ pnpm build
 # Run production build (Telegram mode)
 pnpm start
 
-# Run production build (CLI mode)
-pnpm start:cli
+# Run production build (TUI mode)
+pnpm start:tui
 
 # Run tests
 pnpm test
@@ -80,7 +80,7 @@ pnpm test:ui
 ## Testing
 
 The project includes comprehensive unit tests covering:
-- Command handling (CLI & Telegram)
+- Command handling (TUI & Telegram)
 - Instruction detection
 - File operations
 - Telegram bot integration
@@ -122,19 +122,19 @@ Or send natural language instructions:
 - "search for config" - Search codebase
 - "execute npm test" - Run a command
 
-### CLI Mode
+### TUI Mode
 
-Run in CLI mode for local testing without Telegram:
+Run in TUI mode for local testing without Telegram:
 
 ```bash
-pnpm dev:cli
+pnpm dev:tui
 ```
 
 Then type your messages at the prompt:
 - `/help` - Show commands
 - "read package.json" - Test file reading
 - "list src" - Test directory listing
-- "/exit" or "/quit" - Exit CLI
+- "/exit" or "/quit" - Exit TUI
 
 ## Mock Implementation
 
@@ -160,14 +160,14 @@ See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detai
 ```
 src/
 ├── config/index.ts           # Environment configuration
-├── index.ts            # Entry point (Telegram or CLI mode)
+├── index.ts            # Entry point (Telegram or TUI mode)
 ├── telegram/           # Telegram bot implementation
 │   ├── bot.ts          # Bot initialization
 │   └── handlers.ts     # Message handlers
 ├── infrastructure
 │   └── logger.ts       # Logger Factory with winston
-├── cli/                # CLI interface
-│   └── interface.ts    # CLI prompt and input handling
+├── tui/                # TUI interface
+│   └── interface.ts    # TUI prompt and input handling
 └── agent/              # Agent logic
     └── processor.ts    # Message processing and mock tools
 ```
@@ -175,7 +175,7 @@ src/
 ## To-do
 
 - [ ] wrap de IA, testes;
-- [ ] multi sessões - rodar me background com o telegram e ter a possibilidade de startar outra no CLI;
+- [ ] multi sessões - rodar me background com o telegram e ter a possibilidade de startar outra no TUI;
 - [ ] orquestrador do meu docker - interface http para saber qual container ligar;
   - Cachear responses, keep-alive enquanto liga...
 - [ ] implementar permissões ao agente de mock - testar como executar os subcomandos...

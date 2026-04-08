@@ -2,12 +2,12 @@
 
 ## Quick Start
 
-### 1. CLI Mode (Easiest to test)
+### 1. TUI Mode (Easiest to test)
 
 No Telegram bot needed! Just run:
 
 ```bash
-pnpm dev:cli
+pnpm dev:tui
 ```
 
 Then try these commands:
@@ -72,7 +72,7 @@ The agent detects these patterns:
 
 ## Architecture Highlights
 
-- **Dual Interface**: Works via Telegram bot OR CLI
+- **Dual Interface**: Works via Telegram bot OR TUI
 - **Shared Processor**: Both interfaces use `agent/processor.ts`
 - **Mock First**: Demonstrates capabilities before implementing complex AI
 - **TypeScript**: Full type safety with strict mode

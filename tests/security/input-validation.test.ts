@@ -6,7 +6,7 @@ describe('Security: Input Validation', () => {
   describe('Message length limits', () => {
     it('should handle extremely long messages safely', async () => {
       const longMessage = 'a'.repeat(1000000); // 1MB of text
-      const result = await processUserMessage(longMessage, 'cli');
+      const result = await processUserMessage(longMessage, 'tui');
       // Should not crash or hang
       expect(result).toBeDefined();
       expect(typeof result).toBe('string');
@@ -14,7 +14,7 @@ describe('Security: Input Validation', () => {
 
     it('should handle extremely long file paths', async () => {
       const longPath = 'a/'.repeat(10000) + 'file.txt';
-      const result = await processUserMessage(`read ${longPath}`, 'cli');
+      const result = await processUserMessage(`read ${longPath}`, 'tui');
       expect(result).toBeDefined();
       expect(result).toMatch(/not found|error|invalid/i);
     });
@@ -29,7 +29,7 @@ describe('Security: Input Validation', () => {
       ];
 
       for (const msg of messages) {
-        const result = await processUserMessage(msg, 'cli');
+        const result = await processUserMessage(msg, 'tui');
         expect(result).toBeDefined();
         // Should not execute any part after null byte
       }
@@ -44,7 +44,7 @@ describe('Security: Input Validation', () => {
       ];
 
       for (const msg of unicodeMessages) {
-        const result = await processUserMessage(msg, 'cli');
+        const result = await processUserMessage(msg, 'tui');
         expect(result).toBeDefined();
         expect(typeof result).toBe('string');
       }
@@ -58,7 +58,7 @@ describe('Security: Input Validation', () => {
       ];
 
       for (const msg of controlChars) {
-        const result = await processUserMessage(msg, 'cli');
+        const result = await processUserMessage(msg, 'tui');
         expect(result).toBeDefined();
       }
     });
@@ -74,7 +74,7 @@ describe('Security: Input Validation', () => {
 
       for (const pattern of redosPatterns) {
         const startTime = Date.now();
-        const result = await processUserMessage(pattern, 'cli');
+        const result = await processUserMessage(pattern, 'tui');
         const duration = Date.now() - startTime;
         
         expect(result).toBeDefined();
@@ -94,7 +94,7 @@ describe('Security: Input Validation', () => {
       ];
 
       for (const attempt of pollutionAttempts) {
-        const result = await processUserMessage(attempt, 'cli');
+        const result = await processUserMessage(attempt, 'tui');
         expect(result).toBeDefined();
         // Should treat as normal string, not object key access
       }
@@ -117,7 +117,7 @@ describe('Security: Input Validation', () => {
       for (const input of inputs) {
         try {
           // Expect function to handle type mismatch gracefully
-          const result = await processUserMessage(input, 'cli');
+          const result = await processUserMessage(input, 'tui');
           expect(result).toBeDefined();
         } catch (error: any) {
           // Should throw a safe error, not crash
@@ -129,7 +129,7 @@ describe('Security: Input Validation', () => {
 
   describe('Empty and whitespace inputs', () => {
     it('should handle empty strings safely', async () => {
-      const result = await processUserMessage('', 'cli');
+      const result = await processUserMessage('', 'tui');
       expect(result).toBeDefined();
       expect(typeof result).toBe('string');
     });
@@ -143,7 +143,7 @@ describe('Security: Input Validation', () => {
       ];
 
       for (const input of whitespaceInputs) {
-        const result = await processUserMessage(input, 'cli');
+        const result = await processUserMessage(input, 'tui');
         expect(result).toBeDefined();
       }
     });

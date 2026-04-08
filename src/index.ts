@@ -1,21 +1,21 @@
 import { initBot } from './telegram/bot';
-import { startCLI } from './cli/interface';
+import { startTUI } from './tui/interface';
 import { LoggerFactory } from './infrastructure/logger';
 
 const logger = LoggerFactory.create();
 
 logger.log("info", "🚀 Starting opencrawdio...\n");
 
-const cliMode = process.argv.includes("--cli");
+const tuiMode = process.argv.includes("tui");
 
-if (cliMode) {
-  logger.log("info", "Mode: CLI\n");
-  startCLI();
+if (tuiMode) {
+  logger.log("info", "Mode: TUI\n");
+  startTUI();
 } else {
   logger.log("info", "Mode: Telegram Bot\n");
   const bot = initBot();
   logger.log("info", "✅ Bot is ready! Send a message to your bot on Telegram.\n");
-  logger.log("info", "💡 Tip: Run with --cli flag to use CLI mode instead.\n");
+  logger.log("info", "💡 Tip: Run with 'tui' flag to use TUI mode instead.\n");
 
   process.on("SIGINT", () => {
     logger.log("info", "\n👋 Shutting down gracefully...");

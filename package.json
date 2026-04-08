@@ -9,11 +9,11 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "dev:cli": "tsx watch src/index.ts --cli",
+    "dev:tui": "tsx watch src/index.ts --tui",
     "clean": "rm -rf dist",
     "build": "pnpm run clean && tsc --project tsconfig.json",
     "start": "node dist/src/index.js",
-    "start:cli": "node dist/src/index.js --cli",
+    "start:tui": "node dist/src/index.js --tui",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",

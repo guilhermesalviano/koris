@@ -21,7 +21,7 @@ interface SessionState {
   startTime: Date;
 }
 
-export function startCLI(): void {
+export function startTUI(): void {
   const session: SessionState = {
     messageCount: 0,
     startTime: new Date(),
@@ -46,9 +46,9 @@ export function startCLI(): void {
       return;
     }
 
-    // todo: unify Telegram handle messages and Cli handle messages.
+    // todo: unify Telegram handle messages and TUI handle messages.
     if (isCommand(trimmed)) {
-      const result = handleCommand(trimmed, { source: 'cli', session, rl });
+      const result = handleCommand(trimmed, { source: 'tui', session, rl });
       
       // Handle actions
       if (result.action === 'exit') {
@@ -90,7 +90,7 @@ export function startCLI(): void {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Set to process in bg with queue
-      const response = await processUserMessage(trimmed, 'cli');
+      const response = await processUserMessage(trimmed, 'tui');
 
       stop();
 

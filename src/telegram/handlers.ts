@@ -2,7 +2,7 @@ import { TelegramMessage, InlineKeyboardMarkup } from './client';
 import { getBot } from './bot';
 import { processUserMessage } from '../agent/processor';
 
-// todo: unify Telegram handle messages and Cli handle messages.
+// todo: unify Telegram handle messages and TUI handle messages.
 export async function handleMessage(msg: TelegramMessage): Promise<void> {
   const chatId = msg.chat.id;
   const text = msg.text;
