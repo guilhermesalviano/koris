@@ -25,7 +25,7 @@ function listDirectory(dirPath: string): string {
 
     if (entries.length === 0) {
       const escapedPath = escapeMarkdown(resolved);
-      return `📁 *Directory listing: ${escapedPath}*\n\n_Empty directory\\._`;
+      return `*Directory list: ${escapedPath}*\n\n_Empty directory\\._`;
     }
 
     const folders = entries
@@ -45,7 +45,7 @@ function listDirectory(dirPath: string): string {
     const lines = [folders, files].filter(Boolean).join("\n");
     const escapedPath = escapeMarkdown(resolved);
 
-    return `📁 *Directory listing: ${escapedPath}*\n\n${lines}`;
+    return `*Directory list: ${escapedPath}*\n\n${lines}`;
   } catch (err: any) {
     const escapedPath = escapeMarkdown(dirPath);
     if (err.code === "ENOENT") {

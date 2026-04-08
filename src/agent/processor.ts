@@ -1,5 +1,5 @@
 // import { ILogger } from '@/infrastructure/logger';
-import { handleCommand as handleCentralizedCommand, isCommand } from './commands';
+import { handleCommand, isCommand } from './commands';
 import { listDirectory } from '../sub-instructions/list-directory';
 import { readFile } from '../sub-instructions/read-file';
 import { search } from '../sub-instructions/search';
@@ -16,13 +16,11 @@ export async function processUserMessage(
   source: 'telegram' | 'cli'
 ): Promise<string> {
   // Only log for telegram source to avoid breaking CLI interface
-  if (source === 'telegram') {
-    // logger.log("info", `📥 Processing message from ${source}: "${message}"`);
-  }
+  console.log(`Processing message from ${source}: "${message}"`);
 
   // Handle commands using centralized handler
   if (isCommand(message)) {
-    const result = handleCentralizedCommand(message, { source });
+    const result = handleCommand(message, { source });
     return result.response || '';
   }
 

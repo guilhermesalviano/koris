@@ -2,13 +2,14 @@ import { TelegramMessage, InlineKeyboardMarkup } from './client';
 import { getBot } from './bot';
 import { processUserMessage } from '../agent/processor';
 
+// todo: unify Telegram handle messages and Cli handle messages.
 export async function handleMessage(msg: TelegramMessage): Promise<void> {
   const chatId = msg.chat.id;
   const text = msg.text;
 
   console.log(`📨 Message from ${msg.from?.username || msg.from?.id}: ${text}`);
 
-  // Handle commands
+  // Set to process in bg with queue
   if (text?.startsWith('/')) {
     await handleCommand(msg);
     return;

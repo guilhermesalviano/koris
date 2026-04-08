@@ -1,6 +1,6 @@
 import readline from 'readline';
 import { processUserMessage } from '../agent/processor';
-import { handleCommand as handleCentralizedCommand, isCommand } from '../agent/commands';
+import { handleCommand, isCommand } from '../agent/commands';
 
 // ANSI color codes
 const colors = {
@@ -46,9 +46,9 @@ export function startCLI(): void {
       return;
     }
 
-    // Handle slash commands using centralized handler
+    // todo: unify Telegram handle messages and Cli handle messages.
     if (isCommand(trimmed)) {
-      const result = handleCentralizedCommand(trimmed, { source: 'cli', session, rl });
+      const result = handleCommand(trimmed, { source: 'cli', session, rl });
       
       // Handle actions
       if (result.action === 'exit') {
@@ -84,19 +84,23 @@ export function startCLI(): void {
     session.messageCount++;
 
     try {
-      // Show thinking indicator
-      process.stdout.write(`${colors.dim}${colors.gray}Thinking...${colors.reset}\n`);
+      const stop = startThinkingSpinner("Thinking");
 
+      // Simulate processing time (remove in production)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Set to process in bg with queue
       const response = await processUserMessage(trimmed, 'cli');
 
-      // Clear the thinking line
-      readline.clearLine(process.stdout, 0);
-      readline.moveCursor(process.stdout, 0, -1);
+      stop();
 
-      // Print response with formatting
-      console.log(`${colors.green}Assistant${colors.reset}\n`);
-      console.log(formatResponse(response));
-      console.log(); // Empty line for spacing
+      // Clear the thinking line is not working properly
+      readline.moveCursor(process.stdout, 0, -1);
+      readline.clearLine(process.stdout, 0);
+
+      // Print response with formatting - in debug mode...
+      console.log(`${colors.reset}●${colors.reset} ${formatResponse(response)}`);
+      console.log();
     } catch (error) {
       console.log(`${colors.red}✗ Error:${colors.reset} ${error instanceof Error ? error.message : String(error)}`);
       console.log();
@@ -126,12 +130,29 @@ export function startCLI(): void {
 function printWelcome(): void {
   console.clear();
   console.log(`${colors.bright}${colors.cyan}╔═══════════════════════════════════════════════════════════╗${colors.reset}`);
-  console.log(`${colors.bright}${colors.cyan}║${colors.reset}  ${colors.bright}opencrawdio - AI Assistant${colors.reset}                                ${colors.bright}${colors.cyan}║${colors.reset}`);
+  console.log(`${colors.bright}${colors.cyan}║${colors.reset}  ${colors.bright}opencrawdio - AI Assistant${colors.reset}                               ${colors.bright}${colors.cyan}║${colors.reset}`);
   console.log(`${colors.bright}${colors.cyan}╚═══════════════════════════════════════════════════════════╝${colors.reset}`);
   console.log();
   console.log(`${colors.dim}Type your message or use slash commands for help.${colors.reset}`);
   console.log(`${colors.dim}Commands: /help /clear /exit /stats${colors.reset}`);
   console.log();
+}
+
+function startThinkingSpinner(label = "Thinking"): () => void {
+  const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  let i = 0;
+
+  const interval = setInterval(() => {
+    process.stdout.write(
+      `\r${colors.dim}${colors.gray}${frames[i]} ${label}...${colors.reset}`
+    );
+    i = (i + 1) % frames.length;
+  }, 80);
+
+  return () => {
+    clearInterval(interval);
+    process.stdout.write('\r' + ' '.repeat(label.length + 10) + '\r');
+  };
 }
 
 function formatResponse(response: string): string {

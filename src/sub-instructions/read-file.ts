@@ -20,21 +20,21 @@ function readFile(filename: string): string {
     const lines = content.split("\n").length;
 
     if (content.trim().length === 0) {
-      return `📄 *File: ${resolved}*\n\n_Empty file._`;
+      return `*File Content: ${resolved}*\n\n_Empty file._`;
     }
 
-    return `📄 *Reading file: ${resolved}* _(${size}, ${lines} lines)_\n\n\`\`\`${ext}\n${content}\n\`\`\``;
+    return `*File Content: ${resolved}* _(${size}, ${lines} lines)_\n\n\`\`\`${ext}\n${content}\n\`\`\``;
   } catch (err: any) {
     if (err.code === "ENOENT") {
-      return `❌ *File not found:* \`${filename}\``;
+      return `*File not found:* \`${filename}\``;
     }
     if (err.code === "EACCES") {
-      return `🔒 *Permission denied:* \`${filename}\``;
+      return `*Permission denied:* \`${filename}\``;
     }
     if (err.code === "EISDIR") {
-      return `❌ *Cannot read:* \`${filename}\` is a directory.`;
+      return `*Cannot read:* \`${filename}\` is a directory.`;
     }
-    return `❌ *Error reading file:* ${err.message}`;
+    return `*Error reading file:* ${err.message}`;
   }
 }
 
