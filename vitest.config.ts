@@ -15,6 +15,9 @@ export default defineConfig({
         '**/*.config.ts',
       ],
     },
+    onConsoleLog(log: string, type: 'stdout' | 'stderr'): boolean | void {
+      return false;  // NO console.log() statements will be printed!
+    },
   },
   resolve: {
     alias: {
