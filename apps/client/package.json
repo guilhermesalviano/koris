@@ -31,6 +31,7 @@
   },
   "homepage": "https://github.com/guilhermesalviano/opencrawdio#readme",
   "dependencies": {
+    "assistant-telegram-bot": "file:../telegram-bot",
     "assistant-tui": "file:../assistant-tui",
     "dotenv": "^17.4.1",
     "winston": "^3.19.0"

@@ -84,9 +84,7 @@ No matches found in the codebase.`;
     const hasMore = results.length > 20;
 
     // Format results
-    let response = `Found ${results.length} match${results.length === 1 ? '' : 'es'}${hasMore ? ` (showing first 20)` : ''}:
-
-`;
+    let response = `🔍 Searching for: "${escapeMarkdown(query)}"\n\nFound ${results.length} match${results.length === 1 ? '' : 'es'}${hasMore ? ` (showing first 20)` : ''}:\n\n`;
 
     for (let i = 0; i < limitedResults.length; i++) {
       const result = limitedResults[i];

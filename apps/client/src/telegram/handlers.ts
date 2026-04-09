@@ -1,5 +1,5 @@
-import { TelegramMessage, InlineKeyboardMarkup } from '../../../telegram-bot/client';
-import { getBot } from '../../../telegram-bot/bot';
+import { TelegramMessage, InlineKeyboardMarkup } from 'assistant-telegram-bot';
+import { getBot } from './bot';
 import { processUserMessage } from '../agent/processor';
 
 // todo: unify Telegram handle messages and TUI handle messages.
@@ -51,7 +51,7 @@ async function handleUserMessage(chatId: number, text: string): Promise<void> {
 
     // Process message through agent processor
     const response = await processUserMessage(text, 'telegram');
-    await bot.sendMessage(chatId, response);
+    await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
   } catch (error) {
     console.error('Error handling message:', error);
     await bot.sendMessage(
