@@ -16,8 +16,9 @@ export const config = {
   },
 } as const;
 
-// Only validate token in production/development, not in tests
-if (!isTest && !config.TELEGRAM.BOT_TOKEN) {
+// Only validate token in production/development, not in tests or TUI mode
+const isTui = process.argv.includes('tui') || process.argv.includes('--tui');
+if (!isTest && !isTui && !config.TELEGRAM.BOT_TOKEN) {
   console.error('ERROR: TELEGRAM_BOT_TOKEN is required');
   console.error('Please set TELEGRAM_BOT_TOKEN in your .env file or environment variables');
   process.exit(1);

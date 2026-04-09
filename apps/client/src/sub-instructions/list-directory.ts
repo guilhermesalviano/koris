@@ -6,7 +6,6 @@ import * as path from "path";
  * Escape special characters for Telegram Markdown
  */
 function escapeMarkdown(text: string): string {
-  return text
   return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
 }
 
@@ -26,7 +25,7 @@ function listDirectory(dirPath: string): string {
 
     if (entries.length === 0) {
       const escapedPath = escapeMarkdown(resolved);
-      return `*Directory list: ${escapedPath}*\n\n_Empty directory\\._`;
+      return `📁 Directory listing: ${escapedPath}\n\n_Empty directory._`;
     }
 
     const folders = entries
@@ -37,16 +36,16 @@ function listDirectory(dirPath: string): string {
     const files = entries
       .filter((e) => e.isFile())
       .map((e) => {
-        // const stats = fs.statSync(path.join(resolved, e.name));
-        // const size = ` _\\(${formatSize(stats.size)}\\)_`;
-        return `📄 ${escapeMarkdown(e.name)}`;
+        const stats = fs.statSync(path.join(resolved, e.name));
+        const size = ` _\\(${formatSize(stats.size)}\\)_`;
+        return `📄 ${escapeMarkdown(e.name)}${size}`;
       })
       .join("\n");
 
     const lines = [folders, files].filter(Boolean).join("\n");
     const escapedPath = escapeMarkdown(resolved);
 
-    return `*Directory list: ${escapedPath}*\n\n${lines}`;
+    return `📁 Directory listing: ${escapedPath}\n\n${lines}`;
   } catch (err: any) {
     const escapedPath = escapeMarkdown(dirPath);
     if (err.code === "ENOENT") {
@@ -70,4 +69,4 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
-export { listDirectory }
+export { listDirectory };

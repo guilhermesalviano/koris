@@ -6,7 +6,7 @@ const logger = LoggerFactory.create();
 
 logger.log("info", "🚀 Starting opencrawdio...\n");
 
-const tuiMode = process.argv.includes("tui");
+const tuiMode = process.argv.includes('tui') || process.argv.includes('--tui');
 
 if (tuiMode) {
   logger.log("info", "Mode: TUI\n");
