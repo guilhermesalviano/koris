@@ -1,185 +1,78 @@
-# opencrawdio 🤖
+# opencrawdio
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D24.0.0-brightgreen.svg)](https://nodejs.org/)
-[![pnpm](https://img.shields.io/badge/pnpm-10.x-orange.svg)](https://pnpm.io/)
-[![Tests](https://github.com/guilhermesalviano/opencrawdio/workflows/Tests/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions)
-[![Lint](https://github.com/guilhermesalviano/opencrawdio/workflows/Lint/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions)
+[![pnpm](https://img.shields.io/badge/pnpm-10.18.3-orange.svg)](https://pnpm.io/)
+[![Security Tests](https://github.com/guilhermesalviano/opencrawdio/actions/workflows/tests.yml/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions/workflows/tests.yml)
+[![Lint](https://github.com/guilhermesalviano/opencrawdio/actions/workflows/lint.yml/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions/workflows/lint.yml)
+[![CodeQL](https://github.com/guilhermesalviano/opencrawdio/actions/workflows/codeql.yml/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions/workflows/codeql.yml)
 
-An AI-powered coding agent similar to Cline/Claude Code that uses Ollama for local AI inference and Telegram as the user interface.
+An AI-powered coding agent (mock tool implementation for now) with two user interfaces:
 
-## Features
+- Telegram bot
+- TUI (terminal UI)
 
-- 🤖 AI coding agent powered by Ollama (local LLM)
-- 💬 Dual interface: Telegram bot + TUI
-- 📁 Mock file operations (read, write, list) - *Real implementation coming*
-- ⚙️ Mock command execution - *Real implementation coming*
-- 🔍 Mock code search - *Real implementation coming*
-- 🔒 Local-first (your code never leaves your machine)
+This repo is **modular**: the main runnable app lives in `apps/client/`, and reusable mini-modules live under `apps/*`.
+
+## Repository layout
+
+- `apps/client/` — main app (agent + TUI + Telegram integration)
+- `apps/assistant-tui/` — reusable TUI runner package (`assistant-tui`)
+- `apps/telegram-bot/` — reusable Telegram connection package (`assistant-telegram-bot`)
 
 ## Prerequisites
 
-- Node.js 18+ (with pnpm)
-- [Ollama](https://ollama.ai/) installed and running *(coming soon)*
-- A Telegram bot token (from [@BotFather](https://t.me/botfather))
+- Node.js >= 24
+- pnpm 10.18.3
+- A Telegram bot token (from @BotFather) for Telegram mode
 
-## Setup
+## Quick start (from repo root)
 
-1. **Install dependencies:**
-   ```bash
-   pnpm install
-   ```
-
-2. **Create a Telegram bot:**
-   - Open Telegram and chat with [@BotFather](https://t.me/botfather)
-   - Send `/newbot` and follow the instructions
-   - Copy the bot token you receive
-
-3. **Configure environment:**
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your TELEGRAM_BOT_TOKEN
-   ```
-
-4. **Run the bot:**
-   ```bash
-   # Telegram mode
-   pnpm dev
-   
-   # OR TUI mode (no Telegram needed)
-   pnpm dev:tui
-   ```
-
-## Development
+### Install
 
 ```bash
-# Development with hot reload (Telegram mode)
-pnpm dev
-
-# Development with TUI mode
-pnpm dev:tui
-
-# Build TypeScript
-pnpm build
-
-# Run production build (Telegram mode)
-pnpm start
-
-# Run production build (TUI mode)
-pnpm start:tui
-
-# Run tests
-pnpm test
-
-# Run tests in watch mode
-pnpm test:watch
-
-# Run tests with UI
-pnpm test:ui
+pnpm -C apps/client install
 ```
 
-## Testing
-
-The project includes comprehensive unit tests covering:
-- Command handling (TUI & Telegram)
-- Instruction detection
-- File operations
-- Telegram bot integration
-- Markdown escaping
-
-See [TESTS.md](TESTS.md) for detailed testing guide.
-
-### CI/CD
-
-GitHub Actions automatically run tests on every commit:
-- ✅ Unit tests on Node.js 24.x
-- ✅ TypeScript type checking
-- ✅ Build verification
-
-See [.github/workflows/README.md](.github/workflows/README.md) for workflow details.
-
-## Configuration
-
-Edit `.env` to configure:
-
-- `TELEGRAM_BOT_TOKEN` - Your Telegram bot token (required for Telegram mode)
-- `OLLAMA_BASE_URL` - Ollama API endpoint (default: http://localhost:11434)
-- `OLLAMA_MODEL` - Model to use (default: llama3.1)
-
-## Usage
-
-### Telegram Bot
-
-Send messages to your Telegram bot:
-
-- `/start` - Get started
-- `/help` - Show available commands
-- `/status` - Check bot status
-- `/clear` - Clear conversation history
-
-Or send natural language instructions:
-- "read src/index.ts" - Read a file
-- "list src/" - List directory
-- "search for config" - Search codebase
-- "execute npm test" - Run a command
-
-### TUI Mode
-
-Run in TUI mode for local testing without Telegram:
+### Configure Telegram token (optional)
 
 ```bash
-pnpm dev:tui
+cp apps/client/.env.example apps/client/.env
+# edit apps/client/.env and set TELEGRAM_BOT_TOKEN
 ```
 
-Then type your messages at the prompt:
-- `/help` - Show commands
-- "read package.json" - Test file reading
-- "list src" - Test directory listing
-- "/exit" or "/quit" - Exit TUI
+### Run
 
-## Mock Implementation
+```bash
+# Telegram mode
+pnpm -C apps/client dev
 
-The current version includes **mock implementations** that demonstrate the agent's planned capabilities:
-
-- **File operations**: Read, write, list directories
-- **Command execution**: Run shell commands
-- **Code search**: Search through codebase
-- **Instruction detection**: Parse natural language requests
-
-These mocks will be replaced with:
-1. Real file system operations
-2. Ollama AI integration for intelligent responses
-3. Actual command execution with sandboxing
-4. Real search using grep/ripgrep
-
-## Architecture
-
-See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detailed architecture and development guidelines.
-
-## Project Structure
-
-```
-src/
-├── config/index.ts           # Environment configuration
-├── index.ts            # Entry point (Telegram or TUI mode)
-├── telegram/           # Telegram bot implementation
-│   ├── bot.ts          # Bot initialization
-│   └── handlers.ts     # Message handlers
-├── infrastructure
-│   └── logger.ts       # Logger Factory with winston
-├── tui/                # TUI interface
-│   └── interface.ts    # TUI prompt and input handling
-└── agent/              # Agent logic
-    └── processor.ts    # Message processing and mock tools
+# TUI mode (no Telegram needed)
+pnpm -C apps/client dev:tui
 ```
 
-## To-do
+## Common commands
 
-- [ ] wrap de IA, testes;
-- [ ] multi sessões - rodar me background com o telegram e ter a possibilidade de startar outra no TUI;
-- [ ] orquestrador do meu docker - interface http para saber qual container ligar;
-  - Cachear responses, keep-alive enquanto liga...
-- [ ] implementar permissões ao agente de mock - testar como executar os subcomandos...
+```bash
+# Build
+pnpm -C apps/client build
 
-## License
+# Production run
+pnpm -C apps/client start
+pnpm -C apps/client start:tui
 
-ISC
+# Tests
+pnpm -C apps/client test
+pnpm -C apps/client test:coverage
+```
+
+## Docs
+
+- Architecture / agent internals: [AGENTS.md](AGENTS.md)
+- Demo walkthrough: [apps/client/DEMO.md](apps/client/DEMO.md)
+- Testing guide: [apps/client/TESTS.md](apps/client/TESTS.md)
+- CI workflows: [.github/workflows/README.md](.github/workflows/README.md)
+
+## Notes
+
+- Ollama integration is planned; current behavior focuses on deterministic parsing + mocked tool responses.
+- Telegram connectivity is intentionally isolated inside `apps/telegram-bot` and injected into the client.

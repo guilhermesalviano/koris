@@ -32,7 +32,7 @@ opencrawdio is a multi-interface AI agent system that processes user messages an
 
 ## Core Components
 
-### 1. Message Processor (`src/agent/processor.ts`)
+### 1. Message Processor (`apps/client/src/agent/processor.ts`)
 
 **Purpose**: Central hub for processing all user messages regardless of interface.
 
@@ -57,7 +57,7 @@ opencrawdio is a multi-interface AI agent system that processes user messages an
 - `search` - Search in files
 - `unknown` - Unrecognized instruction
 
-### 2. Command Handler (`src/agent/commands.ts`)
+### 2. Command Handler (`apps/client/src/agent/commands.ts`)
 
 **Purpose**: Centralized command handling for both TUI and Telegram interfaces.
 
@@ -98,7 +98,7 @@ interface CommandResult {
 }
 ```
 
-### 3. tui Interface (`src/tui/interface.ts`)
+### 3. tui Interface (`apps/client/src/tui/interface.ts`)
 
 **Purpose**: Terminal-based interface with rich formatting and session management.
 
@@ -124,13 +124,14 @@ interface SessionState {
 - `yellow` - Warnings
 - `gray/dim` - Secondary information
 
-### 4. Telegram Bot (`src/telegram/bot.ts`)
+### 4. Telegram Bot (via `apps/telegram-bot`)
 
 **Purpose**: Telegram interface for remote access to agent capabilities.
 
 **Message Format**: Uses Telegram Markdown for formatting responses.
 
-**Integration**: Calls `processUserMessage(message, 'telegram')` for all non-command messages.
+**Integration**: The main app (`apps/client`) wires Telegram events into `processUserMessage(message, 'telegram')` using the reusable `assistant-telegram-bot` module from `apps/telegram-bot`.
+
 
 ## Agent Capabilities
 
@@ -192,7 +193,7 @@ The agent detects instructions using pattern matching:
 
 ### Adding a New Command
 
-1. Add command handler in `src/agent/commands.ts`:
+1. Add command handler in `apps/client/src/agent/commands.ts`:
 ```typescript
 case '/mycommand':
   return handleMyCommand(context);
@@ -249,7 +250,7 @@ function mockMyNewType(params: string): string {
 
 When integrating Ollama, replace mock implementations with real tool calls:
 
-1. Create Ollama tuient wrapper in `src/agent/ollama.ts`
+1. Create Ollama client wrapper in `apps/client/src/agent/ollama.ts`
 2. Define tool schemas for Ollama function calling
 3. Replace `mockReadFile`, `mockWriteFile`, etc. with real implementations
 4. Add conversation history management
@@ -274,14 +275,14 @@ const readFileTool = {
 
 ### Environment Variables
 
-See `.env.example` for required configuration:
+See `apps/client/.env.example` for required configuration:
 - `TELEGRAM_BOT_TOKEN` - Telegram bot token
 - `LOG_LEVEL` - Logging level (info, debug, error)
 - `ENVIRONMENT` - Environment name (dev, prod)
 
 ### Logging
 
-Logger is configured in `src/infrastructure/logger.ts`:
+Logger is configured in `apps/client/src/infrastructure/logger.ts`:
 - Uses Winston for structured logging
 - Outputs JSON format to console
 - Includes timestamps and environment metadata
@@ -291,7 +292,7 @@ Logger is configured in `src/infrastructure/logger.ts`:
 ### tui Usage
 ```bash
 # Start tui
-npm run dev:tui
+pnpm -C apps/client dev:tui
 
 # Example session
 > /help
@@ -324,13 +325,13 @@ Bot: ✅ Bot Status [...]
 ### Manual Testing
 ```bash
 # Build project
-npm run build
+pnpm -C apps/client build
 
 # Test tui
-npm run dev:tui
+pnpm -C apps/client dev:tui
 
 # Test with production build
-npm run start:tui
+pnpm -C apps/client start:tui
 ```
 
 ### Future: Automated Testing
@@ -356,8 +357,8 @@ npm run start:tui
 ## Dependencies
 
 ### Core
-- `readline` - tui interface
-- `node-telegram-bot-api` - Telegram integration
+- `assistant-tui` - Reusable TUI runner
+- `assistant-telegram-bot` - Telegram connection module (polling)
 - `winston` - Structured logging
 - `dotenv` - Environment configuration
 
@@ -369,21 +370,18 @@ npm run start:tui
 ## File Structure
 
 ```
-src/
-├── agent/
-│   ├── processor.ts      # Main message processing logic
-│   ├── commands.ts       # Centralized command handler
-│   └── [future: ollama.ts, tools.ts]
-├── tui/
-│   └── interface.ts      # tui interface with readline
-├── telegram/
-│   ├── bot.ts           # Telegram bot setup
-│   └── handlers.ts      # Telegram message handlers
-├── infrastructure/
-│   └── logger.ts        # Logging configuration
-├── config/
-│   └── index.ts         # Application configuration
-└── index.ts             # Entry point
+apps/
+├── client/                 # main runnable app
+│   ├── src/                # agent + tui + telegram integration
+│   └── tests/              # unit + security tests (vitest)
+├── assistant-tui/          # reusable TUI mini-module (assistant-tui)
+│   └── src/
+└── telegram-bot/           # reusable Telegram mini-module (assistant-telegram-bot)
+    └── src/
+
+.github/workflows/          # CI workflows
+AGENTS.md                   # architecture notes
+README.md                   # repo overview
 ```
 
 ## Contributing
@@ -400,8 +398,8 @@ When modifying the agent system:
 
 **When working on this codebase:**
 
-1. **Use centralized command handler** (`src/agent/commands.ts`) for all command-related changes
-2. **Respect interface separation**: tui-specific code in `tui/`, Telegram in `telegram/`
+1. **Use centralized command handler** (`apps/client/src/agent/commands.ts`) for all command-related changes
+2. **Respect interface separation**: client-specific code in `apps/client/src/`, modules in `apps/*`
 3. **Update command responses**: Ensure proper formatting for both Telegram (Markdown) and tui (ANSI colors)
 4. **Mock before integrate**: Keep mock implementations until Ollama integration is ready
 5. **Maintain session state**: tui has session state, Telegram should track per-user state
