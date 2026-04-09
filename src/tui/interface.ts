@@ -47,6 +47,8 @@ export function startTUI(): void {
     }
 
     // todo: unify Telegram handle messages and TUI handle messages.
+    // let interface agnostic and move command handling to a common layer.
+    // make zsh auto-completion for commands and options.
     if (isCommand(trimmed)) {
       const result = handleCommand(trimmed, { source: 'tui', session, rl });
       

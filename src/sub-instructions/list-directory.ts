@@ -6,6 +6,7 @@ import * as path from "path";
  * Escape special characters for Telegram Markdown
  */
 function escapeMarkdown(text: string): string {
+  return text
   return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
 }
 
@@ -36,9 +37,9 @@ function listDirectory(dirPath: string): string {
     const files = entries
       .filter((e) => e.isFile())
       .map((e) => {
-        const stats = fs.statSync(path.join(resolved, e.name));
-        const size = formatSize(stats.size);
-        return `📄 ${escapeMarkdown(e.name)} _\\(${size}\\)_`;
+        // const stats = fs.statSync(path.join(resolved, e.name));
+        // const size = ` _\\(${formatSize(stats.size)}\\)_`;
+        return `📄 ${escapeMarkdown(e.name)}`;
       })
       .join("\n");
 

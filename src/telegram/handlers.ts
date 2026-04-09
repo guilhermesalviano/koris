@@ -51,7 +51,7 @@ async function handleUserMessage(chatId: number, text: string): Promise<void> {
 
     // Process message through agent processor
     const response = await processUserMessage(text, 'telegram');
-    await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, response);
   } catch (error) {
     console.error('Error handling message:', error);
     await bot.sendMessage(
