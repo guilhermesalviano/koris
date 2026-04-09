@@ -13,6 +13,8 @@ An AI-powered coding agent (mock tool implementation for now) with two user inte
 
 This repo is **modular**: the main runnable app lives in `apps/client/`, and reusable mini-modules live under `apps/*`.
 
+> Note: It will be a modular monorepo project temporarily.
+
 ## Repository layout
 
 - `apps/client/` — main app (agent + TUI + Telegram integration)
