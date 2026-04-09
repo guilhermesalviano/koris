@@ -8,6 +8,10 @@ jobs:
   lint:
     name: Code Quality
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: apps/client
     
     steps:
       - name: Checkout code
@@ -23,6 +27,7 @@ jobs:
         with:
           node-version: '24.x'
           cache: 'pnpm'
+          cache-dependency-path: apps/client/pnpm-lock.yaml
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

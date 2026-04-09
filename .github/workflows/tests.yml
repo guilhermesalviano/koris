@@ -15,6 +15,10 @@ jobs:
   security-tests:
     name: Run Security Test Suite
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: apps/client
     
     strategy:
       matrix:
@@ -34,6 +38,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
+          cache-dependency-path: apps/client/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -65,6 +70,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: security-tests
 
+    defaults:
+      run:
+        working-directory: apps/client
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -79,6 +88,7 @@ jobs:
         with:
           node-version: 24.x
           cache: 'pnpm'
+          cache-dependency-path: apps/client/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -91,7 +101,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          scan-ref: '.'
+          scan-ref: 'apps/client'
           format: 'sarif'
           output: 'trivy-results.sarif'
         continue-on-error: true
