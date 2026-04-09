@@ -10,14 +10,14 @@ This directory contains CI workflows for linting, security tests, and CodeQL.
 - **What it does**:
   - Sets up pnpm (pinned)
   - Sets up Node
-  - Installs dependencies
-  - Runs TypeScript typecheck (`pnpm exec tsc --noEmit`)
+  - Installs dependencies from repo root
+  - Runs `pnpm lint` (turbo, TypeScript typecheck across packages)
 
 ### `tests.yml` — Security Tests
 
 - **Trigger**: push (main/develop), PR (main), manual dispatch
 - **Jobs**:
-  - `security-tests`: runs the security test suite (Vitest)
+  - `security-tests`: runs the security test suite (Vitest) for the client package (`pnpm --filter opencrawdio ...`)
   - `security-analysis`: runs `pnpm audit` and Trivy, uploads SARIF
 
 ### `codeql.yml` — CodeQL Analysis

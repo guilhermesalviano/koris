@@ -1,6 +1,6 @@
 # opencrawdio Demo
 
-Run from `apps/client` (or use `pnpm -C apps/client ...` from repo root).
+Run from the repo root.
 
 ## Quick Start
 
@@ -9,7 +9,7 @@ Run from `apps/client` (or use `pnpm -C apps/client ...` from repo root).
 No Telegram bot needed:
 
 ```bash
-pnpm -C apps/client dev:tui
+pnpm dev:tui
 ```
 
 Then try:
@@ -34,7 +34,7 @@ search for config
 2. Run:
 
    ```bash
-   pnpm -C apps/client dev
+   pnpm dev
    ```
 
 3. Open Telegram and message your bot.

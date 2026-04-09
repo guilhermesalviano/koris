@@ -2,25 +2,23 @@
 
 Comprehensive test suite for TUI and Telegram interfaces.
 
-Run from `apps/client` (or use `pnpm -C apps/client ...` from repo root).
+Run from the repo root.
 
 ## Running Tests
 
 ```bash
-# Run all tests
-pnpm -C apps/client test
+# Run all tests across the monorepo
+pnpm test
 
-# Watch mode
-pnpm -C apps/client test:watch
+# Client-only tests (watch / UI)
+pnpm --filter opencrawdio test:watch
+pnpm --filter opencrawdio test:ui
 
-# UI mode
-pnpm -C apps/client test:ui
+# Coverage (client)
+pnpm --filter opencrawdio test:coverage
 
-# Coverage
-pnpm -C apps/client test:coverage
-
-# Security tests only
-pnpm -C apps/client test tests/security
+# Security tests only (client)
+pnpm --filter opencrawdio test tests/security
 ```
 
 ## Test Structure
@@ -39,7 +37,7 @@ tests/
 
 CI is configured under `.github/workflows/`:
 
-- `lint.yml` runs `pnpm exec tsc --noEmit`
-- `tests.yml` runs the security test suite (Vitest)
+- `lint.yml` runs `pnpm lint` (turbo, TypeScript typecheck across packages)
+- `tests.yml` runs the security test suite (Vitest) via `pnpm --filter opencrawdio ...`
 
 See `/.github/workflows/README.md` for details.

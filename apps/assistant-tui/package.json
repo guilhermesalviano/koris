@@ -21,6 +21,7 @@
   "scripts": {
     "clean": "rm -rf dist",
     "build": "pnpm run clean && tsc --project tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
     "prepare": "pnpm run build",
     "prepublishOnly": "pnpm run build",
     "test": "echo \"No tests\" && exit 0"

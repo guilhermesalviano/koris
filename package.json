@@ -1,0 +1,20 @@
+{
+  "name": "opencrawdio-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.18.3",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "dev": "turbo run dev --filter=opencrawdio",
+    "dev:tui": "turbo run dev:tui --filter=opencrawdio",
+    "start": "turbo run start --filter=opencrawdio",
+    "start:tui": "turbo run start:tui --filter=opencrawdio"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0"
+  }
+}

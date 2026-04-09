@@ -12,6 +12,7 @@
     "dev:tui": "tsx watch src/index.ts --tui",
     "clean": "rm -rf dist",
     "build": "pnpm run clean && tsc --project tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
     "start": "node dist/src/index.js",
     "start:tui": "node dist/src/index.js --tui",
     "test": "vitest run",
@@ -31,8 +32,8 @@
   },
   "homepage": "https://github.com/guilhermesalviano/opencrawdio#readme",
   "dependencies": {
-    "assistant-telegram-bot": "file:../telegram-bot",
-    "assistant-tui": "file:../assistant-tui",
+    "assistant-telegram-bot": "workspace:*",
+    "assistant-tui": "workspace:*",
     "dotenv": "^17.4.1",
     "winston": "^3.19.0"
   },

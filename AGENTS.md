@@ -292,7 +292,7 @@ Logger is configured in `apps/client/src/infrastructure/logger.ts`:
 ### tui Usage
 ```bash
 # Start tui
-pnpm -C apps/client dev:tui
+pnpm dev:tui
 
 # Example session
 > /help
@@ -325,13 +325,13 @@ Bot: ✅ Bot Status [...]
 ### Manual Testing
 ```bash
 # Build project
-pnpm -C apps/client build
+pnpm build
 
 # Test tui
-pnpm -C apps/client dev:tui
+pnpm dev:tui
 
 # Test with production build
-pnpm -C apps/client start:tui
+pnpm start:tui
 ```
 
 ### Future: Automated Testing

@@ -32,7 +32,7 @@ This repo is **modular**: the main runnable app lives in `apps/client/`, and reu
 ### Install
 
 ```bash
-pnpm -C apps/client install
+pnpm install
 ```
 
 ### Configure Telegram token (optional)
@@ -46,25 +46,30 @@ cp apps/client/.env.example apps/client/.env
 
 ```bash
 # Telegram mode
-pnpm -C apps/client dev
+pnpm dev
 
 # TUI mode (no Telegram needed)
-pnpm -C apps/client dev:tui
+pnpm dev:tui
 ```
 
 ## Common commands
 
 ```bash
-# Build
-pnpm -C apps/client build
+# Build (all packages)
+pnpm build
 
-# Production run
-pnpm -C apps/client start
-pnpm -C apps/client start:tui
+# Production run (client)
+pnpm start
+pnpm start:tui
 
-# Tests
-pnpm -C apps/client test
-pnpm -C apps/client test:coverage
+# Tests (all packages)
+pnpm test
+
+# Coverage (client)
+pnpm --filter opencrawdio test:coverage
+
+# Security tests only (client)
+pnpm --filter opencrawdio test tests/security
 ```
 
 ## Docs

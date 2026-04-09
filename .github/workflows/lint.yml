@@ -9,32 +9,24 @@ jobs:
     name: Code Quality
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: apps/client
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-      
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
         with:
           version: 10.18.3
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24.x'
           cache: 'pnpm'
-          cache-dependency-path: apps/client/pnpm-lock.yaml
-      
+          cache-dependency-path: pnpm-lock.yaml
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
-      - name: TypeScript type check
-        run: pnpm exec tsc --noEmit
-      
-      - name: Check for TypeScript errors
-        run: |
-          echo "✅ TypeScript type check passed"
+
+      - name: Lint (TypeScript typecheck)
+        run: pnpm lint
