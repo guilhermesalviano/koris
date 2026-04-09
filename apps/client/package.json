@@ -31,6 +31,7 @@
   },
   "homepage": "https://github.com/guilhermesalviano/opencrawdio#readme",
   "dependencies": {
+    "assistant-tui": "file:../assistant-tui",
     "dotenv": "^17.4.1",
     "readline": "^1.3.0",
     "winston": "^3.19.0"

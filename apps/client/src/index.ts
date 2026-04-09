@@ -1,4 +1,4 @@
-import { initBot } from './telegram/bot';
+import { initBot } from '../../telegram-bot/bot';
 import { startTUI } from './tui/interface';
 import { LoggerFactory } from './infrastructure/logger';
 

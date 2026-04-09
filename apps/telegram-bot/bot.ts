@@ -1,6 +1,6 @@
 import { TelegramBot } from './client';
-import { config } from '../config';
-import { handleMessage } from './handlers';
+import { config } from '../opencrawdio/src/config';
+import { handleMessage } from '../opencrawdio/src/telegram/handlers';
 
 let bot: TelegramBot;
 

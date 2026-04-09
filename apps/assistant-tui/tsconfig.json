@@ -4,12 +4,11 @@
     "module": "commonjs",
     "lib": ["ES2020"],
     "outDir": "./dist",
-    "rootDir": ".",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -19,10 +18,8 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "bundler",
-    "paths": {
-      "@/*": ["./src/*"],
-    }
+    "types": ["node"]
   },
-  "include": ["src/**/*", "src/config/**/*", "tests/unit/agent/commands.test.ts", "tests/unit/agent/processor.test.ts", "tests/unit/sub-instructions/detect-instruction.test.ts", "tests/unit/sub-instructions/list-directory.test.ts", "tests/unit/sub-instructions/read-file.test.ts", "tests/unit/telegram/handlers.test.ts"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

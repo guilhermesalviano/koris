@@ -1,5 +1,5 @@
-import { TelegramMessage, InlineKeyboardMarkup } from './client';
-import { getBot } from './bot';
+import { TelegramMessage, InlineKeyboardMarkup } from '../../../telegram-bot/client';
+import { getBot } from '../../../telegram-bot/bot';
 import { processUserMessage } from '../agent/processor';
 
 // todo: unify Telegram handle messages and TUI handle messages.
