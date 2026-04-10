@@ -34,7 +34,6 @@
   "dependencies": {
     "assistant-telegram-bot": "workspace:*",
     "assistant-tui": "workspace:*",
-    "sh-compression": "workspace:*",
     "dotenv": "^17.4.1",
     "winston": "^3.19.0"
   },

@@ -32,9 +32,6 @@ importers:
       dotenv:
         specifier: ^17.4.1
         version: 17.4.1
-      sh-compression:
-        specifier: workspace:*
-        version: link:../sh-compression
       winston:
         specifier: ^3.19.0
         version: 3.19.0

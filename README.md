@@ -73,19 +73,6 @@ pnpm --filter opencrawdio test:coverage
 pnpm --filter opencrawdio test tests/security
 ```
 
-### “Install” sh-compression it globally from your local folder
-
-This creates a global symlink to the bin:
-```
-pnpm --filter sh-compression build
-pnpm -C apps/sh-compression link --global
-sh-compression -- node -v
-```
-
-To remove later:
-``` 
-pnpm unlink --global sh-compression
-``` 
 ## Docs
 
 - Architecture / agent internals: [AGENTS.md](AGENTS.md)
