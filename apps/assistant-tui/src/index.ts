@@ -128,7 +128,12 @@ export function startTui(options: StartTuiOptions): void {
 
   let scrollOffset = 0; // 0 = latest; higher = scrolled up.
 
-  const maxContentLines = () => Math.max(1, terminalHeight - 2);
+  // Layout in fixed mode:
+  // - content area
+  // - separator line
+  // - footer help line
+  // - input line
+  const maxContentLines = () => Math.max(1, terminalHeight - 3);
   const ensureScrollOffsetInRange = () => {
     const maxOffset = Math.max(0, contentBuffer.length - maxContentLines());
     scrollOffset = Math.max(0, Math.min(maxOffset, scrollOffset));
@@ -323,6 +328,25 @@ export function startTui(options: StartTuiOptions): void {
   });
 
   rl.setPrompt(prompt);
+  const footerText = `Commands: /help - /clear - /reset - /exit`;
+  const renderFooterLine = () => {
+    if (!fixedInput) return;
+    // Save/restore cursor so footer paint never steals input cursor position.
+    process.stdout.write('\x1b7');
+    process.stdout.write(ansi.cursorPos(terminalHeight, 1));
+    process.stdout.write(ansi.clearLine);
+    process.stdout.write(`${colors.bright}${colors.cyan}${footerText.slice(0, terminalWidth)}${colors.reset}`);
+    process.stdout.write('\x1b8');
+  };
+
+  const anyRl = rl as any;
+  if (fixedInput && typeof anyRl._refreshLine === 'function') {
+    const originalRefreshLine = anyRl._refreshLine.bind(rl);
+    anyRl._refreshLine = (...args: unknown[]) => {
+      originalRefreshLine(...args);
+      renderFooterLine();
+    };
+  }
 
   const ctx: TuiContext = {
     rl,
@@ -363,20 +387,20 @@ export function startTui(options: StartTuiOptions): void {
       if (typeof line === 'string') process.stdout.write(line);
     }
 
-    // Separator row (just above the input line)
-    process.stdout.write(ansi.cursorPos(terminalHeight - 1, 1));
+    // Separator row
+    process.stdout.write(ansi.cursorPos(terminalHeight - 2, 1));
     process.stdout.write(ansi.clearLine);
     process.stdout.write(`${colors.dim}${'─'.repeat(terminalWidth)}${colors.reset}`);
 
-    // Input pinned to last row
-    process.stdout.write(ansi.cursorPos(terminalHeight, 1));
+    // Input pinned to row above the footer
+    process.stdout.write(ansi.cursorPos(terminalHeight - 1, 1));
 
     rl.resume();
-    const anyRl = rl as any;
     if (typeof anyRl._refreshLine === 'function') {
       anyRl._refreshLine();
     } else {
       rl.prompt(true);
+      renderFooterLine();
     }
 
     isRendering = false;
@@ -586,7 +610,7 @@ function defaultWelcome(ctx: TuiContext, title?: string, showHints?: boolean): v
   const titleContent = `✨  ${appTitle}  ✨`;
   const totalPadding = contentWidth - titleContent.length;
   const leftPadding = Math.floor(totalPadding / 2);
-  const rightPadding = totalPadding - leftPadding;
+  const rightPadding = totalPadding * 1.42 - leftPadding;
   const titleLine = `${colors.bright}${colors.cyan}┃${colors.reset}  ${colors.bright}${colors.blue}${titleContent}${' '.repeat(Math.max(0, rightPadding))}${colors.reset}  ${colors.bright}${colors.cyan}┃${colors.reset}`;
   println(titleLine);
 
