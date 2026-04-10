@@ -1,4 +1,5 @@
 import * as readline from 'readline';
+import { Transform } from 'stream';
 
 // ANSI color codes
 export const defaultColors = {
@@ -94,18 +95,10 @@ export function startTui(options: StartTuiOptions): void {
 
   const colors = defaultColors;
   const fixedInput = options.fixedInput !== false;
-  
-  let contentBuffer: string[] = [];
+
+  const contentBuffer: string[] = [];
   let terminalWidth = process.stdout.columns || 80;
   let terminalHeight = process.stdout.rows || 24;
-
-  const clearScreen = () => console.clear();
-  const println = (text = '') => {
-    contentBuffer.push(text);
-    if (!fixedInput) {
-      console.log(text);
-    }
-  };
 
   const prompt = options.prompt ?? buildBeautifulPrompt(colors);
   const isCommand = options.isCommand ?? ((line: string) => line.startsWith('/'));
@@ -122,27 +115,209 @@ export function startTui(options: StartTuiOptions): void {
     clearLine: '\x1b[2K',
     altScreenOn: '\x1b[?1049h',
     altScreenOff: '\x1b[?1049l',
+    cursorHide: '\x1b[?25l',
+    cursorShow: '\x1b[?25h',
+    // Alternate scroll mode: mouse wheel becomes Up/Down key sequences while on the alt screen.
+    // This is more reliable than full mouse reporting across terminals and avoids terminal viewport scrolling.
+    mouseOn: '\x1b[?1007h',
+    mouseOff: '\x1b[?1007l',
     cursorPos: (row: number, col: number) => `\x1b[${row};${col}H`,
   };
 
-  // For fixed input, use dummy stream to prevent readline interference
-  const dummyOutput = fixedInput ? {
-    write: () => {},
-    on: () => {},
-    once: () => {},
-  } as any : process.stdout;
+  let scrollOffset = 0; // 0 = latest; higher = scrolled up.
+
+  const maxContentLines = () => Math.max(1, terminalHeight - 2);
+  const ensureScrollOffsetInRange = () => {
+    const maxOffset = Math.max(0, contentBuffer.length - maxContentLines());
+    scrollOffset = Math.max(0, Math.min(maxOffset, scrollOffset));
+  };
+
+  const clearScreen = () => {
+    if (fixedInput) {
+      process.stdout.write(ansi.clearScreen);
+      process.stdout.write(ansi.cursorHome);
+    } else {
+      console.clear();
+    }
+  };
+
+  const println = (text = '') => {
+    // If user is scrolled up, keep their viewport anchored as new lines arrive.
+    if (fixedInput && scrollOffset > 0) scrollOffset += 1;
+
+    contentBuffer.push(text);
+
+    if (!fixedInput) {
+      console.log(text);
+    } else {
+      ensureScrollOffsetInRange();
+    }
+  };
+
+  let renderScreen: () => void = () => undefined;
+  let renderScheduled: NodeJS.Timeout | undefined;
+
+  const requestRender = () => {
+    if (!fixedInput) return;
+    if (renderScheduled) return;
+
+    // Coalesce rapid wheel/key events to reduce flicker and prevent interleaving with readline writes.
+    renderScheduled = setTimeout(() => {
+      renderScheduled = undefined;
+      renderScreen();
+    }, 16);
+  };
+
+  const createInputFilter = (handlers: {
+    line(dir: 'up' | 'down'): void;
+    page(dir: 'up' | 'down'): void;
+  }): Transform => {
+    // We support multiple scroll input sources:
+    // - Alternate scroll mode (1007): wheel becomes Up/Down key sequences while in the alt screen
+    // - PageUp/PageDown keys
+    // - (Optional) mouse-reporting formats if the terminal still emits them
+    let pending = '';
+
+    const decodeWheel = (rawBtn: number): 'up' | 'down' | undefined => {
+      const btn = rawBtn >= 96 ? rawBtn - 32 : rawBtn;
+      if (btn === 64) return 'up';
+      if (btn === 65) return 'down';
+      return undefined;
+    };
+
+    const t = new Transform({
+      transform(chunk, _enc, cb) {
+        pending += chunk.toString('latin1');
+
+        const pushText = (s: string) => {
+          if (s.length > 0) this.push(Buffer.from(s, 'latin1'));
+        };
+
+        while (pending.length > 0) {
+          const idxSgr = pending.indexOf('\x1b[<');
+          const idxX10 = pending.indexOf('\x1b[M');
+          const idxUp = pending.indexOf('\x1b[A');
+          const idxDown = pending.indexOf('\x1b[B');
+          const idxPgUp = pending.indexOf('\x1b[5~');
+          const idxPgDown = pending.indexOf('\x1b[6~');
+
+          const indices = [idxSgr, idxX10, idxUp, idxDown, idxPgUp, idxPgDown].filter((i) => i !== -1);
+          const start = indices.length ? Math.min(...indices) : -1;
+
+          if (start === -1) {
+            pushText(pending);
+            pending = '';
+            break;
+          }
+
+          if (start > 0) {
+            pushText(pending.slice(0, start));
+            pending = pending.slice(start);
+          }
+
+          // Alternate scroll mode (1007) wheel events
+          if (pending.startsWith('\x1b[A')) {
+            handlers.line('up');
+            pending = pending.slice(3);
+            continue;
+          }
+          if (pending.startsWith('\x1b[B')) {
+            handlers.line('down');
+            pending = pending.slice(3);
+            continue;
+          }
+
+          // Page keys
+          if (pending.startsWith('\x1b[5~')) {
+            handlers.page('up');
+            pending = pending.slice(4);
+            continue;
+          }
+          if (pending.startsWith('\x1b[6~')) {
+            handlers.page('down');
+            pending = pending.slice(4);
+            continue;
+          }
+
+          // Mouse reporting formats (if emitted)
+          if (pending.startsWith('\x1b[<')) {
+            const m = pending.match(/^\x1b\[<([0-9]+);([0-9]+);([0-9]+)([mM])/);
+            if (!m) break;
+
+            const dir = decodeWheel(Number(m[1]));
+            if (dir) handlers.line(dir);
+            pending = pending.slice(m[0].length);
+            continue;
+          }
+
+          if (pending.startsWith('\x1b[M')) {
+            if (pending.length < 6) break;
+
+            const cbByte = pending.charCodeAt(3) - 32;
+            const dir = decodeWheel(cbByte);
+            if (dir) handlers.line(dir);
+            pending = pending.slice(6);
+            continue;
+          }
+
+          const u = pending.match(/^\x1b\[([0-9]+);([0-9]+);([0-9]+)([mM])/);
+          if (u) {
+            const dir = decodeWheel(Number(u[1]));
+            if (dir) handlers.line(dir);
+            pending = pending.slice(u[0].length);
+            continue;
+          }
+
+          pushText(pending.slice(0, 1));
+          pending = pending.slice(1);
+        }
+
+        cb();
+      },
+      flush(cb) {
+        if (pending.length) this.push(Buffer.from(pending, 'latin1'));
+        pending = '';
+        cb();
+      },
+    });
+
+    const anyT = t as any;
+    anyT.isTTY = Boolean((process.stdin as any).isTTY);
+    anyT.setRawMode = (mode: boolean) => (process.stdin as any).setRawMode?.(mode);
+
+    return t;
+  };
+
+  const inputFilter = fixedInput
+    ? createInputFilter({
+        line: (dir) => {
+          const delta = Math.max(1, Math.min(5, Math.floor(maxContentLines() / 12) + 1));
+          scrollOffset += dir === 'up' ? delta : -delta;
+          ensureScrollOffsetInRange();
+          requestRender();
+        },
+        page: (dir) => {
+          const delta = maxContentLines();
+          scrollOffset += dir === 'up' ? delta : -delta;
+          ensureScrollOffsetInRange();
+          requestRender();
+        },
+      })
+    : undefined;
+
+  if (inputFilter) {
+    process.stdin.pipe(inputFilter);
+  }
+
+  const inputStream = inputFilter ?? process.stdin;
 
   const rl = readline.createInterface({
-    input: process.stdin,
-    output: dummyOutput,
+    input: inputStream,
+    output: process.stdout,
     terminal: true,
   });
 
-  // Enable alternate screen buffer for fixed input (prevents terminal scrolling)
-  if (fixedInput) {
-    process.stdout.write(ansi.altScreenOn);
-    process.stdout.write(ansi.clearScreen);
-  }
+  rl.setPrompt(prompt);
 
   const ctx: TuiContext = {
     rl,
@@ -155,6 +330,66 @@ export function startTui(options: StartTuiOptions): void {
     terminalHeight,
   };
 
+  let isRendering = false;
+  let renderQueued = false;
+
+  renderScreen = () => {
+    if (!fixedInput) return;
+    if (isRendering) {
+      renderQueued = true;
+      return;
+    }
+    isRendering = true;
+
+    ensureScrollOffsetInRange();
+
+    rl.pause();
+
+    const availableHeight = maxContentLines();
+    const startIdx = Math.max(0, contentBuffer.length - availableHeight - scrollOffset);
+    const endIdx = Math.min(contentBuffer.length, startIdx + availableHeight);
+    const visibleContent = contentBuffer.slice(startIdx, endIdx);
+
+    // Repaint content area line-by-line to reduce flicker.
+    for (let row = 0; row < availableHeight; row++) {
+      process.stdout.write(ansi.cursorPos(row + 1, 1));
+      process.stdout.write(ansi.clearLine);
+      const line = visibleContent[row];
+      if (typeof line === 'string') process.stdout.write(line);
+    }
+
+    // Separator row (just above the input line)
+    process.stdout.write(ansi.cursorPos(terminalHeight - 1, 1));
+    process.stdout.write(ansi.clearLine);
+    process.stdout.write(`${colors.dim}${'─'.repeat(terminalWidth)}${colors.reset}`);
+
+    // Input pinned to last row
+    process.stdout.write(ansi.cursorPos(terminalHeight, 1));
+
+    rl.resume();
+    const anyRl = rl as any;
+    if (typeof anyRl._refreshLine === 'function') {
+      anyRl._refreshLine();
+    } else {
+      rl.prompt(true);
+    }
+
+    isRendering = false;
+
+    if (renderQueued) {
+      renderQueued = false;
+      requestRender();
+    }
+  };
+
+  // Enable alternate screen buffer for fixed input and capture wheel scroll.
+  if (fixedInput) {
+    process.stdout.write(ansi.altScreenOn);
+    process.stdout.write(ansi.cursorHide);
+    process.stdout.write(ansi.mouseOn);
+    clearScreen();
+  }
+
   // Handle terminal resize
   const handleResize = () => {
     terminalWidth = process.stdout.columns || 80;
@@ -162,56 +397,25 @@ export function startTui(options: StartTuiOptions): void {
     ctx.terminalWidth = terminalWidth;
     ctx.terminalHeight = terminalHeight;
     if (fixedInput) {
-      renderScreen();
+      requestRender();
     }
   };
 
   process.stdout.on('resize', handleResize);
 
-  const renderScreen = () => {
-    if (!fixedInput) return;
-    
-    // Move to home, clear screen
-    process.stdout.write(ansi.clearScreen);
-    process.stdout.write(ansi.cursorHome);
-    
-    // Calculate available height for content (leave room for input area)
-    const inputAreaHeight = 3;
-    const availableHeight = Math.max(3, terminalHeight - inputAreaHeight);
-    
-    // Show last N lines of content
-    const startIdx = Math.max(0, contentBuffer.length - availableHeight);
-    const visibleContent = contentBuffer.slice(startIdx);
-    
-    visibleContent.forEach(line => {
-      console.log(line);
-    });
-    
-    // Add padding to fill remaining space
-    const paddingNeeded = Math.max(0, availableHeight - visibleContent.length);
-    for (let i = 0; i < paddingNeeded; i++) {
-      console.log('');
-    }
-    
-    // Render fixed input area separator
-    console.log(`${colors.dim}${'─'.repeat(terminalWidth)}${colors.reset}`);
-    
-    // Position cursor at bottom for input and write prompt (no newline)
-    process.stdout.write(ansi.cursorPos(terminalHeight, 1));
-    process.stdout.write(prompt);
-  };
-
   if (clearOnStart) clearScreen();
   renderWelcome(ctx);
-  
+
   if (fixedInput) {
-    renderScreen();
+    requestRender();
   }
 
-  rl.setPrompt(prompt);
   rl.prompt();
 
   rl.on('line', async (input: string) => {
+    // Any user action implies “go back to bottom”.
+    scrollOffset = 0;
+
     const trimmed = input.trim();
 
     if (!trimmed) {
@@ -239,11 +443,12 @@ export function startTui(options: StartTuiOptions): void {
         }
 
         if (commandResult.action === 'clear') {
-          contentBuffer = [];
+          contentBuffer.length = 0;
+          scrollOffset = 0;
           clearScreen();
           renderWelcome(ctx);
           if (fixedInput) {
-            renderScreen();
+            requestRender();
           }
           rl.prompt();
           return;
@@ -254,7 +459,7 @@ export function startTui(options: StartTuiOptions): void {
           session.startTime = new Date();
           if (commandResult.response) println(`${colors.green}${commandResult.response}${colors.reset}\n`);
           if (fixedInput) {
-            renderScreen();
+            requestRender();
           }
           rl.prompt();
           return;
@@ -262,7 +467,7 @@ export function startTui(options: StartTuiOptions): void {
 
         if (commandResult.response) println(`\n${commandResult.response}\n`);
         if (fixedInput) {
-          renderScreen();
+          requestRender();
         }
         rl.prompt();
         return;
@@ -278,23 +483,37 @@ export function startTui(options: StartTuiOptions): void {
   rl.on('close', () => {
     process.stdout.removeListener('resize', handleResize);
     println(`\n${colors.dim}Session ended. Messages: ${session.messageCount}${colors.reset}`);
+
+    if (inputFilter) {
+      try {
+        process.stdin.unpipe(inputFilter);
+      } catch {
+        // ignore
+      }
+      inputFilter.destroy();
+    }
+
     if (fixedInput) {
-      // Disable alternate screen buffer and restore terminal
+      process.stdout.write(ansi.mouseOff);
+      process.stdout.write(ansi.cursorShow);
       process.stdout.write(ansi.altScreenOff);
     }
+
     process.exit(0);
   });
 
   if (confirmExit) {
     rl.on('SIGINT', () => {
       println('\n');
+      if (fixedInput) requestRender();
+
       rl.question(`${colors.yellow}Are you sure you want to exit? (y/n)${colors.reset} `, (answer: string) => {
         const a = answer.toLowerCase();
         if (a === 'y' || a === 'yes') {
           rl.close();
         } else {
           if (fixedInput) {
-            renderScreen();
+            requestRender();
           }
           rl.prompt();
         }
@@ -305,7 +524,8 @@ export function startTui(options: StartTuiOptions): void {
   async function handleNormalInput(message: string): Promise<void> {
     session.messageCount++;
 
-    const spinnerEnabled = options.spinner === true || typeof options.spinner === 'object';
+    // The legacy spinner writes directly to stdout and can interfere with the fixed input layout.
+    const spinnerEnabled = (options.spinner === true || typeof options.spinner === 'object') && !fixedInput;
     const stopSpinner = startSpinner(
       typeof options.spinner === 'object' ? options.spinner : undefined,
       spinnerEnabled,
@@ -329,7 +549,7 @@ export function startTui(options: StartTuiOptions): void {
     }
 
     if (fixedInput) {
-      renderScreen();
+      requestRender();
     }
     rl.prompt();
   }

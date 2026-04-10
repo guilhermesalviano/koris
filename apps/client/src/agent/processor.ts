@@ -38,5 +38,5 @@ export async function processUserMessage(
   }
 
   // Default response
-  return `I received your message: "${safeMessage}"\n\nI'm currently a mock agent. Ollama integration coming soon!`;
+  return `I'm currently a mock response.\nOllama integration coming soon with full functionality!`;
 }

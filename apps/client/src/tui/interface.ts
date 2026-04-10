@@ -17,7 +17,7 @@ export function startTUI(): void {
     spinner: { enabled: true, label: 'Processing' },
     
     // Thinking indicator for responses
-    assistantPrefix: '🤖',
+    assistantPrefix: '●',
     
     // Command detection
     isCommand,
