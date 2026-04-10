@@ -20,6 +20,7 @@ This repo is **modular**: the main runnable app lives in `apps/client/`, and reu
 - `apps/client/` — main app (agent + TUI + Telegram integration)
 - `apps/assistant-tui/` — reusable TUI runner package (`assistant-tui`)
 - `apps/telegram-bot/` — reusable Telegram connection package (`assistant-telegram-bot`)
+- `apps/sh-compression/` — hookable CLI proxy + shared sub-instruction helpers (`sh-compression`)
 
 ## Prerequisites
 

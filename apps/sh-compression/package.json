@@ -1,0 +1,43 @@
+{
+  "name": "sh-compression",
+  "version": "0.1.0",
+  "description": "Hookable CLI proxy + shared instruction parsing helpers for opencrawdio",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "sh-compression": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "packageManager": "pnpm@10.18.3",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "pnpm run clean && tsc --project tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "prepare": "pnpm run build",
+    "prepublishOnly": "pnpm run build",
+    "test": "echo \"No tests\" && exit 0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guilhermesalviano/opencrawdio.git"
+  },
+  "author": "guilhermesalviano",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "typescript": "^6.0.2"
+  }
+}

@@ -1,10 +1,23 @@
 // import { ILogger } from '@/infrastructure/logger';
 import { handleCommand, isCommand } from './commands';
-import { listDirectory } from '../sub-instructions/list-directory';
-import { readFile } from '../sub-instructions/read-file';
-import { search } from '../sub-instructions/search';
-import { detectInstruction } from '../sub-instructions/detect-instruction';
-import { Instruction } from '../types';
+import type { Instruction } from '../types';
+import { detectInstruction, listDirectory, readFile, search } from 'sh-compression'; // remove it in future.
+
+function toSafeMessage(input: unknown): string {
+  if (typeof input === 'string') return input;
+  if (input === null || input === undefined) return '';
+  try {
+    return String(input);
+  } catch {
+    return '';
+  }
+}
+
+function previewMessage(message: string, maxLen = 200): string {
+  const trimmed = message.replace(/\s+/g, ' ').trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen)}…`;
+}
 
 /**
  * Process user messages and generate responses
@@ -12,27 +25,29 @@ import { Instruction } from '../types';
  */
 export async function processUserMessage(
   // logger: ILogger,
-  message: string,
+  message: unknown,
   source: 'telegram' | 'tui'
 ): Promise<string> {
-  // Only log for telegram source to avoid breaking TUI interface
-  console.log(`Processing message from ${source}: "${message}"`);
+  const safeMessage = toSafeMessage(message);
+
+  // Keep logs lightweight (tests may send very large inputs)
+  console.log(`Processing message from ${source}: "${previewMessage(safeMessage)}"`);
 
   // Handle commands using centralized handler
-  if (isCommand(message)) {
-    const result = handleCommand(message, { source });
+  if (isCommand(safeMessage)) {
+    const result = handleCommand(safeMessage, { source });
     return result.response || '';
   }
 
   // Mock instruction handling
-  const instruction = detectInstruction(message);
+  const instruction = detectInstruction(safeMessage);
   if (instruction) {
     // logger.log("info", `Detected instruction: ${instruction.type} with params: ${instruction.params}`);
-    return handleInstruction(instruction, message);
+    return handleInstruction(instruction, safeMessage);
   }
 
   // Default response
-  return `I received your message: "${message}"\n\nI'm currently a mock agent. Ollama integration coming soon!`;
+  return `I received your message: "${safeMessage}"\n\nI'm currently a mock agent. Ollama integration coming soon!`;
 }
 
 /**
