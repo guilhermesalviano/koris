@@ -20,6 +20,6 @@
     "moduleResolution": "bundler",
     "types": ["node"]
   },
-  "include": ["*.ts"],
+  "include": ["*.ts", "src/commands/read-file.ts", "src/config.ts", "src/index.ts", "src/cli.ts", "src/commands/search.ts", "src/types.ts"],
   "exclude": ["node_modules", "dist"]
 }

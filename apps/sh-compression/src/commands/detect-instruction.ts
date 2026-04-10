@@ -1,4 +1,4 @@
-import type { Instruction } from './types';
+import type { Instruction } from '../types';
 
 function sanitizeFilename(input: string): string {
   // Strip null bytes + common shell metacharacters that should never appear in a filename.
