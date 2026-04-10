@@ -6,10 +6,12 @@ export const defaultColors = {
   reset: '\x1b[0m',
   bright: '\x1b[1m',
   dim: '\x1b[2m',
+  white: '\x1b[97m',
   cyan: '\x1b[36m',
   green: '\x1b[32m',
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
+  bgBlue: '\x1b[44m',
   magenta: '\x1b[35m',
   gray: '\x1b[90m',
   red: '\x1b[31m',
@@ -142,14 +144,17 @@ export function startTui(options: StartTuiOptions): void {
   };
 
   const println = (text = '') => {
+    const lines = text.replace(/\r\n/g, '\n').split('\n');
+
     // If user is scrolled up, keep their viewport anchored as new lines arrive.
-    if (fixedInput && scrollOffset > 0) scrollOffset += 1;
+    if (fixedInput && scrollOffset > 0) scrollOffset += lines.length;
 
-    contentBuffer.push(text);
+    for (const line of lines) {
+      contentBuffer.push(line);
+      if (!fixedInput) console.log(line);
+    }
 
-    if (!fixedInput) {
-      console.log(text);
-    } else {
+    if (fixedInput) {
       ensureScrollOffsetInRange();
     }
   };
@@ -422,6 +427,10 @@ export function startTui(options: StartTuiOptions): void {
       rl.prompt();
       return;
     }
+
+    println(`${colors.bgBlue}${colors.white} YOU ${colors.reset} ${trimmed}`);
+    println();
+    if (fixedInput) requestRender();
 
     const shouldRouteToCommand = Boolean(options.onCommand) && isCommand(trimmed);
 
