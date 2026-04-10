@@ -33,6 +33,9 @@ export interface TuiContext {
   colors: typeof defaultColors;
   clear(): void;
   println(text?: string): void;
+  contentBuffer: string[];
+  terminalWidth: number;
+  terminalHeight: number;
 }
 
 export interface SpinnerOptions {
@@ -72,6 +75,15 @@ export interface StartTuiOptions {
 
   /** Prefix before assistant responses. Defaults to '●'. */
   assistantPrefix?: string;
+
+  /** Title for the welcome message. Defaults to 'Assistant'. */
+  title?: string;
+
+  /** Show feature hints in welcome message. Defaults to true. */
+  showHints?: boolean;
+
+  /** Use fixed input layout with scrollable history. Defaults to true. */
+  fixedInput?: boolean;
 }
 
 export function startTui(options: StartTuiOptions): void {
@@ -81,12 +93,23 @@ export function startTui(options: StartTuiOptions): void {
   };
 
   const colors = defaultColors;
-  const clear = () => console.clear();
-  const println = (text = '') => console.log(text);
+  const fixedInput = options.fixedInput !== false;
+  
+  let contentBuffer: string[] = [];
+  let terminalWidth = process.stdout.columns || 80;
+  let terminalHeight = process.stdout.rows || 24;
 
-  const prompt = options.prompt ?? `${colors.cyan}>${colors.reset} `;
+  const clearScreen = () => console.clear();
+  const println = (text = '') => {
+    contentBuffer.push(text);
+    if (!fixedInput) {
+      console.log(text);
+    }
+  };
+
+  const prompt = options.prompt ?? buildBeautifulPrompt(colors);
   const isCommand = options.isCommand ?? ((line: string) => line.startsWith('/'));
-  const renderWelcome = options.renderWelcome ?? defaultWelcome;
+  const renderWelcome = options.renderWelcome ?? ((ctx) => defaultWelcome(ctx, options.title, options.showHints));
   const formatResponse = options.formatResponse ?? defaultFormatResponse;
   const confirmExit = options.confirmExit ?? true;
   const clearOnStart = options.clearOnStart ?? true;
@@ -94,8 +117,7 @@ export function startTui(options: StartTuiOptions): void {
 
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout,
-    prompt,
+    output: fixedInput ? process.stdout : process.stdout,
     terminal: true,
   });
 
@@ -103,13 +125,56 @@ export function startTui(options: StartTuiOptions): void {
     rl,
     session,
     colors,
-    clear,
+    clear: clearScreen,
     println,
+    contentBuffer,
+    terminalWidth,
+    terminalHeight,
   };
 
-  if (clearOnStart) clear();
-  renderWelcome(ctx);
+  // Handle terminal resize
+  const handleResize = () => {
+    terminalWidth = process.stdout.columns || 80;
+    terminalHeight = process.stdout.rows || 24;
+    ctx.terminalWidth = terminalWidth;
+    ctx.terminalHeight = terminalHeight;
+    if (fixedInput) {
+      renderScreen();
+    }
+  };
 
+  process.stdout.on('resize', handleResize);
+
+  const renderScreen = () => {
+    if (!fixedInput) return;
+    
+    clearScreen();
+    
+    // Calculate available height for content (leave room for input area)
+    const inputAreaHeight = 3;
+    const availableHeight = terminalHeight - inputAreaHeight;
+    
+    // Show last N lines of content
+    const startIdx = Math.max(0, contentBuffer.length - availableHeight);
+    const visibleContent = contentBuffer.slice(startIdx);
+    
+    visibleContent.forEach(line => {
+      console.log(line);
+    });
+    
+    // Render fixed input area
+    console.log(`${colors.dim}${'─'.repeat(terminalWidth)}${colors.reset}`);
+    process.stdout.write(prompt);
+  };
+
+  if (clearOnStart) clearScreen();
+  renderWelcome(ctx);
+  
+  if (fixedInput) {
+    renderScreen();
+  }
+
+  rl.setPrompt(prompt);
   rl.prompt();
 
   rl.on('line', async (input: string) => {
@@ -126,7 +191,6 @@ export function startTui(options: StartTuiOptions): void {
       const result = await options.onCommand(trimmed, ctx);
       const commandResult = normalizeCommandResult(result);
 
-      // If it wasn't handled, treat it as normal input.
       if (commandResult && commandResult.handled === false) {
         await handleNormalInput(trimmed);
         return;
@@ -135,13 +199,18 @@ export function startTui(options: StartTuiOptions): void {
       if (commandResult) {
         if (commandResult.action === 'exit') {
           if (commandResult.response) println(`\n${colors.green}${commandResult.response}${colors.reset}`);
+          process.stdout.removeListener('resize', handleResize);
           rl.close();
           return;
         }
 
         if (commandResult.action === 'clear') {
-          clear();
+          contentBuffer = [];
+          clearScreen();
           renderWelcome(ctx);
+          if (fixedInput) {
+            renderScreen();
+          }
           rl.prompt();
           return;
         }
@@ -150,16 +219,21 @@ export function startTui(options: StartTuiOptions): void {
           session.messageCount = 0;
           session.startTime = new Date();
           if (commandResult.response) println(`${colors.green}${commandResult.response}${colors.reset}\n`);
+          if (fixedInput) {
+            renderScreen();
+          }
           rl.prompt();
           return;
         }
 
         if (commandResult.response) println(`\n${commandResult.response}\n`);
+        if (fixedInput) {
+          renderScreen();
+        }
         rl.prompt();
         return;
       }
 
-      // undefined/null result: just continue
       rl.prompt();
       return;
     }
@@ -168,7 +242,12 @@ export function startTui(options: StartTuiOptions): void {
   });
 
   rl.on('close', () => {
+    process.stdout.removeListener('resize', handleResize);
     println(`\n${colors.dim}Session ended. Messages: ${session.messageCount}${colors.reset}`);
+    if (fixedInput) {
+      clearScreen();
+      contentBuffer.forEach(line => console.log(line));
+    }
     process.exit(0);
   });
 
@@ -177,8 +256,14 @@ export function startTui(options: StartTuiOptions): void {
       println('\n');
       rl.question(`${colors.yellow}Are you sure you want to exit? (y/n)${colors.reset} `, (answer: string) => {
         const a = answer.toLowerCase();
-        if (a === 'y' || a === 'yes') rl.close();
-        else rl.prompt();
+        if (a === 'y' || a === 'yes') {
+          rl.close();
+        } else {
+          if (fixedInput) {
+            renderScreen();
+          }
+          rl.prompt();
+        }
       });
     });
   }
@@ -209,6 +294,9 @@ export function startTui(options: StartTuiOptions): void {
       println();
     }
 
+    if (fixedInput) {
+      renderScreen();
+    }
     rl.prompt();
   }
 }
@@ -218,15 +306,58 @@ export function startTUI(options: StartTuiOptions): void {
   startTui(options);
 }
 
-function defaultWelcome(ctx: TuiContext): void {
-  const { colors, println } = ctx;
+function defaultWelcome(ctx: TuiContext, title?: string, showHints?: boolean): void {
+  const { colors, println, terminalWidth } = ctx;
+  const appTitle = title ?? 'Assistant';
+  const displayHints = showHints !== false;
 
-  println(`${colors.bright}${colors.cyan}╔════════════════════════════════════════════╗${colors.reset}`);
-  println(`${colors.bright}${colors.cyan}║${colors.reset}  ${colors.bright}TUI${colors.reset}                                         ${colors.bright}${colors.cyan}║${colors.reset}`);
-  println(`${colors.bright}${colors.cyan}╚════════════════════════════════════════════╝${colors.reset}`);
+  // Calculate box width (leave 2 chars for padding on each side)
+  const boxWidth = Math.max(30, terminalWidth - 4);
+  const contentWidth = boxWidth - 4; // Account for borders and padding
+
+  // Build top border
+  const topBorder = `${colors.bright}${colors.cyan}┏${('━').repeat(boxWidth - 2)}┓${colors.reset}`;
+  println(topBorder);
+
+  // Build title line with dynamic spacing
+  const titleContent = `✨  ${appTitle}  ✨`;
+  const totalPadding = contentWidth - titleContent.length;
+  const leftPadding = Math.floor(totalPadding / 2);
+  const rightPadding = totalPadding - leftPadding;
+  const titleLine = `${colors.bright}${colors.cyan}┃${colors.reset}  ${colors.bright}${colors.blue}${titleContent}${' '.repeat(Math.max(0, rightPadding))}${colors.reset}  ${colors.bright}${colors.cyan}┃${colors.reset}`;
+  println(titleLine);
+
+  // Build bottom border
+  const bottomBorder = `${colors.bright}${colors.cyan}┗${('━').repeat(boxWidth - 2)}┛${colors.reset}`;
+  println(bottomBorder);
   println();
-  println(`${colors.dim}Type your message. Commands start with '/'.${colors.reset}`);
+
+  // Display current time
+  const now = new Date();
+  const timeStr = now.toLocaleString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  });
+  println(`${colors.dim}${colors.gray}🕐 ${timeStr}${colors.reset}`);
   println();
+
+  // Feature hints
+  if (displayHints) {
+    println(`${colors.bright}${colors.magenta}📚 Quick Tips:${colors.reset}`);
+    println(`  ${colors.cyan}•${colors.reset} Start commands with ${colors.bright}/${colors.reset}`);
+    println(`  ${colors.cyan}•${colors.reset} Type ${colors.bright}/help${colors.reset} for available commands`);
+    println(`  ${colors.cyan}•${colors.reset} Press ${colors.bright}Ctrl+C${colors.reset} to exit gracefully`);
+    println();
+  }
+
+  println(`${colors.dim}Ready to assist! What can I help you with?${colors.reset}`);
+  println();
+}
+
+function buildBeautifulPrompt(colors: typeof defaultColors): string {
+  return `${colors.bright}${colors.blue}❯${colors.reset}${colors.cyan}${colors.bright} ${colors.reset}`;
 }
 
 function startSpinner(
