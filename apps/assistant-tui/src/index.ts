@@ -603,12 +603,12 @@ function defaultWelcome(ctx: TuiContext, title?: string, showHints?: boolean): v
     second: '2-digit',
     hour12: true,
   });
-  println(`${colors.dim}${colors.gray}🕐 ${timeStr}${colors.reset}`);
+  println(`${colors.dim}${colors.gray}Session started at ${timeStr}${colors.reset}`);
   println();
 
   // Feature hints
   if (displayHints) {
-    println(`${colors.bright}${colors.magenta}📚 Quick Tips:${colors.reset}`);
+    println(`${colors.bright}${colors.magenta}Quick Tips:${colors.reset}`);
     println(`  ${colors.cyan}•${colors.reset} Start commands with ${colors.bright}/${colors.reset}`);
     println(`  ${colors.cyan}•${colors.reset} Type ${colors.bright}/help${colors.reset} for available commands`);
     println(`  ${colors.cyan}•${colors.reset} Press ${colors.bright}Ctrl+C${colors.reset} to exit gracefully`);
