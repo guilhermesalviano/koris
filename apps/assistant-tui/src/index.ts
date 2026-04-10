@@ -166,6 +166,7 @@ export function startTui(options: StartTuiOptions): void {
 
   let renderScreen: () => void = () => undefined;
   let renderScheduled: NodeJS.Timeout | undefined;
+  let spinnerStatus = '';
 
   const requestRender = () => {
     if (!fixedInput) return;
@@ -176,6 +177,12 @@ export function startTui(options: StartTuiOptions): void {
       renderScheduled = undefined;
       renderScreen();
     }, 16);
+  };
+
+  const buildSeparatorLine = () => {
+    const prefix = spinnerStatus ? `- ${spinnerStatus} ` : '';
+    const dashCount = Math.max(0, terminalWidth - prefix.length);
+    return `${colors.dim}${prefix}${'─'.repeat(dashCount)}${colors.reset}`;
   };
 
   const createInputFilter = (handlers: {
@@ -390,7 +397,7 @@ export function startTui(options: StartTuiOptions): void {
     // Separator row
     process.stdout.write(ansi.cursorPos(terminalHeight - 2, 1));
     process.stdout.write(ansi.clearLine);
-    process.stdout.write(`${colors.dim}${'─'.repeat(terminalWidth)}${colors.reset}`);
+    process.stdout.write(buildSeparatorLine());
 
     // Input pinned to row above the footer
     process.stdout.write(ansi.cursorPos(terminalHeight - 1, 1));
@@ -557,12 +564,23 @@ export function startTui(options: StartTuiOptions): void {
   async function handleNormalInput(message: string): Promise<void> {
     session.messageCount++;
 
-    // The legacy spinner writes directly to stdout and can interfere with the fixed input layout.
-    const spinnerEnabled = (options.spinner === true || typeof options.spinner === 'object') && !fixedInput;
+    const spinnerEnabled = options.spinner !== false;
     const stopSpinner = startSpinner(
       typeof options.spinner === 'object' ? options.spinner : undefined,
       spinnerEnabled,
-      colors
+      colors,
+      fixedInput
+        ? {
+            onFrame: (text) => {
+              spinnerStatus = text;
+              requestRender();
+            },
+            onStop: () => {
+              spinnerStatus = '';
+              requestRender();
+            },
+          }
+        : undefined
     );
 
     try {
@@ -650,7 +668,11 @@ function buildBeautifulPrompt(colors: typeof defaultColors): string {
 function startSpinner(
   spinnerOptions: SpinnerOptions | undefined,
   enabled: boolean,
-  colors: typeof defaultColors
+  colors: typeof defaultColors,
+  hooks?: {
+    onFrame(text: string): void;
+    onStop(): void;
+  }
 ): () => void {
   if (!enabled) return () => undefined;
   if (spinnerOptions?.enabled === false) return () => undefined;
@@ -661,12 +683,21 @@ function startSpinner(
 
   let i = 0;
   const interval = setInterval(() => {
-    process.stdout.write(`\r${colors.dim}${colors.gray}${frames[i]} ${label}...${colors.reset}`);
+    const text = `${frames[i]} ${label}...`;
+    if (hooks) {
+      hooks.onFrame(text);
+    } else {
+      process.stdout.write(`\r${colors.dim}${colors.gray}${text}${colors.reset}`);
+    }
     i = (i + 1) % frames.length;
   }, intervalMs);
 
   return () => {
     clearInterval(interval);
+    if (hooks) {
+      hooks.onStop();
+      return;
+    }
     // Clear current line
     readline.clearLine(process.stdout, 0);
     readline.cursorTo(process.stdout, 0);

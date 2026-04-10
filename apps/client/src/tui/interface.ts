@@ -11,7 +11,7 @@ export function startTUI(): void {
     title: 'opencrawdio - AI Assistant',
     
     // Show helpful quick tips
-    showHints: true,
+    showHints: false,
     
     // Enhanced spinner during processing
     spinner: { enabled: true, label: 'Processing' },

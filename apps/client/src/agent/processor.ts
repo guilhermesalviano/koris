@@ -37,6 +37,9 @@ export async function processUserMessage(
     return result.response || '';
   }
 
-  // Default response
-  return `I'm currently a mock response.\nOllama integration coming soon with full functionality!`;
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve(`I'm currently a mock response.\nOllama integration coming soon with full functionality!`);
+    }, 3000);
+  });
 }
