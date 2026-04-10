@@ -115,11 +115,34 @@ export function startTui(options: StartTuiOptions): void {
   const clearOnStart = options.clearOnStart ?? true;
   const assistantPrefix = options.assistantPrefix ?? '●';
 
+  // ANSI escape codes for terminal control
+  const ansi = {
+    cursorHome: '\x1b[H',
+    clearScreen: '\x1b[2J',
+    clearLine: '\x1b[2K',
+    altScreenOn: '\x1b[?1049h',
+    altScreenOff: '\x1b[?1049l',
+    cursorPos: (row: number, col: number) => `\x1b[${row};${col}H`,
+  };
+
+  // For fixed input, use dummy stream to prevent readline interference
+  const dummyOutput = fixedInput ? {
+    write: () => {},
+    on: () => {},
+    once: () => {},
+  } as any : process.stdout;
+
   const rl = readline.createInterface({
     input: process.stdin,
-    output: fixedInput ? process.stdout : process.stdout,
+    output: dummyOutput,
     terminal: true,
   });
+
+  // Enable alternate screen buffer for fixed input (prevents terminal scrolling)
+  if (fixedInput) {
+    process.stdout.write(ansi.altScreenOn);
+    process.stdout.write(ansi.clearScreen);
+  }
 
   const ctx: TuiContext = {
     rl,
@@ -148,11 +171,13 @@ export function startTui(options: StartTuiOptions): void {
   const renderScreen = () => {
     if (!fixedInput) return;
     
-    clearScreen();
+    // Move to home, clear screen
+    process.stdout.write(ansi.clearScreen);
+    process.stdout.write(ansi.cursorHome);
     
     // Calculate available height for content (leave room for input area)
     const inputAreaHeight = 3;
-    const availableHeight = terminalHeight - inputAreaHeight;
+    const availableHeight = Math.max(3, terminalHeight - inputAreaHeight);
     
     // Show last N lines of content
     const startIdx = Math.max(0, contentBuffer.length - availableHeight);
@@ -162,8 +187,17 @@ export function startTui(options: StartTuiOptions): void {
       console.log(line);
     });
     
-    // Render fixed input area
+    // Add padding to fill remaining space
+    const paddingNeeded = Math.max(0, availableHeight - visibleContent.length);
+    for (let i = 0; i < paddingNeeded; i++) {
+      console.log('');
+    }
+    
+    // Render fixed input area separator
     console.log(`${colors.dim}${'─'.repeat(terminalWidth)}${colors.reset}`);
+    
+    // Position cursor at bottom for input and write prompt (no newline)
+    process.stdout.write(ansi.cursorPos(terminalHeight, 1));
     process.stdout.write(prompt);
   };
 
@@ -245,8 +279,8 @@ export function startTui(options: StartTuiOptions): void {
     process.stdout.removeListener('resize', handleResize);
     println(`\n${colors.dim}Session ended. Messages: ${session.messageCount}${colors.reset}`);
     if (fixedInput) {
-      clearScreen();
-      contentBuffer.forEach(line => console.log(line));
+      // Disable alternate screen buffer and restore terminal
+      process.stdout.write(ansi.altScreenOff);
     }
     process.exit(0);
   });
