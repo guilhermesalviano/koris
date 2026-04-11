@@ -180,7 +180,7 @@ export function startTui(options: StartTuiOptions): void {
     }, 16);
   };
 
-  const buildSeparatorLine = () => {
+  const buildSeparatorLine = (spinnerStatus: string) => {
     const prefix = spinnerStatus ? `- ${spinnerStatus} ` : '';
     const dashCount = Math.max(0, terminalWidth - prefix.length);
     return `${colors.dim}${prefix}${'─'.repeat(dashCount)}${colors.reset}`;
@@ -341,6 +341,8 @@ export function startTui(options: StartTuiOptions): void {
     if (!fixedInput) return;
     // Save/restore cursor so footer paint never steals input cursor position.
     process.stdout.write('\x1b7');
+    process.stdout.write(ansi.cursorPos(terminalHeight -1, 1));
+    process.stdout.write(buildSeparatorLine(""));
     process.stdout.write(ansi.cursorPos(terminalHeight, 1));
     process.stdout.write(ansi.clearLine);
     process.stdout.write(`${colors.bright}${colors.cyan}${footerText.slice(0, terminalWidth)}${colors.reset}`);
@@ -396,12 +398,12 @@ export function startTui(options: StartTuiOptions): void {
     }
 
     // Separator row
-    process.stdout.write(ansi.cursorPos(terminalHeight - 2, 1));
+    process.stdout.write(ansi.cursorPos(terminalHeight - 3, 1));
     process.stdout.write(ansi.clearLine);
-    process.stdout.write(buildSeparatorLine());
+    process.stdout.write(buildSeparatorLine(spinnerStatus));
 
     // Input pinned to row above the footer
-    process.stdout.write(ansi.cursorPos(terminalHeight - 1, 1));
+    process.stdout.write(ansi.cursorPos(terminalHeight - 2, 1));
 
     rl.resume();
     if (typeof anyRl._refreshLine === 'function') {
