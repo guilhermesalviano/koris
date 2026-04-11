@@ -6,7 +6,7 @@ const isTest = process.env.NODE_ENV === 'test';
 export const config = {
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
   ENVIRONMENT: process.env.ENVIRONMENT || 'development',
-  PORT: process.env.PORT ? parseInt(process.env.PORT) : 3000,
+  PORT: process.env.PORT ? Number(process.env.PORT) : 3000,
   BASE_DIR: process.cwd(),
   AI: {
     // In tests we default to a deterministic mock provider so unit tests don't require Ollama.
