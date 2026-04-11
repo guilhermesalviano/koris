@@ -29,44 +29,13 @@ export class OllamaAIProvider implements AIProvider {
 
   async chat(request: AIChatRequest): Promise<string> {
     const controller = new AbortController();
-
-    let idleTimer: NodeJS.Timeout | undefined;
-    const hardTimer = setTimeout(() => controller.abort(), HARD_TIMEOUT_MS);
-
-    const bumpIdle = () => {
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => controller.abort(), IDLE_TIMEOUT_MS);
-    };
-
-    bumpIdle();
-
     try {
-      const body = await this.fetchStream(request, controller.signal);
-
-      // Non-streaming fallback (some proxies ignore stream:true)
-      if (!body) {
-        return await this.readJsonFallback(request, controller.signal);
-      }
-
-      let out = '';
-
-      for await (const chunk of this.readNDJSON(body, bumpIdle)) {
-        if (chunk.error) throw new Error(chunk.error);
-        const text = this.parseChunk(chunk);
-        if (text) out += text;
-        if (chunk.done) break;
-      }
-
-      if (!out) throw new Error('Ollama response missing content');
-      return out;
+      return await this.readJsonFallback(request, controller.signal);
     } catch (err) {
       if (this.isAbortError(err)) {
         throw new Error('Ollama request timed out while streaming');
       }
       throw err;
-    } finally {
-      clearTimeout(idleTimer);
-      clearTimeout(hardTimer);
     }
   }
 
