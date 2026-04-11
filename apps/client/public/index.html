@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,56 +7,155 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/public/styles.css" />
     <script defer src="/public/main.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['DM Sans', 'sans-serif'],
+              mono: ['DM Mono', 'monospace'],
+            },
+            colors: {
+              bg: {
+                DEFAULT: '#0a0a0f',
+                2: '#111118',
+                3: '#18181f',
+                4: '#1e1e28',
+              },
+              accent: {
+                DEFAULT: '#6c63ff',
+                2: '#8b84ff',
+              },
+              txt: {
+                DEFAULT: '#e8e8f0',
+                2: '#8888a0',
+                3: '#555568',
+              },
+            },
+            borderColor: {
+              subtle: 'rgba(255,255,255,0.07)',
+              strong: 'rgba(255,255,255,0.12)',
+              accent: 'rgba(108,99,255,0.3)',
+            },
+            backgroundColor: {
+              'accent-muted': 'rgba(108,99,255,0.12)',
+            },
+            borderRadius: {
+              card: '18px',
+            },
+            keyframes: {
+              msgIn: {
+                from: { opacity: '0', transform: 'translateY(10px) scale(0.98)' },
+                to:   { opacity: '1', transform: 'translateY(0) scale(1)' },
+              },
+              blink: {
+                '0%,80%,100%': { opacity: '0.3', transform: 'scale(0.8)' },
+                '40%':          { opacity: '1',   transform: 'scale(1)' },
+              },
+              toastIn: {
+                from: { opacity: '0', transform: 'translateX(-50%) translateY(8px)' },
+                to:   { opacity: '1', transform: 'translateX(-50%) translateY(0)' },
+              },
+              toastOut: {
+                from: { opacity: '1' },
+                to:   { opacity: '0' },
+              },
+            },
+            animation: {
+              msgIn:    'msgIn 0.22s cubic-bezier(0.34,1.56,0.64,1) both',
+              blink:    'blink 1.3s ease-in-out infinite',
+              blink2:   'blink 1.3s ease-in-out 0.2s infinite',
+              blink3:   'blink 1.3s ease-in-out 0.4s infinite',
+              toastIn:  'toastIn 0.2s ease',
+              toastOut: 'toastOut 0.3s ease 3s forwards',
+            },
+          },
+        },
+      }
+    </script>
+    <link rel="stylesheet" href="/public/styles.css" />
   </head>
-  <body>
-    <div id="app">
-      <header>
-        <div class="logo">
-          <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+
+  <body class="h-full bg-bg font-sans text-txt antialiased">
+
+    <div id="app" class="relative z-10 flex h-screen flex-col w-full">
+
+      <header class="sticky top-0 z-10 flex flex-shrink-0 items-center gap-2.5 border-b border-subtle bg-bg/80 px-5 py-3.5 backdrop-blur-md">
+        <div class="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-accent">
+          <svg class="h-4 w-4 stroke-white fill-none stroke-2" style="stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24">
+            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+          </svg>
         </div>
         <div>
-          <div class="header-title">opencrawdio</div>
-          <div class="header-sub">ai chat</div>
+          <div class="text-[13px] font-medium tracking-wide">opencrawdio</div>
+          <div class="font-mono text-[11px] text-txt-3 mt-px">ai chat</div>
         </div>
-        <div class="header-right">
-          <div class="status-pill">
-            <div class="status-dot" id="status-dot"></div>
+        <div class="ml-auto flex items-center gap-2">
+          <div class="flex items-center gap-1.5 rounded-full border border-subtle bg-bg-3 px-2.5 py-1 font-mono text-[11px] text-txt-3">
+            <div class="h-1.5 w-1.5 rounded-full bg-green-500 transition-colors duration-300" id="status-dot"></div>
             <span id="status-label">online</span>
           </div>
         </div>
       </header>
 
-      <div id="chat">
-        <div class="empty-state" id="empty-state">
-          <div class="empty-icon">
-            <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <div id="chat" class="flex flex-1 flex-col gap-5 overflow-y-auto scroll-smooth px-5 py-6">
+
+        <div class="m-auto max-w-sm px-6 py-10 text-center" id="empty-state">
+          <div class="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-strong bg-bg-3">
+            <svg class="h-6 w-6 stroke-txt-3 fill-none" style="stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
           </div>
-          <h2>What can I help with?</h2>
-          <p>Ask anything — code, concepts, writing, analysis. I'll think it through with you.</p>
-          <div class="suggestions">
-            <button class="suggestion-btn" onclick="fillPrompt('Explain how streaming works in the Fetch API')">fetch streaming</button>
-            <button class="suggestion-btn" onclick="fillPrompt('Write a Python function to parse JSON safely')">safe JSON parse</button>
-            <button class="suggestion-btn" onclick="fillPrompt('What is the difference between RAG and fine-tuning?')">RAG vs fine-tuning</button>
-            <button class="suggestion-btn" onclick="fillPrompt('How do I center a div in CSS?')">center a div</button>
+          <h2 class="mb-2 text-base font-medium">What can I help with?</h2>
+          <p class="text-[13px] leading-relaxed text-txt-2">Ask anything — code, concepts, writing, analysis. I'll think it through with you.</p>
+          <div class="mt-5 flex flex-wrap justify-center gap-1.5">
+            <button onclick="fillPrompt('Explain how streaming works in the Fetch API')"
+              class="rounded-full border border-strong bg-bg-3 px-3.5 py-1.5 font-mono text-xs text-txt-2 transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2">
+              fetch streaming
+            </button>
+            <button onclick="fillPrompt('Write a Python function to parse JSON safely')"
+              class="rounded-full border border-strong bg-bg-3 px-3.5 py-1.5 font-mono text-xs text-txt-2 transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2">
+              safe JSON parse
+            </button>
+            <button onclick="fillPrompt('What is the difference between RAG and fine-tuning?')"
+              class="rounded-full border border-strong bg-bg-3 px-3.5 py-1.5 font-mono text-xs text-txt-2 transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2">
+              RAG vs fine-tuning
+            </button>
+            <button onclick="fillPrompt('How do I center a div in CSS?')"
+              class="rounded-full border border-strong bg-bg-3 px-3.5 py-1.5 font-mono text-xs text-txt-2 transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2">
+              center a div
+            </button>
           </div>
         </div>
+
       </div>
 
-      <div class="input-area">
-        <div class="input-box">
-          <textarea id="message" placeholder="Ask something…" rows="1" autocomplete="off"></textarea>
-          <button id="send-btn" disabled title="Send message">
-            <svg viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <div class="flex-shrink-0 border-t border-subtle bg-bg/90 px-4 pb-4 pt-3 backdrop-blur-md">
+        <div class="flex items-start gap-2 rounded-card border border-strong bg-bg-3 px-4 py-2.5 pr-2.5 transition-colors duration-200 focus-within:border-accent">
+          <textarea
+            id="message"
+            rows="1"
+            placeholder="Ask something…"
+            autocomplete="off"
+            class="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3"
+          ></textarea>
+          <button
+            id="send-btn"
+            disabled
+            title="Send message"
+            class="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:enabled:opacity-90 active:enabled:scale-95 disabled:opacity-35 disabled:cursor-default"
+          >
+            <svg class="relative z-10 h-[15px] w-[15px] fill-none stroke-white" style="stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24">
               <line x1="22" y1="2" x2="11" y2="13"/>
               <polygon points="22 2 15 22 11 13 2 9 22 2"/>
             </svg>
           </button>
         </div>
-        <div class="input-meta">
+        <div class="mt-1.5 flex items-center justify-between px-1 font-mono text-[11px] text-txt-3">
           <span>↵ send · ⇧↵ newline</span>
-          <span class="char-count" id="char-count">0</span>
+          <span id="char-count">0</span>
         </div>
       </div>
     </div>

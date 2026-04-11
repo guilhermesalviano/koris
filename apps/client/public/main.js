@@ -12,7 +12,10 @@ const MAX_CHARS = 4000;
 
 /* ── Utilities ── */
 function setStatus(state) {
-  statusDot.className = 'status-dot' + (state !== 'online' ? ' ' + state : '');
+  statusDot.className = 'h-1.5 w-1.5 rounded-full transition-colors duration-300';
+  if (state === 'thinking') statusDot.classList.add('bg-amber-500');
+  else if (state === 'error') statusDot.classList.add('bg-red-500');
+  else statusDot.classList.add('bg-green-500');
   statusLbl.textContent = state;
 }
 
@@ -22,9 +25,10 @@ function timeStr() {
 
 function showToast(msg) {
   const t = document.createElement('div');
-  t.className = 'toast';
+  t.className = 'fixed bottom-20 left-1/2 z-[100] -translate-x-1/2 whitespace-nowrap rounded-[10px] border border-red-500/30 bg-[#2a1212] px-4 py-2 text-[13px] font-mono text-red-300 animate-toastIn';
   t.textContent = msg;
   document.body.appendChild(t);
+  setTimeout(() => t.classList.add('animate-toastOut'), 3000);
   setTimeout(() => t.remove(), 3500);
 }
 
@@ -92,25 +96,29 @@ function appendUserMsg(text) {
   removeEmpty();
   const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
   const row = document.createElement('div');
-  row.className = 'message-row user';
+  row.className = 'flex flex-row-reverse gap-2.5 animate-msgIn';
   row.innerHTML = `
-    <div class="bubble-col">
-      <div class="bubble user">${safe}</div>
-      <span class="timestamp">${timeStr()}</span>
+    <div class="bubble-col flex max-w-[calc(100%-44px)] flex-col items-end gap-1">
+      <div class="bubble relative break-words rounded-card rounded-br-[5px] bg-accent px-3.5 py-2.5 text-sm leading-relaxed text-white">${safe}</div>
+      <span class="px-1 font-mono text-[11px] text-txt-3">${timeStr()}</span>
     </div>
-    <div class="avatar user">you</div>`;
+    <div class="mt-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-strong bg-bg-4 font-mono text-[10px] font-medium text-txt-2">you</div>`;
   chatEl.appendChild(row);
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
 function createAssistantRow() {
   const row = document.createElement('div');
-  row.className = 'message-row';
+  row.className = 'flex gap-2.5 animate-msgIn';
   row.innerHTML = `
-    <div class="avatar assistant">ai</div>
-    <div class="bubble-col">
-      <div class="bubble assistant" id="active-bubble">
-        <div class="thinking"><span></span><span></span><span></span></div>
+    <div class="mt-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent font-mono text-[10px] font-medium text-white">ai</div>
+    <div class="bubble-col flex max-w-[calc(100%-44px)] flex-col gap-1">
+      <div class="bubble relative break-words rounded-card rounded-bl-[5px] border border-subtle bg-bg-3 px-3.5 py-2.5 text-sm leading-relaxed text-txt" id="active-bubble">
+        <div class="flex items-center gap-1.5 px-1">
+          <span class="h-[5px] w-[5px] rounded-full bg-txt-3 animate-blink"></span>
+          <span class="h-[5px] w-[5px] rounded-full bg-txt-3 animate-blink2"></span>
+          <span class="h-[5px] w-[5px] rounded-full bg-txt-3 animate-blink3"></span>
+        </div>
       </div>
     </div>`;
   chatEl.appendChild(row);
@@ -124,7 +132,7 @@ function finalizeRow(row, text) {
   bubble.innerHTML = renderMarkdown(text || 'No response.');
   const col = row.querySelector('.bubble-col');
   const ts = document.createElement('span');
-  ts.className = 'timestamp';
+  ts.className = 'px-1 font-mono text-[11px] text-txt-3';
   ts.textContent = timeStr();
   col.appendChild(ts);
   chatEl.scrollTop = chatEl.scrollHeight;
@@ -137,7 +145,9 @@ messageEl.addEventListener('input', () => {
   messageEl.style.height = 'auto';
   messageEl.style.height = Math.min(messageEl.scrollHeight, 130) + 'px';
   charCount.textContent = len;
-  charCount.className = 'char-count' + (len > MAX_CHARS * 0.85 ? ' warn' : '');
+  charCount.className = len > MAX_CHARS * 0.85
+    ? 'text-amber-500'
+    : 'text-txt-3';
 });
 
 messageEl.addEventListener('keydown', e => {
