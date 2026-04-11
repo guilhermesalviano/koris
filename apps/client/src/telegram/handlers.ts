@@ -2,7 +2,7 @@ import { TelegramMessage, InlineKeyboardMarkup } from 'assistant-telegram-bot';
 import { getBot } from './bot';
 import { processUserMessage } from '../agent/processor';
 
-const TYPING_INTERVAL_MS = 30_000;
+const TYPING_INTERVAL_MS = 4_000;
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<string> {
   if (!value || typeof value !== 'object') return false;
@@ -24,6 +24,22 @@ async function withTypingIndicator<T>(chatId: number, work: () => Promise<T>): P
     return await work();
   } finally {
     clearInterval(timer);
+  }
+}
+
+function isEntityParseError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /can't parse entities/i.test(error.message);
+}
+
+async function sendMessageWithMarkdownFallback(chatId: number, text: string): Promise<void> {
+  const bot = getBot();
+
+  try {
+    await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+  } catch (error) {
+    if (!isEntityParseError(error)) throw error;
+    await bot.sendMessage(chatId, text);
   }
 }
 
@@ -56,16 +72,16 @@ async function handleCommand(msg: TelegramMessage): Promise<void> {
       // Process command through agent processor
       const response = await processUserMessage(text, 'telegram');
       if (typeof response === 'string') {
-        await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+        await sendMessageWithMarkdownFallback(chatId, response);
         return;
       }
       if (isAsyncIterable(response)) {
         let out = '';
         for await (const chunk of response) out += chunk;
-        await bot.sendMessage(chatId, out, { parse_mode: 'Markdown' });
+        await sendMessageWithMarkdownFallback(chatId, out);
         return;
       }
-      await bot.sendMessage(chatId, String(response), { parse_mode: 'Markdown' });
+      await sendMessageWithMarkdownFallback(chatId, String(response));
     });
   } catch (error) {
     console.error('Error handling command:', error);
@@ -84,16 +100,16 @@ async function handleUserMessage(chatId: number, text: string): Promise<void> {
       // Process message through agent processor
       const response = await processUserMessage(text, 'telegram');
       if (typeof response === 'string') {
-        await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+        await sendMessageWithMarkdownFallback(chatId, response);
         return;
       }
       if (isAsyncIterable(response)) {
         let out = '';
         for await (const chunk of response) out += chunk;
-        await bot.sendMessage(chatId, out, { parse_mode: 'Markdown' });
+        await sendMessageWithMarkdownFallback(chatId, out);
         return;
       }
-      await bot.sendMessage(chatId, String(response), { parse_mode: 'Markdown' });
+      await sendMessageWithMarkdownFallback(chatId, String(response));
     });
   } catch (error) {
     console.error('Error handling message:', error);
