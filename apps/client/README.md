@@ -12,8 +12,8 @@ This package contains the main opencrawdio client (TUI + Telegram integration).
 Create `apps/client/.env` (see `.env.example`):
 
 - `AI_PROVIDER=ollama`
-- `OLLAMA_BASE_URL=http://localhost:11434`
-- `OLLAMA_MODEL=gemma4:e2b`
+- `AI_BASE_URL=http://localhost:11434`
+- `AI_MODEL=gemma4:e2b`
 
 Notes:
 - In unit tests, the client defaults to `AI_PROVIDER=mock` so tests don’t require a running Ollama server.
