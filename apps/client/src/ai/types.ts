@@ -14,5 +14,6 @@ export interface AIChatRequest {
 export interface AIProvider {
   readonly name: string;
   chat(request: AIChatRequest): Promise<string>;
+  chatStream(request: AIChatRequest): AsyncGenerator<string>;
   healthCheck(): Promise<{ ok: boolean; detail?: string }>;
 }

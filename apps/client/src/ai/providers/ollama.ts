@@ -70,6 +70,48 @@ export class OllamaAIProvider implements AIProvider {
     }
   }
 
+  // ollama.provider.ts — add chatStream, reuses existing private helpers
+
+  async *chatStream(request: AIChatRequest): AsyncGenerator<string> {
+    const controller = new AbortController();
+
+    let idleTimer: NodeJS.Timeout | undefined;
+    const hardTimer = setTimeout(() => controller.abort(), HARD_TIMEOUT_MS);
+
+    const bumpIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => controller.abort(), IDLE_TIMEOUT_MS);
+    };
+
+    bumpIdle();
+
+    try {
+      const body = await this.fetchStream(request, controller.signal);
+
+      if (!body) {
+        // Non-streaming fallback: yield the whole response as one chunk
+        const full = await this.readJsonFallback(request, controller.signal);
+        yield full;
+        return;
+      }
+
+      for await (const chunk of this.readNDJSON(body, bumpIdle)) {
+        if (chunk.error) throw new Error(chunk.error);
+        const text = this.parseChunk(chunk);
+        if (text) yield text;
+        if (chunk.done) break;
+      }
+    } catch (err) {
+      if (this.isAbortError(err)) {
+        throw new Error('Ollama request timed out while streaming');
+      }
+      throw err;
+    } finally {
+      clearTimeout(idleTimer);
+      clearTimeout(hardTimer);
+    }
+  }
+
   async healthCheck(): Promise<{ ok: boolean; detail?: string }> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
