@@ -15,10 +15,9 @@ const HEALTH_CHECK_MS = 5000;
 /* ── Utilities ── */
 function setStatus(state) {
   statusDot.className = 'h-1.5 w-1.5 rounded-full transition-colors duration-300';
-  if (state === 'thinking') statusDot.classList.add('bg-amber-500');
-  else if (state === 'error') statusDot.classList.add('bg-red-500');
+  if (state === 'error') statusDot.classList.add('bg-red-500');
   else statusDot.classList.add('bg-green-500');
-  statusLbl.textContent = (state === 'error' ? 'Server offline' : state === 'thinking' ? 'Thinking...' : 'Online');
+  statusLbl.textContent = (state === 'error' ? 'Server offline' : 'Online');
 }
 
 function syncStatus() {
@@ -202,8 +201,6 @@ async function submit() {
   let accumulated = '';
   let firstChunk  = true;
 
-  console.log(text)
-
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
@@ -213,28 +210,45 @@ async function submit() {
 
     if (!res.ok) throw new Error(`API error ${res.status}`);
 
+    if (!res.body) throw new Error('Empty response body');
     const reader  = res.body.getReader();
     const decoder = new TextDecoder();
     const bubble  = row.querySelector('.bubble');
+    let sseBuffer = '';
+
+    const handleSseLine = (line) => {
+      if (!line.startsWith('data: ')) return;
+      const payload = line.slice(6).trim();
+      if (payload === '[DONE]') return;
+      try {
+        const parsed = JSON.parse(payload);
+        if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+          if (firstChunk) { bubble.innerHTML = ''; firstChunk = false; }
+          accumulated += parsed.delta.text;
+          bubble.innerHTML = renderMarkdown(accumulated);
+          chatEl.scrollTop = chatEl.scrollHeight;
+        }
+      } catch { /* skip malformed SSE lines */ }
+    };
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
-      const lines = decoder.decode(value, { stream: true }).split('\n');
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const payload = line.slice(6).trim();
-        if (payload === '[DONE]') continue;
-        try {
-          const parsed = JSON.parse(payload);
-          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-            if (firstChunk) { bubble.innerHTML = ''; firstChunk = false; }
-            accumulated += parsed.delta.text;
-            bubble.innerHTML = renderMarkdown(accumulated);
-            chatEl.scrollTop = chatEl.scrollHeight;
-          }
-        } catch { /* skip malformed SSE lines */ }
+      sseBuffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+      let newlineIdx = sseBuffer.indexOf('\n');
+      while (newlineIdx !== -1) {
+        const line = sseBuffer.slice(0, newlineIdx).replace(/\r$/, '');
+        sseBuffer = sseBuffer.slice(newlineIdx + 1);
+        handleSseLine(line);
+        newlineIdx = sseBuffer.indexOf('\n');
       }
+
+      if (done) break;
+    }
+
+    const tail = (sseBuffer + decoder.decode()).replace(/\r$/, '');
+    if (tail.trim()) {
+      handleSseLine(tail);
     }
 
     history.push({ role: 'assistant', content: accumulated || 'No response.' });

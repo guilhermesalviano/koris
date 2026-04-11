@@ -7,6 +7,7 @@ import type { Instruction } from '../types';
 import { handleCommand, isCommand } from './commands';
 
 type ProcessedMessage = string | AsyncGenerator<string>;
+type ProcessOptions = { signal?: AbortSignal };
 
 function toSafeMessage(input: unknown): string {
   if (typeof input === 'string') return input;
@@ -109,7 +110,11 @@ async function handleInstruction(instruction: Instruction, source: 'telegram' | 
   }
 }
 
-async function handleStreamChat(message: string, source: 'telegram' | 'tui'): Promise<ProcessedMessage> {
+async function handleStreamChat(
+  message: string,
+  source: 'telegram' | 'tui',
+  options?: ProcessOptions
+): Promise<ProcessedMessage> {
   const provider = getAIProvider();
   const request = {
     messages: [
@@ -124,14 +129,16 @@ async function handleStreamChat(message: string, source: 'telegram' | 'tui'): Pr
 
   // Stream directly in TUI when using Ollama.
   if (source === 'tui' && provider.name === 'ollama') {
-    const stream = provider.chatStream(request);
+    const stream = provider.chatStream(request, { signal: options?.signal });
 
     async function* safeStream(): AsyncGenerator<string> {
       try {
         for await (const chunk of stream) {
+          if (options?.signal?.aborted) return;
           yield chunk;
         }
       } catch (err) {
+        if (options?.signal?.aborted || isAbortError(err)) return;
         const detail = err instanceof Error ? err.message : String(err);
         yield `\n(AI provider error: ${detail})`;
       }
@@ -141,8 +148,11 @@ async function handleStreamChat(message: string, source: 'telegram' | 'tui'): Pr
   }
 
   try {
-    return await provider.chat(request);
+    return await provider.chat(request, { signal: options?.signal });
   } catch (err) {
+    if (options?.signal?.aborted || isAbortError(err)) {
+      throw err;
+    }
     const detail = err instanceof Error ? err.message : String(err);
     return source === 'telegram'
       ? `I received your message: "${escapeTelegramMarkdown(message)}"\n\n(AI provider error: ${escapeTelegramMarkdown(detail)})`
@@ -150,7 +160,11 @@ async function handleStreamChat(message: string, source: 'telegram' | 'tui'): Pr
   }
 }
 
-async function handleChat(message: string, source: 'telegram' | 'tui'): Promise<ProcessedMessage> {
+async function handleChat(
+  message: string,
+  source: 'telegram' | 'tui',
+  options?: ProcessOptions
+): Promise<ProcessedMessage> {
   const provider = getAIProvider();
   const request = {
     messages: [
@@ -164,8 +178,11 @@ async function handleChat(message: string, source: 'telegram' | 'tui'): Promise<
   };
 
   try {
-    return await provider.chat(request);
+    return await provider.chat(request, { signal: options?.signal });
   } catch (err) {
+    if (options?.signal?.aborted || isAbortError(err)) {
+      throw err;
+    }
     const detail = err instanceof Error ? err.message : String(err);
     return source === 'telegram'
       ? `I received your message: "${escapeTelegramMarkdown(message)}"\n\n(AI provider error: ${escapeTelegramMarkdown(detail)})`
@@ -181,7 +198,8 @@ async function handleChat(message: string, source: 'telegram' | 'tui'): Promise<
 export async function processUserMessage(
   // logger: ILogger,
   message: unknown,
-  source: 'telegram' | 'tui'
+  source: 'telegram' | 'tui',
+  options?: ProcessOptions
 ): Promise<ProcessedMessage> {
   const safeMessage = toSafeMessage(message);
 
@@ -200,9 +218,13 @@ export async function processUserMessage(
   }
 
   if (source === 'tui') {
-    return handleStreamChat(safeMessage, source);
+    return handleStreamChat(safeMessage, source, options);
   }
-  return await handleChat(safeMessage, source);
+  return await handleChat(safeMessage, source, options);
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && (err.name === 'AbortError' || /aborted/i.test(err.message));
 }
 
 export async function healthCheck(): Promise<{ status: 'ok' | 'error'; timestamp: string; details?: string }> {

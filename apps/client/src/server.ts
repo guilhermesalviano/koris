@@ -1,9 +1,9 @@
 import express, { type Request, type Response, type Application } from 'express';
+import { healthCheck, processUserMessage } from './agent/processor';
+import { config } from './config';
+import { logger } from './app';
 import fs from 'node:fs';
 import path from 'node:path';
-import { config } from './config'
-import { logger } from './app'
-import { healthCheck, processUserMessage } from './agent/processor';
 
 const app: Application = express()
 
@@ -31,7 +31,17 @@ app.post('/api/chat', async (req: Request, res: Response) => {
     return;
   }
 
+  const abortController = new AbortController();
+  let clientClosed = false;
+  const onClose = () => {
+    clientClosed = true;
+    abortController.abort();
+  };
+  req.on('aborted', onClose);
+  res.on('close', onClose);
+
   const writeSse = (payload: unknown) => {
+    if (clientClosed || res.writableEnded || res.destroyed) return;
     res.write(`data: ${JSON.stringify(payload)}\n\n`);
   };
 
@@ -42,10 +52,12 @@ app.post('/api/chat', async (req: Request, res: Response) => {
   res.flushHeaders();
 
   try {
-    const result = await processUserMessage(message, 'tui');
+    const result = await processUserMessage(message, 'tui', { signal: abortController.signal });
+    if (clientClosed) return;
 
     if (typeof result !== 'string') {
       for await (const chunk of result) {
+        if (clientClosed) break;
         if (!chunk) continue;
         writeSse({
           type: 'content_block_delta',
@@ -59,9 +71,11 @@ app.post('/api/chat', async (req: Request, res: Response) => {
       });
     }
 
+    if (clientClosed) return;
     res.write('data: [DONE]\n\n');
     res.end();
   } catch (error) {
+    if (clientClosed) return;
     const msg = error instanceof Error ? error.message : String(error);
     writeSse({
       type: 'content_block_delta',
@@ -69,6 +83,9 @@ app.post('/api/chat', async (req: Request, res: Response) => {
     });
     res.write('data: [DONE]\n\n');
     res.end();
+  } finally {
+    req.off('aborted', onClose);
+    res.off('close', onClose);
   }
 });
 
