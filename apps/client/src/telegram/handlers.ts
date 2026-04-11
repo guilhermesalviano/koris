@@ -2,58 +2,66 @@ import { TelegramMessage, InlineKeyboardMarkup } from 'assistant-telegram-bot';
 import { getBot } from './bot';
 import { processUserMessage } from '../agent/processor';
 
-// todo: unify Telegram handle messages and TUI handle messages.
-export async function handleMessage(msg: TelegramMessage): Promise<void> {
-  const chatId = msg.chat.id;
-  const text = msg.text;
+const TYPING_INTERVAL_MS = 4_000;
 
-  console.log(`📨 Message from ${msg.from?.username || msg.from?.id}: ${text}`);
+function isAsyncIterable(value: unknown): value is AsyncIterable<string> {
+  if (!value || typeof value !== 'object') return false;
+  const maybe = value as { [Symbol.asyncIterator]?: unknown };
+  return typeof maybe[Symbol.asyncIterator] === 'function';
+}
 
-  // Set to process in bg with queue
-  if (text?.startsWith('/')) {
-    await handleCommand(msg);
-    return;
-  }
+function isEntityParseError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /can't parse entities/i.test(error.message);
+}
 
-  // Handle regular messages
-  if (text) {
-    await handleUserMessage(chatId, text);
+async function sendMessageWithMarkdownFallback(chatId: number, text: string): Promise<void> {
+  const bot = getBot();
+  try {
+    await bot.sendMessage(chatId, text, { parse_mode: 'MarkdownV2' });
+  } catch (error) {
+    if (!isEntityParseError(error)) throw error;
+    await bot.sendMessage(chatId, text);
   }
 }
 
-async function handleCommand(msg: TelegramMessage): Promise<void> {
+async function resolveResponse(response: unknown): Promise<string> {
+  if (typeof response === 'string') return response;
+  if (isAsyncIterable(response)) {
+    let out = '';
+    for await (const chunk of response) out += chunk;
+    return out;
+  }
+  return String(response);
+}
+
+async function withTypingIndicator<T>(chatId: number, work: () => Promise<T>): Promise<T> {
   const bot = getBot();
-  const chatId = msg.chat.id;
-  const text = msg.text || '';
+  await bot.sendChatAction(chatId, 'typing');
+
+  const timer = setInterval(() => {
+    void bot.sendChatAction(chatId, 'typing').catch((error) => {
+      console.error('Error refreshing typing action:', error);
+    });
+  }, TYPING_INTERVAL_MS);
 
   try {
-    // Send typing indicator
-    await bot.sendChatAction(chatId, 'typing');
-
-    // Process command through agent processor
-    const response = await processUserMessage(text, 'telegram');
-    await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
-  } catch (error) {
-    console.error('Error handling command:', error);
-    await bot.sendMessage(
-      chatId,
-      '❌ Sorry, I encountered an error processing your command. Please try again.'
-    );
+    return await work();
+  } finally {
+    clearInterval(timer);
   }
 }
 
-async function handleUserMessage(chatId: number, text: string): Promise<void> {
+async function processAndReply(chatId: number, text: string): Promise<void> {
   const bot = getBot();
-
   try {
-    // Send typing indicator
-    await bot.sendChatAction(chatId, 'typing');
-
-    // Process message through agent processor
-    const response = await processUserMessage(text, 'telegram');
-    await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+    await withTypingIndicator(chatId, async () => {
+      const response = await processUserMessage(text, 'telegram');
+      const resolved = await resolveResponse(response);
+      await sendMessageWithMarkdownFallback(chatId, resolved);
+    });
   } catch (error) {
-    console.error('Error handling message:', error);
+    console.error('Error processing message:', error);
     await bot.sendMessage(
       chatId,
       '❌ Sorry, I encountered an error processing your message. Please try again.'
@@ -61,18 +69,24 @@ async function handleUserMessage(chatId: number, text: string): Promise<void> {
   }
 }
 
-// Helper function to send a message with code formatting
+export async function handleMessage(msg: TelegramMessage): Promise<void> {
+  const { id: chatId } = msg.chat;
+  const { text } = msg;
+
+  if (text) {
+    await processAndReply(chatId, text);
+  }
+}
+
 export async function sendCode(
   chatId: number,
   code: string,
   language: string = ''
 ): Promise<void> {
   const bot = getBot();
-  const formatted = `\`\`\`${language}\n${code}\n\`\`\``;
-  await bot.sendMessage(chatId, formatted, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, `\`\`\`${language}\n${code}\n\`\`\``, { parse_mode: 'Markdown' });
 }
 
-// Helper function to send a message with approval buttons
 export async function sendWithApproval(
   chatId: number,
   message: string,
@@ -88,8 +102,5 @@ export async function sendWithApproval(
     ],
   };
 
-  await bot.sendMessage(chatId, message, {
-    parse_mode: 'Markdown',
-    reply_markup: keyboard,
-  });
+  await bot.sendMessage(chatId, message, { parse_mode: 'Markdown', reply_markup: keyboard });
 }

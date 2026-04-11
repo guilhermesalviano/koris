@@ -1,6 +1,7 @@
 import { startTui } from 'assistant-tui';
 import { processUserMessage } from '../agent/processor';
 import { handleCommand, isCommand } from '../agent/commands';
+import { config } from '../config';
 
 export function startTUI(): void {
   startTui({
@@ -11,10 +12,10 @@ export function startTUI(): void {
     title: 'opencrawdio - AI Assistant',
     
     // Show helpful quick tips
-    showHints: true,
+    showHints: false,
     
     // Enhanced spinner during processing
-    spinner: { enabled: true, label: 'Processing' },
+    spinner: { enabled: true },
     
     // Thinking indicator for responses
     assistantPrefix: '●',
@@ -76,18 +77,12 @@ export function startTUI(): void {
       
       return result;
     },
+
+    aiModel: config.AI.MODEL,
     
     // Main message handler
-    onInput: async (message, ctx) => {
-      const response = await processUserMessage(message, 'tui');
-      
-      // Include stats info for debugging
-      if (response && message.toLowerCase().includes('debug')) {
-        const debugInfo = `\n\n${ctx.colors.dim}[Debug: Terminal ${ctx.terminalWidth}x${ctx.terminalHeight}, Messages: ${ctx.session.messageCount}]${ctx.colors.reset}`;
-        return response + debugInfo;
-      }
-      
-      return response;
+    onInput: async (message) => {
+      return await processUserMessage(message, 'tui');
     },
   });
 }

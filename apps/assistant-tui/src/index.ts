@@ -49,8 +49,8 @@ export interface SpinnerOptions {
 }
 
 export interface StartTuiOptions {
-  /** Called for normal (non-command) input. If you return a string, it will be printed. */
-  onInput(input: string, ctx: TuiContext): Promise<string | void>;
+  /** If you return a string, it will be printed. If you return an `AsyncIterable<string>`, yielded chunks will be streamed to the output. */
+  onInput(input: string, ctx: TuiContext): Promise<string | AsyncIterable<string> | void>;
 
   /** If provided, command input is routed here (when `isCommand` matches). */
   onCommand?: (command: string, ctx: TuiContext) => Promise<TuiCommandResult | string | void>;
@@ -87,6 +87,8 @@ export interface StartTuiOptions {
 
   /** Use fixed input layout with scrollable history. Defaults to true. */
   fixedInput?: boolean;
+
+  aiModel?: string;
 }
 
 export function startTui(options: StartTuiOptions): void {
@@ -104,12 +106,11 @@ export function startTui(options: StartTuiOptions): void {
 
   const prompt = options.prompt ?? buildBeautifulPrompt(colors);
   const isCommand = options.isCommand ?? ((line: string) => line.startsWith('/'));
-  const renderWelcome = options.renderWelcome ?? ((ctx) => defaultWelcome(ctx, options.title, options.showHints));
+  const renderWelcome = options.renderWelcome ?? ((ctx) => defaultWelcome(ctx, options.title, options.aiModel, options.showHints));
   const formatResponse = options.formatResponse ?? defaultFormatResponse;
   const confirmExit = options.confirmExit ?? true;
   const clearOnStart = options.clearOnStart ?? true;
   const assistantPrefix = options.assistantPrefix ?? '●';
-
   // ANSI escape codes for terminal control
   const ansi = {
     cursorHome: '\x1b[H',
@@ -130,10 +131,11 @@ export function startTui(options: StartTuiOptions): void {
 
   // Layout in fixed mode:
   // - content area
+  // - spinner status line
   // - separator line
   // - footer help line
   // - input line
-  const maxContentLines = () => Math.max(1, terminalHeight - 3);
+  const maxContentLines = () => Math.max(1, terminalHeight - 4);
   const ensureScrollOffsetInRange = () => {
     const maxOffset = Math.max(0, contentBuffer.length - maxContentLines());
     scrollOffset = Math.max(0, Math.min(maxOffset, scrollOffset));
@@ -148,8 +150,70 @@ export function startTui(options: StartTuiOptions): void {
     }
   };
 
-  const println = (text = '') => {
+  const ansiRegex = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+  const visibleWidth = (value: string): number => value.replace(ansiRegex, '').length;
+
+  const wrapSingleLineForWidth = (line: string, width: number): string[] => {
+    const maxWidth = Math.max(1, width);
+    if (line.length === 0) return [''];
+
+    const wrapped: string[] = [];
+    const tokens = line.match(/ +|[^ ]+/g) ?? [line];
+    let currentLine = '';
+    let currentWidth = 0;
+
+    for (const token of tokens) {
+      const isSpaces = token.startsWith(' ');
+      const tokenWidth = isSpaces ? token.length : visibleWidth(token);
+
+      if (isSpaces) {
+        if (currentLine.length === 0) {
+          currentLine = token;
+          currentWidth = tokenWidth;
+          continue;
+        }
+
+        if (currentWidth + tokenWidth <= maxWidth) {
+          currentLine += token;
+          currentWidth += tokenWidth;
+          continue;
+        }
+
+        wrapped.push(currentLine.replace(/ +$/, ''));
+        currentLine = '';
+        currentWidth = 0;
+        continue;
+      }
+
+      if (currentLine.length === 0) {
+        currentLine = token;
+        currentWidth = tokenWidth;
+        continue;
+      }
+
+      if (currentWidth + tokenWidth <= maxWidth) {
+        currentLine += token;
+        currentWidth += tokenWidth;
+        continue;
+      }
+
+      wrapped.push(currentLine.replace(/ +$/, ''));
+      currentLine = token;
+      currentWidth = tokenWidth;
+    }
+
+    if (currentLine.length > 0) wrapped.push(currentLine);
+    return wrapped.length > 0 ? wrapped : [''];
+  };
+
+  const wrapLinesForTerminal = (text: string): string[] => {
     const lines = text.replace(/\r\n/g, '\n').split('\n');
+    if (!fixedInput) return lines;
+    return lines.flatMap((line) => wrapSingleLineForWidth(line, terminalWidth));
+  };
+
+  const println = (text = '') => {
+    const lines = wrapLinesForTerminal(text);
 
     // If user is scrolled up, keep their viewport anchored as new lines arrive.
     if (fixedInput && scrollOffset > 0) scrollOffset += lines.length;
@@ -166,6 +230,7 @@ export function startTui(options: StartTuiOptions): void {
 
   let renderScreen: () => void = () => undefined;
   let renderScheduled: NodeJS.Timeout | undefined;
+  let spinnerStatus = '';
 
   const requestRender = () => {
     if (!fixedInput) return;
@@ -176,6 +241,17 @@ export function startTui(options: StartTuiOptions): void {
       renderScheduled = undefined;
       renderScreen();
     }, 16);
+  };
+
+  const buildSeparatorLine = (spinnerStatus: string) => {
+    const prefix = spinnerStatus ? `- ${spinnerStatus} ` : '';
+    const dashCount = Math.max(0, terminalWidth - prefix.length);
+    return `${colors.dim}${prefix}${'─'.repeat(dashCount)}${colors.reset}`;
+  };
+
+  const buildSpinnerLine = (status: string) => {
+    if (!status) return '';
+    return `${colors.dim}${colors.gray}${status.slice(0, terminalWidth)}${colors.reset}`;
   };
 
   const createInputFilter = (handlers: {
@@ -333,6 +409,8 @@ export function startTui(options: StartTuiOptions): void {
     if (!fixedInput) return;
     // Save/restore cursor so footer paint never steals input cursor position.
     process.stdout.write('\x1b7');
+    process.stdout.write(ansi.cursorPos(terminalHeight -1, 1));
+    process.stdout.write(buildSeparatorLine(""));
     process.stdout.write(ansi.cursorPos(terminalHeight, 1));
     process.stdout.write(ansi.clearLine);
     process.stdout.write(`${colors.bright}${colors.cyan}${footerText.slice(0, terminalWidth)}${colors.reset}`);
@@ -387,13 +465,18 @@ export function startTui(options: StartTuiOptions): void {
       if (typeof line === 'string') process.stdout.write(line);
     }
 
-    // Separator row
-    process.stdout.write(ansi.cursorPos(terminalHeight - 2, 1));
+    // Spinner status row (line above separator)
+    process.stdout.write(ansi.cursorPos(terminalHeight - 4, 1));
     process.stdout.write(ansi.clearLine);
-    process.stdout.write(`${colors.dim}${'─'.repeat(terminalWidth)}${colors.reset}`);
+    process.stdout.write(buildSpinnerLine(spinnerStatus));
+
+    // Separator row above input
+    process.stdout.write(ansi.cursorPos(terminalHeight - 3, 1));
+    process.stdout.write(ansi.clearLine);
+    process.stdout.write(buildSeparatorLine(''));
 
     // Input pinned to row above the footer
-    process.stdout.write(ansi.cursorPos(terminalHeight - 1, 1));
+    process.stdout.write(ansi.cursorPos(terminalHeight - 2, 1));
 
     rl.resume();
     if (typeof anyRl._refreshLine === 'function') {
@@ -537,43 +620,69 @@ export function startTui(options: StartTuiOptions): void {
 
   if (confirmExit) {
     rl.on('SIGINT', () => {
-      println('\n');
-      if (fixedInput) requestRender();
+      (rl as any).line = '';
+      (rl as any).cursor = 0;
 
-      rl.question(`${colors.yellow}Are you sure you want to exit? (y/n)${colors.reset} `, (answer: string) => {
-        const a = answer.toLowerCase();
-        if (a === 'y' || a === 'yes') {
+      process.stdout.write('\x1b7'); // save cursor
+      process.stdout.write(ansi.cursorPos(terminalHeight, 1));
+      process.stdout.write(ansi.clearLine);
+      process.stdout.write(`${colors.yellow}Are you sure you want to exit? (y/n)${colors.reset} `);
+      process.stdout.write('\x1b8'); // restore cursor
+
+      const onKey = (key: string) => {
+        const k = key.toLowerCase();
+
+        if (k === 'y') {
           rl.close();
         } else {
-          if (fixedInput) {
-            requestRender();
-          }
+          process.stdout.write('\x1b7');
+          process.stdout.write(ansi.cursorPos(terminalHeight, 1));
+          process.stdout.write(ansi.clearLine);
+          process.stdout.write(`${colors.bright}${colors.cyan}${footerText.slice(0, terminalWidth)}${colors.reset}`);
+          process.stdout.write('\x1b8');
           rl.prompt();
         }
-      });
+
+        (rl as any).input?.removeListener('keypress', onKey);
+      };
+
+      (rl as any).input?.on('keypress', onKey);
     });
   }
 
   async function handleNormalInput(message: string): Promise<void> {
     session.messageCount++;
 
-    // The legacy spinner writes directly to stdout and can interfere with the fixed input layout.
-    const spinnerEnabled = (options.spinner === true || typeof options.spinner === 'object') && !fixedInput;
+    const spinnerEnabled = options.spinner !== false;
     const stopSpinner = startSpinner(
       typeof options.spinner === 'object' ? options.spinner : undefined,
       spinnerEnabled,
-      colors
+      colors,
+      fixedInput
+        ? {
+            onFrame: (text) => {
+              spinnerStatus = text;
+              requestRender();
+            },
+            onStop: () => {
+              spinnerStatus = '';
+              requestRender();
+            },
+          }
+        : undefined
     );
 
     try {
       const response = await options.onInput(message, ctx);
-      stopSpinner();
 
-      if (typeof response === 'string' && response.trim().length > 0) {
+      if (isAsyncIterable(response)) {
+        await renderStreamedResponse(response);
+      } else if (typeof response === 'string' && response.trim().length > 0) {
         const formatted = formatResponse(response, ctx);
         println(`${colors.reset}${assistantPrefix}${colors.reset} ${formatted}`);
         println();
       }
+      stopSpinner();
     } catch (error) {
       stopSpinner();
       const msg = error instanceof Error ? error.message : String(error);
@@ -586,6 +695,50 @@ export function startTui(options: StartTuiOptions): void {
     }
     rl.prompt();
   }
+
+  async function renderStreamedResponse(stream: AsyncIterable<string>): Promise<void> {
+    let out = '';
+
+    if (!fixedInput) {
+      for await (const chunk of stream) out += chunk;
+      if (!out.trim()) return;
+      const formatted = formatResponse(out, ctx);
+      println(`${colors.reset}${assistantPrefix}${colors.reset} ${formatted}`);
+      println();
+      return;
+    }
+
+    const baseIndex = contentBuffer.length;
+    let renderedLineCount = 0;
+    let lastRenderedAt = 0;
+    const minRenderIntervalMs = 25;
+
+    const renderCurrent = (force = false) => {
+      const now = Date.now();
+      if (!force && now - lastRenderedAt < minRenderIntervalMs) return;
+      lastRenderedAt = now;
+
+      const formatted = formatResponse(out, ctx);
+      const rawLines = formatted.length > 0 ? formatted.replace(/\r\n/g, '\n').split('\n') : [''];
+      rawLines[0] = `${colors.reset}${assistantPrefix}${colors.reset} ${rawLines[0]}`;
+      const prefixedLines = rawLines.flatMap((line) => wrapSingleLineForWidth(line, terminalWidth));
+
+      contentBuffer.splice(baseIndex, renderedLineCount, ...prefixedLines);
+      renderedLineCount = prefixedLines.length;
+      requestRender();
+    };
+
+    for await (const chunk of stream) {
+      out += chunk;
+      renderCurrent();
+    }
+
+    if (!out.trim()) return;
+
+    renderCurrent(true);
+    contentBuffer.splice(baseIndex + renderedLineCount, 0, '');
+    requestRender();
+  }
 }
 
 /** Backwards-compatible alias. */
@@ -593,33 +746,21 @@ export function startTUI(options: StartTuiOptions): void {
   startTui(options);
 }
 
-function defaultWelcome(ctx: TuiContext, title?: string, showHints?: boolean): void {
+function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string, showHints?: boolean): void {
   const { colors, println, terminalWidth } = ctx;
   const appTitle = title ?? 'Assistant';
   const displayHints = showHints !== false;
 
-  // Calculate box width (leave 2 chars for padding on each side)
-  const boxWidth = Math.max(30, terminalWidth - 4);
-  const contentWidth = boxWidth - 4; // Account for borders and padding
-
-  // Build top border
-  const topBorder = `${colors.bright}${colors.cyan}┏${('━').repeat(boxWidth - 2)}┓${colors.reset}`;
+  const topBorder = `${colors.bright}${colors.cyan}┏${('━').repeat(terminalWidth - 2)}┓${colors.reset}`;
   println(topBorder);
 
-  // Build title line with dynamic spacing
   const titleContent = `✨  ${appTitle}  ✨`;
-  const totalPadding = contentWidth - titleContent.length;
-  const leftPadding = Math.floor(totalPadding / 2);
-  const rightPadding = totalPadding * 1.42 - leftPadding;
-  const titleLine = `${colors.bright}${colors.cyan}┃${colors.reset}  ${colors.bright}${colors.blue}${titleContent}${' '.repeat(Math.max(0, rightPadding))}${colors.reset}  ${colors.bright}${colors.cyan}┃${colors.reset}`;
+  const titleLine = `${colors.bright}${colors.cyan}┃${colors.reset}  ${colors.bright}${colors.blue}${titleContent}${' '.repeat(Math.max(0, terminalWidth - (titleContent.length + 8)))}${colors.reset}  ${colors.bright}${colors.cyan}┃${colors.reset}`;
   println(titleLine);
 
-  // Build bottom border
-  const bottomBorder = `${colors.bright}${colors.cyan}┗${('━').repeat(boxWidth - 2)}┛${colors.reset}`;
+  const bottomBorder = `${colors.bright}${colors.cyan}┗${('━').repeat(terminalWidth - 2)}┛${colors.reset}`;
   println(bottomBorder);
-  println();
 
-  // Display current time
   const now = new Date();
   const timeStr = now.toLocaleString('en-US', {
     hour: '2-digit',
@@ -630,7 +771,6 @@ function defaultWelcome(ctx: TuiContext, title?: string, showHints?: boolean): v
   println(`${colors.dim}${colors.gray}Session started at ${timeStr}${colors.reset}`);
   println();
 
-  // Feature hints
   if (displayHints) {
     println(`${colors.bright}${colors.magenta}Quick Tips:${colors.reset}`);
     println(`  ${colors.cyan}•${colors.reset} Start commands with ${colors.bright}/${colors.reset}`);
@@ -639,7 +779,8 @@ function defaultWelcome(ctx: TuiContext, title?: string, showHints?: boolean): v
     println();
   }
 
-  println(`${colors.dim}Ready to assist! What can I help you with?${colors.reset}`);
+  const modelLabel = aiModel || 'Assistant';
+  println(`${colors.dim}${modelLabel} is ready to assist! What can I help you with?${colors.reset}`);
   println();
 }
 
@@ -647,10 +788,20 @@ function buildBeautifulPrompt(colors: typeof defaultColors): string {
   return `${colors.bright}${colors.blue}❯${colors.reset}${colors.cyan}${colors.bright} ${colors.reset}`;
 }
 
+function isAsyncIterable(value: unknown): value is AsyncIterable<string> {
+  if (!value || typeof value !== 'object') return false;
+  const maybe = value as { [Symbol.asyncIterator]?: unknown };
+  return typeof maybe[Symbol.asyncIterator] === 'function';
+}
+
 function startSpinner(
   spinnerOptions: SpinnerOptions | undefined,
   enabled: boolean,
-  colors: typeof defaultColors
+  colors: typeof defaultColors,
+  hooks?: {
+    onFrame(text: string): void;
+    onStop(): void;
+  }
 ): () => void {
   if (!enabled) return () => undefined;
   if (spinnerOptions?.enabled === false) return () => undefined;
@@ -661,12 +812,21 @@ function startSpinner(
 
   let i = 0;
   const interval = setInterval(() => {
-    process.stdout.write(`\r${colors.dim}${colors.gray}${frames[i]} ${label}...${colors.reset}`);
+    const text = `${frames[i]} ${label}...`;
+    if (hooks) {
+      hooks.onFrame(text);
+    } else {
+      process.stdout.write(`\r${colors.dim}${colors.gray}${text}${colors.reset}`);
+    }
     i = (i + 1) % frames.length;
   }, intervalMs);
 
   return () => {
     clearInterval(interval);
+    if (hooks) {
+      hooks.onStop();
+      return;
+    }
     // Clear current line
     readline.clearLine(process.stdout, 0);
     readline.cursorTo(process.stdout, 0);
