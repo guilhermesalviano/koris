@@ -16,6 +16,12 @@ function startCliMode(): void {
   const tuiMode = hasFlag("tui");
   const telegramMode = hasFlag("telegram");
 
+  if (!tuiMode && !telegramMode) {
+    logger.log("error", "No mode provided.");
+    logger.log("error", "Usage: pnpm --filter opencrawdio run tui | pnpm --filter opencrawdio run telegram");
+    process.exit(1);
+  }
+
   if (tuiMode) {
     logger.log("info", "Mode: TUI\n");
     startTUI();
