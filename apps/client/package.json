@@ -8,7 +8,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev:tui": "tsx watch src/app.ts --tui",
+    "dev:server": "tsx watch src/server.ts",
     "clean": "rm -rf dist",
     "build": "pnpm run clean && tsc --project tsconfig.json",
     "lint": "tsc --noEmit -p tsconfig.json",
