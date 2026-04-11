@@ -2,6 +2,12 @@ import { TelegramMessage, InlineKeyboardMarkup } from 'assistant-telegram-bot';
 import { getBot } from './bot';
 import { processUserMessage } from '../agent/processor';
 
+function isAsyncIterable(value: unknown): value is AsyncIterable<string> {
+  if (!value || typeof value !== 'object') return false;
+  const maybe = value as { [Symbol.asyncIterator]?: unknown };
+  return typeof maybe[Symbol.asyncIterator] === 'function';
+}
+
 // todo: unify Telegram handle messages and TUI handle messages.
 export async function handleMessage(msg: TelegramMessage): Promise<void> {
   const chatId = msg.chat.id;
@@ -32,7 +38,17 @@ async function handleCommand(msg: TelegramMessage): Promise<void> {
 
     // Process command through agent processor
     const response = await processUserMessage(text, 'telegram');
-    await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+    if (typeof response === 'string') {
+      await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+      return;
+    }
+    // if (isAsyncIterable(response)) {
+    //   let out = '';
+    //   for await (const chunk of response) out += chunk;
+    //   await bot.sendMessage(chatId, out, { parse_mode: 'Markdown' });
+    //   return;
+    // }
+    await bot.sendMessage(chatId, String(response), { parse_mode: 'Markdown' });
   } catch (error) {
     console.error('Error handling command:', error);
     await bot.sendMessage(
@@ -51,7 +67,17 @@ async function handleUserMessage(chatId: number, text: string): Promise<void> {
 
     // Process message through agent processor
     const response = await processUserMessage(text, 'telegram');
-    await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+    if (typeof response === 'string') {
+      await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+      return;
+    }
+    if (isAsyncIterable(response)) {
+      let out = '';
+      for await (const chunk of response) out += chunk;
+      await bot.sendMessage(chatId, out, { parse_mode: 'Markdown' });
+      return;
+    }
+    await bot.sendMessage(chatId, String(response), { parse_mode: 'Markdown' });
   } catch (error) {
     console.error('Error handling message:', error);
     await bot.sendMessage(

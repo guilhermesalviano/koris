@@ -50,7 +50,7 @@ export interface SpinnerOptions {
 
 export interface StartTuiOptions {
   /** Called for normal (non-command) input. If you return a string, it will be printed. */
-  onInput(input: string, ctx: TuiContext): Promise<string | void>;
+  onInput(input: string, ctx: TuiContext): Promise<string | AsyncIterable<string> | void>;
 
   /** If provided, command input is routed here (when `isCommand` matches). */
   onCommand?: (command: string, ctx: TuiContext) => Promise<TuiCommandResult | string | void>;
@@ -87,6 +87,8 @@ export interface StartTuiOptions {
 
   /** Use fixed input layout with scrollable history. Defaults to true. */
   fixedInput?: boolean;
+
+  aiModel?: string;
 }
 
 export function startTui(options: StartTuiOptions): void {
@@ -104,12 +106,11 @@ export function startTui(options: StartTuiOptions): void {
 
   const prompt = options.prompt ?? buildBeautifulPrompt(colors);
   const isCommand = options.isCommand ?? ((line: string) => line.startsWith('/'));
-  const renderWelcome = options.renderWelcome ?? ((ctx) => defaultWelcome(ctx, options.title, options.showHints));
+  const renderWelcome = options.renderWelcome ?? ((ctx) => defaultWelcome(ctx, options.title, options.aiModel, options.showHints));
   const formatResponse = options.formatResponse ?? defaultFormatResponse;
   const confirmExit = options.confirmExit ?? true;
   const clearOnStart = options.clearOnStart ?? true;
   const assistantPrefix = options.assistantPrefix ?? '●';
-
   // ANSI escape codes for terminal control
   const ansi = {
     cursorHome: '\x1b[H',
@@ -585,13 +586,15 @@ export function startTui(options: StartTuiOptions): void {
 
     try {
       const response = await options.onInput(message, ctx);
-      stopSpinner();
 
-      if (typeof response === 'string' && response.trim().length > 0) {
+      if (isAsyncIterable(response)) {
+        await renderStreamedResponse(response);
+      } else if (typeof response === 'string' && response.trim().length > 0) {
         const formatted = formatResponse(response, ctx);
         println(`${colors.reset}${assistantPrefix}${colors.reset} ${formatted}`);
         println();
       }
+      stopSpinner();
     } catch (error) {
       stopSpinner();
       const msg = error instanceof Error ? error.message : String(error);
@@ -604,6 +607,52 @@ export function startTui(options: StartTuiOptions): void {
     }
     rl.prompt();
   }
+
+  async function renderStreamedResponse(stream: AsyncIterable<string>): Promise<void> {
+    let out = '';
+
+    if (!fixedInput) {
+      for await (const chunk of stream) out += chunk;
+      if (!out.trim()) return;
+      const formatted = formatResponse(out, ctx);
+      println(`${colors.reset}${assistantPrefix}${colors.reset} ${formatted}`);
+      println();
+      return;
+    }
+
+    const baseIndex = contentBuffer.length;
+    let renderedLineCount = 0;
+    let lastRenderedAt = 0;
+    const minRenderIntervalMs = 25;
+
+    const renderCurrent = (force = false) => {
+      const now = Date.now();
+      if (!force && now - lastRenderedAt < minRenderIntervalMs) return;
+      lastRenderedAt = now;
+
+      const formatted = formatResponse(out, ctx);
+      const lines = formatted.length > 0 ? formatted.split('\n') : [''];
+      const prefixedLines = [
+        `${colors.reset}${assistantPrefix}${colors.reset} ${lines[0]}`,
+        ...lines.slice(1),
+      ];
+
+      contentBuffer.splice(baseIndex, renderedLineCount, ...prefixedLines);
+      renderedLineCount = prefixedLines.length;
+      requestRender();
+    };
+
+    for await (const chunk of stream) {
+      out += chunk;
+      renderCurrent();
+    }
+
+    if (!out.trim()) return;
+
+    renderCurrent(true);
+    contentBuffer.splice(baseIndex + renderedLineCount, 0, '');
+    requestRender();
+  }
 }
 
 /** Backwards-compatible alias. */
@@ -611,7 +660,7 @@ export function startTUI(options: StartTuiOptions): void {
   startTui(options);
 }
 
-function defaultWelcome(ctx: TuiContext, title?: string, showHints?: boolean): void {
+function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string, showHints?: boolean): void {
   const { colors, println, terminalWidth } = ctx;
   const appTitle = title ?? 'Assistant';
   const displayHints = showHints !== false;
@@ -656,12 +705,18 @@ function defaultWelcome(ctx: TuiContext, title?: string, showHints?: boolean): v
     println();
   }
 
-  println(`${colors.dim}Ready to assist! What can I help you with?${colors.reset}`);
+  println(`${colors.dim}${aiModel} is ready to assist! What can I help you with?${colors.reset}`);
   println();
 }
 
 function buildBeautifulPrompt(colors: typeof defaultColors): string {
   return `${colors.bright}${colors.blue}❯${colors.reset}${colors.cyan}${colors.bright} ${colors.reset}`;
+}
+
+function isAsyncIterable(value: unknown): value is AsyncIterable<string> {
+  if (!value || typeof value !== 'object') return false;
+  const maybe = value as { [Symbol.asyncIterator]?: unknown };
+  return typeof maybe[Symbol.asyncIterator] === 'function';
 }
 
 function startSpinner(

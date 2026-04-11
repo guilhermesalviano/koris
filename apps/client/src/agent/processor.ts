@@ -6,6 +6,8 @@ import { config } from '../config';
 import type { Instruction } from '../types';
 import { handleCommand, isCommand } from './commands';
 
+type ProcessedMessage = string | AsyncGenerator<string>;
+
 function toSafeMessage(input: unknown): string {
   if (typeof input === 'string') return input;
   if (input === null || input === undefined) return '';
@@ -107,25 +109,67 @@ async function handleInstruction(instruction: Instruction, source: 'telegram' | 
   }
 }
 
-async function handleFreeformChat(message: string): Promise<string> {
+async function handleStreamChat(message: string, source: 'telegram' | 'tui'): Promise<ProcessedMessage> {
   const provider = getAIProvider();
+  const request = {
+    messages: [
+      {
+        role: 'system' as const,
+        content:
+          'You are opencrawdio, a concise AI Assistant. Be direct and helpful. If the user asks to read/list/search/write/run commands, describe what you would do and ask for approval when needed.',
+      },
+      { role: 'user' as const, content: message },
+    ],
+  };
+
+  // Stream directly in TUI when using Ollama.
+  if (source === 'tui' && provider.name === 'ollama') {
+    const stream = provider.chatStream(request);
+
+    async function* safeStream(): AsyncGenerator<string> {
+      try {
+        for await (const chunk of stream) {
+          yield chunk;
+        }
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        yield `\n(AI provider error: ${detail})`;
+      }
+    }
+
+    return safeStream();
+  }
 
   try {
-    const content = await provider.chat({
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are opencrawdio, a concise AI coding assistant. Be direct and helpful. If the user asks to read/list/search/write/run commands, describe what you would do and ask for approval when needed.',
-        },
-        { role: 'user', content: message },
-      ],
-    });
-
-    return content;
+    return await provider.chat(request);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    return `I received your message: "${message}"\n\n(AI provider error: ${detail})`;
+    return source === 'telegram'
+      ? `I received your message: "${escapeTelegramMarkdown(message)}"\n\n(AI provider error: ${escapeTelegramMarkdown(detail)})`
+      : `I received your message: "${message}"\n\n(AI provider error: ${detail})`;
+  }
+}
+
+async function handleChat(message: string, source: 'telegram' | 'tui'): Promise<ProcessedMessage> {
+  const provider = getAIProvider();
+  const request = {
+    messages: [
+      {
+        role: 'system' as const,
+        content:
+          'You are opencrawdio, a concise AI Assistant. Be direct and helpful. If the user asks to read/list/search/write/run commands, describe what you would do and ask for approval when needed.',
+      },
+      { role: 'user' as const, content: message },
+    ],
+  };
+
+  try {
+    return await provider.chat(request);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return source === 'telegram'
+      ? `I received your message: "${escapeTelegramMarkdown(message)}"\n\n(AI provider error: ${escapeTelegramMarkdown(detail)})`
+      : `I received your message: "${message}"\n\n(AI provider error: ${detail})`;
   }
 }
 
@@ -138,7 +182,7 @@ export async function processUserMessage(
   // logger: ILogger,
   message: unknown,
   source: 'telegram' | 'tui'
-): Promise<string> {
+): Promise<ProcessedMessage> {
   const safeMessage = toSafeMessage(message);
 
   // Keep logs lightweight (tests may send very large inputs)
@@ -155,5 +199,8 @@ export async function processUserMessage(
     return handleInstruction(instruction, source);
   }
 
-  return handleFreeformChat(safeMessage);
+  if (source === 'tui') {
+    return handleStreamChat(safeMessage, source);
+  }
+  return await handleChat(safeMessage, source);
 }
