@@ -29,6 +29,8 @@ export class OllamaAIProvider implements AIProvider {
 
   async chat(request: AIChatRequest): Promise<string> {
     const controller = new AbortController();
+
+    const hardTimer = setTimeout(() => controller.abort(), HARD_TIMEOUT_MS);
     try {
       return await this.readJsonFallback(request, controller.signal);
     } catch (err) {
@@ -36,6 +38,8 @@ export class OllamaAIProvider implements AIProvider {
         throw new Error('Ollama request timed out while streaming');
       }
       throw err;
+    } finally {
+      clearTimeout(hardTimer);
     }
   }
 
