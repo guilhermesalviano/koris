@@ -10,8 +10,8 @@ export const config = {
   AI: {
     // In tests we default to a deterministic mock provider so unit tests don't require Ollama.
     PROVIDER: (isTest ? 'mock' : (process.env.AI_PROVIDER || 'ollama')) as 'ollama' | 'mock',
-    BASE_URL: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
-    MODEL: process.env.OLLAMA_MODEL || 'gemma4:e2b',
+    BASE_URL: process.env.AI_BASE_URL || 'http://192.168.3.140:11434',
+    MODEL: process.env.AI_MODEL || 'gemma4:e2b',
   },
   TELEGRAM: {
     BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',

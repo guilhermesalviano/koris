@@ -27,6 +27,8 @@ export function handleCommand(command: string, context: CommandContext): Command
       return handleHelp(context);
 
     case '/status':
+      return handleStatus(context);
+
     case '/stats':
       return handleStats(context);
 
@@ -124,6 +126,32 @@ Tips:
 
   return {
     response: message,
+    action: 'none',
+    handled: true,
+  };
+}
+
+function handleStatus(context: CommandContext): CommandResult {
+  if (context.source === 'telegram') {
+    return {
+      response: `✅ *Bot Status*
+
+• Connection: Active
+• AI Provider: *${config.AI.PROVIDER}*
+• Model: *${config.AI.MODEL}*
+• Ready to assist!`,
+      action: 'none',
+      handled: true,
+    };
+  }
+
+  return {
+    response: `Status:
+
+  Connection: Active
+  AI Provider: ${config.AI.PROVIDER}
+  Model: ${config.AI.MODEL}
+  Base URL: ${config.AI.BASE_URL}`,
     action: 'none',
     handled: true,
   };
