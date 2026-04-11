@@ -1,9 +1,12 @@
 import express, { type Request, type Response, type Application } from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
 import { initBot } from 'assistant-telegram-bot';
 import { startTUI } from './tui/interface';
 import { LoggerFactory } from './infrastructure/logger';
 import { config } from './config';
 import { handleMessage } from './telegram/handlers';
+import { processUserMessage } from './agent/processor';
 
 const logger = LoggerFactory.create();
 
@@ -50,6 +53,42 @@ function startCliMode(): void {
 const app: Application = express()
 
 app.use(express.json())
+
+const publicDirCandidates = [
+  path.resolve(config.BASE_DIR, 'public'),
+  path.resolve(config.BASE_DIR, 'apps/client/public'),
+];
+
+const publicDir = publicDirCandidates.find((candidate) => fs.existsSync(candidate));
+
+if (publicDir) {
+  app.use('/public', express.static(publicDir));
+
+  app.get('/', (_: Request, res: Response) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
+  });
+}
+
+app.post('/api/chat', async (req: Request, res: Response) => {
+  const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+  if (!message) {
+    res.status(400).json({ error: 'message is required' });
+    return;
+  }
+
+  const result = await processUserMessage(message, 'tui');
+
+  console.log('Processed message:', result);
+
+  if (typeof result !== 'string') {
+    let out = '';
+    for await (const chunk of result) out += chunk;
+    res.status(200).json({ response: out });
+    return;
+  }
+
+  res.status(200).json({ response: result });
+});
 
 app.get('/health', (_: Request, res: Response) => {
   res.status(200).json({ 
