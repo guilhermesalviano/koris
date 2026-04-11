@@ -547,20 +547,33 @@ export function startTui(options: StartTuiOptions): void {
 
   if (confirmExit) {
     rl.on('SIGINT', () => {
-      println('\n');
-      if (fixedInput) requestRender();
+      (rl as any).line = '';
+      (rl as any).cursor = 0;
 
-      rl.question(`${colors.yellow}Are you sure you want to exit? (y/n)${colors.reset} `, (answer: string) => {
-        const a = answer.toLowerCase();
-        if (a === 'y' || a === 'yes') {
+      process.stdout.write('\x1b7'); // save cursor
+      process.stdout.write(ansi.cursorPos(terminalHeight, 1));
+      process.stdout.write(ansi.clearLine);
+      process.stdout.write(`${colors.yellow}Are you sure you want to exit? (y/n)${colors.reset} `);
+      process.stdout.write('\x1b8'); // restore cursor
+
+      const onKey = (key: string) => {
+        const k = key.toLowerCase();
+
+        if (k === 'y') {
           rl.close();
         } else {
-          if (fixedInput) {
-            requestRender();
-          }
+          process.stdout.write('\x1b7');
+          process.stdout.write(ansi.cursorPos(terminalHeight, 1));
+          process.stdout.write(ansi.clearLine);
+          process.stdout.write(`${colors.bright}${colors.cyan}${footerText.slice(0, terminalWidth)}${colors.reset}`);
+          process.stdout.write('\x1b8');
           rl.prompt();
         }
-      });
+
+        (rl as any).input?.removeListener('keypress', onKey);
+      };
+
+      (rl as any).input?.on('keypress', onKey);
     });
   }
 
