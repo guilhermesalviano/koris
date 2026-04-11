@@ -76,18 +76,45 @@ app.post('/api/chat', async (req: Request, res: Response) => {
     return;
   }
 
-  const result = await processUserMessage(message, 'tui');
+  const writeSse = (payload: unknown) => {
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
 
-  console.log('Processed message:', result);
+  res.status(200);
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
 
-  if (typeof result !== 'string') {
-    let out = '';
-    for await (const chunk of result) out += chunk;
-    res.status(200).json({ response: out });
-    return;
+  try {
+    const result = await processUserMessage(message, 'tui');
+
+    if (typeof result !== 'string') {
+      for await (const chunk of result) {
+        if (!chunk) continue;
+        writeSse({
+          type: 'content_block_delta',
+          delta: { text: chunk },
+        });
+      }
+    } else {
+      writeSse({
+        type: 'content_block_delta',
+        delta: { text: result },
+      });
+    }
+
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    writeSse({
+      type: 'content_block_delta',
+      delta: { text: `Error: ${msg}` },
+    });
+    res.write('data: [DONE]\n\n');
+    res.end();
   }
-
-  res.status(200).json({ response: result });
 });
 
 app.get('/health', (_: Request, res: Response) => {
