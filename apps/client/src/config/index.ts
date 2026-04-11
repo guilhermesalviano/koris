@@ -7,12 +7,14 @@ export const config = {
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
   ENVIRONMENT: process.env.ENVIRONMENT || 'development',
   BASE_DIR: process.cwd(),
-  TELEGRAM: {
-    BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
-  },
-  OLLAMA: {
+  AI: {
+    // In tests we default to a deterministic mock provider so unit tests don't require Ollama.
+    PROVIDER: (isTest ? 'mock' : (process.env.AI_PROVIDER || 'ollama')) as 'ollama' | 'mock',
     BASE_URL: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
     MODEL: process.env.OLLAMA_MODEL || 'gemma4:e2b',
+  },
+  TELEGRAM: {
+    BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
   },
 } as const;
 

@@ -1,4 +1,5 @@
 import readline from 'readline';
+import { config } from '../config';
 
 export interface CommandContext {
   source: 'telegram' | 'tui';
@@ -56,7 +57,7 @@ function handleStart(context: CommandContext): CommandResult {
   const message = context.source === 'telegram'
     ? `👋 *Welcome to opencrawdio!*
 
-I'm an AI coding agent powered by Ollama. I can help you with:
+I'm an AI coding agent (provider: *${config.AI.PROVIDER}*). I can help you with:
 
 • Reading and analyzing code
 • Making file changes
@@ -66,7 +67,7 @@ I'm an AI coding agent powered by Ollama. I can help you with:
 Just send me a message with what you need!`
     : `Welcome to opencrawdio!
 
-I'm an AI coding agent that can help you with:
+I'm an AI coding agent (provider: ${config.AI.PROVIDER}) that can help you with:
 • Reading and analyzing code
 • Making file changes
 • Running commands
@@ -134,8 +135,7 @@ function handleStats(context: CommandContext): CommandResult {
       response: `✅ *Bot Status*
 
 • Connection: Active
-• Mode: Mock Implementation
-• Ollama: Not connected (using mock)
+• AI Provider: *${config.AI.PROVIDER}*
 • Ready to assist!`,
       action: 'none',
       handled: true,
