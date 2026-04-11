@@ -9,7 +9,7 @@ describe('OllamaAIProvider', () => {
     vi.restoreAllMocks();
   });
 
-  it('accumulates streamed NDJSON message.content chunks from /api/chat', async () => {
+  it('accumulates streamed NDJSON message.content chunks from /api/chat via chatStream', async () => {
     const encoder = new TextEncoder();
 
     const ndjson =
@@ -31,6 +31,33 @@ describe('OllamaAIProvider', () => {
         new Response(stream, {
           status: 200,
           headers: { 'content-type': 'application/x-ndjson' },
+        })
+      ) as unknown as typeof fetch;
+
+    const provider = new OllamaAIProvider({ baseUrl: 'http://localhost:11434', model: 'test' });
+
+    let out = '';
+    for await (const chunk of provider.chatStream({
+      messages: [{ role: 'user', content: 'hi' }],
+    })) {
+      out += chunk;
+    }
+
+    expect(out).toBe('Hello');
+  });
+
+  it('returns full response from chat() using non-streaming fallback', async () => {
+    const responseBody = JSON.stringify({
+      message: { role: 'assistant', content: 'Hello' },
+      done: true,
+    });
+
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(responseBody, {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
         })
       ) as unknown as typeof fetch;
 

@@ -705,7 +705,8 @@ function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string, showH
     println();
   }
 
-  println(`${colors.dim}${aiModel} is ready to assist! What can I help you with?${colors.reset}`);
+  const modelLabel = aiModel || 'Assistant';
+  println(`${colors.dim}${modelLabel} is ready to assist! What can I help you with?${colors.reset}`);
   println();
 }
 
