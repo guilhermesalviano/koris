@@ -665,27 +665,16 @@ function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string, showH
   const appTitle = title ?? 'Assistant';
   const displayHints = showHints !== false;
 
-  // Calculate box width (leave 2 chars for padding on each side)
-  // const boxWidth = Math.max(30, terminalWidth - 4);
-  // const contentWidth = boxWidth - 4; // Account for borders and padding
-
-  // Build top border
   const topBorder = `${colors.bright}${colors.cyan}┏${('━').repeat(terminalWidth - 2)}┓${colors.reset}`;
   println(topBorder);
 
-  // Build title line with dynamic spacing
   const titleContent = `✨  ${appTitle}  ✨`;
-  // const totalPadding = contentWidth - titleContent.length;
-  // const leftPadding = Math.floor(totalPadding / 2);
-  // const rightPadding = totalPadding * 1.42 - leftPadding;
   const titleLine = `${colors.bright}${colors.cyan}┃${colors.reset}  ${colors.bright}${colors.blue}${titleContent}${' '.repeat(Math.max(0, terminalWidth - (titleContent.length + 8)))}${colors.reset}  ${colors.bright}${colors.cyan}┃${colors.reset}`;
   println(titleLine);
 
-  // Build bottom border
   const bottomBorder = `${colors.bright}${colors.cyan}┗${('━').repeat(terminalWidth - 2)}┛${colors.reset}`;
   println(bottomBorder);
 
-  // Display current time
   const now = new Date();
   const timeStr = now.toLocaleString('en-US', {
     hour: '2-digit',
@@ -696,7 +685,6 @@ function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string, showH
   println(`${colors.dim}${colors.gray}Session started at ${timeStr}${colors.reset}`);
   println();
 
-  // Feature hints
   if (displayHints) {
     println(`${colors.bright}${colors.magenta}Quick Tips:${colors.reset}`);
     println(`  ${colors.cyan}•${colors.reset} Start commands with ${colors.bright}/${colors.reset}`);
