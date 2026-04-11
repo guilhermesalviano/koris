@@ -49,7 +49,7 @@ export interface SpinnerOptions {
 }
 
 export interface StartTuiOptions {
-  /** Called for normal (non-command) input. If you return a string, it will be printed. */
+  /** If you return a string, it will be printed. If you return an `AsyncIterable<string>`, yielded chunks will be streamed to the output. */
   onInput(input: string, ctx: TuiContext): Promise<string | AsyncIterable<string> | void>;
 
   /** If provided, command input is routed here (when `isCommand` matches). */

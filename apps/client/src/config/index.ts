@@ -1,7 +1,7 @@
 import 'dotenv/config';
 
 // Check if running in test environment
-const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+const isTest = process.env.NODE_ENV === 'test';
 
 export const config = {
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
@@ -9,7 +9,7 @@ export const config = {
   BASE_DIR: process.cwd(),
   AI: {
     // In tests we default to a deterministic mock provider so unit tests don't require Ollama.
-    PROVIDER: (isTest ? 'mock' : (process.env.AI_PROVIDER || 'ollama')) as 'ollama' | 'mock',
+    PROVIDER: (process.env.VITEST === 'true' ? 'mock' : process.env.AI_PROVIDER || 'ollama'),
     BASE_URL: process.env.AI_BASE_URL || 'http://localhost:11434',
     MODEL: process.env.AI_MODEL || 'gemma4:e2b',
   },

@@ -18,7 +18,7 @@ function isEntityParseError(error: unknown): boolean {
 async function sendMessageWithMarkdownFallback(chatId: number, text: string): Promise<void> {
   const bot = getBot();
   try {
-    await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, text, { parse_mode: 'MarkdownV2' });
   } catch (error) {
     if (!isEntityParseError(error)) throw error;
     await bot.sendMessage(chatId, text);

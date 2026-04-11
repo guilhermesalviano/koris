@@ -35,7 +35,7 @@ export class OllamaAIProvider implements AIProvider {
       return await this.readJsonFallback(request, controller.signal);
     } catch (err) {
       if (this.isAbortError(err)) {
-        throw new Error('Ollama request timed out while streaming');
+        throw new Error('Ollama request timed out during non-stream /api/chat request');
       }
       throw err;
     } finally {
