@@ -124,8 +124,7 @@ function appendUserMsg(text) {
     <div class="bubble-col flex max-w-[calc(100%-44px)] flex-col items-end gap-1">
       <div class="bubble relative break-words rounded-card rounded-br-[5px] bg-accent px-3.5 py-2.5 text-sm leading-relaxed text-white">${safe}</div>
       <span class="px-1 font-mono text-[11px] text-txt-3">${timeStr()}</span>
-    </div>
-    <div class="mt-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-strong bg-bg-4 font-mono text-[10px] font-medium text-txt-2">you</div>`;
+    </div>`;
   chatEl.appendChild(row);
   chatEl.scrollTop = chatEl.scrollHeight;
 }
