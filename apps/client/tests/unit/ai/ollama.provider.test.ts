@@ -2,10 +2,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { OllamaAIProvider } from '../../../src/ai/providers/ollama';
 
 describe('OllamaAIProvider', () => {
-  const originalFetch = global.fetch;
+  const originalFetch = globalThis.fetch;
 
   afterEach(() => {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
   });
 
@@ -25,7 +25,7 @@ describe('OllamaAIProvider', () => {
       },
     });
 
-    global.fetch = vi
+    globalThis.fetch = vi
       .fn()
       .mockResolvedValue(
         new Response(stream, {
@@ -52,7 +52,7 @@ describe('OllamaAIProvider', () => {
       done: true,
     });
 
-    global.fetch = vi
+    globalThis.fetch = vi
       .fn()
       .mockResolvedValue(
         new Response(responseBody, {
