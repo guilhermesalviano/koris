@@ -89,7 +89,7 @@ async function handleInstruction(instruction: Instruction, source: 'telegram' | 
           return `- ${source === 'telegram' ? escapeTelegramMarkdown(name) : name}`;
         });
 
-      return [source === 'telegram' ? escapeTelegramMarkdown(header) : header, ...lines].join('\n');
+      return [source === 'telegram' ? header : header, ...lines].join('\n');
     }
 
     case 'search': {
