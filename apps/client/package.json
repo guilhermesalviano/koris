@@ -9,10 +9,11 @@
   },
   "scripts": {
     "dev:server": "tsx watch src/server.ts",
+    "server": "node dist/src/server.js",
+    "app": "node dist/src/app.js",
     "clean": "rm -rf dist",
     "build": "pnpm run clean && tsc --project tsconfig.json",
     "lint": "tsc --noEmit -p tsconfig.json",
-    "server": "node dist/src/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
