@@ -13,7 +13,6 @@
     "build": "pnpm run clean && tsc --project tsconfig.json",
     "lint": "tsc --noEmit -p tsconfig.json",
     "server": "node dist/src/server.js",
-    "tui": "node dist/src/app.js --tui",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
