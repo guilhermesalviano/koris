@@ -8,7 +8,9 @@ const charCount = document.getElementById('char-count');
 
 let history    = [];
 let streaming  = false;
+let serverHealthy = true;
 const MAX_CHARS = 4000;
+const HEALTH_CHECK_MS = 5000;
 
 /* ── Utilities ── */
 function setStatus(state) {
@@ -16,7 +18,29 @@ function setStatus(state) {
   if (state === 'thinking') statusDot.classList.add('bg-amber-500');
   else if (state === 'error') statusDot.classList.add('bg-red-500');
   else statusDot.classList.add('bg-green-500');
-  statusLbl.textContent = state;
+  statusLbl.textContent = (state === 'error' ? 'Server offline' : state === 'thinking' ? 'Thinking...' : 'Online');
+}
+
+function syncStatus() {
+  if (!serverHealthy) {
+    setStatus('error');
+    return;
+  }
+  if (streaming) {
+    setStatus('thinking');
+    return;
+  }
+  setStatus('online');
+}
+
+async function checkHealth() {
+  try {
+    const res = await fetch('/health', { cache: 'no-store' });
+    serverHealthy = res.ok;
+  } catch {
+    serverHealthy = false;
+  }
+  syncStatus();
 }
 
 function timeStr() {
@@ -166,7 +190,7 @@ async function submit() {
 
   streaming = true;
   sendBtn.disabled = true;
-  setStatus('thinking');
+  syncStatus();
 
   history.push({ role: 'user', content: text });
   appendUserMsg(text);
@@ -215,18 +239,22 @@ async function submit() {
 
     history.push({ role: 'assistant', content: accumulated || 'No response.' });
     finalizeRow(row, accumulated);
-    setStatus('online');
 
   } catch (err) {
     const msg = err.message || 'Request failed';
     history.push({ role: 'assistant', content: msg });
     finalizeRow(row, msg);
-    setStatus('error');
+    serverHealthy = false;
+    syncStatus();
     showToast('Error: ' + msg);
-    setTimeout(() => setStatus('online'), 3000);
+    setTimeout(() => checkHealth(), 3000);
   } finally {
     streaming = false;
+    syncStatus();
     sendBtn.disabled = !messageEl.value.trim();
     messageEl.focus();
   }
 }
+
+checkHealth();
+setInterval(checkHealth, HEALTH_CHECK_MS);

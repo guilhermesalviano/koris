@@ -73,8 +73,8 @@ app.post('/api/chat', async (req: Request, res: Response) => {
 });
 
 app.get('/health', async (_: Request, res: Response) => {
-  const health = await healthCheck();
-  res.status(200).json(health);
+  const { status, timestamp, details } = await healthCheck();
+  res.status((status === 'ok' ? 200 : 500)).json({ status, timestamp, details });
 });
 
 app.listen(config.PORT, () => {
