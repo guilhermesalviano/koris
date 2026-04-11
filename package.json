@@ -15,6 +15,10 @@
     "start:tui": "turbo run start:tui --filter=opencrawdio"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "turbo": "^2.5.0"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
   }
 }

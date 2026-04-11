@@ -2,19 +2,18 @@
   "name": "opencrawdio",
   "version": "1.0.0",
   "description": "",
-  "main": "dist/src/index.js",
+  "main": "dist/src/app.js",
   "packageManager": "pnpm@10.18.3",
   "engines": {
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev": "tsx src/index.ts",
-    "dev:tui": "tsx watch src/index.ts --tui",
+    "dev:tui": "tsx watch src/app.ts --tui",
     "clean": "rm -rf dist",
     "build": "pnpm run clean && tsc --project tsconfig.json",
     "lint": "tsc --noEmit -p tsconfig.json",
-    "start": "node dist/src/index.js",
-    "start:tui": "node dist/src/index.js --tui",
+    "server": "node dist/src/server.js",
+    "tui": "node dist/src/app.js --tui",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
