@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config'
 import { logger } from './app'
-import { processUserMessage } from './agent/processor';
+import { healthCheck, processUserMessage } from './agent/processor';
 
 const app: Application = express()
 
@@ -72,12 +72,10 @@ app.post('/api/chat', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/health', (_: Request, res: Response) => {
-  res.status(200).json({ 
-    message: 'OK',
-    timestamp: new Date().toISOString()
-  })
-})
+app.get('/health', async (_: Request, res: Response) => {
+  const health = await healthCheck();
+  res.status(200).json(health);
+});
 
 app.listen(config.PORT, () => {
   logger.log('info', `Server running at http://localhost:${config.PORT}`)

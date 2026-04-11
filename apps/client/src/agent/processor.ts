@@ -204,3 +204,14 @@ export async function processUserMessage(
   }
   return await handleChat(safeMessage, source);
 }
+
+export async function healthCheck(): Promise<{ status: 'ok' | 'error'; timestamp: string; details?: string }> {
+  const provider = getAIProvider();
+  try {
+    const health = await provider.healthCheck();
+    return { status: health.ok === true ? 'ok' : 'error', timestamp: new Date().toISOString() };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return { status: 'error', timestamp: new Date().toISOString(), details: detail };
+  }
+}
