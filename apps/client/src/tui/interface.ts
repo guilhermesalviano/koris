@@ -15,7 +15,7 @@ export function startTUI(): void {
     showHints: false,
     
     // Enhanced spinner during processing
-    spinner: { enabled: true, label: 'Processing' },
+    spinner: { enabled: true },
     
     // Thinking indicator for responses
     assistantPrefix: '●',

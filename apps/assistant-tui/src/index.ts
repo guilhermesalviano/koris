@@ -131,10 +131,11 @@ export function startTui(options: StartTuiOptions): void {
 
   // Layout in fixed mode:
   // - content area
+  // - spinner status line
   // - separator line
   // - footer help line
   // - input line
-  const maxContentLines = () => Math.max(1, terminalHeight - 3);
+  const maxContentLines = () => Math.max(1, terminalHeight - 4);
   const ensureScrollOffsetInRange = () => {
     const maxOffset = Math.max(0, contentBuffer.length - maxContentLines());
     scrollOffset = Math.max(0, Math.min(maxOffset, scrollOffset));
@@ -246,6 +247,11 @@ export function startTui(options: StartTuiOptions): void {
     const prefix = spinnerStatus ? `- ${spinnerStatus} ` : '';
     const dashCount = Math.max(0, terminalWidth - prefix.length);
     return `${colors.dim}${prefix}${'─'.repeat(dashCount)}${colors.reset}`;
+  };
+
+  const buildSpinnerLine = (status: string) => {
+    if (!status) return '';
+    return `${colors.dim}${colors.gray}${status.slice(0, terminalWidth)}${colors.reset}`;
   };
 
   const createInputFilter = (handlers: {
@@ -459,10 +465,15 @@ export function startTui(options: StartTuiOptions): void {
       if (typeof line === 'string') process.stdout.write(line);
     }
 
-    // Separator row
+    // Spinner status row (line above separator)
+    process.stdout.write(ansi.cursorPos(terminalHeight - 4, 1));
+    process.stdout.write(ansi.clearLine);
+    process.stdout.write(buildSpinnerLine(spinnerStatus));
+
+    // Separator row above input
     process.stdout.write(ansi.cursorPos(terminalHeight - 3, 1));
     process.stdout.write(ansi.clearLine);
-    process.stdout.write(buildSeparatorLine(spinnerStatus));
+    process.stdout.write(buildSeparatorLine(''));
 
     // Input pinned to row above the footer
     process.stdout.write(ansi.cursorPos(terminalHeight - 2, 1));
