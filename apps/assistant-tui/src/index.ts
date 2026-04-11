@@ -149,8 +149,70 @@ export function startTui(options: StartTuiOptions): void {
     }
   };
 
-  const println = (text = '') => {
+  const ansiRegex = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+  const visibleWidth = (value: string): number => value.replace(ansiRegex, '').length;
+
+  const wrapSingleLineForWidth = (line: string, width: number): string[] => {
+    const maxWidth = Math.max(1, width);
+    if (line.length === 0) return [''];
+
+    const wrapped: string[] = [];
+    const tokens = line.match(/ +|[^ ]+/g) ?? [line];
+    let currentLine = '';
+    let currentWidth = 0;
+
+    for (const token of tokens) {
+      const isSpaces = token.startsWith(' ');
+      const tokenWidth = isSpaces ? token.length : visibleWidth(token);
+
+      if (isSpaces) {
+        if (currentLine.length === 0) {
+          currentLine = token;
+          currentWidth = tokenWidth;
+          continue;
+        }
+
+        if (currentWidth + tokenWidth <= maxWidth) {
+          currentLine += token;
+          currentWidth += tokenWidth;
+          continue;
+        }
+
+        wrapped.push(currentLine.replace(/ +$/, ''));
+        currentLine = '';
+        currentWidth = 0;
+        continue;
+      }
+
+      if (currentLine.length === 0) {
+        currentLine = token;
+        currentWidth = tokenWidth;
+        continue;
+      }
+
+      if (currentWidth + tokenWidth <= maxWidth) {
+        currentLine += token;
+        currentWidth += tokenWidth;
+        continue;
+      }
+
+      wrapped.push(currentLine.replace(/ +$/, ''));
+      currentLine = token;
+      currentWidth = tokenWidth;
+    }
+
+    if (currentLine.length > 0) wrapped.push(currentLine);
+    return wrapped.length > 0 ? wrapped : [''];
+  };
+
+  const wrapLinesForTerminal = (text: string): string[] => {
     const lines = text.replace(/\r\n/g, '\n').split('\n');
+    if (!fixedInput) return lines;
+    return lines.flatMap((line) => wrapSingleLineForWidth(line, terminalWidth));
+  };
+
+  const println = (text = '') => {
+    const lines = wrapLinesForTerminal(text);
 
     // If user is scrolled up, keep their viewport anchored as new lines arrive.
     if (fixedInput && scrollOffset > 0) scrollOffset += lines.length;
@@ -646,11 +708,9 @@ export function startTui(options: StartTuiOptions): void {
       lastRenderedAt = now;
 
       const formatted = formatResponse(out, ctx);
-      const lines = formatted.length > 0 ? formatted.split('\n') : [''];
-      const prefixedLines = [
-        `${colors.reset}${assistantPrefix}${colors.reset} ${lines[0]}`,
-        ...lines.slice(1),
-      ];
+      const rawLines = formatted.length > 0 ? formatted.replace(/\r\n/g, '\n').split('\n') : [''];
+      rawLines[0] = `${colors.reset}${assistantPrefix}${colors.reset} ${rawLines[0]}`;
+      const prefixedLines = rawLines.flatMap((line) => wrapSingleLineForWidth(line, terminalWidth));
 
       contentBuffer.splice(baseIndex, renderedLineCount, ...prefixedLines);
       renderedLineCount = prefixedLines.length;
