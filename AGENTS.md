@@ -124,7 +124,24 @@ interface SessionState {
 - `yellow` - Warnings
 - `gray/dim` - Secondary information
 
-### 4. Telegram Bot (via `apps/telegram-bot`)
+### 4. Web Interface (`apps/client/src/channels/web/`)
+
+**Purpose**: Browser-based chat interface served via Express.
+
+**Architecture**:
+- `server.ts` - Express server with SSE streaming
+- `public/index.html` - Main chat UI (Tailwind CSS + DM fonts)
+- `public/main.js` - Frontend logic with markdown rendering
+- `public/styles.css` - Custom styles (grid bg, scrollbars, code labels)
+
+**Features**:
+- Real-time SSE streaming from `/api/chat`
+- Markdown rendering with syntax highlighting
+- Tool execution response handling
+- Server health check with status indicator
+- Character count for input (max 4000 chars)
+
+### 5. Telegram Bot (via `apps/telegram-bot`)
 
 **Purpose**: Telegram interface for remote access to agent capabilities.
 
@@ -135,30 +152,48 @@ interface SessionState {
 
 ## Agent Capabilities
 
-### Current (Mock Implementation)
+### Current (Ollama Integration + Tool Execution)
 
-The agent currently provides mock responses for:
+The agent now provides:
 
-1. **File Operations**
-   - Reading file contents
-   - Writing/creating files
-   - Listing directories
+1. **AI Provider Integration**
+   - Ollama provider with streaming responses
+   - Mock provider for testing
+   - Tool calling with automatic detection and execution
+   - Configurable timeouts for remote models (IDLE_TIMEOUT=90s, HARD_TIMEOUT=15m)
 
-2. **Command Execution**
-   - Shell command execution (requires approval)
-   - Output display
+2. **File Operations** (via Ollama tool calls)
+   - `read_file` - Read file contents with size limits
+   - `write_file` - Create/modify files with validation
+   - `list_dir` - List directory contents
+   - All paths validated to prevent directory traversal attacks
 
-3. **Search Operations**
-   - File content search
-   - Pattern matching
+3. **Command Execution**
+   - `execute_command` - Run shell commands with output capture
+   - Executed by AI model as tool calls
 
-### Planned (Ollama Integration)
+4. **Search Operations**
+   - `search` - Search files with pattern matching
+   - Returns file contents matching patterns
 
-The system is designed to integrate with Ollama for:
-- Natural language understanding
-- Code analysis and generation
-- Context-aware responses
-- Tool calling capabilities
+5. **System Information**
+   - Context-aware system prompts per interface
+   - Tool schemas automatically passed to AI model
+
+### Tool Execution Architecture
+
+Tool calls flow:
+```
+User Message → Ollama Chat → Detects tool_calls in response
+              ↓
+        Tool Executor (tool-executor.ts)
+              ↓
+   [read_file | write_file | list_dir | search | execute_command]
+              ↓
+        Results formatted as JSON → Sent back to AI for continuation
+              ↓
+        Final response streamed to user
+```
 
 ## Tool Detection Patterns
 
@@ -248,28 +283,45 @@ function mockMyNewType(params: string): string {
 
 ### Adding Ollama Integration
 
-When integrating Ollama, replace mock implementations with real tool calls:
+Ollama integration is now active with full tool support:
 
-1. Create Ollama client wrapper in `apps/client/src/agent/ollama.ts`
-2. Define tool schemas for Ollama function calling
-3. Replace `mockReadFile`, `mockWriteFile`, etc. with real implementations
-4. Add conversation history management
-5. Implement streaming responses for better UX
+**Current Implementation** (`apps/client/src/ai/providers/ollama.ts`):
+1. Streaming chat completions with timeout handling
+2. Automatic tool call detection in responses
+3. Tool execution via `tool-executor.ts`
+4. Response parsing with JSON fallback for tool_calls
+5. Comprehensive logging of all requests/responses
 
-**Tool Schema Example**:
+**Tool Schema Handling**:
 ```typescript
-const readFileTool = {
-  name: 'read_file',
-  description: 'Read contents of a file',
-  parameters: {
-    type: 'object',
-    properties: {
-      path: { type: 'string', description: 'File path to read' }
-    },
-    required: ['path']
-  }
-};
+// Tools automatically passed to Ollama in system prompt
+const tools = [
+  { name: 'read_file', description: '...' },
+  { name: 'write_file', description: '...' },
+  { name: 'list_dir', description: '...' },
+  { name: 'search', description: '...' },
+  { name: 'execute_command', description: '...' }
+];
+
+// Model responds with tool_calls array
+{
+  "tool_calls": [{
+    "name": "read_file",
+    "parameters": { "path": "src/config.ts" }
+  }]
+}
+
+// Results formatted and sent back to model for continuation
+{
+  "role": "tool",
+  "content": "{ \"file_contents\": \"...\" }"
+}
 ```
+
+**Timeout Configuration** (for slow remote models):
+- `IDLE_TIMEOUT`: 90s (time between chunks) - resets on each data chunk
+- `HARD_TIMEOUT`: 15m (total request time) - prevents hung requests
+- Configurable via environment variables
 
 ## Configuration
 
@@ -284,12 +336,20 @@ See `apps/client/.env.example` for required configuration:
 
 Logger is configured in `apps/client/src/infrastructure/logger.ts`:
 - Uses Winston for structured logging
-- Outputs JSON format to console
-- Includes timestamps and environment metadata
+- Outputs to console (JSON format) and files
+- File transports: `logs/combined.log` (all) and `logs/error.log` (errors only)
+- Includes request/response data from AI providers
+- Maximum 5MB per file, 5 files rotation
+
+**Logging Coverage**:
+- All Ollama requests and responses
+- Tool execution and results
+- Errors with full stack traces
+- Mock provider responses (for testing)
 
 ## Usage Examples
 
-### tui Usage
+### TUI Usage
 ```bash
 # Start tui
 pnpm dev:tui
@@ -299,7 +359,7 @@ pnpm dev:tui
 [Shows available commands]
 
 > read src/config.ts
-[Shows file contents]
+[Ollama processes and executes read_file tool]
 
 > /stats
 [Shows session statistics]
@@ -308,13 +368,26 @@ pnpm dev:tui
 [Exits cleanly]
 ```
 
+### Web Interface Usage
+```bash
+# Start web server (runs at http://localhost:3000)
+pnpm dev
+
+# Or with production build
+pnpm build && pnpm start
+
+# Then visit http://localhost:3000 in browser
+```
+
+Send messages and receive real-time SSE responses with tool execution.
+
 ### Telegram Usage
 ```
 User: /start
 Bot: 👋 Welcome to opencrawdio! [...]
 
 User: read package.json
-Bot: 📄 Reading file: package.json [...]
+Bot: [Ollama executes read_file tool]
 
 User: /status
 Bot: ✅ Bot Status [...] 
@@ -327,17 +400,36 @@ Bot: ✅ Bot Status [...]
 # Build project
 pnpm build
 
-# Test tui
+# Test tui with AI provider
 pnpm dev:tui
 
-# Test with production build
-pnpm start:tui
+# Test web interface
+pnpm dev  # Starts on http://localhost:3000
+
+# Test with Ollama
+# Ensure Ollama is running: ollama serve
+# Set in .env: AI_PROVIDER=ollama, AI_BASE_URL=http://localhost:11434, AI_MODEL=gemma4:e2b
 ```
 
-### Future: Automated Testing
-- Unit tests for command handlers
-- Integration tests for message processing
-- Mock Ollama responses for consistent testing
+### Automated Testing
+```bash
+# Run all tests (unit tests default to mock provider)
+pnpm test
+
+# Tests for each component
+- agents/commands: 19 tests
+- agents/processor: 13 tests  
+- AI providers (mock, ollama): 7 tests
+- System info: 1 test
+- Tools: 2 tests
+
+Total: 42 tests passing
+```
+
+**Test Configuration**:
+- Tests default to `AI_PROVIDER=mock` via `NODE_ENV=test` or `VITEST=true`
+- No Ollama server needed for unit tests
+- Integration tests can be added for live Ollama testing
 
 ## Security Considerations
 
@@ -371,17 +463,27 @@ pnpm start:tui
 
 ```
 apps/
-├── client/                 # main runnable app
-│   ├── src/                # agent + tui + telegram integration
-│   └── tests/              # unit + security tests (vitest)
-├── assistant-tui/          # reusable TUI mini-module (assistant-tui)
-│   └── src/
-└── telegram-bot/           # reusable Telegram mini-module (assistant-telegram-bot)
-    └── src/
+├── client/                     # main runnable app
+│   ├── src/
+│   │   ├── ai/                 # AI provider layer
+│   │   │   ├── providers/      # ollama.ts, mock.ts
+│   │   │   ├── worker/         # tool-executor.ts
+│   │   │   └── prompt/         # system-info.ts, tools.ts
+│   │   ├── agent/              # processor.ts, commands.ts
+│   │   ├── channels/
+│   │   │   ├── tui/            # TUI interface
+│   │   │   └── web/            # Web interface (Express + public/)
+│   │   └── infrastructure/     # logger.ts
+│   ├── public/                 # Static assets (index.html, main.js, styles.css)
+│   ├── tests/                  # Unit + security tests (vitest)
+│   └── logs/                   # Runtime logs (combined.log, error.log)
+├── assistant-tui/              # Reusable TUI module
+├── telegram-bot/               # Reusable Telegram module
+└── sh-compression/             # Utility module
 
-.github/workflows/          # CI workflows
-AGENTS.md                   # architecture notes
-README.md                   # repo overview
+.github/workflows/              # CI workflows (lint, test)
+AGENTS.md                       # System architecture (this file)
+README.md                       # Repo overview
 ```
 
 ## Contributing
@@ -413,6 +515,6 @@ When modifying the agent system:
 
 ---
 
-**Last Updated**: 2026-04-07
-**Version**: 1.0.0
-**Status**: Mock implementation, Ollama integration pending
+**Last Updated**: 2026-04-12
+**Version**: 1.1.0
+**Status**: Ollama integration complete with tool execution. Web interface added.
