@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { processUserMessage } from '../../../src/agent/processor';
 
 describe('Message Processor', () => {
@@ -33,35 +33,16 @@ describe('Message Processor', () => {
     });
   });
 
-  describe('Instruction Detection', () => {
-    it('should detect read_file instruction', async () => {
+  describe('Non-command messages', () => {
+    it('should route plain messages to AI provider', async () => {
+      const result = await processUserMessage('Hello world', 'tui');
+      expect(result).toContain('received your message');
+    });
+
+    it('should route former instruction-like messages to AI provider', async () => {
       const result = await processUserMessage('read package.json', 'tui');
-      expect(result).toContain('package.json');
-    });
-
-    it('should detect list_dir instruction', async () => {
-      const result = await processUserMessage('list src/', 'tui');
-      expect(result).toContain('Directory');
-    });
-
-    it('should detect list_dir for current directory', async () => {
-      const result = await processUserMessage('list .', 'tui');
-      expect(result).toContain('Directory');
-    });
-
-    it('should detect write_file instruction', async () => {
-      const result = await processUserMessage('write test.txt', 'tui');
-      expect(result).toContain('create/update file');
-    });
-
-    it('should detect execute_command instruction', async () => {
-      const result = await processUserMessage('run npm test', 'tui');
-      expect(result).toContain('execute command');
-    });
-
-    it('should detect search instruction', async () => {
-      const result = await processUserMessage('search for config', 'tui');
-      expect(result).toContain('Searching');
+      expect(result).toContain('received your message');
+      expect(result).toContain('read package.json');
     });
 
     it('should handle unknown instructions', async () => {
@@ -70,38 +51,24 @@ describe('Message Processor', () => {
     });
   });
 
-  describe('Markdown Escaping for Telegram', () => {
-    // todo: check if needed later.
-    // it('should escape special characters in file operations', async () => {
-    //   const result = await processUserMessage('read test_file.json', 'telegram');
-    //   // Should contain escaped underscores or dots
-    //   expect(result).toMatch(/\\[_\\.]/);
-    // });
-
-    it('should escape periods in directory listing', async () => {
-      const result = await processUserMessage('list .', 'telegram');
-      // Should escape dots and other special chars
-      expect(result).toMatch(/\\\./);
-    });
-
-    it('should escape special characters in search results', async () => {
+  describe('Telegram message routing', () => {
+    it('should keep user prompt content in provider response', async () => {
       const result = await processUserMessage('search for key-for-tests', 'telegram');
-      // Should escape hyphens
-      expect(result).toMatch(/\\-/);
+      expect(result).toContain('search for key-for-tests');
     });
   });
 
-  describe('Mock Responses', () => {
-    it('should return mock response for write_file', async () => {
+  describe('AI fallback behavior', () => {
+    it('should route write-style prompts to AI provider', async () => {
       const result = await processUserMessage('write newfile.ts', 'tui');
-      expect(result).toContain('mock response');
-      expect(result).toContain('approval');
+      expect(result).toContain('received your message');
+      expect(result).toContain('write newfile.ts');
     });
 
-    it('should return mock response for execute_command', async () => {
+    it('should route run-style prompts to AI provider', async () => {
       const result = await processUserMessage('run npm install', 'tui');
-      expect(result).toContain('mock response');
-      expect(result).toContain('approval');
+      expect(result).toContain('received your message');
+      expect(result).toContain('run npm install');
     });
   });
 

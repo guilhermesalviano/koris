@@ -1,9 +1,4 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-
 import { getAIProvider } from '../ai';
-import { config } from '../config';
-import type { Instruction } from '../types';
 import { handleCommand, isCommand } from './commands';
 
 type ProcessedMessage = string | AsyncGenerator<string>;
@@ -29,85 +24,6 @@ function escapeTelegramMarkdown(text: string): string {
   // Tests expect escaping for '.' and '-' at minimum.
   // NOTE: Telegram "Markdown" vs "MarkdownV2" escaping differs; keep it minimal + test-driven.
   return text.replace(/([\\._-])/g, '\\$1');
-}
-
-function detectInstruction(message: string): Instruction {
-  const trimmed = message.trim();
-  if (!trimmed) return { type: 'unknown', params: '' };
-
-  const readMatch = trimmed.match(/^(read|show|cat)\s+["']?([^\s"']+)["']?/i);
-  if (readMatch) return { type: 'read_file', params: readMatch[2] };
-
-  const listMatch = trimmed.match(/^(list|ls|directory)\s+["']?([^\s"']+)["']?/i);
-  if (listMatch) return { type: 'list_dir', params: listMatch[2] };
-
-  const writeMatch = trimmed.match(/^(write|create|save).*?["']?([^\s"']+)["']?/i);
-  if (writeMatch) return { type: 'write_file', params: writeMatch[2] };
-
-  const execMatch = trimmed.match(/^(run|execute)(?:\s+command)?\s+["']?(.+?)["']?$/i);
-  if (execMatch) return { type: 'execute_command', params: execMatch[2] };
-
-  const searchMatch = trimmed.match(/^(search|find)\s+(?:for\s+)?["']?(.+?)["']?$/i);
-  if (searchMatch) return { type: 'search', params: searchMatch[2] };
-
-  return { type: 'unknown', params: trimmed };
-}
-
-function resolveWithinBaseDir(userPath: string): string {
-  const baseDir = config.BASE_DIR;
-  const normalized = userPath.replace(/\0/g, '');
-  const resolved = path.resolve(baseDir, normalized);
-  const rel = path.relative(baseDir, resolved);
-
-  if (rel.startsWith('..') || path.isAbsolute(rel)) {
-    throw new Error('Path escapes base directory');
-  }
-
-  return resolved;
-}
-
-async function handleInstruction(instruction: Instruction, source: 'telegram' | 'tui'): Promise<string> {
-  switch (instruction.type) {
-    case 'read_file': {
-      const target = instruction.params;
-      const label = source === 'telegram' ? escapeTelegramMarkdown(target) : target;
-      // Keep it lightweight for now (no full file dump in chat).
-      return `Reading file: ${label}`;
-    }
-
-    case 'list_dir': {
-      const target = instruction.params || '.';
-      const resolved = resolveWithinBaseDir(target);
-      const entries = await fs.readdir(resolved, { withFileTypes: true });
-
-      const displayTarget = source === 'telegram' ? escapeTelegramMarkdown(target) : target;
-      const header = `Directory listing for: ${displayTarget}`;
-
-      const lines = entries
-        .slice(0, 50)
-        .map((e) => {
-          const name = e.name + (e.isDirectory() ? '/' : '');
-          return `- ${source === 'telegram' ? escapeTelegramMarkdown(name) : name}`;
-        });
-
-      return [source === 'telegram' ? header : header, ...lines].join('\n');
-    }
-
-    case 'search': {
-      const query = instruction.params;
-      const shown = source === 'telegram' ? escapeTelegramMarkdown(query) : query;
-      return `Searching for: ${shown}\n\n(mock search — tool integration coming next)`;
-    }
-
-    case 'write_file':
-      return `This is a mock response for create/update file: ${instruction.params}.\nRequires approval before writing. (mock response, approval)`;
-
-    case 'execute_command':
-      return `This is a mock response to execute command: ${instruction.params}.\nRequires approval before running. (mock response, approval)`;
-
-    default:
-      return '';
-  }
 }
 
 async function handleStreamChat(
@@ -192,8 +108,7 @@ async function handleChat(
 
 /**
  * Process user messages and generate responses.
- * Commands are handled centrally. For non-commands we first detect built-in instructions,
- * otherwise we fall back to the configured AI provider (default: Ollama).
+ * Commands are handled centrally. Non-commands are routed to the configured AI provider.
  */
 export async function processUserMessage(
   // logger: ILogger,
@@ -210,11 +125,6 @@ export async function processUserMessage(
   if (isCommand(safeMessage)) {
     const result = handleCommand(safeMessage, { source });
     return result.response || '';
-  }
-
-  const instruction = detectInstruction(safeMessage);
-  if (instruction.type !== 'unknown') {
-    return handleInstruction(instruction, source);
   }
 
   if (source === 'tui') {
