@@ -1,8 +1,10 @@
-import { getAIProvider } from '../ai';
+import { getAIProvider, loadAITools, loadSystemInfoPrompt } from '../ai';
 import { handleCommand, isCommand } from './commands';
 
 type ProcessedMessage = string | AsyncGenerator<string>;
 type ProcessOptions = { signal?: AbortSignal };
+const BASE_SYSTEM_PROMPT =
+  'You are a Personal Assistant. Be direct.';
 
 function toSafeMessage(input: unknown): string {
   if (typeof input === 'string') return input;
@@ -28,23 +30,14 @@ function escapeTelegramMarkdown(text: string): string {
 
 async function handleStreamChat(
   message: string,
-  source: 'telegram' | 'tui',
+  channel: 'telegram' | 'tui',
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
   const provider = getAIProvider();
-  const request = {
-    messages: [
-      {
-        role: 'system' as const,
-        content:
-          'You are opencrawdio, a concise AI Assistant. Be direct and helpful. If the user asks to read/list/search/write/run commands, describe what you would do and ask for approval when needed.',
-      },
-      { role: 'user' as const, content: message },
-    ],
-  };
+  const request = buildChatRequest(message, channel);
 
   // Stream directly in TUI when using Ollama.
-  if (source === 'tui' && provider.name === 'ollama') {
+  if (channel === 'tui' && provider.name === 'ollama') {
     const stream = provider.chatStream(request, { signal: options?.signal });
 
     async function* safeStream(): AsyncGenerator<string> {
@@ -70,7 +63,7 @@ async function handleStreamChat(
       throw err;
     }
     const detail = err instanceof Error ? err.message : String(err);
-    return source === 'telegram'
+    return channel === 'telegram'
       ? `I received your message: "${escapeTelegramMarkdown(message)}"\n\n(AI provider error: ${escapeTelegramMarkdown(detail)})`
       : `I received your message: "${message}"\n\n(AI provider error: ${detail})`;
   }
@@ -78,20 +71,11 @@ async function handleStreamChat(
 
 async function handleChat(
   message: string,
-  source: 'telegram' | 'tui',
+  channel: 'telegram' | 'tui',
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
   const provider = getAIProvider();
-  const request = {
-    messages: [
-      {
-        role: 'system' as const,
-        content:
-          'You are opencrawdio, a concise AI Assistant. Be direct and helpful. If the user asks to read/list/search/write/run commands, describe what you would do and ask for approval when needed.',
-      },
-      { role: 'user' as const, content: message },
-    ],
-  };
+  const request = buildChatRequest(message, channel);
 
   try {
     return await provider.chat(request, { signal: options?.signal });
@@ -100,7 +84,7 @@ async function handleChat(
       throw err;
     }
     const detail = err instanceof Error ? err.message : String(err);
-    return source === 'telegram'
+    return channel === 'telegram'
       ? `I received your message: "${escapeTelegramMarkdown(message)}"\n\n(AI provider error: ${escapeTelegramMarkdown(detail)})`
       : `I received your message: "${message}"\n\n(AI provider error: ${detail})`;
   }
@@ -113,28 +97,45 @@ async function handleChat(
 export async function processUserMessage(
   // logger: ILogger,
   message: unknown,
-  source: 'telegram' | 'tui',
+  channel: 'telegram' | 'tui',
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
   const safeMessage = toSafeMessage(message);
 
   // Keep logs lightweight (tests may send very large inputs)
-  console.log(`Processing message from ${source}: "${previewMessage(safeMessage)}"`);
+  console.log(`Processing message from ${channel}: "${previewMessage(safeMessage)}"`);
 
   // Handle commands using centralized handler
   if (isCommand(safeMessage)) {
-    const result = handleCommand(safeMessage, { source });
+    const result = handleCommand(safeMessage, { source: channel });
     return result.response || '';
   }
 
-  if (source === 'tui') {
-    return handleStreamChat(safeMessage, source, options);
+  if (channel === 'tui') {
+    return handleStreamChat(safeMessage, channel, options);
   }
-  return await handleChat(safeMessage, source, options);
+  return await handleChat(safeMessage, channel, options);
 }
 
 function isAbortError(err: unknown): boolean {
   return err instanceof Error && (err.name === 'AbortError' || /aborted/i.test(err.message));
+}
+
+function buildChatRequest(message: string, channel: 'telegram' | 'tui') {
+  return {
+    messages: [
+      {
+        role: 'system' as const,
+        content: BASE_SYSTEM_PROMPT,
+      },
+      {
+        role: 'system' as const,
+        content: loadSystemInfoPrompt(channel),
+      },
+      { role: 'user' as const, content: message },
+    ],
+    tools: loadAITools(),
+  };
 }
 
 export async function healthCheck(): Promise<{ status: 'ok' | 'error'; timestamp: string; details?: string }> {

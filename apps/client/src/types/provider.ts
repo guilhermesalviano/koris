@@ -5,10 +5,20 @@ export interface AIMessage {
   content: string;
 }
 
+export interface AIToolDefinition {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
 export interface AIChatRequest {
   model?: string;
   messages: AIMessage[];
   temperature?: number;
+  tools?: AIToolDefinition[];
 }
 
 export interface AIChatOptions {

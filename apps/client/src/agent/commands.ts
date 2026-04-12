@@ -124,11 +124,7 @@ Tips:
   • Press Ctrl+C to interrupt
   • Type naturally - no special format needed`;
 
-  return {
-    response: message,
-    action: 'none',
-    handled: true,
-  };
+  return formatCommandResult(message, context.source);
 }
 
 function handleStatus(context: CommandContext): CommandResult {
@@ -236,17 +232,25 @@ function handleExit(context: CommandContext): CommandResult {
 
   return {
     response: '👋 Goodbye!',
-    action: 'exit',
+    action: 'exit' as const,
     handled: true,
   };
 }
 
-function formatMessage(message: string, source: 'telegram' | 'tui'): string {
+function formatMessage(message: string, channel: 'telegram' | 'tui'): string {
   // Telegram uses Markdown, TUI uses plain text
-  if (source === 'telegram') {
+  if (channel === 'telegram') {
     return message;
   }
   return message.replace(/\*/g, '');
+}
+
+function formatCommandResult(message: string, channel: 'telegram' | 'tui'): CommandResult {
+  return {
+    response: formatMessage(message, channel),
+    action: 'none',
+    handled: true,
+  };
 }
 
 /**
@@ -259,10 +263,10 @@ export function isCommand(message: string): boolean {
 /**
  * Get list of available commands
  */
-export function getAvailableCommands(source: 'telegram' | 'tui'): string[] {
+export function getAvailableCommands(channel: 'telegram' | 'tui'): string[] {
   const commonCommands = ['/start', '/help', '/clear'];
   
-  if (source === 'tui') {
+  if (channel === 'tui') {
     return [...commonCommands, '/stats', '/status', '/reset', '/exit', '/quit', '/bye'];
   }
   

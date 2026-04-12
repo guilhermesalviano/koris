@@ -70,6 +70,45 @@ describe('OllamaAIProvider', () => {
     expect(out).toBe('Hello');
   });
 
+  it('forwards tools to Ollama chat payload', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            message: { role: 'assistant', content: 'ok' },
+            done: true,
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }
+        )
+      ) as unknown as typeof fetch;
+
+    globalThis.fetch = fetchMock;
+    const provider = new OllamaAIProvider({ baseUrl: 'http://localhost:11434', model: 'test' });
+
+    await provider.chat({
+      messages: [{ role: 'user', content: 'hi' }],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'search',
+            description: 'Search files',
+            parameters: { type: 'object', properties: {} },
+          },
+        },
+      ],
+    });
+
+    const fetchArgs = fetchMock.mock.calls[0]?.[1];
+    const body = typeof fetchArgs?.body === 'string' ? JSON.parse(fetchArgs.body) : undefined;
+    expect(body?.tools).toBeDefined();
+    expect(body?.tools[0]?.function?.name).toBe('search');
+  });
+
   it('healthCheck() returns ok with version detail on 200 /api/version', async () => {
     globalThis.fetch = vi
       .fn()

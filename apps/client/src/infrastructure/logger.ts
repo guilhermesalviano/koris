@@ -1,10 +1,14 @@
 import {
   Logger as WinstonLogger, createLogger, format, LoggerOptions, transports,
 } from 'winston';
+import path from 'path';
 import { config } from '../config';
 
 interface ILogger {
   log(level: string, message: string, meta?: Record<string, unknown>): void;
+  info(message: string, meta?: Record<string, unknown>): void;
+  error(message: string, meta?: Record<string, unknown>): void;
+  debug(message: string, meta?: Record<string, unknown>): void;
 }
 
 class Logger implements ILogger {
@@ -14,8 +18,20 @@ class Logger implements ILogger {
     this.logger = logger;
   }
 
-  log(level: string, message: string) {
-    return this.logger.log(level, message);
+  log(level: string, message: string, meta?: Record<string, unknown>) {
+    return this.logger.log(level, message, meta);
+  }
+
+  info(message: string, meta?: Record<string, unknown>) {
+    return this.logger.info(message, meta);
+  }
+
+  error(message: string, meta?: Record<string, unknown>) {
+    return this.logger.error(message, meta);
+  }
+
+  debug(message: string, meta?: Record<string, unknown>) {
+    return this.logger.debug(message, meta);
   }
 }
 
@@ -27,13 +43,29 @@ class LoggerFactory {
       return newInfo;
     });
 
+    // Create logs directory if it doesn't exist
+    const logsDir = path.join(config.BASE_DIR, 'logs');
+
     const options: LoggerOptions = {
       level: config.LOG_LEVEL || 'info',
       format: format.combine(generateExtraTags(), format.json()),
       defaultMeta: {
         environment: config.ENVIRONMENT,
       },
-      transports: [new transports.Console()],
+      transports: [
+        new transports.Console(),
+        new transports.File({ 
+          filename: path.join(logsDir, 'combined.log'),
+          maxsize: 5242880, // 5MB
+          maxFiles: 5,
+        }),
+        new transports.File({ 
+          filename: path.join(logsDir, 'error.log'),
+          level: 'error',
+          maxsize: 5242880, // 5MB
+          maxFiles: 5,
+        }),
+      ],
     };
 
     return options

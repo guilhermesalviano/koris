@@ -1,5 +1,6 @@
-import type { AIChatOptions, AIChatRequest, AIProvider } from '../types';
+import type { AIChatOptions, AIChatRequest, AIProvider } from '../../types/provider';
 import { config } from '../../config';
+import { logger } from '../../app';
 
 type OllamaChatChunk = {
   message?: { role?: string; content?: string; thinking?: string };
@@ -12,9 +13,9 @@ type OllamaVersionResponse = {
   version?: string;
 };
 
-const IDLE_TIMEOUT_MS  = 30_000;
-const HARD_TIMEOUT_MS  = 5 * 60_000;
-const HEALTH_TIMEOUT_MS = 2_500;
+const IDLE_TIMEOUT_MS  = 90_000;  // 90 seconds for slow models like Gemma4
+const HARD_TIMEOUT_MS  = 15 * 60_000;  // 15 minutes total
+const HEALTH_TIMEOUT_MS = 5_000;  // 5 seconds for health checks
 
 export class OllamaAIProvider implements AIProvider {
   readonly name = 'ollama';
@@ -33,8 +34,24 @@ export class OllamaAIProvider implements AIProvider {
 
     const hardTimer = setTimeout(() => controller.abort(), HARD_TIMEOUT_MS);
     try {
-      return await this.readJsonFallback(request, controller.signal);
+      logger.debug('Ollama chat request', { 
+        model: request.model ?? this.defaultModel,
+        messagesCount: request.messages.length,
+        hasTools: !!request.tools?.length,
+      });
+      
+      const response = await this.readJsonFallback(request, controller.signal);
+      
+      logger.info('Ollama chat response received', {
+        model: request.model ?? this.defaultModel,
+        responseLength: response.length,
+      });
+      
+      return response;
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      logger.error('Ollama chat error', { error: errorMsg });
+      
       if (this.isAbortError(err)) {
         if (options?.signal?.aborted) throw new Error('Ollama request aborted');
         throw new Error('Ollama request timed out during non-stream /api/chat request');
@@ -54,6 +71,8 @@ export class OllamaAIProvider implements AIProvider {
 
     let idleTimer: NodeJS.Timeout | undefined;
     const hardTimer = setTimeout(() => controller.abort(), HARD_TIMEOUT_MS);
+    let totalChunksReceived = 0;
+    let totalCharsYielded = 0;
 
     const bumpIdle = () => {
       clearTimeout(idleTimer);
@@ -62,23 +81,53 @@ export class OllamaAIProvider implements AIProvider {
 
     bumpIdle();
 
+    logger.debug('Ollama chatStream started', { 
+      model: request.model ?? this.defaultModel,
+      messagesCount: request.messages.length,
+      hasTools: !!request.tools?.length,
+    });
+
     try {
       const body = await this.fetchStream(request, controller.signal);
 
       if (!body) {
-        // Non-streaming fallback: yield the whole response as one chunk
+        logger.debug('Ollama stream body is null, falling back to JSON');
         const full = await this.readJsonFallback(request, controller.signal);
+        totalCharsYielded = full.length;
         yield full;
         return;
       }
 
       for await (const chunk of this.readNDJSON(body, bumpIdle)) {
-        if (chunk.error) throw new Error(chunk.error);
+        totalChunksReceived++;
+        if (chunk.error) {
+          logger.error('Ollama stream error chunk', { error: chunk.error });
+          throw new Error(chunk.error);
+        }
         const text = this.parseChunk(chunk);
-        if (text) yield text;
-        if (chunk.done) break;
+        if (text) {
+          totalCharsYielded += text.length;
+          yield text;
+        }
+        if (chunk.done) {
+          logger.debug('Ollama stream completed', { chunksReceived: totalChunksReceived });
+          break;
+        }
       }
+
+      logger.info('Ollama chatStream response complete', {
+        model: request.model ?? this.defaultModel,
+        chunksReceived: totalChunksReceived,
+        charsYielded: totalCharsYielded,
+      });
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      logger.error('Ollama chatStream error', { 
+        error: errorMsg,
+        chunksReceived: totalChunksReceived,
+        charsYielded: totalCharsYielded,
+      });
+
       if (this.isAbortError(err)) {
         if (options?.signal?.aborted) throw new Error('Ollama request aborted');
         throw new Error('Ollama request timed out while streaming');
@@ -124,6 +173,7 @@ export class OllamaAIProvider implements AIProvider {
       body   : JSON.stringify({
         model      : request.model ?? this.defaultModel,
         messages   : request.messages,
+        tools      : request.tools,
         stream     : true,
         temperature: request.temperature,
       }),
@@ -134,6 +184,8 @@ export class OllamaAIProvider implements AIProvider {
       const text = await res.text().catch(() => '');
       throw new Error(`Ollama /api/chat failed (${res.status}): ${text}`);
     }
+
+    logger.log("info", "bodys: " + JSON.stringify(res.body))
 
     return res.body ?? null;
   }
@@ -149,6 +201,7 @@ export class OllamaAIProvider implements AIProvider {
       body   : JSON.stringify({
         model      : request.model ?? this.defaultModel,
         messages   : request.messages,
+        tools      : request.tools,
         stream     : false,
         temperature: request.temperature,
       }),

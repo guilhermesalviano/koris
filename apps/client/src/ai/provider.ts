@@ -1,4 +1,4 @@
-import type { AIProvider } from './types';
+import type { AIProvider } from '../types/provider';
 import { config } from '../config';
 import { MockAIProvider } from './providers/mock';
 import { OllamaAIProvider } from './providers/ollama';
