@@ -1,7 +1,7 @@
-import type { AIProvider } from '../types/provider';
-import { config } from '../config';
-import { MockAIProvider } from './providers/mock';
-import { OllamaAIProvider } from './providers/ollama';
+import type { AIProvider } from '../../types/provider';
+import { config } from '../../config';
+import { MockAIProvider } from './mock';
+import { OllamaAIProvider } from './ollama';
 
 let cached: AIProvider | null = null;
 

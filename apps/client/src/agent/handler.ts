@@ -1,7 +1,7 @@
-import { loadSystemInfoPrompt } from '../ai/prompt/system-info';
-import { getAIProvider } from '../ai/provider';
-import { loadAITools } from '../ai/worker/tools';
 import { handleCommand, isCommand } from './commands';
+import { loadSystemInfoPrompt } from '../ai/prompt/system-info';
+import { buildAITools } from '../ai/worker/tools';
+import { getAIProvider } from '../ai/providers';
 
 type ProcessedMessage = string | AsyncGenerator<string>;
 type ProcessOptions = { signal?: AbortSignal };
@@ -136,7 +136,7 @@ function buildChatRequest(message: string, channel: 'telegram' | 'tui') {
       },
       { role: 'user' as const, content: message },
     ],
-    tools: loadAITools(),
+    tools: buildAITools(),
   };
 }
 

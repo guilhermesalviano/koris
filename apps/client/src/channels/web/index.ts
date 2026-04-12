@@ -1,5 +1,5 @@
 import express, { type Request, type Response, type Application } from 'express';
-import { healthCheck, processUserMessage } from '../../agent/processor';
+import { healthCheck, processUserMessage } from '../../agent/handler';
 import { config } from '../../config';
 import { logger } from '../../app';
 import path from 'node:path';

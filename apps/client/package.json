@@ -8,8 +8,8 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev:server": "tsx watch src/channels/web/server.ts",
-    "server": "node dist/src/channels/web/server.js",
+    "dev:server": "tsx watch src/channels/web/index.ts",
+    "server": "node dist/src/channels/web/index.js",
     "app": "node dist/src/app.js",
     "clean": "rm -rf dist",
     "build": "pnpm run clean && tsc --project tsconfig.json",

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { processUserMessage } from '../../../src/agent/processor';
+import { processUserMessage } from '../../../src/agent/handler';
 
 describe('Message Processor', () => {
   describe('Command Handling', () => {

@@ -74,7 +74,7 @@ const defaultTools: AIToolDefinition[] = [
   },
 ];
 
-export function loadAITools(): AIToolDefinition[] {
+export function buildAITools(): AIToolDefinition[] {
   return defaultTools.map((tool) => ({
     type: tool.type,
     function: {

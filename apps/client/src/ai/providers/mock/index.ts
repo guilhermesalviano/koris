@@ -1,5 +1,5 @@
-import type { AIChatOptions, AIChatRequest, AIProvider } from '../../types/provider';
-import { logger } from '../../app';
+import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/provider';
+import { logger } from '../../../app';
 
 export class MockAIProvider implements AIProvider {
   readonly name = 'mock';

@@ -1,5 +1,5 @@
 import { startTui } from 'assistant-tui';
-import { processUserMessage } from '../../agent/processor';
+import { processUserMessage } from '../../agent/handler';
 import { handleCommand, isCommand } from '../../agent/commands';
 import { config } from '../../config';
 

@@ -1,8 +1,8 @@
 import { initBot } from 'assistant-telegram-bot';
-import { startTUI } from './channels/tui/interface';
+import { startTUI } from './channels/tui';
 import { LoggerFactory } from './infrastructure/logger';
+import { handleMessage } from './channels/telegram';
 import { config } from './config';
-import { handleMessage } from './channels/telegram/handlers';
 
 const logger = LoggerFactory.create();
 
