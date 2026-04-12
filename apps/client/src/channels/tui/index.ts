@@ -1,6 +1,6 @@
 import { startTui } from 'assistant-tui';
-import { processUserMessage } from '../../agent/handler';
-import { handleCommand, isCommand } from '../../agent/commands';
+import { handle } from '../../agents/handler';
+import { handleCommand, isCommand } from '../../agents/commands';
 import { config } from '../../config';
 
 export function startTUI(): void {
@@ -82,7 +82,7 @@ export function startTUI(): void {
     
     // Main message handler
     onInput: async (message) => {
-      return await processUserMessage(message, 'tui');
+      return await handle(message, 'tui');
     },
   });
 }

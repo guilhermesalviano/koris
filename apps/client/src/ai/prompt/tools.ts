@@ -74,7 +74,7 @@ const defaultTools: AIToolDefinition[] = [
   },
 ];
 
-export function buildAITools(): AIToolDefinition[] {
+function buildAITools(): AIToolDefinition[] {
   return defaultTools.map((tool) => ({
     type: tool.type,
     function: {
@@ -83,3 +83,5 @@ export function buildAITools(): AIToolDefinition[] {
     },
   }));
 }
+
+export { buildAITools };

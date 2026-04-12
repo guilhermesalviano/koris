@@ -1,6 +1,6 @@
 import os from 'node:os';
 
-export function loadSystemInfoPrompt(params: { channel: 'telegram' | 'tui' }): string {
+function loadSystemInfoPrompt(params: { channel: 'telegram' | 'tui' }): string {
   return [
     'Session context:',
     `- source: ${params.channel}`,
@@ -9,3 +9,5 @@ export function loadSystemInfoPrompt(params: { channel: 'telegram' | 'tui' }): s
     `- cwd: ${process.cwd()}`,
   ].join('\n');
 }
+
+export { loadSystemInfoPrompt };

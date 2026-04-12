@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { handleCommand, isCommand, getAvailableCommands } from '../../../src/agent/commands';
+import { describe, it, expect } from 'vitest';
+import { getAvailableCommands, handleCommand, isCommand } from '../../../src/agents/commands';
 
 describe('Command Handler', () => {
   describe('isCommand', () => {

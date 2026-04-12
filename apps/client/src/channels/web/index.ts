@@ -1,5 +1,5 @@
 import express, { type Request, type Response, type Application } from 'express';
-import { healthCheck, processUserMessage } from '../../agent/handler';
+import { healthCheck, handle } from '../../agents/handler';
 import { config } from '../../config';
 import { logger } from '../../app';
 import path from 'node:path';
@@ -44,7 +44,7 @@ app.post('/api/chat', async (req: Request, res: Response) => {
   res.flushHeaders();
 
   try {
-    const result = await processUserMessage(message, 'tui', { signal: abortController.signal });
+    const result = await handle(message, 'tui', { signal: abortController.signal });
     if (clientClosed) return;
 
     if (typeof result !== 'string') {

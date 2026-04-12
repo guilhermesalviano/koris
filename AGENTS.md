@@ -37,7 +37,7 @@ opencrawdio is a multi-interface AI agent system that processes user messages an
 **Purpose**: Central hub for processing all user messages regardless of interface.
 
 **Functions**:
-- `processUserMessage(message: string, source: 'telegram' | 'tui'): Promise<string>`
+- `handle(message: string, source: 'telegram' | 'tui'): Promise<string>`
   - Main entry point for all message processing
   - Routes to appropriate handler (commands vs instructions)
   - Returns formatted response string
@@ -130,7 +130,7 @@ interface SessionState {
 
 **Message Format**: Uses Telegram Markdown for formatting responses.
 
-**Integration**: The main app (`apps/client`) wires Telegram events into `processUserMessage(message, 'telegram')` using the reusable `assistant-telegram-bot` module from `apps/telegram-bot`.
+**Integration**: The main app (`apps/client`) wires Telegram events into `handle(message, 'telegram')` using the reusable `assistant-telegram-bot` module from `apps/telegram-bot`.
 
 
 ## Agent Capabilities
@@ -407,7 +407,7 @@ When modifying the agent system:
 **Common patterns to follow:**
 - Use `handleCommand()` for slash commands
 - Use `detectInstruction()` for natural language instructions
-- Use `processUserMessage()` as the universal entry point
+- Use `handle()` as the universal entry point
 - Format responses based on `source` parameter
 - Return `CommandResult` from command handlers with appropriate `action` values
 

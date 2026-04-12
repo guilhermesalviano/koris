@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAITools } from '../../../src/ai/worker/tools';
+import { buildAITools } from '../../../src/ai/prompt/tools';
 
 describe('AI tools loader', () => {
   it('returns the default toolset', () => {
