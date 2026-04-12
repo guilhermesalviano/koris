@@ -1,7 +1,7 @@
 import express, { type Request, type Response, type Application } from 'express';
-import { healthCheck, processUserMessage } from './agent/processor';
-import { config } from './config';
-import { logger } from './app';
+import { healthCheck, processUserMessage } from '../../agent/processor';
+import { config } from '../../config';
+import { logger } from '../../app';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -10,18 +10,20 @@ const app: Application = express()
 app.use(express.json())
 
 const publicDirCandidates = [
-  path.resolve(config.BASE_DIR, 'public'),
-  path.resolve(config.BASE_DIR, 'apps/client/public'),
+  path.resolve(config.BASE_DIR, 'src/channels/web/public'),
+  path.resolve(__dirname, '../web/public'),
 ];
 
 const publicDir = publicDirCandidates.find((candidate) => fs.existsSync(candidate));
 
 if (publicDir) {
-  app.use('/public', express.static(publicDir));
+  app.use(express.static(publicDir));
 
   app.get('/', (_: Request, res: Response) => {
     res.sendFile(path.join(publicDir, 'index.html'));
   });
+} else {
+  logger.warn('Public directory not found', { candidates: publicDirCandidates });
 }
 
 app.post('/api/chat', async (req: Request, res: Response) => {
@@ -95,5 +97,5 @@ app.get('/health', async (_: Request, res: Response) => {
 });
 
 app.listen(config.PORT, () => {
-  logger.log('info', `Server running at http://localhost:${config.PORT}`)
-})
+  logger.info(`Server running at http://localhost:${config.PORT}`);
+});

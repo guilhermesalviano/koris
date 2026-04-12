@@ -1,6 +1,6 @@
 import { TelegramMessage, InlineKeyboardMarkup } from 'assistant-telegram-bot';
 import { getBot } from 'assistant-telegram-bot';
-import { processUserMessage } from '../agent/processor';
+import { processUserMessage } from '../../agent/processor';
 
 const TYPING_INTERVAL_MS = 4_000;
 

@@ -1,7 +1,7 @@
 import { startTui } from 'assistant-tui';
-import { processUserMessage } from '../agent/processor';
-import { handleCommand, isCommand } from '../agent/commands';
-import { config } from '../config';
+import { processUserMessage } from '../../agent/processor';
+import { handleCommand, isCommand } from '../../agent/commands';
+import { config } from '../../config';
 
 export function startTUI(): void {
   startTui({
