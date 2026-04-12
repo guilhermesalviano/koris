@@ -9,6 +9,7 @@ interface ILogger {
   info(message: string, meta?: Record<string, unknown>): void;
   error(message: string, meta?: Record<string, unknown>): void;
   debug(message: string, meta?: Record<string, unknown>): void;
+  warn(message: string, meta?: Record<string, unknown>): void;
 }
 
 class Logger implements ILogger {
@@ -32,6 +33,10 @@ class Logger implements ILogger {
 
   debug(message: string, meta?: Record<string, unknown>) {
     return this.logger.debug(message, meta);
+  }
+
+  warn(message: string, meta?: Record<string, unknown>) {
+    return this.logger.warn(message, meta);
   }
 }
 

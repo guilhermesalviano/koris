@@ -1,9 +1,15 @@
 import type { AIChatOptions, AIChatRequest, AIProvider } from '../../types/provider';
 import { config } from '../../config';
 import { logger } from '../../app';
+import { executeTool, type ToolCall } from '../tool-executor';
 
 type OllamaChatChunk = {
-  message?: { role?: string; content?: string; thinking?: string };
+  message?: { 
+    role?: string; 
+    content?: string; 
+    thinking?: string;
+    tool_calls?: Array<{ function: { name: string; arguments: string } }>;
+  };
   response?: string;
   done?: boolean;
   error?: string;
@@ -41,6 +47,15 @@ export class OllamaAIProvider implements AIProvider {
       });
       
       const response = await this.readJsonFallback(request, controller.signal);
+      logger.debug('Ollama chat raw response', { responseLength: response.length });
+      logger.log("info", "response: " + JSON.stringify(response))
+      
+      // Check if response contains tool calls
+      const toolCalls = this.extractToolCalls(response);
+      if (toolCalls.length > 0) {
+        logger.debug('Tool calls detected in response', { count: toolCalls.length });
+        return await this.handleToolCalls(toolCalls, request, controller.signal);
+      }
       
       logger.info('Ollama chat response received', {
         model: request.model ?? this.defaultModel,
@@ -69,6 +84,8 @@ export class OllamaAIProvider implements AIProvider {
     const controller = new AbortController();
     const unlinkAbort = this.linkAbortSignal(options?.signal, controller);
 
+    logger.info("Ollama chatStream initiated")
+
     let idleTimer: NodeJS.Timeout | undefined;
     const hardTimer = setTimeout(() => controller.abort(), HARD_TIMEOUT_MS);
     let totalChunksReceived = 0;
@@ -89,6 +106,7 @@ export class OllamaAIProvider implements AIProvider {
 
     try {
       const body = await this.fetchStream(request, controller.signal);
+      logger.info("body from chatStream response: " + JSON.stringify(body))
 
       if (!body) {
         logger.debug('Ollama stream body is null, falling back to JSON');
@@ -185,8 +203,6 @@ export class OllamaAIProvider implements AIProvider {
       throw new Error(`Ollama /api/chat failed (${res.status}): ${text}`);
     }
 
-    logger.log("info", "bodys: " + JSON.stringify(res.body))
-
     return res.body ?? null;
   }
 
@@ -214,6 +230,14 @@ export class OllamaAIProvider implements AIProvider {
     }
 
     const data = (await res.json()) as OllamaChatChunk;
+    
+    // Handle tool calls (model response with tool_calls but no content)
+    if (data.message?.tool_calls && (!data.message?.content || data.message.content.trim() === '')) {
+      logger.debug('Tool calls detected in non-stream response', { toolCallsCount: data.message.tool_calls.length });
+      // Return JSON representation of tool calls
+      return JSON.stringify({ tool_calls: data.message.tool_calls });
+    }
+    
     const content = this.parseChunk(data);
     if (!content) throw new Error('Ollama response missing content');
     return content;
@@ -283,6 +307,10 @@ export class OllamaAIProvider implements AIProvider {
   }
 
   private parseChunk(chunk: OllamaChatChunk): string {
+    // Handle tool calls in response (prioritize over content)
+    if (chunk.message?.tool_calls && chunk.message.tool_calls.length > 0) {
+      return JSON.stringify({ tool_calls: chunk.message.tool_calls });
+    }
     return chunk.message?.content ?? chunk.response ?? chunk.message?.thinking ?? '';
   }
 
@@ -303,5 +331,49 @@ export class OllamaAIProvider implements AIProvider {
     const onAbort = () => controller.abort(signal.reason);
     signal.addEventListener('abort', onAbort, { once: true });
     return () => signal.removeEventListener('abort', onAbort);
+  }
+
+  private extractToolCalls(response: string): ToolCall[] {
+    try {
+      // Try to parse as JSON tool calls
+      const parsed = JSON.parse(response);
+      if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
+        return parsed.tool_calls.map((tc: { function?: { name?: string; arguments?: Record<string, unknown> } }) => ({
+          name: tc.function?.name || 'unknown',
+          arguments: tc.function?.arguments || {},
+        }));
+      }
+    } catch {
+      // Not JSON, return empty
+    }
+    return [];
+  }
+
+  private async handleToolCalls(
+    toolCalls: ToolCall[],
+    _request: AIChatRequest,
+    signal: AbortSignal,
+  ): Promise<string> {
+    const results = [];
+
+    for (const toolCall of toolCalls) {
+      if (signal.aborted) break;
+      
+      logger.debug('Executing tool from AI response', { toolName: toolCall.name });
+      const result = await executeTool(toolCall);
+      results.push(result);
+    }
+
+    logger.info('Tool calls completed', { count: results.length });
+
+    // Format tool results for the AI
+    const toolResults = results
+      .map(
+        (r) =>
+          `Tool: ${r.toolName}\nSuccess: ${r.success}\n${r.success ? `Result:\n${r.result}` : `Error: ${r.error}`}`,
+      )
+      .join('\n\n');
+
+    return `I executed the following tools:\n\n${toolResults}`;
   }
 }

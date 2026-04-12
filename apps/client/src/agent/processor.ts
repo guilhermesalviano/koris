@@ -28,46 +28,46 @@ function escapeTelegramMarkdown(text: string): string {
   return text.replace(/([\\._-])/g, '\\$1');
 }
 
-async function handleStreamChat(
-  message: string,
-  channel: 'telegram' | 'tui',
-  options?: ProcessOptions
-): Promise<ProcessedMessage> {
-  const provider = getAIProvider();
-  const request = buildChatRequest(message, channel);
+// async function handleStreamChat(
+//   message: string,
+//   channel: 'telegram' | 'tui',
+//   options?: ProcessOptions
+// ): Promise<ProcessedMessage> {
+//   const provider = getAIProvider();
+//   const request = buildChatRequest(message, channel);
 
-  // Stream directly in TUI when using Ollama.
-  if (channel === 'tui' && provider.name === 'ollama') {
-    const stream = provider.chatStream(request, { signal: options?.signal });
+//   // Stream directly in TUI when using Ollama.
+//   if (channel === 'tui' && provider.name === 'ollama') {
+//     const stream = provider.chatStream(request, { signal: options?.signal });
 
-    async function* safeStream(): AsyncGenerator<string> {
-      try {
-        for await (const chunk of stream) {
-          if (options?.signal?.aborted) return;
-          yield chunk;
-        }
-      } catch (err) {
-        if (options?.signal?.aborted || isAbortError(err)) return;
-        const detail = err instanceof Error ? err.message : String(err);
-        yield `\n(AI provider error: ${detail})`;
-      }
-    }
+//     async function* safeStream(): AsyncGenerator<string> {
+//       try {
+//         for await (const chunk of stream) {
+//           if (options?.signal?.aborted) return;
+//           yield chunk;
+//         }
+//       } catch (err) {
+//         if (options?.signal?.aborted || isAbortError(err)) return;
+//         const detail = err instanceof Error ? err.message : String(err);
+//         yield `\n(AI provider error: ${detail})`;
+//       }
+//     }
 
-    return safeStream();
-  }
+//     return safeStream();
+//   }
 
-  try {
-    return await provider.chat(request, { signal: options?.signal });
-  } catch (err) {
-    if (options?.signal?.aborted || isAbortError(err)) {
-      throw err;
-    }
-    const detail = err instanceof Error ? err.message : String(err);
-    return channel === 'telegram'
-      ? `I received your message: "${escapeTelegramMarkdown(message)}"\n\n(AI provider error: ${escapeTelegramMarkdown(detail)})`
-      : `I received your message: "${message}"\n\n(AI provider error: ${detail})`;
-  }
-}
+//   try {
+//     return await provider.chat(request, { signal: options?.signal });
+//   } catch (err) {
+//     if (options?.signal?.aborted || isAbortError(err)) {
+//       throw err;
+//     }
+//     const detail = err instanceof Error ? err.message : String(err);
+//     return channel === 'telegram'
+//       ? `I received your message: "${escapeTelegramMarkdown(message)}"\n\n(AI provider error: ${escapeTelegramMarkdown(detail)})`
+//       : `I received your message: "${message}"\n\n(AI provider error: ${detail})`;
+//   }
+// }
 
 async function handleChat(
   message: string,
@@ -111,9 +111,9 @@ export async function processUserMessage(
     return result.response || '';
   }
 
-  if (channel === 'tui') {
-    return handleStreamChat(safeMessage, channel, options);
-  }
+  // if (channel === 'tui') {
+  //   return handleStreamChat(safeMessage, channel, options);
+  // }
   return await handleChat(safeMessage, channel, options);
 }
 
