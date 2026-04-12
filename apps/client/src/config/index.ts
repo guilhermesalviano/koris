@@ -6,6 +6,7 @@ const isTest = process.env.NODE_ENV === 'test';
 export const config = {
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
   ENVIRONMENT: process.env.ENVIRONMENT || 'development',
+  PORT: process.env.PORT ? Number(process.env.PORT) : 3000,
   BASE_DIR: process.cwd(),
   AI: {
     // In tests we default to a deterministic mock provider so unit tests don't require Ollama.
@@ -18,9 +19,9 @@ export const config = {
   },
 } as const;
 
-// Only validate token in production/development, not in tests or TUI mode
-const isTui = process.argv.includes('tui') || process.argv.includes('--tui');
-if (!isTest && !isTui && !config.TELEGRAM.BOT_TOKEN) {
+// Only validate token when Telegram mode is explicitly requested.
+const isTelegramMode = process.argv.includes('telegram') || process.argv.includes('--telegram');
+if (!isTest && isTelegramMode && !config.TELEGRAM.BOT_TOKEN) {
   console.error('ERROR: TELEGRAM_BOT_TOKEN is required');
   console.error('Please set TELEGRAM_BOT_TOKEN in your .env file or environment variables');
   process.exit(1);

@@ -2,10 +2,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { OllamaAIProvider } from '../../../src/ai/providers/ollama';
 
 describe('OllamaAIProvider', () => {
-  const originalFetch = global.fetch;
+  const originalFetch = globalThis.fetch;
 
   afterEach(() => {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
   });
 
@@ -25,7 +25,7 @@ describe('OllamaAIProvider', () => {
       },
     });
 
-    global.fetch = vi
+    globalThis.fetch = vi
       .fn()
       .mockResolvedValue(
         new Response(stream, {
@@ -52,7 +52,7 @@ describe('OllamaAIProvider', () => {
       done: true,
     });
 
-    global.fetch = vi
+    globalThis.fetch = vi
       .fn()
       .mockResolvedValue(
         new Response(responseBody, {
@@ -68,5 +68,46 @@ describe('OllamaAIProvider', () => {
     });
 
     expect(out).toBe('Hello');
+  });
+
+  it('healthCheck() returns ok with version detail on 200 /api/version', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ version: '0.6.0' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      ) as unknown as typeof fetch;
+
+    const provider = new OllamaAIProvider({ baseUrl: 'http://localhost:11434', model: 'test' });
+    const health = await provider.healthCheck();
+
+    expect(health).toEqual({ ok: true, detail: 'v0.6.0' });
+  });
+
+  it('healthCheck() returns HTTP detail when /api/version is non-2xx', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response('service unavailable', {
+          status: 503,
+          headers: { 'content-type': 'text/plain' },
+        })
+      ) as unknown as typeof fetch;
+
+    const provider = new OllamaAIProvider({ baseUrl: 'http://localhost:11434', model: 'test' });
+    const health = await provider.healthCheck();
+
+    expect(health).toEqual({ ok: false, detail: 'HTTP 503' });
+  });
+
+  it('healthCheck() returns error detail when fetch throws', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('network down')) as unknown as typeof fetch;
+
+    const provider = new OllamaAIProvider({ baseUrl: 'http://localhost:11434', model: 'test' });
+    const health = await provider.healthCheck();
+
+    expect(health).toEqual({ ok: false, detail: 'network down' });
   });
 });

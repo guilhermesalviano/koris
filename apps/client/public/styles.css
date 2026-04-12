@@ -1,0 +1,27 @@
+/* Grid background — no Tailwind equivalent */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(108,99,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(108,99,255,0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+}
+/* Scrollbar */
+#chat::-webkit-scrollbar { width: 3px; }
+#chat::-webkit-scrollbar-track { background: transparent; }
+#chat::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+/* pre lang label */
+.bubble pre::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 8px; right: 10px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: #555568;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}

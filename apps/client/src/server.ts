@@ -1,0 +1,99 @@
+import express, { type Request, type Response, type Application } from 'express';
+import { healthCheck, processUserMessage } from './agent/processor';
+import { config } from './config';
+import { logger } from './app';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const app: Application = express()
+
+app.use(express.json())
+
+const publicDirCandidates = [
+  path.resolve(config.BASE_DIR, 'public'),
+  path.resolve(config.BASE_DIR, 'apps/client/public'),
+];
+
+const publicDir = publicDirCandidates.find((candidate) => fs.existsSync(candidate));
+
+if (publicDir) {
+  app.use('/public', express.static(publicDir));
+
+  app.get('/', (_: Request, res: Response) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
+  });
+}
+
+app.post('/api/chat', async (req: Request, res: Response) => {
+  const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+  if (!message) {
+    res.status(400).json({ error: 'message is required' });
+    return;
+  }
+
+  const abortController = new AbortController();
+  let clientClosed = false;
+  const onClose = () => {
+    clientClosed = true;
+    abortController.abort();
+  };
+  req.on('aborted', onClose);
+  res.on('close', onClose);
+
+  const writeSse = (payload: unknown) => {
+    if (clientClosed || res.writableEnded || res.destroyed) return;
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
+
+  res.status(200);
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  try {
+    const result = await processUserMessage(message, 'tui', { signal: abortController.signal });
+    if (clientClosed) return;
+
+    if (typeof result !== 'string') {
+      for await (const chunk of result) {
+        if (clientClosed) break;
+        if (!chunk) continue;
+        writeSse({
+          type: 'content_block_delta',
+          delta: { text: chunk },
+        });
+      }
+    } else {
+      writeSse({
+        type: 'content_block_delta',
+        delta: { text: result },
+      });
+    }
+
+    if (clientClosed) return;
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (error) {
+    if (clientClosed) return;
+    const msg = error instanceof Error ? error.message : String(error);
+    writeSse({
+      type: 'content_block_delta',
+      delta: { text: `Error: ${msg}` },
+    });
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } finally {
+    req.off('aborted', onClose);
+    res.off('close', onClose);
+  }
+});
+
+app.get('/health', async (_: Request, res: Response) => {
+  const { status, timestamp, details } = await healthCheck();
+  res.status((status === 'ok' ? 200 : 500)).json({ status, timestamp, details });
+});
+
+app.listen(config.PORT, () => {
+  logger.log('info', `Server running at http://localhost:${config.PORT}`)
+})

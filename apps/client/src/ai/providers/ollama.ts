@@ -1,4 +1,4 @@
-import type { AIChatRequest, AIProvider } from '../types';
+import type { AIChatOptions, AIChatRequest, AIProvider } from '../types';
 import { config } from '../../config';
 
 type OllamaChatChunk = {
@@ -27,26 +27,30 @@ export class OllamaAIProvider implements AIProvider {
     this.defaultModel = opts?.model    ?? config.AI.MODEL;
   }
 
-  async chat(request: AIChatRequest): Promise<string> {
+  async chat(request: AIChatRequest, options?: AIChatOptions): Promise<string> {
     const controller = new AbortController();
+    const unlinkAbort = this.linkAbortSignal(options?.signal, controller);
 
     const hardTimer = setTimeout(() => controller.abort(), HARD_TIMEOUT_MS);
     try {
       return await this.readJsonFallback(request, controller.signal);
     } catch (err) {
       if (this.isAbortError(err)) {
+        if (options?.signal?.aborted) throw new Error('Ollama request aborted');
         throw new Error('Ollama request timed out during non-stream /api/chat request');
       }
       throw err;
     } finally {
+      unlinkAbort();
       clearTimeout(hardTimer);
     }
   }
 
   // ollama.provider.ts — add chatStream, reuses existing private helpers
 
-  async *chatStream(request: AIChatRequest): AsyncGenerator<string> {
+  async *chatStream(request: AIChatRequest, options?: AIChatOptions): AsyncGenerator<string> {
     const controller = new AbortController();
+    const unlinkAbort = this.linkAbortSignal(options?.signal, controller);
 
     let idleTimer: NodeJS.Timeout | undefined;
     const hardTimer = setTimeout(() => controller.abort(), HARD_TIMEOUT_MS);
@@ -76,10 +80,12 @@ export class OllamaAIProvider implements AIProvider {
       }
     } catch (err) {
       if (this.isAbortError(err)) {
+        if (options?.signal?.aborted) throw new Error('Ollama request aborted');
         throw new Error('Ollama request timed out while streaming');
       }
       throw err;
     } finally {
+      unlinkAbort();
       clearTimeout(idleTimer);
       clearTimeout(hardTimer);
     }
@@ -232,5 +238,17 @@ export class OllamaAIProvider implements AIProvider {
       err instanceof Error &&
       (err.name === 'AbortError' || /aborted/i.test(err.message))
     );
+  }
+
+  private linkAbortSignal(signal: AbortSignal | undefined, controller: AbortController): () => void {
+    if (!signal) return () => undefined;
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+      return () => undefined;
+    }
+
+    const onAbort = () => controller.abort(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    return () => signal.removeEventListener('abort', onAbort);
   }
 }
