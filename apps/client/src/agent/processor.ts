@@ -1,4 +1,6 @@
-import { getAIProvider, loadAITools, loadSystemInfoPrompt } from '../ai';
+import { loadSystemInfoPrompt } from '../ai/prompt/system-info';
+import { getAIProvider } from '../ai/provider';
+import { loadAITools } from '../ai/worker/tools';
 import { handleCommand, isCommand } from './commands';
 
 type ProcessedMessage = string | AsyncGenerator<string>;
@@ -130,7 +132,7 @@ function buildChatRequest(message: string, channel: 'telegram' | 'tui') {
       },
       {
         role: 'system' as const,
-        content: loadSystemInfoPrompt(channel),
+        content: loadSystemInfoPrompt({ channel }),
       },
       { role: 'user' as const, content: message },
     ],

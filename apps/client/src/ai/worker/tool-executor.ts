@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-import { logger } from '../app';
-import { config } from '../config';
+import { logger } from '../../app';
+import { config } from '../../config';
 
 export interface ToolCall {
   name: string;
