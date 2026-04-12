@@ -1,6 +1,6 @@
 import { handleCommand, isCommand } from './commands';
 import { loadSystemInfoPrompt } from '../ai/prompt/system-info';
-import { buildAITools } from '../ai/worker/tools';
+import { buildAITools } from '../ai/prompt/tools';
 import { getAIProvider } from '../ai/providers';
 
 type ProcessedMessage = string | AsyncGenerator<string>;

@@ -1,7 +1,7 @@
 import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/provider';
 import { config } from '../../../config';
 import { logger } from '../../../app';
-import { executeTool, type ToolCall } from '../../worker/tool-executor';
+import { executeTool, type ToolCall } from '../../worker/executor';
 
 type OllamaChatChunk = {
   message?: { 
