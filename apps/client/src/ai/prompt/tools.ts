@@ -72,6 +72,20 @@ const defaultTools: AIToolDefinition[] = [
       },
     },
   },
+  // {
+  //   type: 'function',
+  //   function: {
+  //     name: 'get_skill_by_name',
+  //     description: 'Retrieve a skill by its name',
+  //     parameters: {
+  //       type: 'object',
+  //       properties: {
+  //         name: { type: 'string', description: 'Name of the skill to retrieve' },
+  //       },
+  //       required: ['name'],
+  //     },
+  //   },
+  // }
 ];
 
 function buildAITools(): AIToolDefinition[] {
