@@ -29,12 +29,56 @@ function createSkillsTool(skills: Skill[]): AIToolDefinition {
   };
 }
 
+function createCurlTool(): AIToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: 'curl_request',
+      description: 'Execute HTTP requests using curl. Useful for API calls, testing endpoints, and retrieving web data.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: 'URL to request (required). Examples: https://api.github.com/users/github, https://jsonplaceholder.typicode.com/posts/1',
+          },
+          method: {
+            type: 'string',
+            enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
+            description: 'HTTP method (default: GET)',
+          },
+          headers: {
+            type: 'object',
+            description: 'Custom HTTP headers. Example: {"Authorization": "Bearer token", "Content-Type": "application/json"}',
+          },
+          data: {
+            type: 'string',
+            description: 'Request body for POST/PUT/PATCH. Can be JSON string or form data.',
+          },
+          follow_redirects: {
+            type: 'boolean',
+            description: 'Follow HTTP redirects (default: true)',
+          },
+          timeout: {
+            type: 'number',
+            description: 'Request timeout in seconds (default: 30)',
+          },
+        },
+        required: ['url'],
+      },
+    },
+  };
+}
+
 function buildAITools(skills?: Skill[]): AIToolDefinition[] {
   let tools: AIToolDefinition[] = [];
   
   if (skills && skills.length > 0) {
     tools.push(createSkillsTool(skills));
   }
+
+  // Always add curl tool
+  tools.push(createCurlTool());
   
   return tools.map((tool) => ({
     type: tool.type,
@@ -45,4 +89,4 @@ function buildAITools(skills?: Skill[]): AIToolDefinition[] {
   }));
 }
 
-export { buildAITools, createSkillsTool };
+export { buildAITools, createSkillsTool, createCurlTool };
