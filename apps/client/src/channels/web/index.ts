@@ -1,8 +1,10 @@
 import express, { type Request, type Response, type Application } from 'express';
 import { healthCheck, handle } from '../../agents/handler';
+import { LoggerFactory } from '../../infrastructure/logger';
 import { config } from '../../config';
-import { logger } from '../../app';
 import path from 'node:path';
+
+const logger = LoggerFactory.create();
 
 const app: Application = express()
 
@@ -82,7 +84,7 @@ app.post('/api/chat', async (req: Request, res: Response) => {
 });
 
 app.get('/health', async (_: Request, res: Response) => {
-  const { status, timestamp, details } = await healthCheck();
+  const { status, timestamp, details } = await healthCheck({ logger });
   res.status((status === 'ok' ? 200 : 500)).json({ status, timestamp, details });
 });
 

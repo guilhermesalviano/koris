@@ -53,5 +53,3 @@ function startCliMode(): void {
 if (require.main === module) {
   startCliMode();
 }
-
-export { logger }

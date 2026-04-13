@@ -28,11 +28,11 @@ export async function handle(
     return result.response || '';
   }
 
-  return await messageProvider(safeMessage, channel, options);
+  return await messageProvider(logger,safeMessage, channel, options);
 }
 
-export async function healthCheck(): Promise<{ status: 'ok' | 'error'; timestamp: string; details?: string }> {
-  const provider = getAIProvider();
+export async function healthCheck(params: { logger: ILogger }): Promise<{ status: 'ok' | 'error'; timestamp: string; details?: string }> {
+  const provider = getAIProvider(params);
   try {
     const health = await provider.healthCheck();
     return { status: health.ok === true ? 'ok' : 'error', timestamp: new Date().toISOString() };

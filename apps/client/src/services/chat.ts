@@ -1,16 +1,18 @@
 import { buildMessages } from "../ai/prompt/messages";
 import { getAIProvider } from "../ai/providers";
 import { escapeTelegramMarkdown, isAbortError } from "../helpers/chat";
+import { ILogger } from "../infrastructure/logger";
 
 type ProcessedMessage = string | AsyncGenerator<string>;
 type ProcessOptions = { signal?: AbortSignal };
 
 async function messageProviderStream(
+  logger: ILogger,
   message: string,
   channel: 'telegram' | 'tui',
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
-  const provider = getAIProvider();
+  const provider = getAIProvider({ logger });
   const request = buildMessages(message, channel);
 
   // Stream directly in TUI when using Ollama.
@@ -47,11 +49,12 @@ async function messageProviderStream(
 }
 
 async function messageProvider(
+  logger: ILogger,
   message: string,
   channel: 'telegram' | 'tui',
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
-  const provider = getAIProvider();
+  const provider = getAIProvider({ logger });
   const request = buildMessages(message, channel);
 
   try {

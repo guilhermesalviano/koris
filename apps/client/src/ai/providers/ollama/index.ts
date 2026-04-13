@@ -1,7 +1,7 @@
 import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/provider';
-import { config } from '../../../config';
-import { logger } from '../../../app';
+import { config } from '../../../config'; 
 import { executeTool, type ToolCall } from '../../worker/executor';
+import { ILogger } from '../../../infrastructure/logger';
 
 type OllamaChatChunk = {
   message?: { 
@@ -26,10 +26,12 @@ const HEALTH_TIMEOUT_MS = 5_000;  // 5 seconds for health checks
 export class OllamaAIProvider implements AIProvider {
   readonly name = 'ollama';
 
+  private readonly logger: ILogger;
   private readonly baseUrl: string;
   private readonly defaultModel: string;
 
-  constructor(opts?: { baseUrl?: string; model?: string }) {
+  constructor(logger: ILogger, opts?: { baseUrl?: string; model?: string }) {
+    this.logger = logger;
     this.baseUrl      = (opts?.baseUrl ?? config.AI.BASE_URL).replace(/\/+$/, '');
     this.defaultModel = opts?.model    ?? config.AI.MODEL;
   }
@@ -40,24 +42,24 @@ export class OllamaAIProvider implements AIProvider {
 
     const hardTimer = setTimeout(() => controller.abort(), HARD_TIMEOUT_MS);
     try {
-      logger.debug('Ollama chat request', { 
+      this.logger.debug('Ollama chat request', { 
         model: request.model ?? this.defaultModel,
         messagesCount: request.messages.length,
         hasTools: !!request.tools?.length,
       });
       
       const response = await this.readJsonFallback(request, controller.signal);
-      logger.debug('Ollama chat raw response', { responseLength: response.length });
-      logger.log("info", "response: " + JSON.stringify(response))
+      this.logger.debug('Ollama chat raw response', { responseLength: response.length });
+      this.logger.log("info", "response: " + JSON.stringify(response))
       
       // Check if response contains tool calls
       const toolCalls = this.extractToolCalls(response);
       if (toolCalls.length > 0) {
-        logger.debug('Tool calls detected in response', { count: toolCalls.length });
+        this.logger.debug('Tool calls detected in response', { count: toolCalls.length });
         return await this.handleToolCalls(toolCalls, request, controller.signal);
       }
       
-      logger.info('Ollama chat response received', {
+      this.logger.info('Ollama chat response received', {
         model: request.model ?? this.defaultModel,
         responseLength: response.length,
       });
@@ -65,7 +67,7 @@ export class OllamaAIProvider implements AIProvider {
       return response;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      logger.error('Ollama chat error', { error: errorMsg });
+      this.logger.error('Ollama chat error', { error: errorMsg });
       
       if (this.isAbortError(err)) {
         if (options?.signal?.aborted) throw new Error('Ollama request aborted');
@@ -84,7 +86,7 @@ export class OllamaAIProvider implements AIProvider {
     const controller = new AbortController();
     const unlinkAbort = this.linkAbortSignal(options?.signal, controller);
 
-    logger.info("Ollama chatStream initiated")
+    this.logger.info("Ollama chatStream initiated")
 
     let idleTimer: NodeJS.Timeout | undefined;
     const hardTimer = setTimeout(() => controller.abort(), HARD_TIMEOUT_MS);
@@ -98,7 +100,7 @@ export class OllamaAIProvider implements AIProvider {
 
     bumpIdle();
 
-    logger.debug('Ollama chatStream started', { 
+    this.logger.debug('Ollama chatStream started', { 
       model: request.model ?? this.defaultModel,
       messagesCount: request.messages.length,
       hasTools: !!request.tools?.length,
@@ -106,10 +108,10 @@ export class OllamaAIProvider implements AIProvider {
 
     try {
       const body = await this.fetchStream(request, controller.signal);
-      logger.info("body from chatStream response: " + JSON.stringify(body))
+      this.logger.info("body from chatStream response: " + JSON.stringify(body))
 
       if (!body) {
-        logger.debug('Ollama stream body is null, falling back to JSON');
+        this.logger.debug('Ollama stream body is null, falling back to JSON');
         const full = await this.readJsonFallback(request, controller.signal);
         totalCharsYielded = full.length;
         yield full;
@@ -119,7 +121,7 @@ export class OllamaAIProvider implements AIProvider {
       for await (const chunk of this.readNDJSON(body, bumpIdle)) {
         totalChunksReceived++;
         if (chunk.error) {
-          logger.error('Ollama stream error chunk', { error: chunk.error });
+          this.logger.error('Ollama stream error chunk', { error: chunk.error });
           throw new Error(chunk.error);
         }
         const text = this.parseChunk(chunk);
@@ -128,19 +130,19 @@ export class OllamaAIProvider implements AIProvider {
           yield text;
         }
         if (chunk.done) {
-          logger.debug('Ollama stream completed', { chunksReceived: totalChunksReceived });
+          this.logger.debug('Ollama stream completed', { chunksReceived: totalChunksReceived });
           break;
         }
       }
 
-      logger.info('Ollama chatStream response complete', {
+      this.logger.info('Ollama chatStream response complete', {
         model: request.model ?? this.defaultModel,
         chunksReceived: totalChunksReceived,
         charsYielded: totalCharsYielded,
       });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      logger.error('Ollama chatStream error', { 
+      this.logger.error('Ollama chatStream error', { 
         error: errorMsg,
         chunksReceived: totalChunksReceived,
         charsYielded: totalCharsYielded,
@@ -233,7 +235,7 @@ export class OllamaAIProvider implements AIProvider {
     
     // Handle tool calls (model response with tool_calls but no content)
     if (data.message?.tool_calls && (!data.message?.content || data.message.content.trim() === '')) {
-      logger.debug('Tool calls detected in non-stream response', { toolCallsCount: data.message.tool_calls.length });
+      this.logger.debug('Tool calls detected in non-stream response', { toolCallsCount: data.message.tool_calls.length });
       // Return JSON representation of tool calls
       return JSON.stringify({ tool_calls: data.message.tool_calls });
     }
@@ -359,12 +361,12 @@ export class OllamaAIProvider implements AIProvider {
     for (const toolCall of toolCalls) {
       if (signal.aborted) break;
       
-      logger.debug('Executing tool from AI response', { toolName: toolCall.name });
-      const result = await executeTool(toolCall);
+      this.logger.debug('Executing tool from AI response', { toolName: toolCall.name });
+      const result = await executeTool(this.logger, toolCall);
       results.push(result);
     }
 
-    logger.info('Tool calls completed', { count: results.length });
+    this.logger.info('Tool calls completed', { count: results.length });
 
     // Format tool results for the AI
     const toolResults = results

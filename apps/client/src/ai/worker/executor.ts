@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-import { logger } from '../../app';
 import { config } from '../../config';
+import { ILogger } from '../../infrastructure/logger';
 
 export interface ToolCall {
   name: string;
@@ -36,7 +36,7 @@ function validatePath(inputPath: string): string {
 /**
  * Execute a tool and return the result
  */
-export async function executeTool(toolCall: ToolCall): Promise<ToolResult> {
+export async function executeTool(logger: ILogger, toolCall: ToolCall): Promise<ToolResult> {
   const { name, arguments: args } = toolCall;
 
   logger.debug('Executing tool', { toolName: name, argsKeys: Object.keys(args || {}) });
@@ -44,15 +44,15 @@ export async function executeTool(toolCall: ToolCall): Promise<ToolResult> {
   try {
     switch (name) {
       case 'read_file':
-        return await executeReadFile(args);
+        return await executeReadFile(logger, args);
       case 'write_file':
-        return await executeWriteFile(args);
+        return await executeWriteFile(logger, args);
       case 'list_dir':
-        return await executeListDir(args);
+        return await executeListDir(logger, args);
       case 'search':
-        return await executeSearch(args);
+        return await executeSearch(logger, args);
       case 'execute_command':
-        return await executeCommand(args);
+        return await executeCommand(logger, args);
       default:
         return {
           toolName: name,
@@ -71,7 +71,7 @@ export async function executeTool(toolCall: ToolCall): Promise<ToolResult> {
   }
 }
 
-async function executeReadFile(args: Record<string, unknown>): Promise<ToolResult> {
+async function executeReadFile(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const filePath = args.path as string;
   if (!filePath) {
     return { toolName: 'read_file', success: false, error: 'Missing required parameter: path' };
@@ -92,7 +92,7 @@ async function executeReadFile(args: Record<string, unknown>): Promise<ToolResul
   }
 }
 
-async function executeWriteFile(args: Record<string, unknown>): Promise<ToolResult> {
+async function executeWriteFile(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const filePath = args.path as string;
   const content = args.content as string;
 
@@ -125,7 +125,7 @@ async function executeWriteFile(args: Record<string, unknown>): Promise<ToolResu
   }
 }
 
-async function executeListDir(args: Record<string, unknown>): Promise<ToolResult> {
+async function executeListDir(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const dirPath = args.path as string || '.';
 
   try {
@@ -153,7 +153,7 @@ async function executeListDir(args: Record<string, unknown>): Promise<ToolResult
   }
 }
 
-async function executeSearch(args: Record<string, unknown>): Promise<ToolResult> {
+async function executeSearch(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const query = args.query as string;
 
   if (!query) {
@@ -189,7 +189,7 @@ async function executeSearch(args: Record<string, unknown>): Promise<ToolResult>
   }
 }
 
-async function executeCommand(args: Record<string, unknown>): Promise<ToolResult> {
+async function executeCommand(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const command = args.command as string;
 
   if (!command) {
