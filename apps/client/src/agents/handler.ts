@@ -79,11 +79,7 @@ async function processAIMessage(
     const toolCalls = extractToolCalls(responseText);
 
     if (toolCalls.length === 0) {
-      // No more tool calls - return final response
       logger.info('AI returned final response (no tool calls)', { channel });
-      if (onProgress) {
-        onProgress('✅ Complete!');
-      }
       return responseText;
     }
 

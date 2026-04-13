@@ -90,7 +90,7 @@ export function startTUI(params: { logger: ILogger }): void {
         onProgress: (summary: string) => {
           progressMessages.push(summary);
           const latest = progressMessages[progressMessages.length - 1];
-          ctx.println(`${ctx.colors.dim}${ctx.colors.bright}● ${latest}${ctx.colors.reset}`);
+          ctx.println(`${ctx.colors.dim}${ctx.colors.bright}● ${latest}${ctx.colors.reset} \n`);
         }
       });
     },
