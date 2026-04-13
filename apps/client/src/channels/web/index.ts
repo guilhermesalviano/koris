@@ -47,7 +47,16 @@ app.post('/api/chat', async (req: Request, res: Response) => {
   res.flushHeaders();
 
   try {
-    const result = await handle(logger, message, 'tui', { signal: abortController.signal });
+    const result = await handle(logger, message, 'tui', { 
+      signal: abortController.signal,
+      onProgress: (summary: string) => {
+        if (clientClosed) return;
+        writeSse({
+          type: 'progress',
+          delta: { status: summary },
+        });
+      }
+    });
     if (clientClosed) return;
 
     // Handle always returns a string now

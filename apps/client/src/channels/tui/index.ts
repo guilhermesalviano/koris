@@ -81,9 +81,18 @@ export function startTUI(params: { logger: ILogger }): void {
 
     aiModel: config.AI.MODEL,
     
-    // Main message handler
-    onInput: async (message) => {
-      return await handle(params.logger, message, 'tui', { toolsEnabled: true });
+    // Main message handler with progress updates
+    onInput: async (message, ctx) => {
+      const progressMessages: string[] = [];
+      
+      return await handle(params.logger, message, 'tui', { 
+        toolsEnabled: true,
+        onProgress: (summary: string) => {
+          progressMessages.push(summary);
+          const latest = progressMessages[progressMessages.length - 1];
+          ctx.println(`${ctx.colors.dim}${ctx.colors.bright}● ${latest}${ctx.colors.reset}`);
+        }
+      });
     },
   });
 }

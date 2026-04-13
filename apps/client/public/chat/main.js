@@ -221,6 +221,16 @@ async function submit() {
       if (payload === '[DONE]') return;
       try {
         const parsed = JSON.parse(payload);
+        
+        // Handle progress updates
+        if (parsed.type === 'progress' && parsed.delta?.status) {
+          if (firstChunk) { bubble.innerHTML = ''; firstChunk = false; }
+          bubble.innerHTML = `<div class="text-txt-3 text-sm italic">${parsed.delta.status}</div>`;
+          chatEl.scrollTop = chatEl.scrollHeight;
+          return;
+        }
+        
+        // Handle content
         if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
           if (firstChunk) { bubble.innerHTML = ''; firstChunk = false; }
           accumulated += parsed.delta.text;

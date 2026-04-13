@@ -7,7 +7,9 @@ import { Orchestrator } from '../orchestrator';
 import { config } from '../config';
 
 type ProcessedMessage = string;
-type ProcessOptions = { signal?: AbortSignal, toolsEnabled?: boolean };
+type ProcessOptions = { signal?: AbortSignal; toolsEnabled?: boolean; onProgress?: (summary: string) => void };
+
+const MAX_TOOL_ITERATIONS = 10; // Prevent infinite loops
 
 /**
  * Process user messages and generate responses.
@@ -21,7 +23,6 @@ async function handle(
 ): Promise<ProcessedMessage> {
   const safeMessage = toSafeMessage(message);
 
-  // Keep logs lightweight (tests may send very large inputs)
   logger.info(`Processing message from ${channel}: "${previewMessage(safeMessage)}"`);
 
   // Handle commands using centralized handler
@@ -30,37 +31,123 @@ async function handle(
     return result.response || '';
   }
 
-  const result = await messageProvider(logger, safeMessage, channel, options);
+  // Process AI messages with potential multi-round tool execution
+  return await processAIMessage(logger, safeMessage, channel, options);
+}
 
-  const toolCalls = extractToolCalls(typeof result === 'string' ? result : '');
+/**
+ * Process AI messages with iterative tool call handling.
+ * Continues executing tools until AI returns a final response without tool calls.
+ * Sends progress summaries via onProgress callback.
+ */
+async function processAIMessage(
+  logger: ILogger,
+  userMessage: string,
+  channel: 'telegram' | 'tui',
+  options?: ProcessOptions
+): Promise<ProcessedMessage> {
+  const orchestrator = new Orchestrator(logger);
+  const signal = options?.signal || new AbortController().signal;
+  const onProgress = options?.onProgress;
+  
+  let currentMessage = userMessage;
+  let iteration = 0;
 
-  let finalResult: ProcessedMessage;
-  if (toolCalls.length > 0) {
-    logger.info('Message contains tool calls', { channel });
-
-    const orchestrator = new Orchestrator(logger);
-    finalResult = await orchestrator.handleToolCalls(toolCalls, { model: config.AI.MODEL }, options?.signal || new AbortController().signal);
-
-    /**
-     * learn and try again
-     */
-    if (result.toString().includes('get_skill')) {
-      logger.info('content to learn', { content: result.toString() });
-
-      const buildATwoFactorPrompt = `Extract how to use in ` + `\n${finalResult}\n\nOriginal Question:\n${safeMessage}`;
-      logger.info('buildATwoFactorPrompt', { buildATwoFactorPrompt });
-      
-
-      // deve retornar um evento em CURL 
-      const secondResult = await messageProvider(logger, buildATwoFactorPrompt, channel, { signal: options?.signal, toolsEnabled: false });
-      finalResult = typeof secondResult === 'string' ? secondResult : JSON.stringify(secondResult);
-      logger.info('secondResult', { secondResult });
+  while (iteration < MAX_TOOL_ITERATIONS) {
+    iteration++;
+    
+    logger.info(`AI iteration ${iteration}`, { channel });
+    
+    // Send progress to user
+    if (onProgress) {
+      onProgress(`Processing (iteration ${iteration}/${MAX_TOOL_ITERATIONS})...`);
     }
-  } else {
-    finalResult = typeof result === 'string' ? result : JSON.stringify(result);
+
+    // Get AI response
+    const aiResponse = await messageProvider(
+      logger,
+      currentMessage,
+      channel,
+      options
+    );
+
+    const responseText = typeof aiResponse === 'string' 
+      ? aiResponse 
+      : JSON.stringify(aiResponse);
+
+    // Check for tool calls
+    const toolCalls = extractToolCalls(responseText);
+
+    if (toolCalls.length === 0) {
+      // No more tool calls - return final response
+      logger.info('AI returned final response (no tool calls)', { channel });
+      if (onProgress) {
+        onProgress('✅ Complete!');
+      }
+      return responseText;
+    }
+
+    // Execute tool calls
+    logger.info(`Executing ${toolCalls.length} tool call(s)`, { channel, iteration });
+    
+    if (onProgress) {
+      onProgress(`Executing ${toolCalls.length} tool(s): ${toolCalls.map(t => t.name).join(', ')}`);
+    }
+    
+    const toolResults = await orchestrator.handleToolCalls(
+      toolCalls,
+      { model: config.AI.MODEL },
+      signal
+    );
+
+    // Special handling for skill learning
+    if (responseText.includes('get_skill')) {
+      logger.info('Learning skill content', { channel });
+      if (onProgress) {
+        onProgress('Learning skill content...');
+      }
+      currentMessage = buildSkillLearningPrompt(toolResults);
+
+      // Disable tools for learning iteration to force direct response
+      options = { ...options, toolsEnabled: false };
+    } else {
+      // Build next prompt with tool results
+      if (onProgress) {
+        onProgress(`Processing tool results (${toolResults.length} chars)...`);
+      }
+      currentMessage = buildToolResultPrompt(responseText, toolResults);
+    }
   }
 
-  return finalResult;
+  logger.warn('Max tool iterations reached', { 
+    channel, 
+    maxIterations: MAX_TOOL_ITERATIONS 
+  });
+  
+  if (onProgress) {
+    onProgress('⚠️ Max iterations reached');
+  }
+  
+  return 'Maximum tool execution iterations reached. Please try rephrasing your request.';
+}
+
+/**
+ * Build prompt for skill learning iteration
+ */
+function buildSkillLearningPrompt(
+  skillContent: string
+): string {
+  return `**Extract how to use and execute**:\n${skillContent}\n If it is a curl execution, extract the url, method, headers and body and call respective tool to execute it.`;
+}
+
+/**
+ * Build prompt with tool execution results for next AI iteration
+ */
+function buildToolResultPrompt(
+  previousResponse: string,
+  toolResults: string
+): string {
+  return `Previous response:\n${previousResponse}\n\nTool execution results:\n${toolResults}`;
 }
 
 export { handle };
