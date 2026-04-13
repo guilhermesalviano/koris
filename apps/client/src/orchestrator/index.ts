@@ -31,14 +31,13 @@ class Orchestrator {
 
     this.logger.info('Tool calls completed', { count: results.length });
 
-    const toolResults = results
+    return results
       .map(
         (r) =>
-          `Tool: ${r.toolName}\nSuccess: ${r.success}\n${r.success ? `Result:\n${r.result}` : `Error: ${r.error}`}`,
+          `Tool: ${r.toolName}\nSuccess: ${r.success}\n` +
+          `${r.success ? `Result:\n${r.result}` : `Error: ${r.error}`}`,
       )
       .join('\n\n');
-
-    return `I executed the following tools:\n\n${toolResults}`;
   }
 }
 

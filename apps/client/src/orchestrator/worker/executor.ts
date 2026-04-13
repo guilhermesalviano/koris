@@ -1,9 +1,8 @@
-import fs from 'fs';
-import path, { join } from 'path';
-import { execSync } from 'child_process';
+import { execSync } from 'node:child_process';
 import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
 import { readFile } from 'fs/promises';
+import { join } from 'node:path';
 
 export interface ToolCall {
   name: string;
@@ -18,21 +17,6 @@ export interface ToolResult {
 }
 
 const BASE_DIR = config.BASE_DIR;
-
-/**
- * Validate and normalize file paths to prevent directory traversal
- */
-function validatePath(inputPath: string): string {
-  const normalized = path.normalize(inputPath);
-  const resolved = path.resolve(BASE_DIR, normalized);
-
-  // Ensure the resolved path is within BASE_DIR
-  if (!resolved.startsWith(BASE_DIR)) {
-    throw new Error(`Access denied: path is outside repository (${inputPath})`);
-  }
-
-  return resolved;
-}
 
 /**
  * Execute a tool and return the result
@@ -100,16 +84,12 @@ async function executeGetSkill(
   args: ToolCall['arguments']
 ): Promise<ToolResult> {
 
-  if (!args.skill_name) {
-    throw new Error('skill_name is required when action is "read"');
+  if (!args.skill_name || !args.skill_path) {
+    logger.error('skill_name and skill_path are required.');
+    throw new Error('skill_name and skill_path are required.');
   }
 
-  logger.info('Reading skill content', { skillName: args.skill_name });
-  logger.info('skill path', { skillName: args.skill_path });
-
-  const skillPath = join(String(args.skill_path), 'SKILL.md');
-  const content = await readFile(skillPath, 'utf-8');
-
+  const content = await readFile(join(String(args.skill_path), 'SKILL.md'), 'utf-8');
   return {
     toolName: 'execute_get_skill',
     success: true,

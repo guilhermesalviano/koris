@@ -4,7 +4,7 @@ import { Skill } from '../types/skills';
 function createSkillsTool(skills: Skill[]): AIToolDefinition {
   const skillList = skills
     .map(s => `- ${s.name}: ${s.path}`)
-    .join('; ');
+    .join('\n');
 
   return {
     type: 'function',
@@ -21,7 +21,7 @@ function createSkillsTool(skills: Skill[]): AIToolDefinition {
           },
           skill_name: {
             type: 'string',
-            description: `Name of the skill to read. Available skills: ${skillList}`,
+            description: `Name of the skill to read. Available skills: ${skills.map(s => s.name).join(', ')}`,
           },
           skill_path: {
             type: 'string',

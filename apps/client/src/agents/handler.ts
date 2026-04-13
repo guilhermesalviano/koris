@@ -40,6 +40,13 @@ async function handle(
 
     const orchestrator = new Orchestrator(logger);
     finalResult = await orchestrator.handleToolCalls(toolCalls, { model: config.AI.MODEL }, options?.signal || new AbortController().signal);
+
+    /**
+     * learn and try again
+     */
+    if (result.toString().includes('get_skill')) {
+      logger.info('content to learn', { content: result.toString() });
+    }
   } else {
     // No tool calls, return the result as-is
     finalResult = typeof result === 'string' ? result : JSON.stringify(result);
