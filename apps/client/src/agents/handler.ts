@@ -1,5 +1,4 @@
 import { handleCommand, isCommand } from './commands';
-import { getAIProvider } from '../ai/providers';
 import { previewMessage, toSafeMessage } from './helpers';
 import { messageProvider } from '../services/chat';
 import { ILogger } from '../infrastructure/logger';
@@ -11,7 +10,7 @@ type ProcessOptions = { signal?: AbortSignal };
  * Process user messages and generate responses.
  * Commands are handled centrally. Non-commands are routed to the configured AI provider.
  */
-export async function handle(
+async function handle(
   logger: ILogger,
   message: unknown,
   channel: 'telegram' | 'tui',
@@ -31,13 +30,4 @@ export async function handle(
   return await messageProvider(logger,safeMessage, channel, options);
 }
 
-export async function healthCheck(params: { logger: ILogger }): Promise<{ status: 'ok' | 'error'; timestamp: string; details?: string }> {
-  const provider = getAIProvider(params);
-  try {
-    const health = await provider.healthCheck();
-    return { status: health.ok === true ? 'ok' : 'error', timestamp: new Date().toISOString() };
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    return { status: 'error', timestamp: new Date().toISOString(), details: detail };
-  }
-}
+export { handle };
