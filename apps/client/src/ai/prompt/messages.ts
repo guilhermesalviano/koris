@@ -1,6 +1,6 @@
 import { Skill } from "../../types/skills";
 import { loadSystemInfoPrompt } from "./system-info";
-import { buildAITools } from "./tools";
+import { buildAITools } from "../../orchestrator/tools";
 
 const BASE_SYSTEM_PROMPT =
   'You are a Personal Assistant. Be direct.';
@@ -22,12 +22,9 @@ function buildMessages(params: MessagesParams) {
         role: 'system' as const,
         content:  loadSystemInfoPrompt({ channel: params.channel }),
       },
-      ...(params.skills && params.skills.length > 0) ?
-        [{ role: 'system' as const, content: `Skills:\n${params.skills.map(s => `${s.name}: ${s.description}`).join('\n')}` }] :
-        [],
       { role: 'user' as const, content: params.message },
     ],
-    tools: buildAITools(),
+    tools: buildAITools(params.skills),
   };
 }
 

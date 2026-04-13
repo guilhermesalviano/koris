@@ -1,8 +1,10 @@
 import fs from 'fs';
-import path from 'path';
+import path, { join } from 'path';
 import { execSync } from 'child_process';
 import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
+import { readFile } from 'fs/promises';
+import { SkillsRepository } from '../../repository/skills';
 
 export interface ToolCall {
   name: string;
@@ -53,6 +55,8 @@ export async function executeTool(logger: ILogger, toolCall: ToolCall): Promise<
         return await executeSearch(logger, args);
       case 'execute_command':
         return await executeCommand(logger, args);
+      case 'get_skills':
+        return await executeGetSkills(logger, args); // Pass skills array if needed
       default:
         return {
           toolName: name,
@@ -217,3 +221,54 @@ async function executeCommand(logger: ILogger, args: Record<string, unknown>): P
     return { toolName: 'execute_command', success: false, error: errorMsg };
   }
 }
+
+async function executeGetSkills(
+  logger: ILogger,
+  args: ToolCall['arguments']
+): Promise<ToolResult> {
+  const skillsRepository = new SkillsRepository(logger);
+  const skills = skillsRepository.get();
+
+  if (args.action === 'list') {
+    // Return list of all skills with descriptions
+    return {
+      toolName: 'execute_get_skills',
+      success: true,
+      result: JSON.stringify({
+        skills: skills.map(s => ({
+          name: s.name,
+          description: s.description,
+        })),
+        total: skills.length,
+      })
+    };
+  }
+  
+  if (args.action === 'read') {
+    if (!args.skill_name) {
+      throw new Error('skill_name is required when action is "read"');
+    }
+
+    const skill = skills.find(s => s.name === args.skill_name);
+    if (!skill) {
+      throw new Error(
+        `Skill '${args.skill_name}' not found. ` +
+        `Available: ${skills.map(s => s.name).join(', ')}`
+      );
+    }
+
+    logger.info('Reading skill content', { skillName: skill.name });
+
+    const skillPath = join(skill.path, 'SKILL.md');
+    const content = await readFile(skillPath, 'utf-8');
+
+    return {
+      toolName: 'execute_get_skills',
+      success: true,
+      result: content.slice(0, 5000),
+    };
+  }
+  
+  throw new Error(`Unknown action: ${args.action}`);
+}
+

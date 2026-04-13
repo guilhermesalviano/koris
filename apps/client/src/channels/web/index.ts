@@ -50,21 +50,11 @@ app.post('/api/chat', async (req: Request, res: Response) => {
     const result = await handle(logger, message, 'tui', { signal: abortController.signal });
     if (clientClosed) return;
 
-    if (typeof result !== 'string') {
-      for await (const chunk of result) {
-        if (clientClosed) break;
-        if (!chunk) continue;
-        writeSse({
-          type: 'content_block_delta',
-          delta: { text: chunk },
-        });
-      }
-    } else {
-      writeSse({
-        type: 'content_block_delta',
-        delta: { text: result },
-      });
-    }
+    // Handle always returns a string now
+    writeSse({
+      type: 'content_block_delta',
+      delta: { text: result },
+    });
 
     if (clientClosed) return;
     res.write('data: [DONE]\n\n');

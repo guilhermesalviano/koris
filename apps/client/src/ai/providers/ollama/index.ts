@@ -1,6 +1,5 @@
 import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/provider';
 import { config } from '../../../config'; 
-import { executeTool, type ToolCall } from '../../worker/executor';
 import { ILogger } from '../../../infrastructure/logger';
 
 type OllamaChatChunk = {
@@ -51,19 +50,7 @@ export class OllamaAIProvider implements AIProvider {
       const response = await this.readJsonFallback(request, controller.signal);
       this.logger.debug('Ollama chat raw response', { responseLength: response.length });
       this.logger.log("info", "response: " + JSON.stringify(response))
-      
-      // Check if response contains tool calls
-      const toolCalls = this.extractToolCalls(response);
-      if (toolCalls.length > 0) {
-        this.logger.debug('Tool calls detected in response', { count: toolCalls.length });
-        return await this.handleToolCalls(toolCalls, request, controller.signal);
-      }
-      
-      this.logger.info('Ollama chat response received', {
-        model: request.model ?? this.defaultModel,
-        responseLength: response.length,
-      });
-      
+
       return response;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -335,47 +322,4 @@ export class OllamaAIProvider implements AIProvider {
     return () => signal.removeEventListener('abort', onAbort);
   }
 
-  private extractToolCalls(response: string): ToolCall[] {
-    try {
-      // Try to parse as JSON tool calls
-      const parsed = JSON.parse(response);
-      if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
-        return parsed.tool_calls.map((tc: { function?: { name?: string; arguments?: Record<string, unknown> } }) => ({
-          name: tc.function?.name || 'unknown',
-          arguments: tc.function?.arguments || {},
-        }));
-      }
-    } catch {
-      // Not JSON, return empty
-    }
-    return [];
-  }
-
-  private async handleToolCalls(
-    toolCalls: ToolCall[],
-    _request: AIChatRequest,
-    signal: AbortSignal,
-  ): Promise<string> {
-    const results = [];
-
-    for (const toolCall of toolCalls) {
-      if (signal.aborted) break;
-      
-      this.logger.debug('Executing tool from AI response', { toolName: toolCall.name });
-      const result = await executeTool(this.logger, toolCall);
-      results.push(result);
-    }
-
-    this.logger.info('Tool calls completed', { count: results.length });
-
-    // Format tool results for the AI
-    const toolResults = results
-      .map(
-        (r) =>
-          `Tool: ${r.toolName}\nSuccess: ${r.success}\n${r.success ? `Result:\n${r.result}` : `Error: ${r.error}`}`,
-      )
-      .join('\n\n');
-
-    return `I executed the following tools:\n\n${toolResults}`;
-  }
 }

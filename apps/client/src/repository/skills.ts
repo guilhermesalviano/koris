@@ -26,13 +26,12 @@ export class SkillsRepository {
         const raw = readFileSync(skillFile, 'utf-8');
         const { data } = matter(raw);
 
-        this.logger.info(`Loaded skill: ${data.name ?? entry.name}`);
-
         const skill: Skill = {
           name: data.name ?? entry.name,
           description: data.description ?? '',
           read_when: data.read_when ?? null,
           metadata: data.metadata ?? null,
+          path: join(skillsPath, entry.name),
         };
 
         return skill;
@@ -63,6 +62,7 @@ export class SkillsRepository {
       read_when: data.read_when ?? null,
       metadata: data.metadata ?? null,
       content,
+      path: join(skillsPath, entry.name),
     };
   }
 

@@ -4,4 +4,5 @@ export interface Skill {
   content?: string;
   read_when?: string[] | null;
   metadata?: Record<string, any> | null;
+  path: string;
 }

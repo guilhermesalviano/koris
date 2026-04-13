@@ -2,8 +2,11 @@ import { handleCommand, isCommand } from './commands';
 import { previewMessage, toSafeMessage } from './helpers';
 import { messageProvider } from '../services/chat';
 import { ILogger } from '../infrastructure/logger';
+import { extractToolCalls } from '../utils/tool-calls';
+import { Orchestrator } from '../orchestrator';
+import { config } from '../config';
 
-type ProcessedMessage = string | AsyncGenerator<string>;
+type ProcessedMessage = string;
 type ProcessOptions = { signal?: AbortSignal };
 
 /**
@@ -27,7 +30,22 @@ async function handle(
     return result.response || '';
   }
 
-  return await messageProvider(logger,safeMessage, channel, options);
+  const result = await messageProvider(logger, safeMessage, channel, options);
+
+  const toolCalls = extractToolCalls(typeof result === 'string' ? result : '');
+
+  let finalResult: string;
+  if (toolCalls.length > 0) {
+    logger.info('Message contains tool calls', { channel });
+
+    const orchestrator = new Orchestrator(logger);
+    finalResult = await orchestrator.handleToolCalls(toolCalls, { model: config.AI.MODEL }, options?.signal || new AbortController().signal);
+  } else {
+    // No tool calls, return the result as-is
+    finalResult = typeof result === 'string' ? result : JSON.stringify(result);
+  }
+
+  return finalResult;
 }
 
 export { handle };

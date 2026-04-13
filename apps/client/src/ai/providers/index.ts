@@ -11,9 +11,13 @@ export function getAIProvider(params: { logger: ILogger }): AIProvider {
 
   const provider = config.AI.PROVIDER;
 
-  cached = provider === 'ollama'
-    ? new OllamaAIProvider(params.logger)
-    : new MockAIProvider(params.logger);
+  const providerMap: Record<string, new (logger: ILogger) => AIProvider> = {
+    ollama: OllamaAIProvider,
+    mock: MockAIProvider,
+  }
+
+  const ProviderClass = providerMap[provider] || MockAIProvider;
+  cached = new ProviderClass(params.logger);
 
   return cached;
 }
