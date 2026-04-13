@@ -89,6 +89,8 @@ async function executeGetSkill(
     throw new Error('skill_name and skill_path are required.');
   }
 
+  logger.info('get_skill args: ', { skillName: args.skill_name, skillPath: args.skill_path });
+
   const content = await readFile(join(String(args.skill_path), 'SKILL.md'), 'utf-8');
   return {
     toolName: 'execute_get_skill',

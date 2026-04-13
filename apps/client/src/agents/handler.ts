@@ -7,7 +7,7 @@ import { Orchestrator } from '../orchestrator';
 import { config } from '../config';
 
 type ProcessedMessage = string;
-type ProcessOptions = { signal?: AbortSignal };
+type ProcessOptions = { signal?: AbortSignal, toolsEnabled?: boolean };
 
 /**
  * Process user messages and generate responses.
@@ -34,7 +34,7 @@ async function handle(
 
   const toolCalls = extractToolCalls(typeof result === 'string' ? result : '');
 
-  let finalResult: string;
+  let finalResult: ProcessedMessage;
   if (toolCalls.length > 0) {
     logger.info('Message contains tool calls', { channel });
 
@@ -46,9 +46,17 @@ async function handle(
      */
     if (result.toString().includes('get_skill')) {
       logger.info('content to learn', { content: result.toString() });
+
+      const buildATwoFactorPrompt = `Extract how to use in ` + `\n${finalResult}\n\nOriginal Question:\n${safeMessage}`;
+      logger.info('buildATwoFactorPrompt', { buildATwoFactorPrompt });
+      
+
+      // deve retornar um evento em CURL 
+      const secondResult = await messageProvider(logger, buildATwoFactorPrompt, channel, { signal: options?.signal, toolsEnabled: false });
+      finalResult = typeof secondResult === 'string' ? secondResult : JSON.stringify(secondResult);
+      logger.info('secondResult', { secondResult });
     }
   } else {
-    // No tool calls, return the result as-is
     finalResult = typeof result === 'string' ? result : JSON.stringify(result);
   }
 

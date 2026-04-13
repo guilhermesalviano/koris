@@ -6,7 +6,7 @@ import { SkillsRepository } from "../repository/skills";
 import { ToolCall } from "../orchestrator/worker/executor";
 
 type ProcessedMessage = string | ToolCall[] | AsyncGenerator<string>;
-type ProcessOptions = { signal?: AbortSignal };
+type ProcessOptions = { signal?: AbortSignal, toolsEnabled?: boolean };
 
 async function messageProvider(
   logger: ILogger,
@@ -17,7 +17,7 @@ async function messageProvider(
   const provider = getAIProvider({ logger });
   const skillsRepository = new SkillsRepository(logger);
   const skills = skillsRepository.get();
-  const prompt = buildMessages({ message, channel, skills });
+  const prompt = buildMessages({ message, channel, skills, toolsEnabled: options?.toolsEnabled });
 
   logger.info("Generated prompt:", prompt);
 

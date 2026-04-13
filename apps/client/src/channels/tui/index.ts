@@ -83,7 +83,7 @@ export function startTUI(params: { logger: ILogger }): void {
     
     // Main message handler
     onInput: async (message) => {
-      return await handle(params.logger, message, 'tui');
+      return await handle(params.logger, message, 'tui', { toolsEnabled: true });
     },
   });
 }

@@ -14,21 +14,16 @@ function createSkillsTool(skills: Skill[]): AIToolDefinition {
       parameters: {
         type: 'object',
         properties: {
-          action: {
-            type: 'string',
-            enum: ['read'],
-            description: 'Action to perform: "read" to get the full SKILL.md content',
-          },
           skill_name: {
             type: 'string',
-            description: `Name of the skill to read. Available skills: ${skills.map(s => s.name).join(', ')}`,
+            description: `Name of the skill to read. Skills: ${skills.map(s => `- ${s.name}: ${s.description}`).join('\n')}`,
           },
           skill_path: {
             type: 'string',
-            description: `Path to the skill directory containing SKILL.md. Available skills: ${skillList}`,
+            description: `Path to the skill directory containing SKILL.md. Skills path: ${skillList}`,
           },
         },
-        required: ['action'],
+        required: ['skill_name', 'skill_path'],
       },
     },
   };

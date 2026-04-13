@@ -9,6 +9,7 @@ interface MessagesParams {
   message: string;
   channel: 'telegram' | 'tui';
   skills?: Skill[];
+  toolsEnabled?: boolean;
 }
 
 function buildMessages(params: MessagesParams) {
@@ -24,7 +25,7 @@ function buildMessages(params: MessagesParams) {
       },
       { role: 'user' as const, content: params.message },
     ],
-    tools: buildAITools(params.skills),
+    tools: params.toolsEnabled ? buildAITools(params.skills) : undefined,
   };
 }
 
