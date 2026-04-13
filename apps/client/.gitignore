@@ -12,3 +12,5 @@ node_modules
 *-TESTS-SUMMARY.txt
 
 logs/
+
+settings.json
