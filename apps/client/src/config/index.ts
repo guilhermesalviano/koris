@@ -35,6 +35,7 @@ function get(envKey: string, filePath: string, fallback: string): string {
 
 export const config = {
   LOG_LEVEL:   get('LOG_LEVEL',   'log.LEVEL',   'info'),
+  TIMEZONE:    get('TIMEZONE',    'TIMEZONE',    'AMERICA/Sao_Paulo'),
   ENVIRONMENT: get('ENVIRONMENT', 'ENVIRONMENT',  'development'),
   PORT:        Number(get('PORT', 'PORT',         '3000')),
   BASE_DIR:    process.cwd(),
