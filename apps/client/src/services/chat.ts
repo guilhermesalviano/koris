@@ -2,6 +2,7 @@ import { buildMessages } from "../ai/prompt/messages";
 import { getAIProvider } from "../ai/providers";
 import { escapeTelegramMarkdown, isAbortError } from "../helpers/chat";
 import { ILogger } from "../infrastructure/logger";
+import { SkillsRepository } from "../repository/skills";
 
 type ProcessedMessage = string | AsyncGenerator<string>;
 type ProcessOptions = { signal?: AbortSignal };
@@ -13,11 +14,11 @@ async function messageProviderStream(
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
   const provider = getAIProvider({ logger });
-  const request = buildMessages(message, channel);
+  const prompt = buildMessages({ message, channel });
 
   // Stream directly in TUI when using Ollama.
   if (channel === 'tui' && provider.name === 'ollama') {
-    const stream = provider.chatStream(request, { signal: options?.signal });
+    const stream = provider.chatStream(prompt, { signal: options?.signal });
 
     async function* safeStream(): AsyncGenerator<string> {
       try {
@@ -36,7 +37,7 @@ async function messageProviderStream(
   }
 
   try {
-    return await provider.chat(request, { signal: options?.signal });
+    return await provider.chat(prompt, { signal: options?.signal });
   } catch (err) {
     if (options?.signal?.aborted || isAbortError(err)) {
       throw err;
@@ -55,10 +56,14 @@ async function messageProvider(
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
   const provider = getAIProvider({ logger });
-  const request = buildMessages(message, channel);
+  const skillsRepository = new SkillsRepository(logger);
+  const skills = skillsRepository.get();
+  const prompt = buildMessages({ message, channel, skills });
+
+  logger.info("Generated prompt:", prompt);
 
   try {
-    return await provider.chat(request, { signal: options?.signal });
+    return await provider.chat(prompt, { signal: options?.signal });
   } catch (err) {
     if (options?.signal?.aborted || isAbortError(err)) {
       throw err;
