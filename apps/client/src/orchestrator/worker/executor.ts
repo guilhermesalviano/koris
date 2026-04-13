@@ -4,7 +4,6 @@ import { execSync } from 'child_process';
 import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
 import { readFile } from 'fs/promises';
-import { SkillsRepository } from '../../repository/skills';
 
 export interface ToolCall {
   name: string;
@@ -45,18 +44,10 @@ export async function executeTool(logger: ILogger, toolCall: ToolCall): Promise<
 
   try {
     switch (name) {
-      case 'read_file':
-        return await executeReadFile(logger, args);
-      case 'write_file':
-        return await executeWriteFile(logger, args);
-      case 'list_dir':
-        return await executeListDir(logger, args);
-      case 'search':
-        return await executeSearch(logger, args);
       case 'execute_command':
         return await executeCommand(logger, args);
-      case 'get_skills':
-        return await executeGetSkills(logger, args); // Pass skills array if needed
+      case 'get_skill':
+        return await executeGetSkill(logger, args);
       default:
         return {
           toolName: name,
@@ -72,124 +63,6 @@ export async function executeTool(logger: ILogger, toolCall: ToolCall): Promise<
       success: false,
       error: errorMsg,
     };
-  }
-}
-
-async function executeReadFile(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
-  const filePath = args.path as string;
-  if (!filePath) {
-    return { toolName: 'read_file', success: false, error: 'Missing required parameter: path' };
-  }
-
-  try {
-    const resolved = validatePath(filePath);
-    const content = fs.readFileSync(resolved, 'utf-8');
-    logger.info('read_file executed', { path: filePath, size: content.length });
-    return {
-      toolName: 'read_file',
-      success: true,
-      result: content,
-    };
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    return { toolName: 'read_file', success: false, error: errorMsg };
-  }
-}
-
-async function executeWriteFile(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
-  const filePath = args.path as string;
-  const content = args.content as string;
-
-  if (!filePath) {
-    return { toolName: 'write_file', success: false, error: 'Missing required parameter: path' };
-  }
-  if (typeof content !== 'string') {
-    return { toolName: 'write_file', success: false, error: 'Missing required parameter: content' };
-  }
-
-  try {
-    const resolved = validatePath(filePath);
-    const dir = path.dirname(resolved);
-
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-
-    fs.writeFileSync(resolved, content, 'utf-8');
-    logger.info('write_file executed', { path: filePath, size: content.length });
-    return {
-      toolName: 'write_file',
-      success: true,
-      result: `File written successfully: ${filePath}`,
-    };
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    return { toolName: 'write_file', success: false, error: errorMsg };
-  }
-}
-
-async function executeListDir(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
-  const dirPath = args.path as string || '.';
-
-  try {
-    const resolved = validatePath(dirPath);
-
-    if (!fs.existsSync(resolved)) {
-      return { toolName: 'list_dir', success: false, error: `Path does not exist: ${dirPath}` };
-    }
-
-    const entries = fs.readdirSync(resolved, { withFileTypes: true });
-    const formatted = entries.map((entry) => ({
-      name: entry.name,
-      type: entry.isDirectory() ? 'directory' : 'file',
-    }));
-
-    logger.info('list_dir executed', { path: dirPath, count: formatted.length });
-    return {
-      toolName: 'list_dir',
-      success: true,
-      result: JSON.stringify(formatted, null, 2),
-    };
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    return { toolName: 'list_dir', success: false, error: errorMsg };
-  }
-}
-
-async function executeSearch(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
-  const query = args.query as string;
-
-  if (!query) {
-    return { toolName: 'search', success: false, error: 'Missing required parameter: query' };
-  }
-
-  try {
-    // Use grep to search files
-    const searchDir = validatePath('.');
-    let output: string;
-
-    try {
-      // Search in source files only
-      output = execSync(
-        `grep -r "${query.replace(/"/g, '\\"')}" ${searchDir} --include="*.ts" --include="*.js" --include="*.json" 2>/dev/null || true`,
-        { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
-      );
-    } catch {
-      output = '';
-    }
-
-    const lines = output.split('\n').filter((l) => l.trim()).slice(0, 50); // Limit to 50 results
-
-    logger.info('search executed', { query, resultCount: lines.length });
-    return {
-      toolName: 'search',
-      success: true,
-      result: lines.length > 0 ? lines.join('\n') : `No matches found for: ${query}`,
-    };
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    return { toolName: 'search', success: false, error: errorMsg };
   }
 }
 
@@ -222,53 +95,25 @@ async function executeCommand(logger: ILogger, args: Record<string, unknown>): P
   }
 }
 
-async function executeGetSkills(
+async function executeGetSkill(
   logger: ILogger,
   args: ToolCall['arguments']
 ): Promise<ToolResult> {
-  const skillsRepository = new SkillsRepository(logger);
-  const skills = skillsRepository.get();
 
-  if (args.action === 'list') {
-    // Return list of all skills with descriptions
-    return {
-      toolName: 'execute_get_skills',
-      success: true,
-      result: JSON.stringify({
-        skills: skills.map(s => ({
-          name: s.name,
-          description: s.description,
-        })),
-        total: skills.length,
-      })
-    };
+  if (!args.skill_name) {
+    throw new Error('skill_name is required when action is "read"');
   }
-  
-  if (args.action === 'read') {
-    if (!args.skill_name) {
-      throw new Error('skill_name is required when action is "read"');
-    }
 
-    const skill = skills.find(s => s.name === args.skill_name);
-    if (!skill) {
-      throw new Error(
-        `Skill '${args.skill_name}' not found. ` +
-        `Available: ${skills.map(s => s.name).join(', ')}`
-      );
-    }
+  logger.info('Reading skill content', { skillName: args.skill_name });
+  logger.info('skill path', { skillName: args.skill_path });
 
-    logger.info('Reading skill content', { skillName: skill.name });
+  const skillPath = join(String(args.skill_path), 'SKILL.md');
+  const content = await readFile(skillPath, 'utf-8');
 
-    const skillPath = join(skill.path, 'SKILL.md');
-    const content = await readFile(skillPath, 'utf-8');
-
-    return {
-      toolName: 'execute_get_skills',
-      success: true,
-      result: content.slice(0, 5000),
-    };
-  }
-  
-  throw new Error(`Unknown action: ${args.action}`);
+  return {
+    toolName: 'execute_get_skill',
+    success: true,
+    result: content.slice(0, 5000),
+  };
 }
 
