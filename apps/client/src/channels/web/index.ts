@@ -44,7 +44,7 @@ app.post('/api/chat', async (req: Request, res: Response) => {
   res.flushHeaders();
 
   try {
-    const result = await handle(message, 'tui', { signal: abortController.signal });
+    const result = await handle(logger, message, 'tui', { signal: abortController.signal });
     if (clientClosed) return;
 
     if (typeof result !== 'string') {

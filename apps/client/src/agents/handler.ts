@@ -2,6 +2,7 @@ import { handleCommand, isCommand } from './commands';
 import { getAIProvider } from '../ai/providers';
 import { previewMessage, toSafeMessage } from './helpers';
 import { messageProvider } from '../services/chat';
+import { ILogger } from '../infrastructure/logger';
 
 type ProcessedMessage = string | AsyncGenerator<string>;
 type ProcessOptions = { signal?: AbortSignal };
@@ -11,7 +12,7 @@ type ProcessOptions = { signal?: AbortSignal };
  * Commands are handled centrally. Non-commands are routed to the configured AI provider.
  */
 export async function handle(
-  // logger: ILogger,
+  logger: ILogger,
   message: unknown,
   channel: 'telegram' | 'tui',
   options?: ProcessOptions
@@ -19,7 +20,7 @@ export async function handle(
   const safeMessage = toSafeMessage(message);
 
   // Keep logs lightweight (tests may send very large inputs)
-  console.log(`Processing message from ${channel}: "${previewMessage(safeMessage)}"`);
+  logger.info(`Processing message from ${channel}: "${previewMessage(safeMessage)}"`);
 
   // Handle commands using centralized handler
   if (isCommand(safeMessage)) {

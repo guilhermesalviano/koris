@@ -1,6 +1,7 @@
 import { TelegramMessage, InlineKeyboardMarkup } from 'assistant-telegram-bot';
 import { getBot } from 'assistant-telegram-bot';
 import { handle } from '../../agents/handler';
+import { ILogger } from '../../infrastructure/logger';
 
 const TYPING_INTERVAL_MS = 4_000;
 
@@ -52,11 +53,11 @@ async function withTypingIndicator<T>(chatId: number, work: () => Promise<T>): P
   }
 }
 
-async function processAndReply(chatId: number, text: string): Promise<void> {
+async function processAndReply(logger: ILogger, chatId: number, text: string): Promise<void> {
   const bot = getBot();
   try {
     await withTypingIndicator(chatId, async () => {
-      const response = await handle(text, 'telegram');
+      const response = await handle(logger, text, 'telegram');
       const resolved = await resolveResponse(response);
       await sendMessageWithMarkdownFallback(chatId, resolved);
     });
@@ -69,12 +70,12 @@ async function processAndReply(chatId: number, text: string): Promise<void> {
   }
 }
 
-export async function handleMessage(msg: TelegramMessage): Promise<void> {
+export async function handleMessage(logger: ILogger, msg: TelegramMessage): Promise<void> {
   const { id: chatId } = msg.chat;
   const { text } = msg;
 
   if (text) {
-    await processAndReply(chatId, text);
+    await processAndReply(logger, chatId, text);
   }
 }
 
@@ -88,10 +89,12 @@ export async function sendCode(
 }
 
 export async function sendWithApproval(
+  logger: ILogger,
   chatId: number,
   message: string,
   callbackData: string
 ): Promise<void> {
+  logger.info(`Sending message with approval to chat ${chatId}: ${message}`);
   const bot = getBot();
   const keyboard: InlineKeyboardMarkup = {
     inline_keyboard: [

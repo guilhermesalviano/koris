@@ -2,8 +2,9 @@ import { startTui } from 'assistant-tui';
 import { handle } from '../../agents/handler';
 import { handleCommand, isCommand } from '../../agents/commands';
 import { config } from '../../config';
+import { ILogger } from '../../infrastructure/logger';
 
-export function startTUI(): void {
+export function startTUI(params: { logger: ILogger }): void {
   startTui({
     // Modern fixed-input layout with scrollable history
     fixedInput: true,
@@ -82,7 +83,7 @@ export function startTUI(): void {
     
     // Main message handler
     onInput: async (message) => {
-      return await handle(message, 'tui');
+      return await handle(params.logger, message, 'tui');
     },
   });
 }

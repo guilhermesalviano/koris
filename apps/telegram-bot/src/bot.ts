@@ -1,6 +1,6 @@
 import { TelegramBot, TelegramMessage } from './client';
 
-export interface InitBotOptions {
+export interface InitBotParams {
   token: string;
   polling?: boolean;
   onMessage: (msg: TelegramMessage) => void | Promise<void>;
@@ -9,16 +9,16 @@ export interface InitBotOptions {
 
 let bot: TelegramBot | undefined;
 
-export function initBot(options: InitBotOptions): TelegramBot {
-  const polling = options.polling ?? true;
+export function initBot(params: InitBotParams): TelegramBot {
+  const polling = params.polling ?? true;
 
-  bot = new TelegramBot(options.token, { polling });
+  bot = new TelegramBot(params.token, { polling });
 
-  bot.on('message', options.onMessage);
+  bot.on('message', params.onMessage);
 
   bot.on('polling_error', (error) => {
-    if (options.onPollingError) {
-      options.onPollingError(error);
+    if (params.onPollingError) {
+      params.onPollingError(error);
       return;
     }
     console.error('Telegram polling error:', error);
