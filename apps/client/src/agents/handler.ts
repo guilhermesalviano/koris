@@ -39,6 +39,7 @@ async function handle(
  * Process AI messages with iterative tool call handling.
  * Continues executing tools until AI returns a final response without tool calls.
  * Sends progress summaries via onProgress callback.
+ * Optimizes skill execution: doesn't loop after successful skill execution.
  */
 async function processAIMessage(
   logger: ILogger,
@@ -52,6 +53,7 @@ async function processAIMessage(
   
   let currentMessage = userMessage;
   let iteration = 0;
+  let isSkillExecution = false; // Track if we're in skill execution mode
 
   while (iteration < MAX_TOOL_ITERATIONS) {
     iteration++;
@@ -80,14 +82,17 @@ async function processAIMessage(
 
     if (toolCalls.length === 0) {
       logger.info('AI returned final response (no tool calls)', { channel });
+      if (onProgress) {
+        onProgress('Complete!');
+      }
       return responseText;
     }
 
     // Execute tool calls
-    logger.info(`Executing ${toolCalls.length} tool call(s)`, { channel, iteration });
+    logger.info(`Executing tool call(s)`, { channel, iteration });
     
     if (onProgress) {
-      onProgress(`Executing ${toolCalls.length} tool(s): ${toolCalls.map(t => t.name).join(', ')}`);
+      onProgress(`Executing tool(s): ${toolCalls.map(t => t.name).join(', ')}`);
     }
     
     const toolResults = await orchestrator.handleToolCalls(
@@ -100,18 +105,33 @@ async function processAIMessage(
     if (responseText.includes('get_skill')) {
       logger.info('Learning skill content', { channel });
       if (onProgress) {
-        onProgress('Learning skill content...');
+        onProgress('Learning skill and executing...');
       }
-      currentMessage = buildSkillLearningPrompt(toolResults);
+      currentMessage = buildSkillLearningPrompt(toolResults, userMessage);
 
-      // Disable tools for learning iteration to force direct response
-      options = { ...options, toolsEnabled: false };
-    } else {
-      // Build next prompt with tool results
+      // Keep tools enabled and mark that we're in skill execution mode
+      options = { ...options, toolsEnabled: true };
+      isSkillExecution = true;
+    } 
+    // If we're in skill execution and just executed a tool (curl_request, etc.)
+    // Return the result immediately without looping
+    else if (isSkillExecution && toolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
+      logger.info('Skill execution complete, returning result', { channel });
+      if (onProgress) {
+        onProgress('Skill complete!');
+      }
+      
+      // Build a message asking AI to provide final answer based on skill execution
+      currentMessage = buildSkillResponsePrompt(userMessage, toolResults);
+    }
+    else {
+      // if no AI interation needed, return tool results directly
+      logger.info('Continuing AI processing with tool results', { channel });
       if (onProgress) {
         onProgress(`Processing tool results (${toolResults.length} chars)...`);
       }
-      currentMessage = buildToolResultPrompt(responseText, toolResults);
+      // currentMessage = buildToolResultPrompt(responseText, toolResults);
+      return toolResults; // Return tool results directly for non-skill executions
     }
   }
 
@@ -128,12 +148,34 @@ async function processAIMessage(
 }
 
 /**
- * Build prompt for skill learning iteration
+ * Build prompt for skill learning and execution
+ * Instructs AI to: 1) understand the skill, 2) map user request to skill instructions, 3) execute commands
  */
 function buildSkillLearningPrompt(
-  skillContent: string
+  skillContent: string,
+  originalUserRequest: string
 ): string {
-  return `**Extract how to use and execute**:\n${skillContent}\n If it is a curl execution, extract the url, method, headers and body and call respective tool to execute it.`;
+  return `You have just learned a skill. Here is the skill documentation:
+
+${skillContent}
+
+---
+
+ORIGINAL USER REQUEST: "${originalUserRequest}"
+
+NOW DO THIS:
+1. Read the skill documentation above carefully
+2. Understand what this skill does and how to use it
+3. Map the user's request to the appropriate skill instructions
+4. For API/curl requests in the skill:
+   - Extract the complete URL (with query parameters if needed)
+   - Extract the HTTP method (GET, POST, PUT, DELETE, etc.)
+   - Extract any headers or authentication required
+   - Extract the request body if present
+   - Call the curl_request tool with these parameters
+5. After executing the curl request, analyze the response and provide a clear answer to the user
+
+Remember: Use the curl_request tool to execute any HTTP/API calls shown in the skill.`;
 }
 
 /**
@@ -144,6 +186,25 @@ function buildToolResultPrompt(
   toolResults: string
 ): string {
   return `Previous response:\n${previousResponse}\n\nTool execution results:\n${toolResults}`;
+}
+
+/**
+ * Build prompt for final response after skill execution
+ * This is the FINAL iteration - AI should provide a complete answer based on skill results
+ */
+function buildSkillResponsePrompt(
+  userRequest: string,
+  skillExecutionResults: string
+): string {
+  return `The skill has been executed successfully. Here are the results:
+
+${skillExecutionResults}
+
+---
+
+USER'S ORIGINAL REQUEST: "${userRequest}"
+
+Based on these results, provide a clear, complete answer to the user. Do NOT call any more tools. Just provide the final answer using the data from the skill execution.`;
 }
 
 export { handle };
