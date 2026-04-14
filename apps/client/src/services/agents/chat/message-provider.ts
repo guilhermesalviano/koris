@@ -13,7 +13,7 @@ type ProcessOptions = { signal?: AbortSignal, toolsEnabled?: boolean };
 async function messageProvider(
   logger: ILogger,
   message: string,
-  channel: 'telegram' | 'tui',
+  channel: string,
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
   const messageBuilder = MessageBuilderFactory.create();

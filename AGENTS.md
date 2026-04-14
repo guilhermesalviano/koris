@@ -37,7 +37,7 @@ opencrawdio is a multi-interface AI agent system that processes user messages an
 **Purpose**: Central hub for processing all user messages regardless of interface.
 
 **Functions**:
-- `handle(message: string, source: 'telegram' | 'tui'): Promise<string>`
+- `handle(message: string, source: string): Promise<string>`
   - Main entry point for all message processing
   - Routes to appropriate handler (commands vs instructions)
   - Returns formatted response string
@@ -64,7 +64,7 @@ opencrawdio is a multi-interface AI agent system that processes user messages an
 **Key Functions**:
 - `handleCommand(command: string, context: CommandContext): CommandResult`
 - `isCommand(message: string): boolean`
-- `getAvailableCommands(source: 'telegram' | 'tui'): string[]`
+- `getAvailableCommands(source: string): string[]`
 
 **Available Commands**:
 | Command | tui | Telegram | Description |
@@ -80,7 +80,7 @@ opencrawdio is a multi-interface AI agent system that processes user messages an
 **CommandContext Interface**:
 ```typescript
 interface CommandContext {
-  source: 'telegram' | 'tui';
+  source: string;
   session?: {
     messageCount: number;
     startTime: Date;

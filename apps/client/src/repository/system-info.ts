@@ -1,13 +1,13 @@
 import os from 'node:os';
 
 interface ISystemInfoRepository {
-  getSystemInfo(params: { channel: 'telegram' | 'tui' }): SystemInfo;
+  getSystemInfo(params: { channel: string }): SystemInfo;
   formatAsPrompt(info: SystemInfo): string;
-  loadSystemInfoPrompt(params: { channel: 'telegram' | 'tui' }): string;
+  loadSystemInfoPrompt(params: { channel: string }): string;
 }
 
 export interface SystemInfo {
-  source: 'telegram' | 'tui';
+  source: string;
   platform: string;
   release: string;
   nodeVersion: string;
@@ -22,7 +22,7 @@ class SystemInfoRepository implements ISystemInfoRepository {
   /**
    * Collect current system information
    */
-  getSystemInfo(params: { channel: 'telegram' | 'tui' }): SystemInfo {
+  getSystemInfo(params: { channel: string }): SystemInfo {
     return {
       source: params.channel,
       platform: os.platform(),
@@ -48,7 +48,7 @@ class SystemInfoRepository implements ISystemInfoRepository {
   /**
    * Load and format system info in one call (convenience method)
    */
-  loadSystemInfoPrompt(params: { channel: 'telegram' | 'tui' }): string {
+  loadSystemInfoPrompt(params: { channel: string }): string {
     const info = this.getSystemInfo(params);
     return this.formatAsPrompt(info);
   }

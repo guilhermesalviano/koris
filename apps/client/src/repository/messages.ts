@@ -12,7 +12,7 @@ interface Message {
 
 interface BuildMessagesParams {
   message: string;
-  channel: 'telegram' | 'tui';
+  channel: string;
   skills?: Skill[];
   toolsEnabled?: boolean;
 }
@@ -62,7 +62,7 @@ class MessageBuilderService {
   /**
    * Build system-level messages (base prompt + context)
    */
-  private buildSystemMessages(channel: "telegram" | "tui"): Message[] {
+  private buildSystemMessages(channel: string): Message[] {
     const systemMessages: Message[] = [];
 
     // Base system prompt

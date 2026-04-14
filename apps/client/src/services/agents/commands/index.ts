@@ -2,7 +2,7 @@ import readline from 'readline';
 import { config } from '../../../config';
 
 export interface CommandContext {
-  source: 'telegram' | 'tui';
+  source: string;
   session?: {
     messageCount: number;
     startTime: Date;
@@ -237,7 +237,7 @@ function handleExit(context: CommandContext): CommandResult {
   };
 }
 
-function formatMessage(message: string, channel: 'telegram' | 'tui'): string {
+function formatMessage(message: string, channel: string): string {
   // Telegram uses Markdown, TUI uses plain text
   if (channel === 'telegram') {
     return message;
@@ -245,7 +245,7 @@ function formatMessage(message: string, channel: 'telegram' | 'tui'): string {
   return message.replace(/\*/g, '');
 }
 
-function formatCommandResult(message: string, channel: 'telegram' | 'tui'): CommandResult {
+function formatCommandResult(message: string, channel: string): CommandResult {
   return {
     response: formatMessage(message, channel),
     action: 'none',
@@ -263,7 +263,7 @@ export function isCommand(message: string): boolean {
 /**
  * Get list of available commands
  */
-export function getAvailableCommands(channel: 'telegram' | 'tui'): string[] {
+export function getAvailableCommands(channel: string): string[] {
   const commonCommands = ['/start', '/help', '/clear'];
   
   if (channel === 'tui') {

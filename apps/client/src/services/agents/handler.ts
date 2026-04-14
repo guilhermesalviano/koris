@@ -18,7 +18,7 @@ const MAX_TOOL_ITERATIONS = 10;
 async function handle(
   logger: ILogger,
   message: unknown,
-  channel: 'telegram' | 'tui',
+  channel: string,
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
   const safeMessage = toSafeMessage(message);
@@ -44,7 +44,7 @@ async function handle(
 async function processAIMessage(
   logger: ILogger,
   userMessage: string,
-  channel: 'telegram' | 'tui',
+  channel: string,
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
   const toolsOrchestrator = new ToolsOrchestrator(logger);
