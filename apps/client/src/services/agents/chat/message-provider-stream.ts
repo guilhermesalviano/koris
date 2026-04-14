@@ -1,9 +1,9 @@
 import { ILogger } from "../../../infrastructure/logger";
 import { AIChatRequest } from "../../../types/provider";
 import { escapeTelegramMarkdown, isAbortError } from "../../../utils/telegram";
-import { ToolCall } from "../../orchestrator/worker/executor";
 import { MessageBuilderFactory } from "../../../repository/messages";
 import { getAIProvider } from "../../providers";
+import { ToolCall } from "../../../types/tools";
 
 type ProcessedMessage = string | ToolCall[] | AsyncGenerator<string>;
 type ProcessOptions = { signal?: AbortSignal, toolsEnabled?: boolean };

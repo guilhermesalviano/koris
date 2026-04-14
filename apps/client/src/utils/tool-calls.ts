@@ -1,4 +1,4 @@
-import { ToolCall } from "../services/orchestrator/worker/executor";
+import { ToolCall } from "../types/tools";
 
 function extractToolCalls(response: string): ToolCall[] {
   try {

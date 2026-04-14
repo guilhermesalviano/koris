@@ -1,24 +1,21 @@
 import pLimit from "p-limit";
 import { ILogger } from "../../infrastructure/logger";
-import { executeTool, type ToolCall } from "./worker/executor";
+import { ToolCall, ToolResult } from "../../types/tools";
+import { COMMAND_MAP } from "./tools";
 
-interface AIChatRequest {
+interface AIAgentRequest {
   model?: string;
 }
 
 class Orchestrator {
-  private maxWorkers: number;
-
   constructor(
     private logger: ILogger,
-    maxWorkers: number = 2
-  ) {
-    this.maxWorkers = maxWorkers;
-  }
+    private maxWorkers: number = 2
+  ) { }
 
   async handle(
     tools: ToolCall[],
-    _request: AIChatRequest,
+    _agent: AIAgentRequest,
     signal: AbortSignal,
   ): Promise<string> {
     const limit = pLimit(this.maxWorkers);
@@ -30,7 +27,7 @@ class Orchestrator {
         }
 
         try {
-          return await executeTool(this.logger, tool);
+          return await this.executeTool(this.logger, tool);
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
           this.logger.error('Tool execution failed', { toolName: tool.name, error: errorMsg });
@@ -56,6 +53,31 @@ class Orchestrator {
       .join('\n\n');
 
     return output;
+  }
+
+  async executeTool(logger: ILogger, toolCall: ToolCall): Promise<ToolResult> {
+    const { name, arguments: args } = toolCall;
+
+    logger.debug('Executing tool', { toolName: name, argsKeys: Object.keys(args || {}) });
+
+    try {
+      const command = COMMAND_MAP[name];
+      if (command) return await command(logger, args);
+
+      return {
+        toolName: name,
+        success: false,
+        error: `Unknown tool: ${name}`,
+      };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      logger.error('Tool execution error', { toolName: name, error: errorMsg });
+      return {
+        toolName: name,
+        success: false,
+        error: errorMsg,
+      };
+    }
   }
 }
 
