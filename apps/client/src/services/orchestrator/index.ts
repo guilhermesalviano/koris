@@ -1,4 +1,4 @@
-import { ILogger } from "../infrastructure/logger";
+import { ILogger } from "../../infrastructure/logger";
 import { WorkerManager } from "./worker-manager";
 import { executeTool, type ToolCall } from "./worker/executor";
 

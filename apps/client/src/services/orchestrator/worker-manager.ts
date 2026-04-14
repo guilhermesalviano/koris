@@ -1,4 +1,4 @@
-import { ILogger } from "../infrastructure/logger";
+import { ILogger } from "../../infrastructure/logger";
 
 interface WorkerTask<T> {
   id: string;

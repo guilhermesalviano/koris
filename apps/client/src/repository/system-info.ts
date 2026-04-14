@@ -1,8 +1,11 @@
 import os from 'node:os';
 
-/**
- * System information data structure
- */
+interface ISystemInfoRepository {
+  getSystemInfo(params: { channel: 'telegram' | 'tui' }): SystemInfo;
+  formatAsPrompt(info: SystemInfo): string;
+  loadSystemInfoPrompt(params: { channel: 'telegram' | 'tui' }): string;
+}
+
 export interface SystemInfo {
   source: 'telegram' | 'tui';
   platform: string;
@@ -15,7 +18,7 @@ export interface SystemInfo {
  * Repository for system and runtime information.
  * Separates data collection from presentation logic.
  */
-export class SystemInfoRepository {
+class SystemInfoRepository implements ISystemInfoRepository {
   /**
    * Collect current system information
    */
@@ -51,15 +54,10 @@ export class SystemInfoRepository {
   }
 }
 
-// Singleton instance
-const repository = new SystemInfoRepository();
-
-/**
- * Backward-compatible function export
- */
-export function loadSystemInfoPrompt(params: { channel: 'telegram' | 'tui' }): string {
-  return repository.loadSystemInfoPrompt(params);
+class SystemInfoRepositoryFactory {
+  static create(): ISystemInfoRepository {
+    return new SystemInfoRepository();
+  }
 }
 
-// Export singleton for direct use
-export const systemInfoRepository = repository;
+export { ISystemInfoRepository, SystemInfoRepositoryFactory };

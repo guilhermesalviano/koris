@@ -1,7 +1,7 @@
-import { Skill } from '../../types/skills';
-import { SystemInfoRepository } from '../../repository/system-info';
-import { buildAITools } from '../../orchestrator/tools';
-import type { AIChatRequest, AIToolDefinition } from '../../types/provider';
+import { Skill } from '../types/skills';
+import { ISystemInfoRepository, SystemInfoRepositoryFactory } from './system-info';
+import type { AIChatRequest, AIToolDefinition } from '../types/provider';
+import { IToolsRepository, ToolsRepositoryFactory } from './tools';
 
 type MessageRole = 'system' | 'user' | 'assistant';
 
@@ -29,11 +29,17 @@ interface MessageBuilderConfig {
  */
 class MessageBuilderService {
   private readonly defaultSystemPrompt = 'You are a Personal Assistant. Be direct.';
+  private systemInfoRepository: ISystemInfoRepository;
+  private toolsRepository: IToolsRepository;
 
   constructor(
-    private systemInfoRepository: SystemInfoRepository,
+    systemInfoRepository: ISystemInfoRepository,
+    toolsRepository: IToolsRepository,
     private config: MessageBuilderConfig = {}
-  ) {}
+  ) {
+    this.systemInfoRepository = systemInfoRepository;
+    this.toolsRepository = toolsRepository;
+  }
 
   /**
    * Build complete message payload for AI provider
@@ -41,14 +47,11 @@ class MessageBuilderService {
   buildMessages(params: BuildMessagesParams): AIChatRequest {
     const messages: Message[] = [];
 
-    // Add system prompts
-    messages.push(...this.buildSystemMessages(params));
+    messages.push(...this.buildSystemMessages(params.channel));
 
-    // Add user message
     messages.push(this.buildUserMessage(params.message));
 
-    // Build tools if enabled
-    const tools = this.buildTools(params);
+    const tools = this.buildToolsIfEnabled(params);
 
     return {
       messages,
@@ -59,7 +62,7 @@ class MessageBuilderService {
   /**
    * Build system-level messages (base prompt + context)
    */
-  private buildSystemMessages(params: BuildMessagesParams): Message[] {
+  private buildSystemMessages(channel: "telegram" | "tui"): Message[] {
     const systemMessages: Message[] = [];
 
     // Base system prompt
@@ -69,7 +72,7 @@ class MessageBuilderService {
     // System info context
     if (this.config.includeSystemInfo !== false) {
       const systemInfo = this.systemInfoRepository.loadSystemInfoPrompt({
-        channel: params.channel,
+        channel,
       });
       systemMessages.push(this.createMessage('system', systemInfo));
     }
@@ -87,14 +90,14 @@ class MessageBuilderService {
   /**
    * Build tools array if enabled
    */
-  private buildTools(params: BuildMessagesParams): AIToolDefinition[] | undefined {
+  private buildToolsIfEnabled(params: BuildMessagesParams): AIToolDefinition[] | undefined {
     const toolsEnabled = params.toolsEnabled ?? this.config.includeTools ?? true;
 
     if (!toolsEnabled) {
       return undefined;
     }
 
-    return buildAITools(params.skills);
+    return this.toolsRepository.getAll(params.skills);
   }
 
   /**
@@ -134,37 +137,21 @@ class MessageBuilderService {
    * Create a new builder with different configuration
    */
   withConfig(config: Partial<MessageBuilderConfig>): MessageBuilderService {
-    return new MessageBuilderService(this.systemInfoRepository, {
+    return new MessageBuilderService(this.systemInfoRepository, this.toolsRepository, {
       ...this.config,
       ...config,
     });
   }
 }
 
-/**
- * Factory for creating message builder instances
- */
 class MessageBuilderFactory {
   static create(
-    systemInfoRepository: SystemInfoRepository,
     config?: MessageBuilderConfig
   ): MessageBuilderService {
-    return new MessageBuilderService(systemInfoRepository, config);
+    const systemInfoRepository = SystemInfoRepositoryFactory.create();
+    const toolsRepository = ToolsRepositoryFactory.create();
+    return new MessageBuilderService(systemInfoRepository, toolsRepository, config);
   }
-
-  static createDefault(): MessageBuilderService {
-    return new MessageBuilderService(new SystemInfoRepository());
-  }
-}
-
-// Singleton instance for backward compatibility
-const defaultBuilder = MessageBuilderFactory.createDefault();
-
-/**
- * Backward-compatible function export
- */
-export function buildMessages(params: BuildMessagesParams): AIChatRequest {
-  return defaultBuilder.buildMessages(params);
 }
 
 export {
@@ -174,5 +161,4 @@ export {
   MessageBuilderConfig,
   MessageBuilderService,
   MessageBuilderFactory,
-  defaultBuilder as messageBuilder,
 };

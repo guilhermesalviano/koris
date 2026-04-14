@@ -1,9 +1,9 @@
 import { handleCommand, isCommand } from './commands';
 import { previewMessage, toSafeMessage } from './helpers';
-import { messageProvider } from './chat';
+import { messageProvider } from './chat/message-provider';
 import { ILogger } from '../../infrastructure/logger';
 import { extractToolCalls } from '../../utils/tool-calls';
-import { Orchestrator } from '../../orchestrator';
+import { Orchestrator } from '../orchestrator';
 import { config } from '../../config';
 
 type ProcessedMessage = string;

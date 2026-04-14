@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
-import { config } from '../../config';
-import { ILogger } from '../../infrastructure/logger';
+import { config } from '../../../config';
+import { ILogger } from '../../../infrastructure/logger';
 import { readFile } from 'fs/promises';
 import { join } from 'node:path';
 import { URL } from 'node:url';
