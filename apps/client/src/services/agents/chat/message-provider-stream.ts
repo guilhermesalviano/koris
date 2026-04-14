@@ -1,7 +1,7 @@
 import { ILogger } from "../../../infrastructure/logger";
 import { AIChatRequest } from "../../../types/provider";
 import { escapeTelegramMarkdown, isAbortError } from "../../../utils/telegram";
-import { MessageBuilderFactory } from "../../../repositories/messages";
+import { PromptRepositoryFactory } from "../../../repositories/prompt";
 import { getAIProvider } from "../../providers";
 import { ToolCall } from "../../../types/tools";
 
@@ -14,9 +14,9 @@ async function messageProviderStream(
   channel: string,
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
-  const messageBuilder = MessageBuilderFactory.create();
   const provider = getAIProvider({ logger });
-  const payload = messageBuilder.buildMessages({ message, channel });
+  const promptRepository = PromptRepositoryFactory.create();
+  const payload = promptRepository.build({ userMessage: message, channel });
 
   // Cast MessagePayload to AIChatRequest (compatible types)
   const chatRequest = payload as AIChatRequest;

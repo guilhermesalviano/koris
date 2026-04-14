@@ -4,7 +4,7 @@ import { escapeTelegramMarkdown, isAbortError } from "../../../utils/telegram";
 import { ILogger } from "../../../infrastructure/logger";
 import { SkillsRepository } from "../../../repositories/skills";
 import type { AIChatRequest } from "../../../types/provider";
-import { MessageBuilderFactory } from "../../../repositories/messages";
+import { PromptRepositoryFactory } from "../../../repositories/prompt";
 import { ToolCall } from "../../../types/tools";
 
 type ProcessedMessage = string | ToolCall[] | AsyncGenerator<string>;
@@ -16,11 +16,11 @@ async function messageProvider(
   channel: string,
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
-  const messageBuilder = MessageBuilderFactory.create();
   const provider = getAIProvider({ logger });
   const skillsRepository = new SkillsRepository(logger);
   const skills = skillsRepository.get();
-  const payload = messageBuilder.buildMessages({ message, channel, skills, toolsEnabled: options?.toolsEnabled });
+  const promptRepository = PromptRepositoryFactory.create();
+  const payload = promptRepository.build({ userMessage: message, channel, skills, toolsEnabled: options?.toolsEnabled });
 
   logger.info("Generated prompt:", payload as unknown as Record<string, unknown>);
 
