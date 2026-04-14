@@ -1,7 +1,7 @@
 import { ILogger } from "../../../infrastructure/logger";
 import { AIChatRequest } from "../../../types/provider";
 import { escapeTelegramMarkdown, isAbortError } from "../../../utils/telegram";
-import { MessageBuilderFactory } from "../../../repository/messages";
+import { MessageBuilderFactory } from "../../../repositories/messages";
 import { getAIProvider } from "../../providers";
 import { ToolCall } from "../../../types/tools";
 

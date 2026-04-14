@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { ToolsOrchestrator } from '../../../src/services/tools-orchestrator';
-import { ILogger } from '../../../src/infrastructure/logger';
+import { ToolsOrchestrator } from '../../../../src/services/tools-orchestrator';
+import { ILogger } from '../../../../src/infrastructure/logger';
 
 // Mock logger
 const mockLogger: ILogger = {

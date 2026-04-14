@@ -329,4 +329,4 @@ class OllamaAIProviderFactory {
   }
 }
 
-export { OllamaAIProviderFactory };
+export { OllamaAIProvider, OllamaAIProviderFactory };

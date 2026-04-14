@@ -61,4 +61,4 @@ class MockAIProviderFactory {
   }
 }
 
-export { MockAIProviderFactory };
+export { MockAIProvider, MockAIProviderFactory };
