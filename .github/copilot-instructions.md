@@ -25,4 +25,4 @@ rtk proxy <cmd>       # Run raw (no filtering) but track usage
 ```
 
 # Instructions
-Use the agent roles defined in agents.md to guide your code suggestions in `../agents.md`.
+Use the agent roles defined in AGENTS.md to guide your code suggestions in `../AGENTS.md`.
