@@ -49,7 +49,7 @@ class OllamaAIProvider implements AIProvider {
       
       const response = await this.readJsonFallback(request, controller.signal);
       this.logger.debug('Ollama chat raw response', { responseLength: response.length });
-      this.logger.log("info", "response: " + JSON.stringify(response))
+      this.logger.info("response: " + JSON.stringify(response))
 
       return response;
     } catch (err) {

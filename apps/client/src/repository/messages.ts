@@ -2,8 +2,7 @@ import { Skill } from '../types/skills';
 import { ISystemInfoRepository, SystemInfoRepositoryFactory } from './system-info';
 import type { AIChatRequest, AIToolDefinition } from '../types/provider';
 import { IToolsRepository, ToolsRepositoryFactory } from './tools';
-
-type MessageRole = 'system' | 'user' | 'assistant';
+import { MessageRole } from '../types/messages';
 
 interface Message {
   role: MessageRole;
@@ -29,17 +28,12 @@ interface MessageBuilderConfig {
  */
 class MessageBuilderService {
   private readonly defaultSystemPrompt = 'You are a Personal Assistant. Be direct.';
-  private systemInfoRepository: ISystemInfoRepository;
-  private toolsRepository: IToolsRepository;
 
   constructor(
-    systemInfoRepository: ISystemInfoRepository,
-    toolsRepository: IToolsRepository,
+    private systemInfoRepository: ISystemInfoRepository,
+    private toolsRepository: IToolsRepository,
     private config: MessageBuilderConfig = {}
-  ) {
-    this.systemInfoRepository = systemInfoRepository;
-    this.toolsRepository = toolsRepository;
-  }
+  ) { }
 
   /**
    * Build complete message payload for AI provider
