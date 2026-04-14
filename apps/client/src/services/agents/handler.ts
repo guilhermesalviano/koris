@@ -99,7 +99,7 @@ async function processAIMessage(
     );
 
     // Special handling for skill learning
-    if (responseText.includes('get_skill')) {
+    if (toolCalls.some(t => t.name === 'get_skill')) {
       logger.info('Learning skill content', { channel });
       processStatus = 'Learning skill content';
       currentMessage = buildSkillLearningPrompt(toolResults, userMessage);
@@ -109,7 +109,6 @@ async function processAIMessage(
       isSkillExecution = true;
     } 
     // If we're in skill execution and just executed a tool (curl_request, etc.)
-    // Return the result immediately without looping
     else if (isSkillExecution && toolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
       logger.info('Skill execution complete, returning result', { channel });
       processStatus = 'Skill executed. Extracting response...';
@@ -118,13 +117,12 @@ async function processAIMessage(
       currentMessage = buildSkillResponsePrompt(userMessage, toolResults);
     }
     else {
-      // if no AI interation needed, return tool results directly
+      // if no AI iteration needed, return tool results directly
       logger.info('Continuing AI processing with tool results', { channel });
       if (onProgress) {
         onProgress(`Processing tool results (${toolResults.length} chars)...`);
       }
-      // currentMessage = buildToolResultPrompt(responseText, toolResults);
-      return toolResults; // Return tool results directly for non-skill executions
+      currentMessage = buildToolResultPrompt(responseText, toolResults);
     }
   }
 
@@ -174,12 +172,12 @@ Remember: Use the curl_request tool to execute any HTTP/API calls shown in the s
 /**
  * Build prompt with tool execution results for next AI iteration
  */
-// function buildToolResultPrompt(
-//   previousResponse: string,
-//   toolResults: string
-// ): string {
-//   return `Previous response:\n${previousResponse}\n\nTool execution results:\n${toolResults}`;
-// }
+function buildToolResultPrompt(
+  previousResponse: string,
+  toolResults: string
+): string {
+  return `Previous response:\n${previousResponse}\n\nTool execution results:\n${toolResults}`;
+}
 
 /**
  * Build prompt for final response after skill execution

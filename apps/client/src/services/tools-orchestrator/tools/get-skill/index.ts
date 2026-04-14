@@ -1,7 +1,10 @@
 import { ILogger } from "../../../../infrastructure/logger";
 import { readFile } from 'fs/promises';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { ToolCall, ToolResult } from "../../../../types/tools";
+import { config } from "../../../../config";
+
+const BASE_SKILLS_DIR = resolve(config.BASE_DIR, 'skills');
 
 export async function executeGetSkill(
   logger: ILogger,
@@ -15,9 +18,20 @@ export async function executeGetSkill(
 
   logger.info('get_skill args: ', { skillName: args.skill_name, skillPath: args.skill_path });
 
-  const content = await readFile(join(String(args.skill_path), 'SKILL.md'), 'utf-8');
+  const requestedPath = resolve(BASE_SKILLS_DIR, String(args.skill_path));
+
+  const isSafePath = requestedPath === BASE_SKILLS_DIR || requestedPath.startsWith(BASE_SKILLS_DIR + sep);
+
+  if (!isSafePath) {
+    logger.error('Path traversal attempt detected.', { requestedPath, skillPath: args.skill_path });
+    throw new Error('Invalid skill_path: Access denied.');
+  }
+
+  const targetFile = join(requestedPath, 'SKILL.md');
+  const content = await readFile(targetFile, 'utf-8');
+
   return {
-    toolName: 'execute_get_skill',
+    toolName: 'get_skill',
     success: true,
     result: content.slice(0, 5000),
   };

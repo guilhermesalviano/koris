@@ -2,6 +2,7 @@ import {
   Logger as WinstonLogger, createLogger, format, LoggerOptions, transports,
 } from 'winston';
 import path from 'path';
+import fs from 'fs';
 import { config } from '../config';
 
 interface ILogger {
@@ -39,14 +40,16 @@ class LoggerFactory {
   static getOptions() {
     const logsDir = path.join(config.BASE_DIR, 'logs');
 
-    const options: LoggerOptions = {
-      level: config.LOG_LEVEL || 'info',
-      format: format.json(),
-      defaultMeta: {
-        environment: config.ENVIRONMENT,
-      },
-      transports: [
-        new transports.Console(),
+    const activeTransports: any[] = [
+      new transports.Console()
+    ];
+
+    try {
+      if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true });
+      }
+
+      activeTransports.push(
         new transports.File({ 
           filename: path.join(logsDir, 'combined.log'),
           maxsize: 5242880, // 5MB
@@ -57,11 +60,22 @@ class LoggerFactory {
           level: 'error',
           maxsize: 5242880, // 5MB
           maxFiles: 5,
-        }),
-      ],
+        })
+      );
+    } catch (error) {
+      console.warn(`[LoggerFactory] Warning: Could not create log directory at ${logsDir}. Falling back to Console-only logging.`, error);
+    }
+
+    const options: LoggerOptions = {
+      level: config.LOG_LEVEL || 'info',
+      format: format.json(),
+      defaultMeta: {
+        environment: config.ENVIRONMENT,
+      },
+      transports: activeTransports,
     };
 
-    return options
+    return options;
   }
 
   static create(): ILogger {

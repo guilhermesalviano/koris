@@ -29,7 +29,7 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
   try {
     let curlCmd = `curl -s -w "\n---HTTP_STATUS:%{http_code}---" --max-time ${timeout}`;
 
-    if (!followRedirects) {
+    if (followRedirects) {
       curlCmd += ' -L';
     }
 
