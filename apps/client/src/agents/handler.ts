@@ -52,6 +52,7 @@ async function processAIMessage(
   const onProgress = options?.onProgress;
   
   let currentMessage = userMessage;
+  let processStatus = 'initializing'; // Track processing status for better logging and progress updates
   let iteration = 0;
   let isSkillExecution = false; // Track if we're in skill execution mode
 
@@ -62,7 +63,7 @@ async function processAIMessage(
     
     // Send progress to user
     if (onProgress) {
-      onProgress(`Processing (iteration ${iteration}/${MAX_TOOL_ITERATIONS})...`);
+      onProgress(`${processStatus || 'Processing'} (iteration ${iteration}/${MAX_TOOL_ITERATIONS})...`);
     }
 
     // Get AI response
@@ -82,9 +83,6 @@ async function processAIMessage(
 
     if (toolCalls.length === 0) {
       logger.info('AI returned final response (no tool calls)', { channel });
-      if (onProgress) {
-        onProgress('Complete!');
-      }
       return responseText;
     }
 
@@ -104,9 +102,7 @@ async function processAIMessage(
     // Special handling for skill learning
     if (responseText.includes('get_skill')) {
       logger.info('Learning skill content', { channel });
-      if (onProgress) {
-        onProgress('Learning skill and executing...');
-      }
+      processStatus = 'Learning skill content';
       currentMessage = buildSkillLearningPrompt(toolResults, userMessage);
 
       // Keep tools enabled and mark that we're in skill execution mode
@@ -117,9 +113,7 @@ async function processAIMessage(
     // Return the result immediately without looping
     else if (isSkillExecution && toolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
       logger.info('Skill execution complete, returning result', { channel });
-      if (onProgress) {
-        onProgress('Skill complete!');
-      }
+      processStatus = 'Skill executed. Extracting response...';
       
       // Build a message asking AI to provide final answer based on skill execution
       currentMessage = buildSkillResponsePrompt(userMessage, toolResults);
@@ -181,12 +175,12 @@ Remember: Use the curl_request tool to execute any HTTP/API calls shown in the s
 /**
  * Build prompt with tool execution results for next AI iteration
  */
-function buildToolResultPrompt(
-  previousResponse: string,
-  toolResults: string
-): string {
-  return `Previous response:\n${previousResponse}\n\nTool execution results:\n${toolResults}`;
-}
+// function buildToolResultPrompt(
+//   previousResponse: string,
+//   toolResults: string
+// ): string {
+//   return `Previous response:\n${previousResponse}\n\nTool execution results:\n${toolResults}`;
+// }
 
 /**
  * Build prompt for final response after skill execution
