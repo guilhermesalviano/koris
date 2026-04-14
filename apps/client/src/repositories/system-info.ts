@@ -60,4 +60,4 @@ class SystemInfoRepositoryFactory {
   }
 }
 
-export { ISystemInfoRepository, SystemInfoRepositoryFactory };
+export { ISystemInfoRepository, SystemInfoRepository, SystemInfoRepositoryFactory };

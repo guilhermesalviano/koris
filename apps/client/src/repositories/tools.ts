@@ -154,4 +154,4 @@ class ToolsRepositoryFactory {
   }
 }
 
-export { ToolsRepositoryFactory, IToolsRepository };
+export { IToolsRepository, ToolsRepository, ToolsRepositoryFactory };
