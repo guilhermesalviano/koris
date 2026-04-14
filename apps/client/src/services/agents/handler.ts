@@ -3,13 +3,13 @@ import { previewMessage, toSafeMessage } from './helpers';
 import { messageProvider } from './chat/message-provider';
 import { ILogger } from '../../infrastructure/logger';
 import { extractToolCalls } from '../../utils/tool-calls';
-import { Orchestrator } from '../orchestrator';
+import { ToolsOrchestrator } from '../tools-orchestrator';
 import { config } from '../../config';
 
 type ProcessedMessage = string;
 type ProcessOptions = { signal?: AbortSignal; toolsEnabled?: boolean; onProgress?: (summary: string) => void };
 
-const MAX_TOOL_ITERATIONS = 10; // Prevent infinite loops
+const MAX_TOOL_ITERATIONS = 10;
 
 /**
  * Process user messages and generate responses.
@@ -47,7 +47,7 @@ async function processAIMessage(
   channel: 'telegram' | 'tui',
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
-  const orchestrator = new Orchestrator(logger);
+  const toolsOrchestrator = new ToolsOrchestrator(logger);
   const signal = options?.signal || new AbortController().signal;
   const onProgress = options?.onProgress;
   
@@ -93,7 +93,7 @@ async function processAIMessage(
       onProgress(`Executing tool(s): ${toolCalls.map(t => t.name).join(', ')}`);
     }
     
-    const toolResults = await orchestrator.handle(
+    const toolResults = await toolsOrchestrator.handle(
       toolCalls,
       { model: config.AI.MODEL },
       signal
