@@ -1,6 +1,6 @@
 import { startTui } from 'assistant-tui';
-import { handle } from '../../agents/handler';
-import { handleCommand, isCommand } from '../../agents/commands';
+import { handle } from '../../services/agents/handler';
+import { handleCommand, isCommand } from '../../services/agents/commands';
 import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
 

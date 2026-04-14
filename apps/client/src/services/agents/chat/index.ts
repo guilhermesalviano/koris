@@ -1,9 +1,10 @@
-import { buildMessages } from "../ai/prompt/messages";
-import { getAIProvider } from "../ai/providers";
-import { escapeTelegramMarkdown, isAbortError } from "../utils/telegram";
-import { ILogger } from "../infrastructure/logger";
-import { SkillsRepository } from "../repository/skills";
-import { ToolCall } from "../orchestrator/worker/executor";
+import { buildMessages } from "../../prompt/messages";
+import { getAIProvider } from "../../providers";
+import { escapeTelegramMarkdown, isAbortError } from "../../../utils/telegram";
+import { ILogger } from "../../../infrastructure/logger";
+import { SkillsRepository } from "../../../repository/skills";
+import { ToolCall } from "../../../orchestrator/worker/executor";
+import type { AIChatRequest } from "../../../types/provider";
 
 type ProcessedMessage = string | ToolCall[] | AsyncGenerator<string>;
 type ProcessOptions = { signal?: AbortSignal, toolsEnabled?: boolean };
@@ -17,12 +18,14 @@ async function messageProvider(
   const provider = getAIProvider({ logger });
   const skillsRepository = new SkillsRepository(logger);
   const skills = skillsRepository.get();
-  const prompt = buildMessages({ message, channel, skills, toolsEnabled: options?.toolsEnabled });
+  const payload = buildMessages({ message, channel, skills, toolsEnabled: options?.toolsEnabled });
 
-  logger.info("Generated prompt:", prompt);
+  logger.info("Generated prompt:", payload as unknown as Record<string, unknown>);
+
+  const chatRequest = payload as AIChatRequest;
 
   try {
-    return await provider.chat(prompt, { signal: options?.signal });
+    return await provider.chat(chatRequest, { signal: options?.signal });
   } catch (err) {
     if (options?.signal?.aborted || isAbortError(err)) {
       throw err;
@@ -41,11 +44,14 @@ async function messageProviderStream(
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
   const provider = getAIProvider({ logger });
-  const prompt = buildMessages({ message, channel });
+  const payload = buildMessages({ message, channel });
+
+  // Cast MessagePayload to AIChatRequest (compatible types)
+  const chatRequest = payload as AIChatRequest;
 
   // Stream directly in TUI when using Ollama.
   if (channel === 'tui' && provider.name === 'ollama') {
-    const stream = provider.chatStream(prompt, { signal: options?.signal });
+    const stream = provider.chatStream(chatRequest, { signal: options?.signal });
 
     async function* safeStream(): AsyncGenerator<string> {
       try {
@@ -64,7 +70,7 @@ async function messageProviderStream(
   }
 
   try {
-    return await provider.chat(prompt, { signal: options?.signal });
+    return await provider.chat(chatRequest, { signal: options?.signal });
   } catch (err) {
     if (options?.signal?.aborted || isAbortError(err)) {
       throw err;

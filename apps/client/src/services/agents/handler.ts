@@ -1,10 +1,10 @@
 import { handleCommand, isCommand } from './commands';
 import { previewMessage, toSafeMessage } from './helpers';
-import { messageProvider } from '../services/chat';
-import { ILogger } from '../infrastructure/logger';
-import { extractToolCalls } from '../utils/tool-calls';
-import { Orchestrator } from '../orchestrator';
-import { config } from '../config';
+import { messageProvider } from './chat';
+import { ILogger } from '../../infrastructure/logger';
+import { extractToolCalls } from '../../utils/tool-calls';
+import { Orchestrator } from '../../orchestrator';
+import { config } from '../../config';
 
 type ProcessedMessage = string;
 type ProcessOptions = { signal?: AbortSignal; toolsEnabled?: boolean; onProgress?: (summary: string) => void };

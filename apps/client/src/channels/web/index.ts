@@ -1,6 +1,6 @@
 import express, { type Request, type Response, type Application } from 'express';
-import { healthCheck } from '../../agents/health';
-import { handle } from '../../agents/handler';
+import { healthCheck } from '../../services/agents/health';
+import { handle } from '../../services/agents/handler';
 import { LoggerFactory } from '../../infrastructure/logger';
 import { config } from '../../config';
 import path from 'node:path';

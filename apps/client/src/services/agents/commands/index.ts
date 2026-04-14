@@ -1,5 +1,5 @@
 import readline from 'readline';
-import { config } from '../config';
+import { config } from '../../../config';
 
 export interface CommandContext {
   source: 'telegram' | 'tui';

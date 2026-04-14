@@ -1,12 +1,13 @@
 import { ILogger } from '../../../infrastructure/logger';
 import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/provider';
 
-export class MockAIProvider implements AIProvider {
-  readonly name = 'mock';
+class MockAIProvider implements AIProvider {
+  readonly name: string;
   private readonly logger: ILogger;
 
-  constructor(logger: ILogger) {
+  constructor(logger: ILogger, name: string = 'mock') {
     this.logger = logger;
+    this.name = name;
   }
 
   async chat(request: AIChatRequest, _options?: AIChatOptions): Promise<string> {
@@ -53,3 +54,11 @@ export class MockAIProvider implements AIProvider {
     return { ok: true, detail: 'mock provider' };
   }
 }
+
+class MockAIProviderFactory {
+  static create(logger: ILogger, name?: string): AIProvider {
+    return new MockAIProvider(logger, name);
+  }
+}
+
+export { MockAIProviderFactory };

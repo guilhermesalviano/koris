@@ -22,7 +22,7 @@ const IDLE_TIMEOUT_MS  = 90_000;  // 90 seconds for slow models like Gemma4
 const HARD_TIMEOUT_MS  = 15 * 60_000;  // 15 minutes total
 const HEALTH_TIMEOUT_MS = 5_000;  // 5 seconds for health checks
 
-export class OllamaAIProvider implements AIProvider {
+class OllamaAIProvider implements AIProvider {
   readonly name = 'ollama';
 
   private readonly logger: ILogger;
@@ -321,5 +321,12 @@ export class OllamaAIProvider implements AIProvider {
     signal.addEventListener('abort', onAbort, { once: true });
     return () => signal.removeEventListener('abort', onAbort);
   }
-
 }
+
+class OllamaAIProviderFactory {
+  static create(logger: ILogger): AIProvider {
+    return new OllamaAIProvider(logger);
+  }
+}
+
+export { OllamaAIProviderFactory };
