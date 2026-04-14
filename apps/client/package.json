@@ -36,6 +36,7 @@
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
     "gray-matter": "^4.0.3",
+    "p-limit": "^7.3.0",
     "winston": "^3.19.0"
   },
   "devDependencies": {

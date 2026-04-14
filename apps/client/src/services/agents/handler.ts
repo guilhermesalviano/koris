@@ -93,7 +93,7 @@ async function processAIMessage(
       onProgress(`Executing tool(s): ${toolCalls.map(t => t.name).join(', ')}`);
     }
     
-    const toolResults = await orchestrator.handleToolCalls(
+    const toolResults = await orchestrator.handle(
       toolCalls,
       { model: config.AI.MODEL },
       signal

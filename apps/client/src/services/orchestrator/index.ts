@@ -1,5 +1,5 @@
+import pLimit from "p-limit";
 import { ILogger } from "../../infrastructure/logger";
-import { WorkerManager } from "./worker-manager";
 import { executeTool, type ToolCall } from "./worker/executor";
 
 interface AIChatRequest {
@@ -7,37 +7,55 @@ interface AIChatRequest {
 }
 
 class Orchestrator {
-  private workerManager: WorkerManager<any>;
+  private maxWorkers: number;
 
   constructor(
     private logger: ILogger,
-    maxWorkers: number = 3
+    maxWorkers: number = 2
   ) {
-    this.workerManager = new WorkerManager(maxWorkers, logger);
+    this.maxWorkers = maxWorkers;
   }
 
-  async handleToolCalls(
-    toolCalls: ToolCall[],
+  async handle(
+    tools: ToolCall[],
     _request: AIChatRequest,
     signal: AbortSignal,
   ): Promise<string> {
-    const tasks = toolCalls.map((toolCall, index) => ({
-      id: `tool-${index}-${toolCall.name}`,
-      execute: () => executeTool(this.logger, toolCall),
-      // priority: toolCall.priority,
-    }));
+    const limit = pLimit(this.maxWorkers);
 
-    const results = await this.workerManager.execute(tasks, signal);
+    const promises = tools.map((tool) =>
+      limit(async () => {
+        if (signal.aborted) {
+          throw new Error('Tool execution aborted');
+        }
 
-    this.logger.info('Tool calls completed', { count: results.length });
+        try {
+          return await executeTool(this.logger, tool);
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          this.logger.error('Tool execution failed', { toolName: tool.name, error: errorMsg });
+          return {
+            toolName: tool.name,
+            success: false,
+            error: errorMsg,
+          };
+        }
+      })
+    );
 
-    return results
+    const results = await Promise.all(promises);
+
+    this.logger.info('Tools completed', { count: results.length });
+
+    const output = results
       .map(
         (r) =>
           `Tool: ${r.toolName}\nSuccess: ${r.success}\n` +
           `${r.success ? `Result:\n${r.result}` : `Error: ${r.error}`}`,
       )
       .join('\n\n');
+
+    return output;
   }
 }
 
