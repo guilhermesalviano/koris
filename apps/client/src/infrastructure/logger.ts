@@ -37,18 +37,11 @@ class Logger implements ILogger {
 
 class LoggerFactory {
   static getOptions() {
-    const generateExtraTags = format((info) => {
-      const newInfo = info;
-      newInfo['created_at'] = new Date().toISOString();
-      return newInfo;
-    });
-
-    // Create logs directory if it doesn't exist
     const logsDir = path.join(config.BASE_DIR, 'logs');
 
     const options: LoggerOptions = {
       level: config.LOG_LEVEL || 'info',
-      format: format.combine(generateExtraTags(), format.json()),
+      format: format.json(),
       defaultMeta: {
         environment: config.ENVIRONMENT,
       },
