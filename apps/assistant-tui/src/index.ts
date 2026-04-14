@@ -12,6 +12,7 @@ export const defaultColors = {
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
   bgBlue: '\x1b[44m',
+  bgGray: '\x1b[100m',
   magenta: '\x1b[35m',
   gray: '\x1b[90m',
   red: '\x1b[31m',
@@ -535,7 +536,7 @@ export function startTui(options: StartTuiOptions): void {
       return;
     }
 
-    println(`${colors.bgBlue}${colors.white} YOU ${colors.reset} ${trimmed}`);
+    println(`${colors.bgGray}${colors.white} ${trimmed} ${colors.reset}`);
     println();
     if (fixedInput) requestRender();
 

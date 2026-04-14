@@ -1,8 +1,8 @@
 import { initBot } from 'assistant-telegram-bot';
-import { startTUI } from './tui/interface';
+import { startTUI } from './channels/tui';
 import { LoggerFactory } from './infrastructure/logger';
+import { handleMessage } from './channels/telegram';
 import { config } from './config';
-import { handleMessage } from './telegram/handlers';
 
 const logger = LoggerFactory.create();
 
@@ -11,40 +11,39 @@ function hasFlag(flag: string): boolean {
 }
 
 function startCliMode(): void {
-  logger.log("info", "🚀 Starting opencrawdio...\n");
+  logger.info("🚀 Starting opencrawdio...\n");
 
   const tuiMode = hasFlag("tui");
   const telegramMode = hasFlag("telegram");
 
   if (!tuiMode && !telegramMode) {
-    logger.log("error", "No mode provided.");
-    logger.log("error", "Usage: pnpm --filter opencrawdio run tui | pnpm --filter opencrawdio run telegram");
+    logger.error("No mode provided.");
+    logger.error("Usage: pnpm --filter opencrawdio run tui | pnpm --filter opencrawdio run telegram");
     process.exit(1);
   }
 
   if (tuiMode) {
-    logger.log("info", "Mode: TUI\n");
-    startTUI();
+    logger.info("Mode: TUI\n");
+    startTUI({ logger });
   }
 
   if (telegramMode) {
-    logger.log("info", "Mode: Telegram Bot\n");
+    logger.info("Mode: Telegram Bot\n");
     const bot = initBot({
       token: config.TELEGRAM.BOT_TOKEN,
       polling: true,
-      onMessage: handleMessage,
+      onMessage: (msg) => handleMessage(logger, msg),
     });
-    logger.log("info", "✅ Bot is ready! Send a message to your bot on Telegram.\n");
-    logger.log("info", "💡 Tip: Run with 'tui' flag to use TUI mode instead.\n");
+    logger.info("✅ Bot is ready! Send a message to your bot on Telegram.\n");
 
     process.on("SIGINT", () => {
-      logger.log("info", "\n👋 Shutting down gracefully...");
+      logger.info("\n👋 Shutting down gracefully...");
       bot.stopPolling();
       process.exit(0);
     });
 
     process.on("SIGTERM", () => {
-      logger.log("info", "\n👋 Shutting down gracefully...");
+      logger.info("\n👋 Shutting down gracefully...");
       bot.stopPolling();
       process.exit(0);
     });
@@ -54,5 +53,3 @@ function startCliMode(): void {
 if (require.main === module) {
   startCliMode();
 }
-
-export { logger }

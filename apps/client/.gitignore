@@ -10,3 +10,7 @@ node_modules
 *-SUMMARY.md
 *-ANALYSIS.md
 *-TESTS-SUMMARY.txt
+
+logs/
+
+settings.json

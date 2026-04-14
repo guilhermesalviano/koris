@@ -1,10 +1,15 @@
 import {
   Logger as WinstonLogger, createLogger, format, LoggerOptions, transports,
 } from 'winston';
+import path from 'path';
+import fs from 'fs';
 import { config } from '../config';
 
 interface ILogger {
-  log(level: string, message: string, meta?: Record<string, unknown>): void;
+  info(message: string, meta?: Record<string, unknown>): void;
+  error(message: string, meta?: Record<string, unknown>): void;
+  debug(message: string, meta?: Record<string, unknown>): void;
+  warn(message: string, meta?: Record<string, unknown>): void;
 }
 
 class Logger implements ILogger {
@@ -14,29 +19,63 @@ class Logger implements ILogger {
     this.logger = logger;
   }
 
-  log(level: string, message: string) {
-    return this.logger.log(level, message);
+  info(message: string, meta?: Record<string, unknown>) {
+    return this.logger.info(message, meta);
+  }
+
+  error(message: string, meta?: Record<string, unknown>) {
+    return this.logger.error(message, meta);
+  }
+
+  debug(message: string, meta?: Record<string, unknown>) {
+    return this.logger.debug(message, meta);
+  }
+
+  warn(message: string, meta?: Record<string, unknown>) {
+    return this.logger.warn(message, meta);
   }
 }
 
 class LoggerFactory {
   static getOptions() {
-    const generateExtraTags = format((info) => {
-      const newInfo = info;
-      newInfo['created_at'] = new Date().toISOString();
-      return newInfo;
-    });
+    const logsDir = path.join(config.BASE_DIR, 'logs');
+
+    const activeTransports: any[] = [
+      new transports.Console()
+    ];
+
+    try {
+      if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true });
+      }
+
+      activeTransports.push(
+        new transports.File({ 
+          filename: path.join(logsDir, 'combined.log'),
+          maxsize: 5242880, // 5MB
+          maxFiles: 5,
+        }),
+        new transports.File({ 
+          filename: path.join(logsDir, 'error.log'),
+          level: 'error',
+          maxsize: 5242880, // 5MB
+          maxFiles: 5,
+        })
+      );
+    } catch (error) {
+      console.warn(`[LoggerFactory] Warning: Could not create log directory at ${logsDir}. Falling back to Console-only logging.`, error);
+    }
 
     const options: LoggerOptions = {
       level: config.LOG_LEVEL || 'info',
-      format: format.combine(generateExtraTags(), format.json()),
+      format: format.json(),
       defaultMeta: {
         environment: config.ENVIRONMENT,
       },
-      transports: [new transports.Console()],
+      transports: activeTransports,
     };
 
-    return options
+    return options;
   }
 
   static create(): ILogger {

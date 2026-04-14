@@ -23,3 +23,6 @@ rtk gain --history    # Per-command savings history
 rtk discover          # Find missed rtk opportunities
 rtk proxy <cmd>       # Run raw (no filtering) but track usage
 ```
+
+# Instructions
+Use the agent roles defined in AGENTS.md to guide your code suggestions in `../AGENTS.md`.

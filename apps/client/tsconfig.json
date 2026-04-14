@@ -19,10 +19,8 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "bundler",
-    "paths": {
-      "@/*": ["./src/*"],
-    }
+    "paths": {}
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "public"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
 }
