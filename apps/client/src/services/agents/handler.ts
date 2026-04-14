@@ -78,7 +78,6 @@ async function processAIMessage(
       ? aiResponse 
       : JSON.stringify(aiResponse);
 
-    // Check for tool calls
     const toolCalls = extractToolCalls(responseText);
 
     if (toolCalls.length === 0) {
