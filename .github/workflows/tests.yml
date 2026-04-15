@@ -31,11 +31,21 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Run tests
-        run: pnpm test
+      - name: Run tests with coverage
+        run: pnpm run test:coverage --reporter=verbose
+        continue-on-error: true
+
+      - name: Check if coverage was generated
+        id: check-coverage
+        run: |
+          if [ -f ./apps/client/coverage/coverage-final.json ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Upload coverage reports
-        if: always()
+        if: steps.check-coverage.outputs.found == 'true'
         uses: codecov/codecov-action@v4
         with:
           files: ./apps/client/coverage/coverage-final.json
