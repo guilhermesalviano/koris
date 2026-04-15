@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { ToolsQueue } from '../../../../src/services/tools-orchestrator';
+import { ToolsQueue } from '../../../../src/services/tools-queue';
 import { ILogger } from '../../../../src/infrastructure/logger';
 
 // Mock logger
