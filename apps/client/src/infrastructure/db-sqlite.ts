@@ -173,9 +173,9 @@ class DatabaseService implements IDatabaseService {
    */
   getStats(): Record<string, unknown> {
     try {
-      const pageCount = this.db.pragma('page_count');
-      const pageSize = this.db.pragma('page_size');
-      const journalMode = this.db.pragma('journal_mode');
+      const pageCount = this.db.pragma('page_count', { simple: true }) as number;
+      const pageSize = this.db.pragma('page_size', { simple: true }) as number;
+      const journalMode = this.db.pragma('journal_mode', { simple: true }) as string;
 
       const tableStats = this.query<{ name: string; type: string }>(
         "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'index')"
@@ -186,7 +186,7 @@ class DatabaseService implements IDatabaseService {
         pageCount,
         pageSize,
         journalMode,
-        totalSize: (pageCount as number) * (pageSize as number),
+        totalSize: pageCount * pageSize,
         tables: tableStats.length,
       };
     } catch (error) {
