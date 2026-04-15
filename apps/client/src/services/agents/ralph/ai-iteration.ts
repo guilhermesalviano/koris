@@ -124,13 +124,12 @@ async function AIiteration(
       currentMessage = buildSkillResponsePrompt(userMessage, toolResults);
     }
     else {
+      // to do: extract results, return to user. Break the loop, if is possible...
+      // in first AI Call, predict the result case when it became.
       logger.info('Continuing AI processing with tool results', { channel });
-      if (onProgress) {
-        onProgress(`Processing tool results...`);
-      }
+      processStatus = 'Processing tool results...';
       currentMessage = buildToolResultPrompt(responseText, toolResults);
     }
-
     // save knowledge from tool execution in message history
     message.save({ role: 'system', content: currentMessage });
   }
