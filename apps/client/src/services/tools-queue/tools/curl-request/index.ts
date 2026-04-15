@@ -20,6 +20,7 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
   const method = (args.method as string) || 'GET';
   const timeout = (args.timeout as number) || 30;
   const followRedirects = args.follow_redirects !== false;
+  const pipe = (args.pipe as string) || ''; // Optional: pipe command like "| jq '.fact'"
 
   const validMethods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
   if (!validMethods.includes(method)) {
@@ -27,7 +28,8 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
   }
 
   try {
-    let curlCmd = `curl -s -w "\n---HTTP_STATUS:%{http_code}---" --max-time ${timeout}`;
+    // Build curl command - don't include status marker when using pipe
+    let curlCmd = `curl -s --max-time ${timeout}`;
 
     if (followRedirects) {
       curlCmd += ' -L';
@@ -49,26 +51,45 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
 
     curlCmd += ` '${url}'`;
 
-    logger.debug('Executing curl request', { url, method, timeout });
+    logger.debug('Executing curl request', { url, method, timeout, pipe: pipe || 'none' });
 
-    const output = execSync(curlCmd, {
-      encoding: 'utf-8',
-      maxBuffer: 10 * 1024 * 1024,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    let output: string;
+    let httpStatus = 0;
 
-    const lines = output.split('\n');
-    const statusLine = lines.find(line => line.startsWith('---HTTP_STATUS:'));
-    const httpStatus = statusLine ? parseInt(statusLine.replace('---HTTP_STATUS:', '').replace('---', ''), 10) : 0;
+    if (pipe && pipe.trim()) {
+      // When using pipe, execute curl and pipe the output
+      const safePipe = pipe.trim().startsWith('|') ? pipe.trim() : `| ${pipe.trim()}`;
+      output = execSync(`${curlCmd} ${safePipe}`, {
+        encoding: 'utf-8',
+        maxBuffer: 10 * 1024 * 1024,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: '/bin/bash',
+      });
+      
+      // For piped requests, assume success (can't easily get status code)
+      httpStatus = 200;
+    } else {
+      // Without pipe, include status marker
+      curlCmd += ` -w "\n---HTTP_STATUS:%{http_code}---"`;
+      output = execSync(curlCmd, {
+        encoding: 'utf-8',
+        maxBuffer: 10 * 1024 * 1024,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: '/bin/bash',
+      });
 
-    const responseBody = lines.filter(line => !line.startsWith('---HTTP_STATUS:')).join('\n').trim();
+      const lines = output.split('\n');
+      const statusLine = lines.find(line => line.startsWith('---HTTP_STATUS:'));
+      httpStatus = statusLine ? parseInt(statusLine.replace('---HTTP_STATUS:', '').replace('---', ''), 10) : 0;
+      output = lines.filter(line => !line.startsWith('---HTTP_STATUS:')).join('\n').trim();
+    }
 
-    logger.info('curl request completed', { url, method, httpStatus, responseSize: responseBody.length });
+    logger.info('curl request completed', { url, method, httpStatus, responseSize: output.length, pipeUsed: !!pipe });
 
     return {
       toolName: 'curl_request',
       success: httpStatus >= 200 && httpStatus < 300,
-      result: `${responseBody}`.slice(0, 5000),
+      result: `${output}`.slice(0, 5000),
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);

@@ -96,7 +96,7 @@ class ToolsRepository implements IToolsRepository {
       type: 'function',
       function: {
         name: 'curl_request',
-        description: 'Execute HTTP requests using curl. Useful for API calls, testing endpoints, and retrieving web data.',
+        description: 'Execute HTTP requests using curl. Useful for API calls, testing endpoints, and retrieving web data. Supports piping output through commands like jq for JSON transformation.',
         parameters: {
           type: 'object',
           properties: {
@@ -125,6 +125,10 @@ class ToolsRepository implements IToolsRepository {
               type: 'number',
               description: 'Request timeout in seconds (default: 30)',
             },
+            pipe: {
+              type: 'string',
+              description: 'Optional: pipe the response through a command. Examples "| jq \'.fact\'", "| grep search_term", "| head -5". Useful for extracting specific data from JSON or text responses.',
+            },
           },
           required: ['url'],
         },
@@ -132,21 +136,6 @@ class ToolsRepository implements IToolsRepository {
     };
   }
 }
-
-// Backward compatibility: export factory function
-// export function buildAITools(skills?: Skill[]): AIToolDefinition[] {
-//   // Create a no-op logger for backward compatibility
-//   const noOpLogger: ILogger = {
-//     log: () => {},
-//     debug: () => {},
-//     info: () => {},
-//     warn: () => {},
-//     error: () => {},
-//   };
-
-//   const repository = new ToolsRepository(noOpLogger);
-//   return repository.getAll(skills);
-// }
 
 class ToolsRepositoryFactory {
   static create(): ToolsRepository {
