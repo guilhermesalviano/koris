@@ -1,8 +1,8 @@
-import { Message } from "../../entities/message";
-import { IDatabaseService } from "../../infrastructure/db-sqlite";
-import { IMessageRepository, MessageRepositoryFactory } from "../../repositories/message";
-import { MessageRole } from "../../types/messages";
-import { ISessionService } from "../session";
+import { Message } from "../entities/message";
+import { IDatabaseService } from "../infrastructure/db-sqlite";
+import { IMessageRepository, MessageRepositoryFactory } from "../repositories/message";
+import { MessageRole } from "../types/messages";
+import { ISessionService } from "./session-service";
 
 interface IMessageService {
   save(props: { role: MessageRole; content: string }): void;

@@ -1,10 +1,12 @@
 import { startTui } from 'assistant-tui';
-import { handle } from '../../services/agents/handler';
 import { handleCommand, isCommand } from '../../services/agents/commands';
 import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
+import { AgentHandlerFactory } from '../../services/agents/handler';
 
 export function startTUI(params: { logger: ILogger }): void {
+  const handler = AgentHandlerFactory.create(params.logger, 'tui');
+
   startTui({
     // Modern fixed-input layout with scrollable history
     fixedInput: true,
@@ -85,7 +87,7 @@ export function startTUI(params: { logger: ILogger }): void {
     onInput: async (message, ctx) => {
       const progressMessages: string[] = [];
       
-      return await handle(params.logger, message, 'tui', { 
+      return await handler.handle(message, {
         toolsEnabled: true,
         onProgress: (summary: string) => {
           progressMessages.push(summary);

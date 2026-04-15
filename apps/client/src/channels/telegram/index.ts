@@ -1,6 +1,6 @@
 import { TelegramMessage, InlineKeyboardMarkup } from 'assistant-telegram-bot';
 import { getBot } from 'assistant-telegram-bot';
-import { handle } from '../../services/agents/handler';
+import { AgentHandlerFactory } from '../../services/agents/handler';
 import { ILogger } from '../../infrastructure/logger';
 
 const TYPING_INTERVAL_MS = 4_000;
@@ -54,10 +54,11 @@ async function withTypingIndicator<T>(chatId: number, work: () => Promise<T>): P
 }
 
 async function processAndReply(logger: ILogger, chatId: number, text: string): Promise<void> {
+  const handler = AgentHandlerFactory.create(logger, 'telegram');
   const bot = getBot();
   try {
     await withTypingIndicator(chatId, async () => {
-      const response = await handle(logger, text, 'telegram');
+      const response = await handler.handle(text);
       const resolved = await resolveResponse(response);
       await sendMessageWithMarkdownFallback(chatId, resolved);
     });

@@ -1,9 +1,10 @@
 import express, { type Request, type Response, type Application } from 'express';
-import { healthCheck } from '../../services/health';
-import { handle } from '../../services/agents/handler';
+import { healthCheck } from '../../services/provider-health-service';
+
 import { ILogger } from '../../infrastructure/logger';
 import { config } from '../../config';
 import path from 'node:path';
+import { AgentHandlerFactory } from '../../services/agents/handler';
 
 interface WebServerOptions {
   logger: ILogger;
@@ -39,6 +40,8 @@ function createHealthHandler(logger: ILogger) {
 }
 
 function createChatHandler(logger: ILogger) {
+  const handler = AgentHandlerFactory.create(logger, 'web');
+
   return async (req: Request, res: Response) => {
     const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
     if (!message) {
@@ -65,7 +68,7 @@ function createChatHandler(logger: ILogger) {
     setupSseHeaders(res);
 
     try {
-      const result = await handle(logger, message, 'web', { 
+      const result = await handler.handle(message, {
         signal: abortController.signal,
         onProgress: (summary: string) => {
           if (clientClosed) return;

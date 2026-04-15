@@ -1,6 +1,6 @@
-import { Session } from "../../entities/session";
-import { IDatabaseService } from "../../infrastructure/db-sqlite";
-import { ISessionRepository, SessionRepositoryFactory } from "../../repositories/session";
+import { Session } from "../entities/session";
+import { IDatabaseService } from "../infrastructure/db-sqlite";
+import { ISessionRepository, SessionRepositoryFactory } from "../repositories/session";
 
 interface ISessionService {
   getSession(): Session;
@@ -27,6 +27,7 @@ class SessionService implements ISessionService {
       messageCount: this.session.messageCount + 1,
     });
     this.sessionRepository.update(this.session.id, updatedSession);
+    this.session = updatedSession;
   }
 }
 

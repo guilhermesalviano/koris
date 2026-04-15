@@ -7,7 +7,7 @@ interface AIAgentRequest {
   model?: string;
 }
 
-class ToolsOrchestrator {
+class ToolsQueue {
   constructor(
     private logger: ILogger,
     private maxWorkers: number = 2
@@ -81,4 +81,4 @@ class ToolsOrchestrator {
   }
 }
 
-export { ToolsOrchestrator };
+export { ToolsQueue };

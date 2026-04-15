@@ -1,11 +1,11 @@
 import { ILogger } from '../../../infrastructure/logger';
 import { messageProvider } from '../chat/message-provider';
 import { extractToolCalls } from '../../../utils/tool-calls';
-import { ToolsOrchestrator } from '../../tools-orchestrator';
+import { ToolsQueue } from '../../tools-queue';
 import { config } from '../../../config';
 import { buildSkillLearningPrompt, buildSkillResponsePrompt, buildToolResultPrompt } from '../../../utils/prompt';
 import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
-import { IMessageService } from '../../message';
+import { IMessageService } from '../../message-service';
 
 const MAX_TOOL_ITERATIONS = 10;
 
@@ -23,7 +23,7 @@ async function AIiteration(
   message: IMessageService,
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
-  const toolsOrchestrator = new ToolsOrchestrator(logger);
+  const toolsQueue = new ToolsQueue(logger);
   const signal = options?.signal || new AbortController().signal;
   const onProgress = options?.onProgress;
 
@@ -72,7 +72,7 @@ async function AIiteration(
       onProgress(`Executing tool(s): ${toolCalls.map(t => t.name).join(', ')}`);
     }
     
-    const toolResults = await toolsOrchestrator.handle(
+    const toolResults = await toolsQueue.handle(
       toolCalls,
       { model: config.AI.MODEL },
       signal
