@@ -56,7 +56,7 @@ class SessionRepository implements ISessionRepository {
   }
 
   deleteExpired(): void {
-    this.db.run('DELETE FROM sessions WHERE expiresAt < ?', [Date.now()]);
+    this.db.run('DELETE FROM sessions WHERE ended_at IS NOT NULL AND ended_at < ?', [Date.now()]);
   }
 
   deleteById(id: string): void {
