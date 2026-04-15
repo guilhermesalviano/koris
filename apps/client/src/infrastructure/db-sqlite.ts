@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { config } from '../config';
 import { LoggerFactory } from './logger';
 
@@ -42,12 +43,13 @@ class DatabaseService implements IDatabaseService {
     this.verbose = options.verbose ?? config.ENVIRONMENT === 'development';
     
     try {
+      fs.mkdirSync(path.dirname(this.filepath), { recursive: true });
+
       this.db = new Database(this.filepath, {
         timeout: options.timeout || 5000,
         fileMustExist: false,
       });
 
-      // Enable foreign keys
       this.db.pragma('foreign_keys = ON');
 
       if (this.verbose) {
@@ -67,7 +69,6 @@ class DatabaseService implements IDatabaseService {
    */
   private initializeSchema(): void {
     try {
-      // Sessions table - for tracking TUI/Web session metadata
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (
           id TEXT PRIMARY KEY,
@@ -79,7 +80,6 @@ class DatabaseService implements IDatabaseService {
         );
       `);
 
-      // Messages table - for storing conversation history
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS messages (
           id TEXT PRIMARY KEY,
@@ -91,8 +91,6 @@ class DatabaseService implements IDatabaseService {
         );
       `);
 
-
-      // Indexes for common queries
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
         CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
