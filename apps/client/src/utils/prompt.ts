@@ -8,11 +8,8 @@ export function buildSkillLearningPrompt(
   originalUserRequest: string
 ): string {
   return `You have just learned a skill. Here is the skill documentation:
-
 ${skillContent}
-
 ---
-
 ORIGINAL USER REQUEST: "${originalUserRequest}"
 
 NOW DO THIS:

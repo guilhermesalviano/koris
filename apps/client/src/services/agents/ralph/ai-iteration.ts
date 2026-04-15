@@ -10,6 +10,16 @@ import { IMessageService } from '../../message-service';
 const MAX_TOOL_ITERATIONS = 10;
 
 /**
+ * Check if a skill is already in the message history
+ */
+function isSkillAlreadyLearned(skillName: string, history: ReturnType<IMessageService['getHistory']>): boolean {
+  return history.some(msg => 
+    msg.role === 'system' && 
+    msg.content.includes(skillName)
+  );
+}
+
+/**
  * Process AI messages with iterative tool call handling.
  * Continues executing tools until AI returns a final response without tool calls.
  * Sends progress summaries via onProgress callback.
@@ -44,6 +54,7 @@ async function AIiteration(
     }
 
     const messageHistory = message.getHistory();
+    
     const aiResponse = await messageProvider(
       logger,
       currentMessage,
@@ -58,7 +69,6 @@ async function AIiteration(
 
     const toolCalls = extractToolCalls(responseText);
 
-
     if (toolCalls.length === 0) {
       logger.info('AI returned final response (no tool calls)', { channel });
       message.save({
@@ -68,28 +78,47 @@ async function AIiteration(
       return responseText;
     }
 
-    logger.info(`Executing tool call(s)`, { channel, iteration });
+    // Filter out cached skill calls
+    const filteredToolCalls = toolCalls.filter(toolCall => {
+      if (toolCall.name === 'get_skill') {
+        logger.info(`Checking if skill is already learned to optimize execution ${toolCall.name}`, { messageHistory });
+
+        if (toolCall.name && isSkillAlreadyLearned(toolCall.name, messageHistory)) {
+          logger.info(`Skill "${toolCall.name}" already in history, skipping get_skill`, { channel });
+          if (onProgress) {
+            onProgress(`Skill "${toolCall.name}" already learned, using cached content...`);
+          }
+          return false;
+        }
+      }
+      return true;
+    });
     
+    logger.info(`Executing tool call(s)`, { channel, toolCalls: filteredToolCalls.map(t => t.name) });
+
     if (onProgress) {
-      onProgress(`Executing tool(s): ${toolCalls.map(t => t.name).join(', ')}`);
+      onProgress(`Executing tool(s): ${filteredToolCalls.map(t => t.name).join(', ')}`);
     }
     
-    const toolResults = await toolsQueue.handle(
-      toolCalls,
-      { model: config.AI.MODEL },
-      signal
-    );
+    let toolResults: string = '';
+    if (filteredToolCalls.length > 0) {
+      toolResults = await toolsQueue.handle(
+          filteredToolCalls,
+          { model: config.AI.MODEL },
+          signal
+        );
+    }
 
     // Special handling for skill learning
-    if (toolCalls.some(t => t.name === 'get_skill')) {
+    if (filteredToolCalls.some(t => t.name === 'get_skill')) {
       logger.info('Learning skill content', { channel });
       processStatus = 'Learning skill content';
       currentMessage = buildSkillLearningPrompt(toolResults, userMessage);
       options = { ...options, toolsEnabled: true };
       isSkillExecution = true;
     } 
-    // If we're in skill execution and just executed a tool
-    else if (isSkillExecution && toolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
+    // ajustar esse if.
+    else if (isSkillExecution && filteredToolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
       logger.info('Skill execution complete, returning result', { channel });
       processStatus = 'Skill executed. Extracting response...';
       currentMessage = buildSkillResponsePrompt(userMessage, toolResults);
@@ -97,10 +126,13 @@ async function AIiteration(
     else {
       logger.info('Continuing AI processing with tool results', { channel });
       if (onProgress) {
-        onProgress(`Processing tool results (${toolResults.length} chars)...`);
+        onProgress(`Processing tool results...`);
       }
       currentMessage = buildToolResultPrompt(responseText, toolResults);
     }
+
+    // save knowledge from tool execution in message history
+    message.save({ role: 'system', content: currentMessage });
   }
 
   logger.warn('Max tool iterations reached', { 
