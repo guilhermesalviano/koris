@@ -7,7 +7,7 @@ interface AIAgentRequest {
   model?: string;
 }
 
-class ToolsOrchestrator {
+class ToolsQueue {
   constructor(
     private logger: ILogger,
     private maxWorkers: number = 2
@@ -45,12 +45,19 @@ class ToolsOrchestrator {
     this.logger.info('Tools completed', { count: results.length });
 
     const output = results
+      .filter(result => {
+        if (!result.success) {
+          this.logger.warn('Tool execution failed', { toolName: result.toolName, error: result.error });
+        }
+        return result.success;
+      })
       .map(
         (r) =>
-          `Tool: ${r.toolName}\nSuccess: ${r.success}\n` +
-          `${r.success ? `Result:\n${r.result}` : `Error: ${r.error}`}`,
+          // temporarily, remove tool keys.
+          // `Tool: ${r.toolName}, Success: ${r.success},` +
+          r.result,
       )
-      .join('\n\n');
+      .join('\n');
 
     return output;
   }
@@ -81,4 +88,4 @@ class ToolsOrchestrator {
   }
 }
 
-export { ToolsOrchestrator };
+export { ToolsQueue };

@@ -1,7 +1,6 @@
-import { getAIProvider } from "../providers";
-import { ILogger } from "../../infrastructure/logger";
+import { getAIProvider } from "./providers";
+import { ILogger } from "../infrastructure/logger";
 
-// refatorar para o COMMANDS 
 async function healthCheck(params: { logger: ILogger }): Promise<{ status: 'ok' | 'error'; timestamp: string; details?: string }> {
   const provider = getAIProvider(params);
   try {

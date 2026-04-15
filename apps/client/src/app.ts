@@ -1,8 +1,10 @@
 import { initBot } from 'assistant-telegram-bot';
 import { startTUI } from './channels/tui';
+import { startWebServer } from './channels/web';
 import { LoggerFactory } from './infrastructure/logger';
 import { handleMessage } from './channels/telegram';
 import { config } from './config';
+import { AgentHandlerFactory } from './services/agents/handler';
 
 const logger = LoggerFactory.create();
 
@@ -15,10 +17,11 @@ function startCliMode(): void {
 
   const tuiMode = hasFlag("tui");
   const telegramMode = hasFlag("telegram");
+  const webMode = hasFlag("web") || (!tuiMode && !telegramMode);
 
-  if (!tuiMode && !telegramMode) {
+  if (!tuiMode && !telegramMode && !webMode) {
     logger.error("No mode provided.");
-    logger.error("Usage: pnpm --filter opencrawdio run tui | pnpm --filter opencrawdio run telegram");
+    logger.error("Usage: pnpm --filter opencrawdio run dev:tui | pnpm --filter opencrawdio run dev:telegram | pnpm --filter opencrawdio run dev");
     process.exit(1);
   }
 
@@ -29,10 +32,12 @@ function startCliMode(): void {
 
   if (telegramMode) {
     logger.info("Mode: Telegram Bot\n");
+    const handler = AgentHandlerFactory.create(logger, 'telegram');
+
     const bot = initBot({
       token: config.TELEGRAM.BOT_TOKEN,
       polling: true,
-      onMessage: (msg) => handleMessage(logger, msg),
+      onMessage: (msg) => handleMessage(handler, msg),
     });
     logger.info("✅ Bot is ready! Send a message to your bot on Telegram.\n");
 
@@ -46,6 +51,14 @@ function startCliMode(): void {
       logger.info("\n👋 Shutting down gracefully...");
       bot.stopPolling();
       process.exit(0);
+    });
+  }
+
+  if (webMode) {
+    logger.info("Mode: Web Server\n");
+    startWebServer(logger).catch((error) => {
+      logger.error("Failed to start web server:", error);
+      process.exit(1);
     });
   }
 }

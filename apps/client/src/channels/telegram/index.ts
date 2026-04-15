@@ -1,9 +1,9 @@
 import { TelegramMessage, InlineKeyboardMarkup } from 'assistant-telegram-bot';
 import { getBot } from 'assistant-telegram-bot';
-import { handle } from '../../services/agents/handler';
+import { IAgentHandler } from '../../services/agents/handler';
 import { ILogger } from '../../infrastructure/logger';
 
-const TYPING_INTERVAL_MS = 4_000;
+const TYPING_INTERVAL_MS = 5_000;
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<string> {
   if (!value || typeof value !== 'object') return false;
@@ -53,11 +53,11 @@ async function withTypingIndicator<T>(chatId: number, work: () => Promise<T>): P
   }
 }
 
-async function processAndReply(logger: ILogger, chatId: number, text: string): Promise<void> {
+async function processAndReply(handler: IAgentHandler, chatId: number, text: string): Promise<void> {
   const bot = getBot();
   try {
     await withTypingIndicator(chatId, async () => {
-      const response = await handle(logger, text, 'telegram');
+      const response = await handler.handle(text);
       const resolved = await resolveResponse(response);
       await sendMessageWithMarkdownFallback(chatId, resolved);
     });
@@ -70,12 +70,12 @@ async function processAndReply(logger: ILogger, chatId: number, text: string): P
   }
 }
 
-export async function handleMessage(logger: ILogger, msg: TelegramMessage): Promise<void> {
+export async function handleMessage(handler: IAgentHandler, msg: TelegramMessage): Promise<void> {
   const { id: chatId } = msg.chat;
   const { text } = msg;
 
   if (text) {
-    await processAndReply(logger, chatId, text);
+    await processAndReply(handler, chatId, text);
   }
 }
 

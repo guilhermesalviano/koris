@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { ToolsOrchestrator } from '../../../../src/services/tools-orchestrator';
+import { ToolsQueue } from '../../../../src/services/tools-queue';
 import { ILogger } from '../../../../src/infrastructure/logger';
 
 // Mock logger
@@ -10,12 +10,12 @@ const mockLogger: ILogger = {
   error: vi.fn(),
 };
 
-describe('ToolsOrchestrator', () => {
-  let orchestrator: ToolsOrchestrator;
+describe('ToolsQueue', () => {
+  let orchestrator: ToolsQueue;
   let abortController: AbortController;
 
   beforeEach(() => {
-    orchestrator = new ToolsOrchestrator(mockLogger, 2);
+    orchestrator = new ToolsQueue(mockLogger, 2);
     abortController = new AbortController();
     vi.clearAllMocks();
   });
@@ -52,7 +52,7 @@ describe('ToolsOrchestrator', () => {
     });
 
     it('respects concurrency limit with single worker', async () => {
-      const limitedOrchestrator = new ToolsOrchestrator(mockLogger, 1);
+      const limitedOrchestrator = new ToolsQueue(mockLogger, 1);
       
       const toolCalls = Array.from({ length: 3 }, (_, i) => ({
         name: 'execute_command',
@@ -168,12 +168,12 @@ describe('ToolsOrchestrator', () => {
 
   describe('constructor', () => {
     it('uses default maxWorkers of 2', () => {
-      const orch = new ToolsOrchestrator(mockLogger);
+      const orch = new ToolsQueue(mockLogger);
       expect(orch).toBeDefined();
     });
 
     it('accepts custom maxWorkers', () => {
-      const orch = new ToolsOrchestrator(mockLogger, 4);
+      const orch = new ToolsQueue(mockLogger, 4);
       expect(orch).toBeDefined();
     });
   });

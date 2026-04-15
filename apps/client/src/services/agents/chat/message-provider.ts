@@ -1,11 +1,11 @@
-
 import { getAIProvider } from "../../providers";
 import { escapeTelegramMarkdown, isAbortError } from "../../../utils/telegram";
 import { ILogger } from "../../../infrastructure/logger";
 import { SkillsRepository } from "../../../repositories/skills";
 import type { AIChatRequest } from "../../../types/provider";
-import { MessageBuilderFactory } from "../../../repositories/messages";
+import { PromptRepositoryFactory } from "../../../repositories/prompt";
 import { ToolCall } from "../../../types/tools";
+import { Message } from "../../../entities/message";
 
 type ProcessedMessage = string | ToolCall[] | AsyncGenerator<string>;
 type ProcessOptions = { signal?: AbortSignal, toolsEnabled?: boolean };
@@ -14,13 +14,23 @@ async function messageProvider(
   logger: ILogger,
   message: string,
   channel: string,
-  options?: ProcessOptions
+  options?: ProcessOptions,
+  messageHistory?: Message[]
 ): Promise<ProcessedMessage> {
-  const messageBuilder = MessageBuilderFactory.create();
   const provider = getAIProvider({ logger });
   const skillsRepository = new SkillsRepository(logger);
   const skills = skillsRepository.get();
-  const payload = messageBuilder.buildMessages({ message, channel, skills, toolsEnabled: options?.toolsEnabled });
+  const promptRepository = PromptRepositoryFactory.create();
+  
+  const historyMessages = messageHistory?.map(m => ({ role: m.role, content: m.content }));
+  
+  const payload = promptRepository.build({ 
+    userMessage: message, 
+    channel, 
+    skills, 
+    toolsEnabled: options?.toolsEnabled,
+    messageHistory: historyMessages
+  });
 
   logger.info("Generated prompt:", payload as unknown as Record<string, unknown>);
 

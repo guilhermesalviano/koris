@@ -14,3 +14,5 @@ node_modules
 logs/
 
 settings.json
+
+temp/
