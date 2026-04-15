@@ -4,15 +4,13 @@ import { handle } from '../../services/agents/handler';
 import { ILogger } from '../../infrastructure/logger';
 import { config } from '../../config';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 
 interface WebServerOptions {
   logger: ILogger;
-  sessionId: string;
 }
 
 function createApp(options: WebServerOptions): Application {
-  const { logger, sessionId } = options;
+  const { logger } = options;
   const app = express();
 
   app.use(express.json());
@@ -21,7 +19,7 @@ function createApp(options: WebServerOptions): Application {
   app.use(express.static(publicDir));
 
   app.get('/', serveIndexHandler(publicDir));
-  app.post('/api/chat', createChatHandler(logger, sessionId));
+  app.post('/api/chat', createChatHandler(logger));
   app.get('/health', createHealthHandler(logger));
 
   return app;
@@ -40,7 +38,7 @@ function createHealthHandler(logger: ILogger) {
   };
 }
 
-function createChatHandler(logger: ILogger, sessionId: string) {
+function createChatHandler(logger: ILogger) {
   return async (req: Request, res: Response) => {
     const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
     if (!message) {
@@ -67,7 +65,7 @@ function createChatHandler(logger: ILogger, sessionId: string) {
     setupSseHeaders(res);
 
     try {
-      const result = await handle(logger, message, 'web', sessionId, { 
+      const result = await handle(logger, message, 'web', { 
         signal: abortController.signal,
         onProgress: (summary: string) => {
           if (clientClosed) return;
@@ -113,8 +111,7 @@ function setupSseHeaders(res: Response): void {
 }
 
 async function startWebServer(logger: ILogger): Promise<void> {
-  const sessionId = randomUUID();
-  const app = createApp({ logger, sessionId });
+  const app = createApp({ logger });
 
   app.listen(config.PORT, () => {
     logger.info(`Server running at http://localhost:${config.PORT}`);

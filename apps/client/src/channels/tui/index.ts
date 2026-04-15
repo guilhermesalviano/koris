@@ -3,11 +3,8 @@ import { handle } from '../../services/agents/handler';
 import { handleCommand, isCommand } from '../../services/agents/commands';
 import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
-import { randomUUID } from 'node:crypto';
 
 export function startTUI(params: { logger: ILogger }): void {
-  const sessionId = randomUUID();
-
   startTui({
     // Modern fixed-input layout with scrollable history
     fixedInput: true,
@@ -88,7 +85,7 @@ export function startTUI(params: { logger: ILogger }): void {
     onInput: async (message, ctx) => {
       const progressMessages: string[] = [];
       
-      return await handle(params.logger, message, 'tui', sessionId, { 
+      return await handle(params.logger, message, 'tui', { 
         toolsEnabled: true,
         onProgress: (summary: string) => {
           progressMessages.push(summary);

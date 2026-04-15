@@ -5,7 +5,6 @@ import { ToolsOrchestrator } from '../../tools-orchestrator';
 import { config } from '../../../config';
 import { buildSkillLearningPrompt, buildSkillResponsePrompt, buildToolResultPrompt } from '../../../utils/prompt';
 import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
-import { ISessionService } from '../../session';
 import { IMessageService } from '../../message';
 
 const MAX_TOOL_ITERATIONS = 10;
@@ -21,8 +20,6 @@ async function AIiteration(
   logger: ILogger,
   userMessage: string,
   channel: string,
-  sessionId: string,
-  session: ISessionService,
   message: IMessageService,
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
@@ -30,8 +27,7 @@ async function AIiteration(
   const signal = options?.signal || new AbortController().signal;
   const onProgress = options?.onProgress;
 
-  message.save({ sessionId, role: 'user', content: userMessage });
-  session.updateCount({ id: sessionId });
+  message.save({ role: 'user', content: userMessage });
   
   let processStatus: string | undefined = undefined;
   let currentMessage = userMessage;
@@ -41,7 +37,7 @@ async function AIiteration(
   while (iteration < MAX_TOOL_ITERATIONS) {
     iteration++;
     
-    logger.info(`AI iteration ${iteration}`, { channel, sessionId });
+    logger.info(`AI iteration ${iteration}`, { channel });
     
     if (onProgress && processStatus) {
       onProgress(`${processStatus || 'Processing'} (iteration ${iteration}/${MAX_TOOL_ITERATIONS})...`);
@@ -62,17 +58,15 @@ async function AIiteration(
 
 
     if (toolCalls.length === 0) {
-      logger.info('AI returned final response (no tool calls)', { channel, sessionId });
+      logger.info('AI returned final response (no tool calls)', { channel });
       message.save({
-        sessionId,
         role: 'assistant',
         content: responseText,
       });
-      session.updateCount({ id: sessionId });
       return responseText;
     }
 
-    logger.info(`Executing tool call(s)`, { channel, iteration, sessionId });
+    logger.info(`Executing tool call(s)`, { channel, iteration });
     
     if (onProgress) {
       onProgress(`Executing tool(s): ${toolCalls.map(t => t.name).join(', ')}`);
@@ -86,7 +80,7 @@ async function AIiteration(
 
     // Special handling for skill learning
     if (toolCalls.some(t => t.name === 'get_skill')) {
-      logger.info('Learning skill content', { channel, sessionId });
+      logger.info('Learning skill content', { channel });
       processStatus = 'Learning skill content';
       currentMessage = buildSkillLearningPrompt(toolResults, userMessage);
       options = { ...options, toolsEnabled: true };
@@ -94,12 +88,12 @@ async function AIiteration(
     } 
     // If we're in skill execution and just executed a tool
     else if (isSkillExecution && toolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
-      logger.info('Skill execution complete, returning result', { channel, sessionId });
+      logger.info('Skill execution complete, returning result', { channel });
       processStatus = 'Skill executed. Extracting response...';
       currentMessage = buildSkillResponsePrompt(userMessage, toolResults);
     }
     else {
-      logger.info('Continuing AI processing with tool results', { channel, sessionId });
+      logger.info('Continuing AI processing with tool results', { channel });
       if (onProgress) {
         onProgress(`Processing tool results (${toolResults.length} chars)...`);
       }
@@ -109,7 +103,6 @@ async function AIiteration(
 
   logger.warn('Max tool iterations reached', { 
     channel,
-    sessionId,
     maxIterations: MAX_TOOL_ITERATIONS 
   });
   
@@ -119,8 +112,7 @@ async function AIiteration(
 
   const finalMessage = 'Maximum tool execution iterations reached. Please try rephrasing your request.';
 
-  message.save({ sessionId, role: 'assistant', content: finalMessage });
-  session.updateCount({ id: sessionId });
+  message.save({ role: 'assistant', content: finalMessage });
   
   return finalMessage;
 }

@@ -2,11 +2,8 @@ import { TelegramMessage, InlineKeyboardMarkup } from 'assistant-telegram-bot';
 import { getBot } from 'assistant-telegram-bot';
 import { handle } from '../../services/agents/handler';
 import { ILogger } from '../../infrastructure/logger';
-import { randomUUID } from 'node:crypto';
 
 const TYPING_INTERVAL_MS = 4_000;
-
-const sessionId = randomUUID();
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<string> {
   if (!value || typeof value !== 'object') return false;
@@ -60,7 +57,7 @@ async function processAndReply(logger: ILogger, chatId: number, text: string): P
   const bot = getBot();
   try {
     await withTypingIndicator(chatId, async () => {
-      const response = await handle(logger, text, 'telegram', sessionId);
+      const response = await handle(logger, text, 'telegram');
       const resolved = await resolveResponse(response);
       await sendMessageWithMarkdownFallback(chatId, resolved);
     });
