@@ -1,5 +1,5 @@
 import { Message } from '../entities/message';
-import { IDataService } from '../infrastructure/db-sqlite';
+import { IDatabaseService } from '../infrastructure/db-sqlite';
 
 interface IMessageRepository {
   save(message: Message): void;
@@ -7,20 +7,18 @@ interface IMessageRepository {
 }
 
 class MessageRepository implements IMessageRepository {
-  constructor(private db: IDataService) { }
+  constructor(private db: IDatabaseService) { }
 
   save(message: Message): void {
     this.db.run(
-      `INSERT INTO messages (id, session_id, role, content, created_at, tool_calls, tool_results)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO messages (id, session_id, role, content, created_at)
+      VALUES (?, ?, ?, ?, ?)`,
       [
         message.id,
         message.sessionId,
         message.role,
         message.content,
-        message.created_at,
-        JSON.stringify(message.tool_calls),
-        JSON.stringify(message.tool_results),
+        message.createdAt
       ]
     );
   }
@@ -30,4 +28,10 @@ class MessageRepository implements IMessageRepository {
   }
 }
 
-export { MessageRepository, IMessageRepository };
+class MessageRepositoryFactory {
+  public static create(db: IDatabaseService): MessageRepository {
+    return new MessageRepository(db);
+  }
+}
+
+export { IMessageRepository, MessageRepositoryFactory };

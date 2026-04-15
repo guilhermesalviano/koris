@@ -20,7 +20,7 @@ interface Row {
   [key: string]: unknown;
 }
 
-interface IDataService {
+interface IDatabaseService {
   query<T extends Row = Row>(sql: string, params?: unknown[]): T[];
   get<T extends Row = Row>(sql: string, params?: unknown[]): T | undefined;
   run(sql: string, params?: unknown[]): QueryResult;
@@ -32,7 +32,7 @@ interface IDataService {
   backup(targetPath: string): void;
 }
 
-class DatabaseService implements IDataService {
+class DatabaseService implements IDatabaseService {
   private db: Database.Database;
   private filepath: string;
   private verbose: boolean;
@@ -243,4 +243,4 @@ class DatabaseServiceFactory {
   }
 }
 
-export { DatabaseServiceFactory, IDataService };
+export { DatabaseServiceFactory, IDatabaseService };

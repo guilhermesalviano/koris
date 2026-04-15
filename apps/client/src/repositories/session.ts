@@ -1,16 +1,16 @@
 import { Session, SessionProps } from '../entities/session';
-import { IDataService } from '../infrastructure/db-sqlite';
+import { IDatabaseService } from '../infrastructure/db-sqlite';
 
 interface ISessionRepository {
   save(session: Session): void;
   update(id: string, updates: Partial<SessionProps>): void;
-  findByToken(token: string): Session | null;
+  findById(id: string): Session | null;
   deleteExpired(): void;
   deleteById(id: string): void;
 }
 
 class SessionRepository implements ISessionRepository {
-  constructor(private db: IDataService) { }
+  constructor(private db: IDatabaseService) { }
 
   save(session: Session): void {
     this.db.run(
@@ -46,8 +46,8 @@ class SessionRepository implements ISessionRepository {
     );
   }
 
-  findByToken(token: string): Session | null {
-    const row = this.db.get('SELECT * FROM sessions WHERE token = ?', [token]) as SessionProps | undefined;
+  findById(id: string): Session | null {
+    const row = this.db.get('SELECT * FROM sessions WHERE id = ?', [id]) as SessionProps | undefined;
 
     if (!row) return null;
 
@@ -63,4 +63,10 @@ class SessionRepository implements ISessionRepository {
   }
 }
 
-export { SessionRepository, ISessionRepository };
+class SessionRepositoryFactory {
+  public static create(db: IDatabaseService): SessionRepository {
+    return new SessionRepository(db);
+  }
+}
+
+export { ISessionRepository, SessionRepositoryFactory };
