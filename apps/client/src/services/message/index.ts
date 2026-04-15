@@ -1,9 +1,10 @@
 import { Message } from "../../entities/message";
 import { IDatabaseService } from "../../infrastructure/db-sqlite";
 import { IMessageRepository, MessageRepositoryFactory } from "../../repositories/message";
+import { MessageRole } from "../../types/messages";
 
 interface IMessageService {
-  save(params: Message): string;
+  save(props: { sessionId: string; role: MessageRole; content: string }): void;
 }
 
 class MessageService implements IMessageService {
@@ -13,9 +14,13 @@ class MessageService implements IMessageService {
     this.messageRepository = messageRepository;
   }
 
-  save (message: Message): string {
+  save(props: { sessionId: string; role: MessageRole; content: string }) {
+    const message = new Message({
+      sessionId: props.sessionId,
+      role: props.role,
+      content: props.content,
+    });
     this.messageRepository.save(message);
-    return message.id;
   }
 }
 

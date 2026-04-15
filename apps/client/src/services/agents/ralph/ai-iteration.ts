@@ -5,9 +5,8 @@ import { ToolsOrchestrator } from '../../tools-orchestrator';
 import { config } from '../../../config';
 import { buildSkillLearningPrompt, buildSkillResponsePrompt, buildToolResultPrompt } from '../../../utils/prompt';
 import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
-import { randomUUID } from 'node:crypto';
-import { Session } from '../../../entities/session';
-import { Message } from '../../../entities/message';
+import { ISessionService } from '../../session';
+import { IMessageService } from '../../message';
 
 const MAX_TOOL_ITERATIONS = 10;
 
@@ -22,52 +21,21 @@ async function AIiteration(
   logger: ILogger,
   userMessage: string,
   channel: string,
+  sessionId: string,
+  session: ISessionService,
+  message: IMessageService,
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
-  const sessionId = options?.sessionId || randomUUID();
   const toolsOrchestrator = new ToolsOrchestrator(logger);
   const signal = options?.signal || new AbortController().signal;
   const onProgress = options?.onProgress;
-  
-  // Ensure session exists
-  if (!options?.sessionId) {
-    try {
-      const session = new Session({
-        id: sessionId,
-        source: channel,
-        startedAt: Date.now(),
-        endedAt: 0,
-        messageCount: 0,
-        metadata: { initiated: new Date().toISOString() },
-      });
-      options?.sessionRepo?.save(session);
-    } catch (error) {
-      logger.error('Failed to create session', { error, sessionId });
-    }
-  }
 
-  // Store user message
-  const userMessageId = randomUUID();
-  try {
-    const userMsg = new Message({
-      id: userMessageId,
-      sessionId,
-      role: 'user',
-      content: userMessage,
-      created_at: new Date().toISOString(),
-      tool_calls: [],
-      tool_results: []
-    });
-    options?.messageRepo?.save(userMsg);
-  } catch (error) {
-    logger.error('Failed to store user message', { error, sessionId });
-  }
+  message.save({ sessionId, role: 'user', content: userMessage });
   
   let processStatus: string | undefined = undefined;
   let currentMessage = userMessage;
   let iteration = 0;
   let isSkillExecution = false;
-  let assistantMessageId = randomUUID();
 
   while (iteration < MAX_TOOL_ITERATIONS) {
     iteration++;
@@ -94,21 +62,12 @@ async function AIiteration(
 
     if (toolCalls.length === 0) {
       logger.info('AI returned final response (no tool calls)', { channel, sessionId });
-      try {
-        const assistantMsg = new Message({
-          id: assistantMessageId,
-          sessionId,
-          role: 'assistant',
-          content: responseText,
-          created_at: new Date().toISOString(),
-          tool_calls: [],
-          tool_results: []
-        });
-        options?.messageRepo?.save(assistantMsg);
-        options?.sessionRepo?.update(sessionId, { messageCount: 2 });
-      } catch (error) {
-        logger.error('Failed to update message count', { error, sessionId });
-      }
+      message.save({
+        sessionId,
+        role: 'assistant',
+        content: responseText,
+      });
+      session.updateCount({ id: sessionId });
       return responseText;
     }
 
@@ -145,8 +104,6 @@ async function AIiteration(
       }
       currentMessage = buildToolResultPrompt(responseText, toolResults);
     }
-
-    assistantMessageId = randomUUID();
   }
 
   logger.warn('Max tool iterations reached', { 
@@ -160,21 +117,9 @@ async function AIiteration(
   }
 
   const finalMessage = 'Maximum tool execution iterations reached. Please try rephrasing your request.';
-  try {
-    const assistantMsg = new Message({
-      id: assistantMessageId,
-      sessionId,
-      role: 'assistant',
-      content: finalMessage,
-      created_at: new Date().toISOString(),
-      tool_calls: [],
-      tool_results: []
-    });
-    options?.messageRepo?.save(assistantMsg);
-    options?.sessionRepo?.update(sessionId, { messageCount: 4 });
-  } catch (error) {
-    logger.error('Failed to store final message', { error, sessionId });
-  }
+
+  message.save({ sessionId, role: 'assistant', content: finalMessage });
+  session.updateCount({ id: sessionId });
   
   return finalMessage;
 }

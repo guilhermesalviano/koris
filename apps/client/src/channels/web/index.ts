@@ -1,15 +1,18 @@
 import express, { type Request, type Response, type Application } from 'express';
-import { healthCheck } from '../../services/agents/health';
+import { healthCheck } from '../../services/health';
 import { handle } from '../../services/agents/handler';
 import { LoggerFactory } from '../../infrastructure/logger';
 import { config } from '../../config';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 const logger = LoggerFactory.create();
 
-const app: Application = express()
+const sessionId = randomUUID();
 
-app.use(express.json())
+const app: Application = express();
+
+app.use(express.json());
 
 const publicDir = path.resolve(config.BASE_DIR, './public');
 
@@ -47,7 +50,7 @@ app.post('/api/chat', async (req: Request, res: Response) => {
   res.flushHeaders();
 
   try {
-    const result = await handle(logger, message, 'tui', { 
+    const result = await handle(logger, message, 'web', sessionId, { 
       signal: abortController.signal,
       onProgress: (summary: string) => {
         if (clientClosed) return;

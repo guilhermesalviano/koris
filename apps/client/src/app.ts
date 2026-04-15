@@ -3,8 +3,12 @@ import { startTUI } from './channels/tui';
 import { LoggerFactory } from './infrastructure/logger';
 import { handleMessage } from './channels/telegram';
 import { config } from './config';
+import { randomUUID } from 'node:crypto';
 
 const logger = LoggerFactory.create();
+// const sessionId = randomUUID();
+// let messageCount = 0;
+// let messages = [];
 
 function hasFlag(flag: string): boolean {
   return process.argv.includes(flag) || process.argv.includes(`--${flag}`);

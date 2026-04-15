@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { MessageRole } from "../types/messages";
 
 export class Message {
@@ -8,13 +9,13 @@ export class Message {
   public readonly createdAt: string;
 
   constructor(data: {
-    id: string;
+    id?: string;
     sessionId: string;
     role: MessageRole;
     content: string;
     createdAt?: string;
   }) {
-    this.id = data.id;
+    this.id = data.id || randomUUID();
     this.sessionId = data.sessionId;
     this.role = data.role;
     this.content = data.content;

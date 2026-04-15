@@ -1,5 +1,6 @@
 import { Session, SessionProps } from '../entities/session';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
+import { camelToSnakeCase } from '../utils/fields';
 
 interface ISessionRepository {
   save(session: Session): void;
@@ -41,7 +42,7 @@ class SessionRepository implements ISessionRepository {
     values.push(id);
 
     this.db.run(
-      `UPDATE sessions SET ${fields.join(', ')} WHERE id = ?`,
+      `UPDATE sessions SET ${fields.map((f) => camelToSnakeCase(f)).join(', ')} WHERE id = ?`,
       values
     );
   }
