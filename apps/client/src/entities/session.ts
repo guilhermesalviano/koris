@@ -1,8 +1,8 @@
 export interface SessionProps {
   id: string;
   source: string;
-  startedAt: number;
-  endedAt: number;
+  startedAt?: string;
+  endedAt?: string;
   messageCount: number;
   metadata: Record<string, unknown>;
 }
@@ -10,21 +10,17 @@ export interface SessionProps {
 export class Session {
   public readonly id: string;
   public readonly source: string;
-  public readonly startedAt: number;
-  public readonly endedAt: number;
+  public readonly startedAt?: string;
+  public readonly endedAt?: string;
   public readonly messageCount: number;
   public readonly metadata: Record<string, unknown>;
 
   constructor(props: SessionProps) {
     this.id = props.id;
     this.source = props.source;
-    this.startedAt = props.startedAt;
+    this.startedAt = props.startedAt || new Date().toISOString();
     this.endedAt = props.endedAt;
     this.messageCount = props.messageCount;
     this.metadata = props.metadata;
-  }
-
-  isExpired(): boolean {
-    return Date.now() > this.endedAt;
   }
 }

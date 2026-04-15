@@ -33,7 +33,7 @@ class SessionRepository implements ISessionRepository {
     const values = [];
 
     for (const [key, value] of Object.entries(updates)) {
-      fields.push(`${key} = ?`);
+      fields.push(`${camelToSnakeCase(key)} = ?`);
       values.push(typeof value === 'object' ? JSON.stringify(value) : value);
     }
 
@@ -42,7 +42,7 @@ class SessionRepository implements ISessionRepository {
     values.push(id);
 
     this.db.run(
-      `UPDATE sessions SET ${fields.map((f) => camelToSnakeCase(f)).join(', ')} WHERE id = ?`,
+      `UPDATE sessions SET ${fields.join(', ')} WHERE id = ?`,
       values
     );
   }

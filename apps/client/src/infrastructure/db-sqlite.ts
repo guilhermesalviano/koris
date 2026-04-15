@@ -72,7 +72,7 @@ class DatabaseService implements IDatabaseService {
         CREATE TABLE IF NOT EXISTS sessions (
           id TEXT PRIMARY KEY,
           source TEXT NOT NULL CHECK(source IN ('tui', 'web', 'telegram')),
-          started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          started_at DATETIME,
           ended_at DATETIME,
           message_count INTEGER DEFAULT 0,
           metadata TEXT

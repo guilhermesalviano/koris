@@ -33,8 +33,6 @@ async function handle(
     const session = new Session({
       id: sessionId,
       source: channel,
-      startedAt: Date.now(),
-      endedAt: 0,
       messageCount: 0,
       metadata: { initiated: new Date().toISOString() },
     });
