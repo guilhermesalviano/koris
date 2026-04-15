@@ -3,21 +3,12 @@ import { messageProvider } from '../chat/message-provider';
 import { extractToolCalls } from '../../../utils/tool-calls';
 import { ToolsQueue } from '../../tools-queue';
 import { config } from '../../../config';
-import { buildSkillLearningPrompt, buildSkillResponsePrompt } from '../../../utils/prompt';
+import { buildSkillLearningPrompt } from '../../../utils/prompt';
 import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import { IMessageService } from '../../message-service';
+import { isSkillAlreadyLearned } from '../../../utils/history';
 
 const MAX_TOOL_ITERATIONS = 10;
-
-/**
- * Check if a skill is already in the message history
- */
-function isSkillAlreadyLearned(skillName: string, history: ReturnType<IMessageService['getHistory']>): boolean {
-  return history.some(msg => 
-    msg.role === 'system' && 
-    msg.content.includes(skillName)
-  );
-}
 
 /**
  * Process AI messages with iterative tool call handling.
@@ -78,7 +69,6 @@ async function AIiteration(
       return responseText;
     }
 
-    // Filter out cached skill calls
     const filteredToolCalls = toolCalls.filter(toolCall => {
       if (toolCall.name === 'get_skill') {
         logger.info(`Checking if skill is already learned to optimize execution ${toolCall.name}`, { messageHistory });
@@ -120,8 +110,9 @@ async function AIiteration(
     // ajustar esse if.
     else if (isSkillExecution && filteredToolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
       logger.info('Skill execution complete, returning result', { channel });
-      processStatus = 'Skill executed. Extracting response...';
-      currentMessage = buildSkillResponsePrompt(userMessage, toolResults);
+      // processStatus = 'Skill executed. Extracting response...';
+      // currentMessage = buildSkillResponsePrompt(userMessage, toolResults);
+      return toolResults;
     }
     else {
       logger.info('tool results', { toolResults });
