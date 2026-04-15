@@ -43,11 +43,13 @@ async function AIiteration(
       onProgress(`${processStatus || 'Processing'} (iteration ${iteration}/${MAX_TOOL_ITERATIONS})...`);
     }
 
+    const messageHistory = message.getHistory();
     const aiResponse = await messageProvider(
       logger,
       currentMessage,
       channel,
-      options
+      options,
+      messageHistory
     );
 
     const responseText = typeof aiResponse === 'string' 

@@ -14,6 +14,7 @@ interface BuildPromptParams {
   channel: string;
   skills?: Skill[];
   toolsEnabled?: boolean;
+  messageHistory?: Message[];
 }
 
 interface PromptConfig {
@@ -46,11 +47,12 @@ class PromptRepository {
   }
 
   /**
-   * Build all messages (system + user)
+   * Build all messages (system + history + user)
    */
   private buildMessages(params: BuildPromptParams): Message[] {
     return [
       ...this.buildSystemPrompt(params.channel),
+      ...(params.messageHistory || []),
       this.buildUserMessage(params.userMessage),
     ];
   }
