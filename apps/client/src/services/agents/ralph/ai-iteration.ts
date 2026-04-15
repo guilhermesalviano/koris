@@ -31,6 +31,7 @@ async function AIiteration(
   const onProgress = options?.onProgress;
 
   message.save({ sessionId, role: 'user', content: userMessage });
+  session.updateCount({ id: sessionId });
   
   let processStatus: string | undefined = undefined;
   let currentMessage = userMessage;
