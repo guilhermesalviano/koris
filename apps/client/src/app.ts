@@ -4,6 +4,7 @@ import { startWebServer } from './channels/web';
 import { LoggerFactory } from './infrastructure/logger';
 import { handleMessage } from './channels/telegram';
 import { config } from './config';
+import { AgentHandlerFactory } from './services/agents/handler';
 
 const logger = LoggerFactory.create();
 
@@ -31,10 +32,12 @@ function startCliMode(): void {
 
   if (telegramMode) {
     logger.info("Mode: Telegram Bot\n");
+    const handler = AgentHandlerFactory.create(logger, 'telegram');
+
     const bot = initBot({
       token: config.TELEGRAM.BOT_TOKEN,
       polling: true,
-      onMessage: (msg) => handleMessage(logger, msg),
+      onMessage: (msg) => handleMessage(handler, msg),
     });
     logger.info("✅ Bot is ready! Send a message to your bot on Telegram.\n");
 
