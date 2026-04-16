@@ -44,20 +44,7 @@ class ToolsQueue {
 
     this.logger.info('Tools completed', { count: results.length });
 
-    const output = results
-      // .filter(result => {
-      //   if (!result.success) {
-      //     this.logger.warn('Tool execution failed', { toolName: result.toolName, error: result.error });
-      //   }
-      //   return result.success;
-      // })
-      .map(
-        (r) =>
-          `Tool: ${r.toolName}, Success: ${r.success}, Result: ` + r.result,
-      )
-      .join('\n');
-
-    return output;
+    return results.map((r) => `Tool: ${r.toolName}, Success: ${r.success}, Result: ` + r.result).join('\n');
   }
 
   async executeTool(logger: ILogger, toolCall: ToolCall): Promise<ToolResult> {

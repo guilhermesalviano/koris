@@ -93,6 +93,8 @@ async function AIiteration(
         { model: config.AI.MODEL },
         signal
       );
+    } else { // fix bug, empty response
+      continue; 
     }
 
     if (filteredToolCalls.some(t => t.name === 'get_skill')) {
@@ -106,7 +108,8 @@ async function AIiteration(
     } else if (isSkillExecution && filteredToolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
       processStatus = 'Skill executed. Extracting response...';
       currentMessage = buildSkillResponsePrompt(toolResults);
-    } else {
+    } else { 
+      // Optional, user can see raw apis responses...
       logger.info('tool results', { toolResults });
       // processStatus = 'Processing tool results...';
       // currentMessage = buildToolResultPrompt(responseText, toolResults);
