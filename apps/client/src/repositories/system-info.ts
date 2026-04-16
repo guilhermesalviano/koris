@@ -34,13 +34,14 @@ class SystemInfoRepository implements ISystemInfoRepository {
 
   /**
    * Format system info as prompt text
+   * inactivated temporarily
    */
   formatAsPrompt(info: SystemInfo): string {
+    return '';
     return [
       'Session context, use it to compose your response, if needed:',
       `- source: ${info.source}`,
       `- os: ${info.platform} ${info.release}`,
-      `- node: ${info.nodeVersion}`,
       `- cwd: ${info.workingDirectory}`,
     ].join('\n');
   }
