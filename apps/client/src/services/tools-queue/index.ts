@@ -45,17 +45,15 @@ class ToolsQueue {
     this.logger.info('Tools completed', { count: results.length });
 
     const output = results
-      .filter(result => {
-        if (!result.success) {
-          this.logger.warn('Tool execution failed', { toolName: result.toolName, error: result.error });
-        }
-        return result.success;
-      })
+      // .filter(result => {
+      //   if (!result.success) {
+      //     this.logger.warn('Tool execution failed', { toolName: result.toolName, error: result.error });
+      //   }
+      //   return result.success;
+      // })
       .map(
         (r) =>
-          // temporarily, remove tool keys.
-          // `Tool: ${r.toolName}, Success: ${r.success},` +
-          r.result,
+          `Tool: ${r.toolName}, Success: ${r.success}, Result: ` + r.result,
       )
       .join('\n');
 

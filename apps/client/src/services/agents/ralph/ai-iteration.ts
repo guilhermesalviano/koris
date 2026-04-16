@@ -105,8 +105,7 @@ async function AIiteration(
       options = { ...options, toolsEnabled: true };
     } else if (isSkillExecution && filteredToolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
       processStatus = 'Skill executed. Extracting response...';
-      currentMessage = buildSkillResponsePrompt(toolResults);
-
+      // currentMessage = buildSkillResponsePrompt(toolResults);
       return toolResults;
     } else {
       logger.info('tool results', { toolResults });
@@ -114,6 +113,7 @@ async function AIiteration(
       // currentMessage = buildToolResultPrompt(responseText, toolResults);
       return toolResults;
     }
+
     // save knowledge from tool execution in message history
     message.save({ role: 'system', content: currentMessage });
     iteration++;
