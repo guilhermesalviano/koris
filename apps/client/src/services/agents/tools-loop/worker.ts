@@ -50,9 +50,9 @@ async function executeToolsIteratively(
 
     if (toolCall.name === 'get_skill') {
       onProgress('Learning skill content... ');
-      accumulatedContext += buildSkillLearningPrompt(toolResults, userMessage);
+      accumulatedContext += `${buildSkillLearningPrompt(toolResults, userMessage)}\n---`;
     } else {
-      accumulatedContext += buildSkillResponsePrompt(toolResults);
+      accumulatedContext += `${buildSkillResponsePrompt(toolResults)}\n---`;
     }
   }
 
@@ -86,9 +86,6 @@ async function executeToolsIteratively(
     iteration,
     toolCallCount: newToolCalls.length
   });
-
-  // Save the AI's response that contains tool calls
-  message.save({ role: 'assistant', content: normalizedResponse });
 
   // Recursively execute the new tool calls
   return executeToolsIteratively(
