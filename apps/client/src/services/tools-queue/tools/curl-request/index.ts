@@ -15,9 +15,11 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     url = `https://${url}`;
   }
 
-  // Validate URL
+  // Parse and encode URL to handle spaces and special characters
+  let encodedUrl: string;
   try {
-    new URL(url);
+    const urlObj = new URL(url);
+    encodedUrl = urlObj.toString();
   } catch {
     return { toolName: 'curl_request', success: false, error: `Invalid URL: ${url}` };
   }
@@ -54,9 +56,9 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
       curlCmd += ` -d '${data.replace(/'/g, "'\\''")}'`;
     }
 
-    curlCmd += ` '${url}'`;
+    curlCmd += ` '${encodedUrl}'`;
 
-    logger.debug('Executing curl request', { url, method, timeout, pipe: pipe || 'none', command: curlCmd });
+    logger.debug('Executing curl request', { url, encodedUrl, method, timeout, pipe: pipe || 'none', command: curlCmd });
 
     let output: string;
     let httpStatus = 0;
@@ -89,10 +91,10 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
       output = lines.filter(line => !line.startsWith('---HTTP_STATUS:')).join('\n').trim();
     }
 
-    logger.info('curl request completed', { url, method, httpStatus, responseSize: output.length, pipeUsed: !!pipe });
+    logger.info('curl request completed', { url, encodedUrl, method, httpStatus, responseSize: output.length, pipeUsed: !!pipe });
 
     if (httpStatus >= 400) {
-      logger.warn('curl request returned error status', { url, method, httpStatus, response: output });
+      logger.warn('curl request returned error status', { url, encodedUrl, method, httpStatus, response: output });
     }
 
     return {
@@ -102,7 +104,7 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    logger.error('curl request failed', { url, method, error: errorMsg });
+    logger.error('curl request failed', { url, encodedUrl: 'N/A', method, error: errorMsg });
     return { toolName: 'curl_request', success: false, error: errorMsg };
   }
 }
