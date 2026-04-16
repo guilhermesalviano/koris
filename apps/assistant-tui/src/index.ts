@@ -536,7 +536,7 @@ export function startTui(options: StartTuiOptions): void {
       return;
     }
 
-    println(`${colors.bgGray}${colors.white} ${trimmed} ${colors.reset}`);
+    println(`${colors.bgGray}${colors.white} ❯ ${trimmed} ${colors.reset}`);
     println();
     if (fixedInput) requestRender();
 
@@ -786,7 +786,7 @@ function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string, showH
 }
 
 function buildBeautifulPrompt(colors: typeof defaultColors): string {
-  return `${colors.bright}${colors.blue}❯${colors.reset}${colors.cyan}${colors.bright} ${colors.reset}`;
+  return `${colors.bright}${colors.gray}❯${colors.reset}${colors.cyan}${colors.bright} ${colors.reset}`;
 }
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<string> {
