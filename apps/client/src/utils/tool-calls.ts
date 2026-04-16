@@ -1,5 +1,15 @@
 import { ToolCall } from '../types/tools';
 import { ILogger } from '../infrastructure/logger';
+import { isSkillAlreadyLearned } from './history';
+import { Message } from '../entities/message';
+
+function normalizeResponse(response: unknown): string {
+  return typeof response === 'string' ? response : JSON.stringify(response);
+}
+
+function shouldSkipToolCall(toolCall: ToolCall, messageHistory: Message[]): boolean {
+  return toolCall.name === 'get_skill' && isSkillAlreadyLearned(toolCall.name, messageHistory);
+}
 
 /**
  * Extract and parse tool calls from AI provider response.
@@ -77,4 +87,4 @@ function parseToolCall(tc: any, index: number, logger?: ILogger): ToolCall {
   };
 }
 
-export { extractToolCalls };
+export { extractToolCalls, normalizeResponse, shouldSkipToolCall };

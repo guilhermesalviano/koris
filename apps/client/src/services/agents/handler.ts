@@ -3,9 +3,9 @@ import { previewMessage, toSafeMessage } from './helpers';
 import { ILogger } from '../../infrastructure/logger';
 import { DatabaseServiceFactory } from '../../infrastructure/db-sqlite';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
-import { AIiteration } from './ralph/ai-iteration';
 import { SessionServiceFactory } from '../session-service';
 import { IMessageService, MessageServiceFactory } from '../message-service';
+import { toolsLoop } from './tools-loop/manager';
 
 interface IAgentHandler {
   handle(message: unknown, options?: ProcessOptions): Promise<ProcessedMessage>;
@@ -20,18 +20,22 @@ class AgentHandler {
 
   async handle(message: string, options?: ProcessOptions): Promise<ProcessedMessage> {
     const safeMessage = toSafeMessage(message);
-    
+
     this.logger.info(`Processing message from ${this.channel}: "${previewMessage(safeMessage)}"`);
-    this.messageService.save({ role: 'user', content: safeMessage });
 
     // Handle commands using centralized handler
     if (isCommand(safeMessage)) {
-      const result = handleCommand(safeMessage, { source: this.channel });      
+      this.messageService.save({ role: 'user', content: safeMessage });
+
+      const result = handleCommand(safeMessage, { source: this.channel });
       return result.response || '';
     }
 
     // Process AI messages with potential multi-round tool execution
-    return await AIiteration(this.logger, safeMessage, this.channel, this.messageService, { ...options });
+    const response = await toolsLoop(this.logger, safeMessage, this.channel, this.messageService, { ...options });
+    this.messageService.save({ role: 'assistant', content: response });
+
+    return response;
   }
 }
 
