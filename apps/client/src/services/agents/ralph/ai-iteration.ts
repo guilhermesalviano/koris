@@ -3,7 +3,7 @@ import { messageProvider } from '../chat/message-provider';
 import { extractToolCalls } from '../../../utils/tool-calls';
 import { ToolsQueue } from '../../tools-queue';
 import { config } from '../../../config';
-import { buildSkillLearningPrompt } from '../../../utils/prompt';
+import { buildSkillLearningPrompt, buildSkillResponsePrompt } from '../../../utils/prompt';
 import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import { IMessageService } from '../../message-service';
 import { isSkillAlreadyLearned } from '../../../utils/history';
@@ -27,19 +27,15 @@ async function AIiteration(
   const toolsQueue = new ToolsQueue(logger);
   const signal = options?.signal || new AbortController().signal;
   const onProgress = options?.onProgress;
-
-  message.save({ role: 'user', content: userMessage });
   
+  let iteration = 1;
   let processStatus: string | undefined = undefined;
   let currentMessage = userMessage;
-  let iteration = 0;
   let isSkillExecution = false;
 
   while (iteration < MAX_TOOL_ITERATIONS) {
-    iteration++;
-    
     logger.info(`AI iteration ${iteration}`, { channel });
-    
+
     if (onProgress && processStatus) {
       onProgress(`${processStatus || 'Processing'} (iteration ${iteration}/${MAX_TOOL_ITERATIONS})...`);
     }
@@ -84,7 +80,7 @@ async function AIiteration(
       return true;
     });
     
-    logger.info(`Executing tool call(s)`, { channel, toolCalls: filteredToolCalls.map(t => t.name) });
+    logger.info(`Executing tool call(s)`, { toolNames: filteredToolCalls.map(t => t.name), toolCalls: toolCalls.map(t => t.arguments)  });
 
     if (onProgress) {
       onProgress(`Executing tool(s): ${filteredToolCalls.map(t => t.name).join(', ')}`);
@@ -93,28 +89,26 @@ async function AIiteration(
     let toolResults: string = '';
     if (filteredToolCalls.length > 0) {
       toolResults = await toolsQueue.handle(
-          filteredToolCalls,
-          { model: config.AI.MODEL },
-          signal
-        );
+        filteredToolCalls,
+        { model: config.AI.MODEL },
+        signal
+      );
     }
 
-    // Special handling for skill learning
     if (filteredToolCalls.some(t => t.name === 'get_skill')) {
       logger.info('Learning skill content', { channel });
+
+      isSkillExecution = true;
       processStatus = 'Learning skill content';
       currentMessage = buildSkillLearningPrompt(toolResults, userMessage);
+
       options = { ...options, toolsEnabled: true };
-      isSkillExecution = true;
-    } 
-    // ajustar esse if.
-    else if (isSkillExecution && filteredToolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
-      logger.info('Skill execution complete, returning result', { channel });
-      // processStatus = 'Skill executed. Extracting response...';
-      // currentMessage = buildSkillResponsePrompt(userMessage, toolResults);
+    } else if (isSkillExecution && filteredToolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
+      processStatus = 'Skill executed. Extracting response...';
+      currentMessage = buildSkillResponsePrompt(toolResults);
+
       return toolResults;
-    }
-    else {
+    } else {
       logger.info('tool results', { toolResults });
       // processStatus = 'Processing tool results...';
       // currentMessage = buildToolResultPrompt(responseText, toolResults);
@@ -122,6 +116,7 @@ async function AIiteration(
     }
     // save knowledge from tool execution in message history
     message.save({ role: 'system', content: currentMessage });
+    iteration++;
   }
 
   logger.warn('Max tool iterations reached', { 

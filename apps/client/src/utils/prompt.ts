@@ -42,16 +42,13 @@ export function buildToolResultPrompt(
  * This is the FINAL iteration - AI should provide a complete answer based on skill results
  */
 export function buildSkillResponsePrompt(
-  userRequest: string,
+  // userRequest: string,
   skillExecutionResults: string
 ): string {
   return `The skill has been executed successfully. Here are the results:
-
 ${skillExecutionResults}
-
----
-
-USER'S ORIGINAL REQUEST: "${userRequest}"
-
+------
 Based on these results, provide a clear, complete answer to the user. Do NOT call any more tools. Just provide the final answer using the data from the skill execution.`;
 }
+
+// USER'S ORIGINAL REQUEST: "${userRequest}"

@@ -4,10 +4,15 @@ import { URL } from 'node:url';
 import { ToolResult } from "../../../../types/tools";
 
 export async function executeCurl(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
-  const url = args.url as string;
+  let url = args.url as string;
   
   if (!url) {
     return { toolName: 'curl_request', success: false, error: 'Missing required parameter: url' };
+  }
+
+  // Normalize URL: prepend https:// if no protocol is specified
+  if (!url.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//)) {
+    url = `https://${url}`;
   }
 
   // Validate URL
@@ -51,7 +56,7 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
 
     curlCmd += ` '${url}'`;
 
-    logger.debug('Executing curl request', { url, method, timeout, pipe: pipe || 'none' });
+    logger.debug('Executing curl request', { url, method, timeout, pipe: pipe || 'none', command: curlCmd });
 
     let output: string;
     let httpStatus = 0;
@@ -85,6 +90,10 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     }
 
     logger.info('curl request completed', { url, method, httpStatus, responseSize: output.length, pipeUsed: !!pipe });
+
+    if (httpStatus >= 400) {
+      logger.warn('curl request returned error status', { url, method, httpStatus, response: output });
+    }
 
     return {
       toolName: 'curl_request',
