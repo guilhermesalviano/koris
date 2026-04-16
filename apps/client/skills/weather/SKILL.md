@@ -3,11 +3,9 @@ name: weather
 description: "Get current weather and forecasts via wttr.in or Open-Meteo. Use when: user asks about weather, temperature, or forecasts for any location. NOT for: historical weather data, severe weather alerts, or detailed meteorological analysis. No API key needed."
 ---
 # Weather Skill
-
 Get current weather conditions and forecasts.
 
 ## Location
-
 Always include a city, region, or airport code in weather queries.
 
 ## Commands
@@ -46,3 +44,11 @@ curl -s "wttr.in/[city]?format=%l:+%c+%p"
 ```bash
 [city]: ⛅  0.0mm
 ```
+### Format Codes
+- `%c` — Weather condition emoji
+- `%t` — Temperature
+- `%f` — "Feels like"
+- `%w` — Wind
+- `%h` — Humidity
+- `%p` — Precipitation
+- `%l` — Location

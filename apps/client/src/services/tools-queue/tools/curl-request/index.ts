@@ -35,8 +35,8 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
   }
 
   try {
-    // Build curl command - don't include status marker when using pipe
-    let curlCmd = `curl -s --max-time ${timeout}`;
+    // Build curl command without --max-time (will use JS-level timeout instead)
+    let curlCmd = `curl -s`;
 
     if (followRedirects) {
       curlCmd += ' -L';
@@ -63,32 +63,57 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     let output: string;
     let httpStatus = 0;
 
-    if (pipe && pipe.trim()) {
-      // When using pipe, execute curl and pipe the output
-      const safePipe = pipe.trim().startsWith('|') ? pipe.trim() : `| ${pipe.trim()}`;
-      output = execSync(`${curlCmd} ${safePipe}`, {
-        encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        shell: '/bin/bash',
-      });
-      
-      // For piped requests, assume success (can't easily get status code)
-      httpStatus = 200;
-    } else {
-      // Without pipe, include status marker
-      curlCmd += ` -w "\n---HTTP_STATUS:%{http_code}---"`;
-      output = execSync(curlCmd, {
-        encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        shell: '/bin/bash',
-      });
+    // Wrap execSync in a timeout handler
+    let timedOut = false;
+    const timeoutHandle = setTimeout(() => {
+      timedOut = true;
+    }, timeout * 1000);
 
-      const lines = output.split('\n');
-      const statusLine = lines.find(line => line.startsWith('---HTTP_STATUS:'));
-      httpStatus = statusLine ? parseInt(statusLine.replace('---HTTP_STATUS:', '').replace('---', ''), 10) : 0;
-      output = lines.filter(line => !line.startsWith('---HTTP_STATUS:')).join('\n').trim();
+    try {
+      if (pipe && pipe.trim()) {
+        // When using pipe, execute curl and pipe the output
+        const safePipe = pipe.trim().startsWith('|') ? pipe.trim() : `| ${pipe.trim()}`;
+        output = execSync(`${curlCmd} ${safePipe}`, {
+          encoding: 'utf-8',
+          maxBuffer: 10 * 1024 * 1024,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          shell: '/bin/bash',
+          timeout: timeout * 1000, // Node.js timeout in ms
+        });
+        
+        // For piped requests, assume success (can't easily get status code)
+        httpStatus = 200;
+      } else {
+        // Without pipe, include status marker
+        curlCmd += ` -w "\n---HTTP_STATUS:%{http_code}---"`;
+        output = execSync(curlCmd, {
+          encoding: 'utf-8',
+          maxBuffer: 10 * 1024 * 1024,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          shell: '/bin/bash',
+          timeout: timeout * 1000, // Node.js timeout in ms
+        });
+
+        const lines = output.split('\n');
+        const statusLine = lines.find(line => line.startsWith('---HTTP_STATUS:'));
+        httpStatus = statusLine ? parseInt(statusLine.replace('---HTTP_STATUS:', '').replace('---', ''), 10) : 0;
+        output = lines.filter(line => !line.startsWith('---HTTP_STATUS:')).join('\n').trim();
+      }
+
+      clearTimeout(timeoutHandle);
+
+      if (timedOut) {
+        logger.warn('curl request timed out', { url, encodedUrl, method, timeout });
+        return { toolName: 'curl_request', success: false, error: `Request timeout after ${timeout} seconds` };
+      }
+    } catch (execErr) {
+      clearTimeout(timeoutHandle);
+      
+      if (timedOut || (execErr instanceof Error && execErr.message.includes('timeout'))) {
+        logger.warn('curl request timed out', { url, encodedUrl, method, timeout });
+        return { toolName: 'curl_request', success: false, error: `Request timeout after ${timeout} seconds` };
+      }
+      throw execErr;
     }
 
     logger.info('curl request completed', { url, encodedUrl, method, httpStatus, responseSize: output.length, pipeUsed: !!pipe });
@@ -104,7 +129,7 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    logger.error('curl request failed', { url, encodedUrl: 'N/A', method, error: errorMsg });
+    logger.error('curl request failed', { url, encodedUrl: 'N/A', method, timeout, error: errorMsg });
     return { toolName: 'curl_request', success: false, error: errorMsg };
   }
 }
