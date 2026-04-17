@@ -50,8 +50,6 @@ class ToolsQueue {
   async executeTool(logger: ILogger, toolCall: ToolCall): Promise<ToolResult> {
     const { name, arguments: args } = toolCall;
 
-    logger.debug('Executing tool', { toolName: name, argsKeys: Object.keys(args || {}) });
-
     try {
       const command = COMMAND_MAP[name];
       if (command) return await command(logger, args);

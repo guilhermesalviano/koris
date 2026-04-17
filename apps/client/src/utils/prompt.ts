@@ -23,8 +23,8 @@ NOW DO THIS:
    - Extract the request body if present
    - Call the curl_request tool with these parameters
 5. After executing the curl request, analyze the response and provide a clear answer to the user
-
-Remember: Use the curl_request tool to execute any HTTP/API calls shown in the skill.`;
+Remember: Use the curl_request tool to execute any HTTP/API calls shown in the skill.
+---`;
 }
 
 /**
@@ -46,9 +46,9 @@ export function buildSkillResponsePrompt(
   skillExecutionResults: string
 ): string {
   return `The skill has been executed successfully. Here are the results:
-${skillExecutionResults}
-------
-Based on these results, provide a clear, complete answer to the user. Do NOT call any more tools. Just provide the final answer using the data from the skill execution.`;
+${skillExecutionResults}.
+Based on these results, provide a clear, complete answer to the user.
+---`;
 }
-
+// Do NOT call any more tools. Just provide the final answer using the data from the skill execution.
 // USER'S ORIGINAL REQUEST: "${userRequest}"

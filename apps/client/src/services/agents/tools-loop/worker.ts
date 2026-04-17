@@ -20,7 +20,7 @@ async function executeToolsIteratively(
   onProgress: (text: string) => void,
   options: ProcessOptions | undefined,
   userMessage: string,
-  iteration: number = 0,
+  iteration: number = 1,
   maxIterations: number = 10
 ): Promise<string> {
   if (iteration >= maxIterations) {
@@ -28,40 +28,34 @@ async function executeToolsIteratively(
       maxIterations,
       userMessage
     });
-    return `Maximum tool execution iterations (${maxIterations}) reached. Please try rephrasing your request.`;
+    return `Maximum tool execution iterations (${maxIterations})`+
+      ` reached. Please try rephrasing your request.`;
   }
 
-  let accumulatedContext = '';
+  const toolsToExecute = toolCalls.filter(toolCall => 
+    toolCall && !shouldSkipToolCall(toolCall, messageHistory)
+  );
 
-  for (let i = 0; i < toolCalls.length; i++) {
-    const toolCall = toolCalls[i];
+  onProgress(`Tools to execute in this iteration(${iteration}/${maxIterations}): ` + 
+    (toolsToExecute.length > 0 ? toolsToExecute.map(t => t.name).join(', ') : "None"));
 
-    if (!toolCall || shouldSkipToolCall(toolCall, messageHistory)) {
-      continue;
-    }
-
-    onProgress(`Executing tool call: ${toolCall.name}`);
-
+  let accumulatedContext = "";
+  if (toolsToExecute.length > 0) {
     const toolResults = await toolsQueue.handle(
-      [toolCall],
+      toolsToExecute,
       { model: config.AI.MODEL },
       signal
     );
 
-    if (toolCall.name === 'get_skill') {
-      onProgress('Learning skill content... ');
-      accumulatedContext += `${buildSkillLearningPrompt(toolResults, userMessage)}\n---`;
-    } else {
-      accumulatedContext += `${buildSkillResponsePrompt(toolResults)}\n---`;
+    for (const toolCall of toolsToExecute) {
+      if (toolCall.name === 'get_skill') {
+        accumulatedContext += buildSkillLearningPrompt(toolResults, userMessage);
+      } else {
+        accumulatedContext += buildSkillResponsePrompt(toolResults);
+      }
     }
   }
-
   message.save({ role: 'system', content: accumulatedContext });
-
-  logger.info('Tool calls executed, generating response', { 
-    iteration,
-    accumulatedContext 
-  });
 
   const finalResponse = await messageProvider(
     logger,
@@ -75,19 +69,10 @@ async function executeToolsIteratively(
   const newToolCalls = extractToolCalls(normalizedResponse);
 
   if (newToolCalls.length === 0) {
-    logger.info('AI returned final response (no more tool calls)', { 
-      iteration,
-      channel 
-    });
+    onProgress('AI returned final response (no more tool calls)');
     return normalizedResponse;
   }
 
-  logger.info('AI response contains more tool calls, looping again', { 
-    iteration,
-    toolCallCount: newToolCalls.length
-  });
-
-  // Recursively execute the new tool calls
   return executeToolsIteratively(
     newToolCalls,
     message.getHistory(),
