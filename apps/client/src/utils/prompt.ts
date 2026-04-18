@@ -7,9 +7,10 @@ export function buildSkillLearningPrompt(
   skillContent: string,
   originalUserRequest: string
 ): string {
-  return `You have just learned a skill. Here is the skill documentation:
+  return `---
+  You have just learned a skill. Here is the skill documentation:
 ${skillContent}
----
+
 ORIGINAL USER REQUEST: "${originalUserRequest}"
 
 NOW DO THIS:
@@ -47,7 +48,7 @@ export function buildSkillResponsePrompt(
 ): string {
   return `The skill has been executed successfully. Here are the results:
 ${skillExecutionResults}.
-Based on these results, provide a clear, complete answer to the user.
+Based on these results, provide a answer to the user.
 ---`;
 }
 // Do NOT call any more tools. Just provide the final answer using the data from the skill execution.

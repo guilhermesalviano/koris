@@ -7,8 +7,23 @@ function normalizeResponse(response: unknown): string {
   return typeof response === 'string' ? response : JSON.stringify(response);
 }
 
-function shouldSkipToolCall(toolCall: ToolCall, messageHistory: Message[]): boolean {
-  return toolCall.name === 'get_skill' && isSkillAlreadyLearned(toolCall.name, messageHistory);
+function shouldSkipToolCall(toolCall: ToolCall, messageHistory: Message[], logger?: ILogger): boolean {
+  // Skip apenas se for o tool "get_skill"
+  if (toolCall.name !== 'get_skill') {
+    return false;
+  }
+
+  const args = toolCall.arguments;
+  
+  const skillName = args.name ?? args.skill_name;
+
+  logger?.info(`Skill name: ${skillName}`);
+  
+  if (!skillName || typeof skillName !== 'string') {
+    return false;
+  }
+
+  return isSkillAlreadyLearned(skillName, messageHistory);
 }
 
 /**

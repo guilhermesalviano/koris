@@ -33,7 +33,7 @@ async function executeToolsIteratively(
   }
 
   const toolsToExecute = toolCalls.filter(toolCall => 
-    toolCall && !shouldSkipToolCall(toolCall, messageHistory)
+    toolCall && !shouldSkipToolCall(toolCall, messageHistory, logger)
   );
 
   onProgress(`Tools to execute in this iteration(${iteration}/${maxIterations}): ` + 
@@ -51,13 +51,13 @@ async function executeToolsIteratively(
       if (toolCall.name === 'get_skill') {
         accumulatedContext += buildSkillLearningPrompt(toolResults, userMessage);
       } else {
-        accumulatedContext += buildSkillResponsePrompt(toolResults);
+        accumulatedContext += buildSkillResponsePrompt(toolCall, toolResults);
       }
     }
   }
   message.save({ role: 'system', content: accumulatedContext });
 
-  const finalResponse = await messageProvider(
+  const response = await messageProvider(
     logger,
     accumulatedContext,
     channel,
@@ -65,7 +65,9 @@ async function executeToolsIteratively(
     messageHistory
   );
 
-  const normalizedResponse = normalizeResponse(finalResponse);
+  logger.info("AI Response: ", { response })
+
+  const normalizedResponse = normalizeResponse(response);
   const newToolCalls = extractToolCalls(normalizedResponse);
 
   if (newToolCalls.length === 0) {
