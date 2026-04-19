@@ -29,14 +29,12 @@ jobs:
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-          # Use security-extended query suite for more thorough analysis
-          # Options: 'default', 'security-extended', 'security-and-quality'
           queries: security-extended
-          # Optional: Specify custom queries
-          # config-file: ./.github/codeql/codeql-config.yml
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
+        with:
+          version: 8.5.1
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -55,11 +53,7 @@ jobs:
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
-          # Upload results even if there are errors
           upload: true
-          # Optional: Fail the build if vulnerabilities are found
-          # This is disabled by default to avoid blocking PRs
-          # fail-build: false
 
       - name: Upload CodeQL results as artifact
         if: always()
