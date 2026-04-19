@@ -102,7 +102,7 @@ async function AIiteration(
 
       isSkillExecution = true;
       processStatus = 'Learning skill content';
-      currentMessage = buildSkillLearningPrompt(toolResults, userMessage);
+      currentMessage = buildSkillLearningPrompt('cat-fact-mock', toolResults); //, userMessage
 
       options = { ...options, toolsEnabled: true };
     } else if (isSkillExecution && filteredToolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {

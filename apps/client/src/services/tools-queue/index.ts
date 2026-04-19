@@ -49,6 +49,7 @@ class ToolsQueue {
 
   async executeTool(logger: ILogger, toolCall: ToolCall): Promise<ToolResult> {
     const { name, arguments: args } = toolCall;
+    logger.info(`Executing tool: ${name} with arguments: ${JSON.stringify(args)}`);
 
     try {
       const command = COMMAND_MAP[name];

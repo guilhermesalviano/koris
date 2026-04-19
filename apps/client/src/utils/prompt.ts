@@ -4,15 +4,12 @@
  * Instructs AI to: 1) understand the skill, 2) map user request to skill instructions, 3) execute commands
  */
 export function buildSkillLearningPrompt(
+  skillName: string,
   skillContent: string,
-  originalUserRequest: string
 ): string {
-  return `---
-  You have just learned a skill. Here is the skill documentation:
+  return `
+You have just learned how to use "${skillName}" skill. Here is the skill documentation:
 ${skillContent}
-
-ORIGINAL USER REQUEST: "${originalUserRequest}"
-
 NOW DO THIS:
 1. Read the skill documentation above carefully
 2. Understand what this skill does and how to use it
@@ -26,6 +23,7 @@ NOW DO THIS:
 5. After executing the curl request, analyze the response and provide a clear answer to the user
 Remember: Use the curl_request tool to execute any HTTP/API calls shown in the skill.
 ---`;
+// ORIGINAL USER REQUEST: "${originalUserRequest}"
 }
 
 /**

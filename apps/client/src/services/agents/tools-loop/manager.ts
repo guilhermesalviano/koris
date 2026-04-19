@@ -4,8 +4,23 @@ import { extractToolCalls, normalizeResponse } from '../../../utils/tool-calls';
 import { ToolsQueue } from '../../tools-queue';
 import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import { IMessageService } from '../../message-service';
-import { executeToolsIteratively } from './worker';
+import { executorWorker } from './executor-worker';
+import { learnerWorker } from './learner-worker';
 
+/**
+ * Tools Loop Manager
+ * 
+ * Orchestrates the skill learning and execution flow:
+ * 1. Get initial AI response with tool calls
+ * 2. Filter out get_skill calls for learning phase
+ * 3. Execute learning phase (learner-worker) to learn skills
+ * 4. Execute execution phase (executor-worker) to use learned skills
+ * 
+ * The database stores learned skills for reuse across sessions:
+ * - Learning context: prompt used to teach the skill
+ * - Execution context: prompt and results from actual usage
+ * - Metadata: execution count, timestamps, etc.
+ */
 async function toolsLoop(
   logger: ILogger,
   userMessage: string,
@@ -17,6 +32,7 @@ async function toolsLoop(
   const signal = options?.signal || new AbortController().signal;
   const onProgress = options?.onProgress || ((text) => logger.info(text));
 
+  // vai retornar apenas skills parendidas no primeiro run, visto que o session ID é zerado.
   const messageHistory = message.getHistory();
 
   const aiResponse = await messageProvider(
@@ -28,14 +44,39 @@ async function toolsLoop(
   );
 
   const responseText = normalizeResponse(aiResponse);
-  const toolCalls = extractToolCalls(responseText);
+  const callbacks = extractToolCalls(responseText);
 
-  if (toolCalls.length === 0) {
+  onProgress(`Tools to execute after learning phase: ${JSON.stringify(callbacks)}`);
+
+  if (callbacks.length === 0) return responseText;
+
+  const toolsToLearn = callbacks.filter(cb => cb.name === 'get_skill');
+  let toolsToExecute = callbacks.filter(cb => cb.name !== 'get_skill');
+  
+  if (toolsToLearn.length > 0) {
+    onProgress(`📚 Learning phase`);
+    onProgress(`Learning phase: ${toolsToLearn.length} skill(s) to learn`);
+    const learnerResponse = await learnerWorker(
+      toolsToLearn,
+      messageHistory,
+      logger,
+      channel,
+      toolsQueue,
+      signal,
+      onProgress,
+      options,
+    );
+    toolsToExecute.push(...extractToolCalls(learnerResponse));
+  }
+
+  if (toolsToExecute.length === 0) {
+    onProgress('✓ All tools processed');
     return responseText;
   }
 
-  const finalResponse = await executeToolsIteratively(
-    toolCalls,
+  onProgress(`⚙️ Execution phase`);
+  const finalResponse = await executorWorker(
+    toolsToExecute,
     messageHistory,
     logger,
     channel,
