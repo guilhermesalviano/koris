@@ -96,6 +96,20 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
       `);
 
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS learned_skills (
+          id TEXT PRIMARY KEY,
+          skill_name TEXT NOT NULL UNIQUE,
+          skill_content TEXT NOT NULL,
+          learned_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_learned_skills_skill_name ON learned_skills(skill_name);
+        CREATE INDEX IF NOT EXISTS idx_learned_skills_learned_at ON learned_skills(learned_at);
+      `);
+
       logger.debug('Database schema initialized successfully');
     } catch (error) {
       logger.error('Failed to initialize database schema', { error });

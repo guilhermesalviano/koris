@@ -3,9 +3,9 @@ import { previewMessage, toSafeMessage } from './helpers';
 import { ILogger } from '../../infrastructure/logger';
 import { DatabaseServiceFactory } from '../../infrastructure/db-sqlite';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
-import { AIiteration } from './ralph/ai-iteration';
 import { SessionServiceFactory } from '../session-service';
 import { IMessageService, MessageServiceFactory } from '../message-service';
+import { toolsLoop } from './tools-loop/manager';
 
 interface IAgentHandler {
   handle(message: unknown, options?: ProcessOptions): Promise<ProcessedMessage>;
@@ -25,21 +25,17 @@ class AgentHandler {
 
     // Handle commands using centralized handler
     if (isCommand(safeMessage)) {
+      this.messageService.save({ role: 'user', content: safeMessage });
+
       const result = handleCommand(safeMessage, { source: this.channel });
-      
-      // Store command in database
-      try {
-        this.messageService.save({ role: 'user', content: safeMessage });
-        this.messageService.save({ role: 'assistant', content: result.response || '' });
-      } catch (error) {
-        this.logger.error('Failed to store command messages', { error });
-      }
-      
       return result.response || '';
     }
 
     // Process AI messages with potential multi-round tool execution
-    return await AIiteration(this.logger, safeMessage, this.channel, this.messageService, { ...options });
+    const response = await toolsLoop(this.logger, safeMessage, this.channel, this.messageService, { ...options });
+    this.messageService.save({ role: 'assistant', content: response });
+
+    return response;
   }
 }
 

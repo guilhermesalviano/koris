@@ -38,11 +38,17 @@ async function resolveResponse(response: unknown): Promise<string> {
 
 async function withTypingIndicator<T>(chatId: number, work: () => Promise<T>): Promise<T> {
   const bot = getBot();
-  await bot.sendChatAction(chatId, 'typing');
+  
+  try {
+    await bot.sendChatAction(chatId, 'typing');
+  } catch {
+    // Silently ignore initial typing action failures - don't block the work
+  }
 
   const timer = setInterval(() => {
-    void bot.sendChatAction(chatId, 'typing').catch((error) => {
-      console.error('Error refreshing typing action:', error);
+    void bot.sendChatAction(chatId, 'typing').catch(() => {
+      // Silently ignore typing action refresh failures - they're not critical
+      // Network issues or rate limiting shouldn't interrupt user experience
     });
   }, TYPING_INTERVAL_MS);
 

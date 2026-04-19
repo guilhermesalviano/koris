@@ -4,14 +4,12 @@
  * Instructs AI to: 1) understand the skill, 2) map user request to skill instructions, 3) execute commands
  */
 export function buildSkillLearningPrompt(
+  skillName: string,
   skillContent: string,
-  originalUserRequest: string
 ): string {
-  return `You have just learned a skill. Here is the skill documentation:
+  return `
+You have just learned how to use "${skillName}" skill. Here is the skill documentation:
 ${skillContent}
----
-ORIGINAL USER REQUEST: "${originalUserRequest}"
-
 NOW DO THIS:
 1. Read the skill documentation above carefully
 2. Understand what this skill does and how to use it
@@ -23,8 +21,9 @@ NOW DO THIS:
    - Extract the request body if present
    - Call the curl_request tool with these parameters
 5. After executing the curl request, analyze the response and provide a clear answer to the user
-
-Remember: Use the curl_request tool to execute any HTTP/API calls shown in the skill.`;
+Remember: Use the curl_request tool to execute any HTTP/API calls shown in the skill.
+---`;
+// ORIGINAL USER REQUEST: "${originalUserRequest}"
 }
 
 /**
@@ -42,16 +41,13 @@ export function buildToolResultPrompt(
  * This is the FINAL iteration - AI should provide a complete answer based on skill results
  */
 export function buildSkillResponsePrompt(
-  userRequest: string,
+  // userRequest: string,
   skillExecutionResults: string
 ): string {
   return `The skill has been executed successfully. Here are the results:
-
 ${skillExecutionResults}
-
----
-
-USER'S ORIGINAL REQUEST: "${userRequest}"
-
-Based on these results, provide a clear, complete answer to the user. Do NOT call any more tools. Just provide the final answer using the data from the skill execution.`;
+Based on these results, provide an answer to the user.
+---`;
 }
+// Do NOT call any more tools. Just provide the final answer using the data from the skill execution.
+// USER'S ORIGINAL REQUEST: "${userRequest}"

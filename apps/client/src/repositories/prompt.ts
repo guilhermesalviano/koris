@@ -70,7 +70,7 @@ class PromptRepository {
     // System info context
     if (this.config.includeSystemInfo !== false) {
       const systemInfo = this.systemInfoRepository.loadSystemInfoPrompt({ channel });
-      messages.push({ role: 'system', content: systemInfo });
+      if (systemInfo) messages.push({ role: 'system', content: systemInfo });
     }
 
     return messages;

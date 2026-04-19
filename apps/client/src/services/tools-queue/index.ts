@@ -44,28 +44,18 @@ class ToolsQueue {
 
     this.logger.info('Tools completed', { count: results.length });
 
-    const output = results
-      .filter(result => {
-        if (!result.success) {
-          this.logger.warn('Tool execution failed', { toolName: result.toolName, error: result.error });
-        }
-        return result.success;
-      })
-      .map(
-        (r) =>
-          // temporarily, remove tool keys.
-          // `Tool: ${r.toolName}, Success: ${r.success},` +
-          r.result,
+    return results
+      .map((r) =>
+        r.success
+          ? `Tool: ${r.toolName}, Success: ${r.success}, Result: ${r.result}`
+          : `Tool: ${r.toolName}, Success: ${r.success}, Error: ${r.error}`
       )
       .join('\n');
-
-    return output;
   }
 
   async executeTool(logger: ILogger, toolCall: ToolCall): Promise<ToolResult> {
     const { name, arguments: args } = toolCall;
-
-    logger.debug('Executing tool', { toolName: name, argsKeys: Object.keys(args || {}) });
+    logger.info(`Executing tool: ${name} with arguments: ${JSON.stringify(args)}`);
 
     try {
       const command = COMMAND_MAP[name];

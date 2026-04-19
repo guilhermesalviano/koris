@@ -1,0 +1,18 @@
+{
+  "PORT": 3000,
+  "TIMEZONE": "America/Sao_Paulo",
+  "log": {
+    "LEVEL": "debug"
+  },
+  "telegram": {
+    "BOT_TOKEN": "YOUR_BOT_TOKEN",
+    "USE_POLLING": true
+  },
+  "ai": {
+    "PROVIDER": "ollama",
+    "BASE_URL": "http://localhost:11434",
+    "API_TOKEN": "",
+    "MODEL": "gemma4:e4b",
+    "THINK_MODEL": "gemma4:26b-a4b-it-q4_K_M"
+  }
+}
