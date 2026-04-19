@@ -45,8 +45,8 @@ export function buildSkillResponsePrompt(
   skillExecutionResults: string
 ): string {
   return `The skill has been executed successfully. Here are the results:
-${skillExecutionResults}.
-Based on these results, provide a answer to the user.
+${skillExecutionResults}
+Based on these results, provide an answer to the user.
 ---`;
 }
 // Do NOT call any more tools. Just provide the final answer using the data from the skill execution.

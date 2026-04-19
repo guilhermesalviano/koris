@@ -20,7 +20,6 @@ interface ILearnedSkillsRepository {
   exists(skillName: string): boolean;
   getAll(): LearnedSkill[];
   getRecent(limit?: number): LearnedSkill[];
-  getMostExecuted(limit?: number): LearnedSkill[];
   deleteByName(skillName: string): boolean;
   deleteAll(): number;
 }
@@ -138,21 +137,6 @@ class LearnedSkillsRepository implements ILearnedSkillsRepository {
       );
     } catch (error) {
       // this.logger.error('Failed to get recent learned skills', { error });
-      throw error;
-    }
-  }
-
-  /**
-   * Get most frequently executed skills
-   */
-  getMostExecuted(limit: number = 10): LearnedSkill[] {
-    try {
-      return this.db.query<LearnedSkill>(
-        'SELECT * FROM learned_skills ORDER BY execution_count DESC LIMIT ?',
-        [limit]
-      );
-    } catch (error) {
-      // this.logger.error('Failed to get most executed skills', { error });
       throw error;
     }
   }

@@ -44,7 +44,13 @@ class ToolsQueue {
 
     this.logger.info('Tools completed', { count: results.length });
 
-    return results.map((r) => `Tool: ${r.toolName}, Success: ${r.success}, Result: ` + r.result).join('\n');
+    return results
+      .map((r) =>
+        r.success
+          ? `Tool: ${r.toolName}, Success: ${r.success}, Result: ${r.result}`
+          : `Tool: ${r.toolName}, Success: ${r.success}, Error: ${r.error}`
+      )
+      .join('\n');
   }
 
   async executeTool(logger: ILogger, toolCall: ToolCall): Promise<ToolResult> {
