@@ -31,7 +31,7 @@ curl -s "wttr.in/[city]?format=%l:+%c+%t+(feels+like+%f),+%w+wind,+%h+humidity"
 ```
 *** Example Response: ***
 ```bash
-[city]: ⛅  +17°C (feels like +17°C), ←8km/h wind, 93% humidity%
+[city]: ⛅  +17°C (feels like +17°C), ←8km/h wind, 93% humidity
 ```
 
 **"Will it rain?"**
