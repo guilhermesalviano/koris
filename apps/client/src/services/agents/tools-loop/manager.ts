@@ -32,7 +32,6 @@ async function toolsLoop(
   const signal = options?.signal || new AbortController().signal;
   const onProgress = options?.onProgress || ((text) => logger.info(text));
 
-  // vai retornar apenas skills parendidas no primeiro run, visto que o session ID é zerado.
   const messageHistory = message.getHistory();
 
   const aiResponse = await messageProvider(
@@ -46,8 +45,6 @@ async function toolsLoop(
   const responseText = normalizeResponse(aiResponse);
   const callbacks = extractToolCalls(responseText);
 
-  onProgress(`Tools to execute after learning phase: ${JSON.stringify(callbacks)}`);
-
   if (callbacks.length === 0) return responseText;
 
   const toolsToLearn = callbacks.filter(cb => cb.name === 'get_skill');
@@ -58,6 +55,7 @@ async function toolsLoop(
     onProgress(`Learning phase: ${toolsToLearn.length} skill(s) to learn`);
     const learnerResponse = await learnerWorker(
       toolsToLearn,
+      userMessage,
       messageHistory,
       logger,
       channel,
@@ -66,7 +64,11 @@ async function toolsLoop(
       onProgress,
       options,
     );
-    toolsToExecute.push(...extractToolCalls(learnerResponse));
+    const newTools = extractToolCalls(learnerResponse);
+    onProgress(`New tools after learning phase: ${JSON.stringify(newTools)}`);
+    const combinedTools = [...toolsToExecute, ...newTools];
+
+    toolsToExecute = combinedTools;
   }
 
   if (toolsToExecute.length === 0) {

@@ -30,9 +30,11 @@ export async function executeGetSkill(
   const targetFile = join(requestedPath, 'SKILL.md');
   const content = await readFile(targetFile, 'utf-8');
 
+  const onlyContent = content.split('---')[2];
+
   return {
     toolName: 'get_skill',
     success: true,
-    result: content.slice(0, 5000),
+    result: onlyContent.slice(0, 5000),
   };
 }

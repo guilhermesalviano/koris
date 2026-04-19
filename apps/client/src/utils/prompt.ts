@@ -23,7 +23,6 @@ NOW DO THIS:
 5. After executing the curl request, analyze the response and provide a clear answer to the user
 Remember: Use the curl_request tool to execute any HTTP/API calls shown in the skill.
 ---`;
-// ORIGINAL USER REQUEST: "${originalUserRequest}"
 }
 
 /**
