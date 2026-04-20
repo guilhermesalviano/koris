@@ -22,11 +22,10 @@ class AgentHandler {
     const safeMessage = toSafeMessage(message);
 
     this.logger.info(`Processing message from ${this.channel}: "${previewMessage(safeMessage)}"`);
+    this.messageService.save({ role: 'user', content: safeMessage });
 
     // Handle commands using centralized handler
     if (isCommand(safeMessage)) {
-      this.messageService.save({ role: 'user', content: safeMessage });
-
       const result = handleCommand(safeMessage, { source: this.channel });
       return result.response || '';
     }

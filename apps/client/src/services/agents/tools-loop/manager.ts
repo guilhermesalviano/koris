@@ -7,20 +7,6 @@ import { IMessageService } from '../../message-service';
 import { executorWorker } from './executor-worker';
 import { learnerWorker } from './learner-worker';
 
-/**
- * Tools Loop Manager
- * 
- * Orchestrates the skill learning and execution flow:
- * 1. Get initial AI response with tool calls
- * 2. Filter out get_skill calls for learning phase
- * 3. Execute learning phase (learner-worker) to learn skills
- * 4. Execute execution phase (executor-worker) to use learned skills
- * 
- * The database stores learned skills for reuse across sessions:
- * - Learning context: prompt used to teach the skill
- * - Execution context: prompt and results from actual usage
- * - Metadata: execution count, timestamps, etc.
- */
 async function toolsLoop(
   logger: ILogger,
   userMessage: string,
@@ -34,9 +20,6 @@ async function toolsLoop(
 
   const messageHistory = message.getHistory();
 
-  /**
-   * Make AI understand exactly city names
-   */
   const aiResponse = await messageProvider(
     logger,
     userMessage,

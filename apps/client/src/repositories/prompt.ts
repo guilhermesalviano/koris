@@ -3,6 +3,8 @@ import { ISystemInfoRepository, SystemInfoRepositoryFactory } from './system-inf
 import type { AIChatRequest, AIToolDefinition } from '../types/provider';
 import { IToolsRepository, ToolsRepositoryFactory } from './tools';
 import { MessageRole } from '../types/messages';
+import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
+import { IDatabaseService } from '../infrastructure/db-sqlite';
 
 interface Message {
   role: MessageRole;
@@ -34,7 +36,8 @@ class PromptRepository {
   constructor(
     private systemInfoRepository: ISystemInfoRepository,
     private toolsRepository: IToolsRepository,
-    private config: PromptConfig = {}
+    private learnedSkillsRepository: ILearnedSkillsRepository,
+    private config: PromptConfig = {},
   ) {}
 
   /**
@@ -66,7 +69,11 @@ class PromptRepository {
 
     // Base system prompt
     const basePrompt = this.config.systemPrompt ?? this.defaultSystemPrompt;
-    messages.push({ role: 'system', content: basePrompt });
+    const learnedSkillsPrompt = this.learnedSkillsRepository.getAll();
+    const baseHistory = basePrompt + "\n" + learnedSkillsPrompt.map((skill) => {
+      return `${skill.skill_name}: ${skill.skill_content}`;
+    }).join("\n");
+    messages.push({ role: 'system', content: baseHistory });
 
     // System info context
     if (this.config.includeSystemInfo !== false) {
@@ -132,16 +139,18 @@ class PromptRepository {
     return new PromptRepository(
       this.systemInfoRepository,
       this.toolsRepository,
+      this.learnedSkillsRepository,
       { ...this.config, ...config }
     );
   }
 }
 
 class PromptRepositoryFactory {
-  static create(config?: PromptConfig): PromptRepository {
+  static create(db: IDatabaseService, config?: PromptConfig): PromptRepository {
     const systemInfoRepository = SystemInfoRepositoryFactory.create();
     const toolsRepository = ToolsRepositoryFactory.create();
-    return new PromptRepository(systemInfoRepository, toolsRepository, config);
+    const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
+    return new PromptRepository(systemInfoRepository, toolsRepository, learnedSkillsRepository, config);
   }
 }
 

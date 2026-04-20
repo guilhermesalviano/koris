@@ -7,6 +7,7 @@ import { PromptRepositoryFactory } from "../../../repositories/prompt";
 import { ToolCall } from "../../../types/tools";
 import { Message } from "../../../entities/message";
 import { ProcessOptions } from "../../../types/agents";
+import { DatabaseServiceFactory } from "../../../infrastructure/db-sqlite";
 
 type ProcessedMessage = string | ToolCall[] | AsyncGenerator<string>;
 
@@ -20,7 +21,9 @@ async function messageProvider(
   const provider = getAIProvider({ logger });
   const skillsRepository = new SkillsRepository(logger);
   const skills = skillsRepository.get();
-  const promptRepository = PromptRepositoryFactory.create();
+
+  const db = DatabaseServiceFactory.create();
+  const promptRepository = PromptRepositoryFactory.create(db);
   
   const historyMessages = messageHistory?.map(m => ({ role: m.role, content: m.content }));
   
