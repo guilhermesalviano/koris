@@ -76,7 +76,7 @@ async function toolsLoop(
     return responseText;
   }
 
-  onProgress(`⚙️ Execution phase`);
+  onProgress(`⚙️ Execution phase, ${toolsToExecute.length} tool(s) to execute`);
   const finalResponse = await executorWorker(
     toolsToExecute,
     messageHistory,

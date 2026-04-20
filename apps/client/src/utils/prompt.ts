@@ -32,9 +32,19 @@ export function buildToolResultPrompt(
   previousResponse: string,
   toolResults: string
 ): string {
-  return `Previous response:\n${previousResponse}\n\nTool execution results:\n${toolResults}`;
-}
+  return `
+Analyze the tool execution results below to answer the user's request. 
+Extract the relevant information from the results and provide a clear, direct answer.
 
+<previous_context>
+${previousResponse}
+</previous_context>
+
+<tool_results>
+${toolResults}
+</tool_results>
+`;
+}
 /**
  * Build prompt for final response after skill execution
  * This is the FINAL iteration - AI should provide a complete answer based on skill results

@@ -33,6 +33,12 @@ async function executorWorker(
   }
   onProgress(`Iteration ${iteration}`);
 
+  /**
+   * bug to fix:
+   * in one iteration, execute, send to AI results and
+   * return to the user.
+   */
+
   const toolResults = await toolsQueue.handle(
     toolCalls,
     { model: config.AI.MODEL },
