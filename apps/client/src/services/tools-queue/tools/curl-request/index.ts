@@ -3,19 +3,32 @@ import { execSync } from 'node:child_process';
 import { URL } from 'node:url';
 import { ToolResult } from "../../../../types/tools";
 
+function isSafeJqPipe(pipe: string): boolean {
+  const normalized = pipe.trim().replace(/^\|\s*/, '');
+
+  if (!/^jq\b/i.test(normalized)) {
+    return false;
+  }
+
+  // Basic shell-injection hardening while allowing jq filters.
+  if (/[;&`$<>\n\r]/.test(normalized)) {
+    return false;
+  }
+
+  return true;
+}
+
 export async function executeCurl(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   let url = args.url as string;
-  
+
   if (!url) {
     return { toolName: 'curl_request', success: false, error: 'Missing required parameter: url' };
   }
 
-  // Normalize URL: prepend https:// if no protocol is specified
   if (!url.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//)) {
     url = `https://${url}`;
   }
 
-  // Parse and encode URL to handle spaces and special characters
   let encodedUrl: string;
   try {
     const urlObj = new URL(url);
@@ -27,7 +40,17 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
   const method = (args.method as string) || 'GET';
   const timeout = (args.timeout as number) || 30;
   const followRedirects = args.follow_redirects !== false;
-  const pipe = (args.pipe as string) || ''; // Optional: pipe command like "| jq '.fact'"
+  const pipe = typeof args.pipe === 'string' ? args.pipe.trim() : '';
+  const normalizedPipe = pipe.replace(/^\|\s*/, '');
+
+  if (pipe && !isSafeJqPipe(pipe)) {
+    logger.warn('Rejected curl_request with unsafe pipe argument', { pipe });
+    return {
+      toolName: 'curl_request',
+      success: false,
+      error: "Invalid pipe. Only a single jq pipe is allowed (example: | jq -r '.result').",
+    };
+  }
 
   const validMethods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
   if (!validMethods.includes(method)) {
@@ -35,8 +58,7 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
   }
 
   try {
-    // Build curl command without --max-time (will use JS-level timeout instead)
-    let curlCmd = `curl -s`;
+    let curlCmd = 'curl -s';
 
     if (followRedirects) {
       curlCmd += ' -L';
@@ -58,40 +80,43 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
 
     curlCmd += ` '${encodedUrl}'`;
 
-    logger.debug('Executing curl request', { url, encodedUrl, method, timeout, pipe: pipe || 'none', command: curlCmd });
+    logger.debug('Executing curl request', {
+      url,
+      encodedUrl,
+      method,
+      timeout,
+      pipe: normalizedPipe || 'none',
+      command: curlCmd,
+    });
 
     let output: string;
     let httpStatus = 0;
 
-    // Wrap execSync in a timeout handler
     let timedOut = false;
     const timeoutHandle = setTimeout(() => {
       timedOut = true;
     }, timeout * 1000);
 
     try {
-      if (pipe && pipe.trim()) {
-        // When using pipe, execute curl and pipe the output
-        const safePipe = pipe.trim().startsWith('|') ? pipe.trim() : `| ${pipe.trim()}`;
-        output = execSync(`${curlCmd} ${safePipe}`, {
+      if (normalizedPipe) {
+        output = execSync(`${curlCmd} | ${normalizedPipe}`, {
           encoding: 'utf-8',
           maxBuffer: 10 * 1024 * 1024,
           stdio: ['pipe', 'pipe', 'pipe'],
           shell: '/bin/bash',
-          timeout: timeout * 1000, // Node.js timeout in ms
+          timeout: timeout * 1000,
         });
-        
-        // For piped requests, assume success (can't easily get status code)
+
+        // For piped requests, use command success as success indicator.
         httpStatus = 200;
       } else {
-        // Without pipe, include status marker
-        curlCmd += ` -w "\n---HTTP_STATUS:%{http_code}---"`;
+        curlCmd += ' -w "\\n---HTTP_STATUS:%{http_code}---"';
         output = execSync(curlCmd, {
           encoding: 'utf-8',
           maxBuffer: 10 * 1024 * 1024,
           stdio: ['pipe', 'pipe', 'pipe'],
           shell: '/bin/bash',
-          timeout: timeout * 1000, // Node.js timeout in ms
+          timeout: timeout * 1000,
         });
 
         const lines = output.split('\n');
@@ -108,7 +133,7 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
       }
     } catch (execErr) {
       clearTimeout(timeoutHandle);
-      
+
       if (timedOut || (execErr instanceof Error && execErr.message.includes('timeout'))) {
         logger.warn('curl request timed out', { url, encodedUrl, method, timeout });
         return { toolName: 'curl_request', success: false, error: `Request timeout after ${timeout} seconds` };
@@ -116,7 +141,14 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
       throw execErr;
     }
 
-    logger.info('curl request completed', { url, encodedUrl, method, httpStatus, responseSize: output.length, pipeUsed: !!pipe });
+    logger.info('curl request completed', {
+      url,
+      encodedUrl,
+      method,
+      httpStatus,
+      responseSize: output.length,
+      pipeUsed: !!normalizedPipe,
+    });
 
     if (httpStatus >= 400) {
       logger.warn('curl request returned error status', { url, encodedUrl, method, httpStatus, response: output });

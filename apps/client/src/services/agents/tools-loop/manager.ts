@@ -30,10 +30,13 @@ async function toolsLoop(
 ): Promise<ProcessedMessage> {
   const toolsQueue = new ToolsQueue(logger);
   const signal = options?.signal || new AbortController().signal;
-  const onProgress = options?.onProgress || ((text) => logger.info(text));
+  const onProgress = options?.onProgress || (() => {});
 
   const messageHistory = message.getHistory();
 
+  /**
+   * Make AI understand exactly city names
+   */
   const aiResponse = await messageProvider(
     logger,
     userMessage,

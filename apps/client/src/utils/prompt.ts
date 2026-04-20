@@ -19,7 +19,8 @@ NOW DO THIS:
    - Extract the HTTP method (GET, POST, PUT, DELETE, etc.)
    - Extract any headers or authentication required
    - Extract the request body if present
-   - Call the curl_request tool with these parameters
+  - Call the curl_request tool with these parameters
+  - Do NOT add any extra arguments, shell pipes, jq, grep, awk, sed, or transformations unless explicitly shown in the skill documentation
 5. After executing the curl request, analyze the response and provide a clear answer to the user
 Remember: Use the curl_request tool to execute any HTTP/API calls shown in the skill.
 ---`;

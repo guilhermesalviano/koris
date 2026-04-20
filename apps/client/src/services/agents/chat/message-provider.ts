@@ -6,9 +6,9 @@ import type { AIChatRequest } from "../../../types/provider";
 import { PromptRepositoryFactory } from "../../../repositories/prompt";
 import { ToolCall } from "../../../types/tools";
 import { Message } from "../../../entities/message";
+import { ProcessOptions } from "../../../types/agents";
 
 type ProcessedMessage = string | ToolCall[] | AsyncGenerator<string>;
-type ProcessOptions = { signal?: AbortSignal, toolsEnabled?: boolean };
 
 async function messageProvider(
   logger: ILogger,
@@ -32,7 +32,7 @@ async function messageProvider(
     messageHistory: historyMessages
   });
 
-  logger.info("Generated prompt:", payload as unknown as Record<string, unknown>);
+  logger.info(`Prompt generated in ${new Date().toISOString()}:`, payload as unknown as Record<string, unknown>);
 
   const chatRequest = payload as AIChatRequest;
 

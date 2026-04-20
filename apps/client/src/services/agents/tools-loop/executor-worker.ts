@@ -33,12 +33,6 @@ async function executorWorker(
   }
   onProgress(`Iteration ${iteration}`);
 
-  /**
-   * bug to fix:
-   * in one iteration, execute, send to AI results and
-   * return to the user.
-   */
-
   const toolResults = await toolsQueue.handle(
     toolCalls,
     { model: config.AI.MODEL },
@@ -49,9 +43,8 @@ async function executorWorker(
     logger,
     buildToolResultPrompt(userMessage, toolResults),
     channel,
-    options,
+    {...options, toolsEnabled: false},
     messageHistory,
-    // [], // Test: Don't include full message history in subsequent iterations to avoid token overload - only the latest user message and tool results
   );
 
   const normalizedToolResults = normalizeResponse(response);

@@ -28,7 +28,8 @@ interface PromptConfig {
  * Composes system prompts, user messages, and tool definitions.
  */
 class PromptRepository {
-  private readonly defaultSystemPrompt = 'You are a Personal Assistant. Be direct.';
+  private readonly defaultSystemPrompt =
+    'You are a Personal Assistant. Be direct. Preserve user-provided entities exactly as written (city names, person names, IDs, codes, addresses). Never auto-correct, translate, expand, or infer a different entity unless the user explicitly asks.';
 
   constructor(
     private systemInfoRepository: ISystemInfoRepository,
