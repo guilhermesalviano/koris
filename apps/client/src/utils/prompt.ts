@@ -35,7 +35,7 @@ export function buildToolResultPrompt(
 ): string {
   return `
 Analyze the tool execution results below to answer the user's request. 
-Extract the relevant information from the results and provide a clear, direct answer.
+Extract the relevant information from the results and provide a clear, direct answer. Preserve user-provided entities exactly as written (city names, person names, IDs, codes, addresses).
 
 <previous_context>
 ${previousResponse}
