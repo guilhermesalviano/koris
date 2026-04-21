@@ -1,4 +1,6 @@
 import * as readline from 'readline';
+import * as fs from 'fs';
+import * as path from 'path';
 import { defaultColors } from './colors';
 import { createInputFilter } from './input-filter';
 import { buildBeautifulPrompt, defaultFormatResponse, isAsyncIterable } from './formatting';
@@ -301,42 +303,35 @@ export function startTui(options: StartTuiOptions): void {
 
   // ── Autocomplete ────────────────────────────────────────────────────────────
   const allCommands = options.commands ?? [];
-  let acSuggestions: typeof allCommands = [];
+  let acSuggestions: { name: string; description?: string }[] = [];
   let acIndex = -1;
+  let acMode: 'commands' | 'files' = 'commands';
   const AC_MAX_ROWS = 8;
-  // acPopupTop: topmost row of the reserved area (always AC_MAX_ROWS tall).
-  // Suggestions are rendered flush to the BOTTOM of that area.
-  // popupBottom = terminalHeight - 5 (just above the spinner row).
+  // Reserved area: always AC_MAX_ROWS rows, flush to the bottom just above the spinner.
   const acPopupBottom = () => terminalHeight - 5;
-  const acPopupTop = () => acPopupBottom() - AC_MAX_ROWS + 1;
+  const acPopupTop    = () => acPopupBottom() - AC_MAX_ROWS + 1;
 
   const renderAc = () => {
     if (!fixedInput) return;
     process.stdout.write('\x1b7');
-
     const count = Math.min(acSuggestions.length, AC_MAX_ROWS);
-
     for (let i = 0; i < AC_MAX_ROWS; i++) {
       const row = acPopupTop() + i;
       process.stdout.write(ansi.cursorPos(row, 1));
       process.stdout.write(ansi.clearLine);
-
-      // Only render rows in the bottom `count` slots.
       const sugIdx = i - (AC_MAX_ROWS - count);
       if (sugIdx < 0) continue;
-      const cmd = acSuggestions[sugIdx];
-      if (!cmd) continue;
-
+      const item = acSuggestions[sugIdx];
+      if (!item) continue;
       const isSelected = sugIdx === acIndex;
-      const nameStr = cmd.name.padEnd(16);
-      const desc = cmd.description ? `  ${colors.dim}${cmd.description}${colors.reset}` : '';
+      const nameStr = item.name.padEnd(20);
+      const desc = item.description ? `  ${colors.dim}${item.description}${colors.reset}` : '';
       if (isSelected) {
         process.stdout.write(`\x1b[46m\x1b[30m ${nameStr}\x1b[0m\x1b[46m\x1b[30m${desc} \x1b[0m`);
       } else {
         process.stdout.write(`${colors.dim} ${nameStr}${desc}${colors.reset}`);
       }
     }
-
     process.stdout.write('\x1b8');
   };
 
@@ -347,27 +342,87 @@ export function startTui(options: StartTuiOptions): void {
     renderAc();
   };
 
+  const listFileCompletions = (query: string): { name: string; description: string }[] => {
+    let dir: string;
+    let base: string;
+    if (query === '' || query.endsWith('/') || query.endsWith(path.sep)) {
+      dir  = query || '.';
+      base = '';
+    } else {
+      dir  = path.dirname(query) || '.';
+      base = path.basename(query);
+    }
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      return entries
+        .filter((e) => !base || e.name.toLowerCase().startsWith(base.toLowerCase()))
+        .filter((e) => !e.name.startsWith('.') || base.startsWith('.'))
+        .slice(0, AC_MAX_ROWS)
+        .map((e) => {
+          const fullPath = dir === '.' ? e.name : path.join(dir, e.name);
+          return {
+            name:        e.isDirectory() ? fullPath + '/' : fullPath,
+            description: e.isDirectory() ? 'dir' : 'file',
+          };
+        });
+    } catch {
+      return [];
+    }
+  };
+
   const acUpdateFromInput = () => {
     if (isBusy) { acDismiss(); return; }
     const currentLine: string = (anyRl as any).line ?? '';
-    if (!currentLine.startsWith('/') || currentLine.includes(' ')) {
-      acDismiss();
+
+    // Command autocomplete: line starts with / (no spaces).
+    if (currentLine.startsWith('/') && !currentLine.includes(' ')) {
+      acMode = 'commands';
+      const query = currentLine.toLowerCase();
+      const next = allCommands.filter(c => c.name.toLowerCase().startsWith(query));
+      acSuggestions = next;
+      acIndex = next.length > 0 ? 0 : -1;
+      renderAc();
       return;
     }
-    const query = currentLine.toLowerCase();
-    const next = allCommands.filter(c => c.name.toLowerCase().startsWith(query));
-    acSuggestions = next;
-    acIndex = next.length > 0 ? 0 : -1;
-    renderAc();
+
+    // File autocomplete: line contains @ — trigger from the last @.
+    const atIdx = currentLine.lastIndexOf('@');
+    if (atIdx !== -1) {
+      acMode = 'files';
+      const fileQuery = currentLine.slice(atIdx + 1);
+      const next = listFileCompletions(fileQuery);
+      acSuggestions = next;
+      acIndex = next.length > 0 ? 0 : -1;
+      renderAc();
+      return;
+    }
+
+    acDismiss();
   };
 
-  // Patch _ttyWrite to swallow ↑/↓ from readline history navigation while popup is open.
-  if (allCommands.length > 0) {
+  /** Apply the chosen suggestion to the current input line. */
+  const acApply = (chosen: string) => {
+    if (acMode === 'files') {
+      const currentLine: string = (anyRl as any).line ?? '';
+      const atIdx = currentLine.lastIndexOf('@');
+      const newLine = currentLine.slice(0, atIdx + 1) + chosen;
+      (anyRl as any).line   = newLine;
+      (anyRl as any).cursor = newLine.length;
+    } else {
+      (anyRl as any).line   = chosen;
+      (anyRl as any).cursor = chosen.length;
+    }
+    if (typeof anyRl._refreshLine === 'function') (anyRl as any)._refreshLine();
+  };
+
+  // Patch _ttyWrite to swallow ↑/↓ history navigation while popup is open.
+  {
     const originalTtyWrite = (anyRl as any)._ttyWrite?.bind(rl);
     if (typeof originalTtyWrite === 'function') {
       (anyRl as any)._ttyWrite = function (s: string, key?: { name?: string }) {
+        if (key?.name === 'tab') return;
         if (acSuggestions.length > 0 && (key?.name === 'up' || key?.name === 'down')) {
-          return; // consumed by our keypress handler
+          return;
         }
         return originalTtyWrite(s, key);
       };
@@ -375,22 +430,21 @@ export function startTui(options: StartTuiOptions): void {
   }
 
   const onAcKeypress = (_ch: string, key?: { name?: string; shift?: boolean }) => {
-    if (!fixedInput || isBusy || allCommands.length === 0) return;
+    if (!fixedInput || isBusy) return;
     const k = key?.name;
 
     if (k === 'tab') {
-      if (acSuggestions.length === 0) {
-        acUpdateFromInput();
-        return;
-      }
+      if (acSuggestions.length === 0) { acUpdateFromInput(); return; }
       acIndex = key?.shift
         ? (acIndex <= 0 ? acSuggestions.length - 1 : acIndex - 1)
         : (acIndex + 1) % acSuggestions.length;
-      const chosen = acSuggestions[acIndex].name;
-      (anyRl as any).line = chosen;
-      (anyRl as any).cursor = chosen.length;
-      if (typeof anyRl._refreshLine === 'function') (anyRl as any)._refreshLine();
-      renderAc();
+      acApply(acSuggestions[acIndex].name);
+      // Directories: drill in on Tab.
+      if (acMode === 'files' && acSuggestions[acIndex]?.name.endsWith('/')) {
+        setTimeout(acUpdateFromInput, 0);
+      } else {
+        renderAc();
+      }
       return;
     }
 
@@ -406,21 +460,21 @@ export function startTui(options: StartTuiOptions): void {
       return;
     }
 
-    // Enter with a selection: fill the line BEFORE readline emits 'line'.
     if ((k === 'return' || k === 'enter') && acIndex >= 0 && acSuggestions[acIndex]) {
       const chosen = acSuggestions[acIndex].name;
-      (anyRl as any).line = chosen;
-      (anyRl as any).cursor = chosen.length;
-      // acDismiss() will be called by the 'line' event handler.
+      if (acMode === 'files' && chosen.endsWith('/')) {
+        // Directory: drill in, don't submit.
+        acApply(chosen);
+        setTimeout(acUpdateFromInput, 0);
+        return;
+      }
+      // Apply the selection; readline will emit 'line' with the updated value.
+      acApply(chosen);
       return;
     }
 
-    if (k === 'escape') {
-      acDismiss();
-      return;
-    }
+    if (k === 'escape') { acDismiss(); return; }
 
-    // Any other key: update suggestions after readline has processed the keystroke.
     if (k !== 'return' && k !== 'enter') {
       setTimeout(acUpdateFromInput, 0);
     }
