@@ -5,6 +5,7 @@ import { IToolsRepository, ToolsRepositoryFactory } from './tools';
 import { MessageRole } from '../types/messages';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
+import { SYSTEM_PROMPT } from '../constants';
 
 interface Message {
   role: MessageRole;
@@ -30,9 +31,6 @@ interface PromptConfig {
  * Composes system prompts, user messages, and tool definitions.
  */
 class PromptRepository {
-  private readonly defaultSystemPrompt =
-    'You are a Personal Assistant. Be direct. Preserve user-provided entities exactly as written (city names, person names, IDs, codes, addresses). Never auto-correct, translate, expand, or infer a different entity unless the user explicitly asks.';
-
   constructor(
     private systemInfoRepository: ISystemInfoRepository,
     private toolsRepository: IToolsRepository,
@@ -68,7 +66,7 @@ class PromptRepository {
     const messages: Message[] = [];
 
     // Base system prompt
-    const basePrompt = this.config.systemPrompt ?? this.defaultSystemPrompt;
+    const basePrompt = this.config.systemPrompt ?? SYSTEM_PROMPT;
     const learnedSkillsPrompt = this.learnedSkillsRepository.getAll();
     const baseHistory = basePrompt + "\n" + learnedSkillsPrompt.map((skill) => {
       return `${skill.skill_name}: ${skill.skill_content}`;

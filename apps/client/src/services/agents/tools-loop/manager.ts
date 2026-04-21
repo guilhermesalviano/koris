@@ -6,6 +6,7 @@ import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import { IMessageService } from '../../message-service';
 import { executorWorker } from './executor-worker';
 import { learnerWorker } from './learner-worker';
+import { TOOL_CALL_HELPER } from '../../../constants';
 
 async function toolsLoop(
   logger: ILogger,
@@ -20,9 +21,11 @@ async function toolsLoop(
 
   const messageHistory = message.getHistory();
 
+  const prompt = TOOL_CALL_HELPER + userMessage;
+
   const aiResponse = await messageProvider(
     logger,
-    userMessage,
+    prompt,
     channel,
     options,
     messageHistory
