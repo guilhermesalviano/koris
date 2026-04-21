@@ -16,3 +16,5 @@ logs/
 settings.json
 
 temp/
+reports/
+.stryker-tmp/

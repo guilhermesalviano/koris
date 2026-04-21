@@ -28,7 +28,14 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile --force || {
+            echo "Initial install failed, cleaning npm artifacts and pnpm store before retry..."
+            rm -f package-lock.json
+            find . -name node_modules -type d -prune -exec rm -rf {} +
+            pnpm store prune
+            pnpm install --frozen-lockfile --force
+          }
 
       - name: Build
         run: pnpm build
@@ -45,6 +52,88 @@ jobs:
           else
             echo "found=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Add coverage annotations
+        if: steps.check-coverage.outputs.found == 'true'
+        env:
+          COVERAGE_MIN: '80'
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const coveragePath = './apps/client/coverage/coverage-final.json';
+          const min = Number(process.env.COVERAGE_MIN ?? '80');
+          const coverage = JSON.parse(fs.readFileSync(coveragePath, 'utf8'));
+
+          const totals = {
+            lines: { covered: 0, total: 0 },
+            statements: { covered: 0, total: 0 },
+            functions: { covered: 0, total: 0 },
+            branches: { covered: 0, total: 0 },
+          };
+
+          for (const fileData of Object.values(coverage)) {
+            const statements = fileData.s ?? {};
+            const statementKeys = Object.keys(statements);
+            totals.statements.total += statementKeys.length;
+            totals.statements.covered += statementKeys.filter((k) => Number(statements[k]) > 0).length;
+
+            const functions = fileData.f ?? {};
+            const functionKeys = Object.keys(functions);
+            totals.functions.total += functionKeys.length;
+            totals.functions.covered += functionKeys.filter((k) => Number(functions[k]) > 0).length;
+
+            const branches = fileData.b ?? {};
+            for (const branchCounts of Object.values(branches)) {
+              if (!Array.isArray(branchCounts)) {
+                continue;
+              }
+
+              totals.branches.total += branchCounts.length;
+              totals.branches.covered += branchCounts.filter((count) => Number(count) > 0).length;
+            }
+
+            const lines = fileData.l ?? {};
+            const lineKeys = Object.keys(lines);
+            totals.lines.total += lineKeys.length;
+            totals.lines.covered += lineKeys.filter((k) => Number(lines[k]) > 0).length;
+          }
+
+          const percent = (metric) => {
+            if (metric.total === 0) {
+              return 100;
+            }
+
+            return Number(((metric.covered / metric.total) * 100).toFixed(2));
+          };
+
+          const results = {
+            lines: percent(totals.lines),
+            statements: percent(totals.statements),
+            functions: percent(totals.functions),
+            branches: percent(totals.branches),
+          };
+
+          for (const [name, value] of Object.entries(results)) {
+            const level = value < min ? 'warning' : 'notice';
+            console.log(`::${level} title=Coverage ${name}::${value}% (min ${min}%)`);
+          }
+
+          const summary = [
+            '## Coverage Summary',
+            '',
+            '| Metric | Coverage | Threshold | Status |',
+            '|---|---:|---:|---|',
+          ];
+
+          for (const [name, value] of Object.entries(results)) {
+            const status = value < min ? 'Below threshold' : 'OK';
+            summary.push(`| ${name} | ${value}% | ${min}% | ${status} |`);
+          }
+
+          summary.push('');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary.join('\n')}\n`);
+          NODE
 
       - name: Upload coverage reports
         if: steps.check-coverage.outputs.found == 'true'

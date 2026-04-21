@@ -17,6 +17,11 @@
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
     },
+    "test:mutation": {
+      "dependsOn": ["^build"],
+      "outputs": ["reports/mutation/**"],
+      "cache": false
+    },
     "dev": {
       "cache": false,
       "persistent": true
