@@ -52,11 +52,14 @@ export function startTui(options: StartTuiOptions): void {
 
   // Layout in fixed mode:
   // - content area
-  // - spinner status line
-  // - separator line
-  // - footer help line
-  // - input line
-  const maxContentLines = () => Math.max(1, terminalHeight - 4);
+  // Layout (bottom-up from terminalHeight):
+  //   row terminalHeight     = footer text
+  //   row terminalHeight - 1 = footer separator
+  //   row terminalHeight - 2 = input line (readline)
+  //   row terminalHeight - 3 = separator above input
+  //   row terminalHeight - 4 = spinner / progress row  ← exclusively chrome
+  //   rows 1 … terminalHeight - 5 = scrollable content area
+  const maxContentLines = () => Math.max(1, terminalHeight - 5);
   const ensureScrollOffsetInRange = () => {
     const maxOffset = Math.max(0, contentBuffer.length - maxContentLines());
     scrollOffset = Math.max(0, Math.min(maxOffset, scrollOffset));
@@ -506,7 +509,7 @@ export function startTui(options: StartTuiOptions): void {
     const endIdx = Math.min(contentBuffer.length, startIdx + availableHeight);
     const visibleContent = contentBuffer.slice(startIdx, endIdx);
 
-    // Repaint content area line-by-line to reduce flicker.
+    // Repaint content area (rows 1 … terminalHeight-5) strictly above chrome.
     for (let row = 0; row < availableHeight; row++) {
       process.stdout.write(ansi.cursorPos(row + 1, 1));
       process.stdout.write(ansi.clearLine);
@@ -514,7 +517,7 @@ export function startTui(options: StartTuiOptions): void {
       if (typeof line === 'string') process.stdout.write(line);
     }
 
-    // Spinner status row (line above separator)
+    // Row terminalHeight-4: spinner/progress (exclusively chrome, never content).
     process.stdout.write(ansi.cursorPos(terminalHeight - 4, 1));
     process.stdout.write(ansi.clearLine);
     process.stdout.write(buildSpinnerLine(spinnerStatus));
