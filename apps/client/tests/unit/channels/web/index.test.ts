@@ -1,25 +1,55 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
+import type { ILogger } from '../../../../src/infrastructure/logger';
 
 type Handler = (req: Request, res: Response) => void;
+type AsyncHandler = (req: Request, res: Response) => Promise<void>;
+
+const {
+  mockHealthCheck,
+  mockAgentHandle,
+  mockAgentFactoryCreate,
+} = vi.hoisted(() => ({
+  mockHealthCheck: vi.fn(),
+  mockAgentHandle: vi.fn(),
+  mockAgentFactoryCreate: vi.fn(),
+}));
+
+vi.mock('../../../../src/services/provider-health-service', () => ({
+  healthCheck: mockHealthCheck,
+}));
+
+vi.mock('../../../../src/services/agents/handler', () => ({
+  AgentHandlerFactory: {
+    create: mockAgentFactoryCreate,
+  },
+}));
 
 interface MockResponse {
   sendFile: ReturnType<typeof vi.fn>;
   status: ReturnType<typeof vi.fn>;
   json: ReturnType<typeof vi.fn>;
+  setHeader: ReturnType<typeof vi.fn>;
+  flushHeaders: ReturnType<typeof vi.fn>;
+  write: ReturnType<typeof vi.fn>;
+  end: ReturnType<typeof vi.fn>;
+  on: ReturnType<typeof vi.fn>;
+  off: ReturnType<typeof vi.fn>;
 }
 
-async function loadServeIndexHandler(): Promise<(publicDir: string) => Handler> {
+async function loadWebModule(): Promise<typeof import('../../../../src/channels/web')> {
   vi.resetModules();
-  const mod = await import('../../../../src/channels/web');
-  return mod.serveIndexHandler;
+  return import('../../../../src/channels/web');
 }
 
 function makeRequest(ip: string): Request {
   return {
     ip,
     socket: { remoteAddress: ip },
-  } as Request;
+    body: {},
+    on: vi.fn(),
+    off: vi.fn(),
+  } as unknown as Request;
 }
 
 function makeResponse(): Response & MockResponse {
@@ -27,6 +57,14 @@ function makeResponse(): Response & MockResponse {
     sendFile: vi.fn(),
     status: vi.fn(),
     json: vi.fn(),
+    setHeader: vi.fn(),
+    flushHeaders: vi.fn(),
+    write: vi.fn(),
+    end: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
+    writableEnded: false,
+    destroyed: false,
   } as unknown as Response & MockResponse;
 
   res.status.mockReturnValue(res);
@@ -38,10 +76,14 @@ function makeResponse(): Response & MockResponse {
 describe('serveIndexHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockHealthCheck.mockReset();
+    mockAgentHandle.mockReset();
+    mockAgentFactoryCreate.mockReset();
+    mockAgentFactoryCreate.mockReturnValue({ handle: mockAgentHandle });
   });
 
   it('serves index.html when request is within the rate limit', async () => {
-    const serveIndexHandler = await loadServeIndexHandler();
+    const { serveIndexHandler } = await loadWebModule();
     const handler = serveIndexHandler('/tmp/public');
 
     const req = makeRequest('127.0.0.1');
@@ -55,7 +97,7 @@ describe('serveIndexHandler', () => {
   });
 
   it('returns 429 after exceeding per-IP index rate limit window', async () => {
-    const serveIndexHandler = await loadServeIndexHandler();
+    const { serveIndexHandler } = await loadWebModule();
     const handler = serveIndexHandler('/tmp/public');
 
     const req = makeRequest('10.0.0.1');
@@ -77,7 +119,7 @@ describe('serveIndexHandler', () => {
   });
 
   it('tracks rate limits independently per IP', async () => {
-    const serveIndexHandler = await loadServeIndexHandler();
+    const { serveIndexHandler } = await loadWebModule();
     const handler = serveIndexHandler('/tmp/public');
 
     const reqA = makeRequest('192.168.0.10');
@@ -92,5 +134,110 @@ describe('serveIndexHandler', () => {
 
     expect(resB.status).not.toHaveBeenCalledWith(429);
     expect(resB.sendFile).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('createHealthHandler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns HTTP 200 when provider health is ok', async () => {
+    const logger = {
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+      warn: vi.fn(),
+    } as ILogger;
+    mockHealthCheck.mockResolvedValue({ status: 'ok', timestamp: '2026-01-01', details: 'fine' });
+
+    const { createHealthHandler } = await loadWebModule();
+    const handler = createHealthHandler(logger) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ status: 'ok', timestamp: '2026-01-01', details: 'fine' });
+  });
+
+  it('returns HTTP 500 when provider health is not ok', async () => {
+    const logger = {
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+      warn: vi.fn(),
+    } as ILogger;
+    mockHealthCheck.mockResolvedValue({ status: 'error', timestamp: '2026-01-01', details: 'down' });
+
+    const { createHealthHandler } = await loadWebModule();
+    const handler = createHealthHandler(logger) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ status: 'error', timestamp: '2026-01-01', details: 'down' });
+  });
+});
+
+describe('createChatHandler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAgentFactoryCreate.mockReset();
+    mockAgentHandle.mockReset();
+    mockAgentFactoryCreate.mockReturnValue({ handle: mockAgentHandle });
+  });
+
+  it('returns 400 when message is missing', async () => {
+    const logger = {
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+      warn: vi.fn(),
+    } as ILogger;
+
+    const { createChatHandler } = await loadWebModule();
+    const handler = createChatHandler(logger) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'message is required' });
+    expect(mockAgentHandle).not.toHaveBeenCalled();
+  });
+
+  it('streams progress + final response in SSE format', async () => {
+    const logger = {
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+      warn: vi.fn(),
+    } as ILogger;
+
+    mockAgentHandle.mockImplementation(async (_msg: string, options: { onProgress?: (s: string) => void }) => {
+      options.onProgress?.('working');
+      return 'done';
+    });
+
+    const { createChatHandler } = await loadWebModule();
+    const handler = createChatHandler(logger) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    req.body = { message: 'hello' } as Request['body'];
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/event-stream; charset=utf-8');
+    expect(res.flushHeaders).toHaveBeenCalled();
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"type":"progress"'));
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"text":"done"'));
+    expect(res.write).toHaveBeenCalledWith('data: [DONE]\n\n');
+    expect(res.end).toHaveBeenCalled();
   });
 });

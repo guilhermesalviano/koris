@@ -6,7 +6,7 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "test:coverage": "turbo run test:coverage",
+    "test:coverage": "turbo run test:coverage --",
     "dev": "turbo run dev --filter=opencrawdio",
     "dev:tui": "turbo run dev:tui --filter=opencrawdio",
     "start": "turbo run start --filter=opencrawdio",
