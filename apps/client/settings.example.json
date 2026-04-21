@@ -9,6 +9,7 @@
     "USE_POLLING": true
   },
   "ai": {
+    "ALLOW_REMOTE_BASE_URL": false,
     "PROVIDER": "ollama",
     "BASE_URL": "http://localhost:11434",
     "API_TOKEN": "",

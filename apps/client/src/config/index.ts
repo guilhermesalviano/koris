@@ -44,6 +44,7 @@ export const config = {
       ? 'mock'
       : get('AI_PROVIDER', 'ai.PROVIDER', 'ollama'),
     BASE_URL:  get('AI_BASE_URL',  'ai.BASE_URL',  'http://localhost:11434'),
+    ALLOW_REMOTE_BASE_URL: get('AI_ALLOW_REMOTE_BASE_URL', 'ai.ALLOW_REMOTE_BASE_URL', 'false') === 'true',
     API_TOKEN: get('AI_API_TOKEN', 'ai.API_TOKEN', ''),
     MODEL:     get('AI_MODEL',     'ai.MODEL',     'gemma4:e2b'),
   },
