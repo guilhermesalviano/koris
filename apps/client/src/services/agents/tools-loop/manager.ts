@@ -1,13 +1,13 @@
-import { ILogger } from '../../../infrastructure/logger';
 import { messageProvider } from '../chat/message-provider';
 import { extractToolCalls, normalizeResponse } from '../../../utils/tool-calls';
 import { ToolsQueue } from '../../tools-queue';
-import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
-import { IMessageService } from '../../message-service';
 import { executorWorker } from './executor-worker';
 import { learnerWorker } from './learner-worker';
 import { TOOL_CALL_HELPER } from '../../../constants';
-import { LoopContext } from '../../../types/tools';
+import { LoopContext } from './context';
+import type { ProcessedMessage, ProcessOptions } from '../../../types/agents';
+import type { IMessageService } from '../../message-service';
+import type { ILogger } from '../../../infrastructure/logger';
 
 async function toolsLoop(
   logger: ILogger,

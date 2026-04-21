@@ -1,13 +1,21 @@
 import pLimit from "p-limit";
-import { ILogger } from "../../infrastructure/logger";
 import { ToolCall, ToolResult } from "../../types/tools";
 import { COMMAND_MAP } from "./tools";
+import type { ILogger } from "../../infrastructure/logger";
 
 interface AIAgentRequest {
   model?: string;
 }
 
-class ToolsQueue {
+interface IToolsQueue {
+  handle(
+    tools: ToolCall[],
+    _agent: AIAgentRequest,
+    signal: AbortSignal,
+  ): Promise<string>;
+}
+
+class ToolsQueue implements IToolsQueue {
   constructor(
     private logger: ILogger,
     private maxWorkers: number = 2
@@ -55,7 +63,10 @@ class ToolsQueue {
 
   async executeTool(logger: ILogger, toolCall: ToolCall): Promise<ToolResult> {
     const { name, arguments: args } = toolCall;
-    logger.info(`Executing tool: ${name} with arguments: ${JSON.stringify(args)}`);
+    logger.debug('Executing tool', {
+      toolName: name,
+      args,
+    });
 
     try {
       const command = COMMAND_MAP[name];
@@ -78,4 +89,4 @@ class ToolsQueue {
   }
 }
 
-export { ToolsQueue };
+export { ToolsQueue, IToolsQueue };

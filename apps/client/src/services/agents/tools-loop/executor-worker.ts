@@ -1,13 +1,13 @@
-import { ILogger } from "../../../infrastructure/logger";
 import { extractToolCalls, normalizeResponse } from "../../../utils/tool-calls";
-import { config } from "../../../config";
-import { ProcessOptions } from "../../../types/agents";
-import { Message } from "../../../entities/message";
 import { ToolCall } from "../../../types/tools";
-import { IMessageService } from "../../message-service";
-import { ToolsQueue } from "../../tools-queue";
 import { messageProvider } from "../chat/message-provider";
 import { buildToolResultPrompt } from "../../../utils/prompt";
+import { config } from "../../../config";
+import type { ILogger } from "../../../infrastructure/logger";
+import type { ProcessOptions } from "../../../types/agents";
+import type { Message } from "../../../entities/message";
+import type { IMessageService } from "../../message-service";
+import type { IToolsQueue } from "../../tools-queue";
 
 async function executorWorker(
   toolCalls: ToolCall[],
@@ -15,7 +15,7 @@ async function executorWorker(
   logger: ILogger,
   channel: string,
   message: IMessageService,
-  toolsQueue: ToolsQueue,
+  toolsQueue: IToolsQueue,
   signal: AbortSignal,
   onProgress: (text: string) => void,
   options: ProcessOptions | undefined,

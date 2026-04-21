@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { config } from "../../../../config";
-import { ILogger } from '../../../../infrastructure/logger';
-import { ToolResult } from '../../../../types/tools';
+import type { ILogger } from '../../../../infrastructure/logger';
+import type { ToolResult } from '../../../../types/tools';
 
 const BASE_DIR = config.BASE_DIR;
 
@@ -9,12 +9,41 @@ const ALLOWED_COMMANDS = new Set([
   'ls', 
   'git', 
   'npm', 
-  'cat'
+  'cat',
+  'echo',
 ]);
 
+function tokenizeCommand(input: string): string[] {
+  const tokens: string[] = [];
+  const regex = /"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|(\S+)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(input)) !== null) {
+    if (match[1] !== undefined) {
+      tokens.push(match[1].replace(/\\"/g, '"'));
+      continue;
+    }
+
+    if (match[2] !== undefined) {
+      tokens.push(match[2].replace(/\\'/g, "'"));
+      continue;
+    }
+
+    if (match[3] !== undefined) {
+      tokens.push(match[3]);
+    }
+  }
+
+  return tokens;
+}
+
 export async function executeCommand(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
-  const command = args.command as string;
-  const commandArgs = (args.args as string[]) || []; 
+  const rawCommand = typeof args.command === 'string' ? args.command.trim() : '';
+  const rawArgs = Array.isArray(args.args) ? (args.args as string[]) : [];
+
+  const tokenized = rawCommand.includes(' ') ? tokenizeCommand(rawCommand) : [rawCommand];
+  const command = tokenized[0] ?? '';
+  const commandArgs = rawArgs.length > 0 ? rawArgs : tokenized.slice(1);
 
   if (!command) {
     return { toolName: 'execute_command', success: false, error: 'Missing required parameter: command' };

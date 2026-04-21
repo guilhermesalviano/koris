@@ -1,11 +1,12 @@
-import { config } from "../../../config";
-import { Message } from "../../../entities/message";
-import { LoopContext, ToolCall } from "../../../types/tools";
+import { ToolCall } from "../../../types/tools";
 import { buildSkillLearningPrompt, buildSkillPrompt } from "../../../utils/prompt";
 import { normalizeResponse } from "../../../utils/tool-calls";
 import { LearnedSkillsRepositoryFactory } from "../../../repositories/learned-skills";
 import { DatabaseServiceFactory } from "../../../infrastructure/db-sqlite";
 import { messageProvider } from "../chat/message-provider";
+import { LoopContext } from "./context";
+import { config } from "../../../config";
+import type { Message } from "../../../entities/message";
 
 async function learnerWorker(
   toolCalls: ToolCall[],
