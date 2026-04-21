@@ -50,7 +50,7 @@ async function toolsLoop(
 
   if (toExecute.length === 0) return responseText;
 
-  ctx.onProgress(`⚙️ Execution phase: ${toExecute.length} tool(s)`);
+  ctx.onProgress(`⚙️  Execution phase: ${toExecute.length} tool(s)`);
   return executorWorker(toExecute, messageHistory, ctx.logger, ctx.channel, ctx.message, ctx.toolsQueue, ctx.signal, ctx.onProgress, ctx.options, userMessage);
 }
 
