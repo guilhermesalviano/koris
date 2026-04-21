@@ -160,13 +160,12 @@ export function createAutocomplete(deps: AutocompleteDeps) {
     const k = key?.name;
 
     // Clear placeholder immediately on any printable keystroke.
+    // Erase only from the current cursor position (after the prompt) to end of
+    // line — do NOT move to col 1, which would overwrite the '❯' prompt glyph.
     if (placeholder && (anyRl.line ?? '') === '') {
       const isPrintable = typeof _ch === 'string' && _ch.length > 0 && _ch.charCodeAt(0) >= 32;
       if (isPrintable) {
-        process.stdout.write('\x1b7');
-        process.stdout.write(ansi.cursorPos(state.terminalHeight - 2, 1));
-        process.stdout.write('\x1b[2K');
-        process.stdout.write('\x1b8');
+        process.stdout.write('\x1b[0K');
       }
     }
 
