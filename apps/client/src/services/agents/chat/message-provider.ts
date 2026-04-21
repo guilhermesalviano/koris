@@ -22,6 +22,10 @@ async function messageProvider(
   const skillsRepository = new SkillsRepository(logger);
   const skills = skillsRepository.get();
 
+  /**
+   * Todo:
+   * passa prompt repository as dependency
+   */
   const db = DatabaseServiceFactory.create();
   const promptRepository = PromptRepositoryFactory.create(db);
   
