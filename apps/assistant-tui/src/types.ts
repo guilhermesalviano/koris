@@ -26,6 +26,8 @@ export interface TuiContext {
   terminalHeight: number;
   requestSignal?: AbortSignal;
   cancelActiveRequest(): boolean;
+  /** Update the iteration badge shown in the bottom-right corner. Pass empty string to clear. */
+  setIterationBadge(text: string): void;
 }
 
 export interface SpinnerOptions {

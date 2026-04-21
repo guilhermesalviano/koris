@@ -94,22 +94,22 @@ export function startTUI(params: { logger: ILogger }): void {
     
     // Main message handler with progress updates
     onInput: async (message, ctx) => {
-      const progressMessages: string[] = [];
-      
       return await handler.handle(message, {
         toolsEnabled: true,
         signal: ctx.requestSignal,
         onProgress: (summary: string) => {
-          progressMessages.push(summary);
-          const latest = progressMessages[progressMessages.length - 1];
-          const dotColor = progressDotColors[(progressMessages.length - 1) % progressDotColors.length](ctx);
-          const { headline, details } = splitProgressSummary(latest);
-
-          ctx.println(`${ctx.colors.dim}${ctx.colors.bright}${dotColor}●${ctx.colors.reset}${ctx.colors.dim} ${headline}${ctx.colors.reset}`);
-
-          if (details) {
-            ctx.println(`${ctx.colors.dim}${ctx.colors.gray}  └ ${details}${ctx.colors.reset}`);
+          // Update bottom-right iteration badge when executor reports a new iteration.
+          const iterMatch = summary.match(/^Iteration (\d+)/i);
+          if (iterMatch) {
+            ctx.setIterationBadge(`⟳ iter ${iterMatch[1]}`);
+            return;
           }
+
+          const { headline, details } = splitProgressSummary(summary);
+          const mixed = details ? `${headline}\n   └ ${details}` : headline;
+          const dotColor = progressDotColors[Math.floor(Math.random() * progressDotColors.length)](ctx);
+
+          ctx.println(`${ctx.colors.dim}${ctx.colors.bright}${dotColor}●${ctx.colors.reset}${ctx.colors.dim} ${mixed}${ctx.colors.reset}`);
 
           ctx.println();
         }
@@ -119,27 +119,26 @@ export function startTUI(params: { logger: ILogger }): void {
 }
 
 function splitProgressSummary(summary: string): { headline: string; details?: string } {
-  const value = summary.trim();
-  if (!value) {
+  if (!summary.trim()) {
     return { headline: 'Working...' };
   }
 
   const splitters = [': ', ' - ', ' — '];
   for (const splitter of splitters) {
-    const index = value.indexOf(splitter);
+    const index = summary.indexOf(splitter);
     if (index <= 0) {
       continue;
     }
 
-    const headline = value.slice(0, index).trim();
-    const details = value.slice(index + splitter.length).trim();
+    const headline = summary.slice(0, index);
+    const details = summary.slice(index + splitter.length);
 
     if (headline && details) {
       return { headline, details };
     }
   }
 
-  return { headline: value };
+  return { headline: summary };
 }
 
 function defaultColor(name: 'cyan' | 'magenta' | 'yellow' | 'green' | 'blue') {

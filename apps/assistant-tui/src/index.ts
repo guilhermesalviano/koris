@@ -161,6 +161,7 @@ export function startTui(options: StartTuiOptions): void {
 
     if (fixedInput) {
       ensureScrollOffsetInRange();
+      requestRender();
     }
   };
 
@@ -237,6 +238,14 @@ export function startTui(options: StartTuiOptions): void {
     process.stdout.write(ansi.cursorPos(terminalHeight, 1));
     process.stdout.write(ansi.clearLine);
     process.stdout.write(`${colors.bright}${colors.gray}${footerText.slice(0, terminalWidth)}${colors.reset}`);
+
+    if (iterationBadge) {
+      const badge = ` ${iterationBadge} `;
+      const col = Math.max(1, terminalWidth - badge.length + 1);
+      process.stdout.write(ansi.cursorPos(terminalHeight, col));
+      process.stdout.write(`${colors.dim}${colors.cyan}${badge}${colors.reset}`);
+    }
+
     process.stdout.write('\x1b8');
   };
 
@@ -279,11 +288,16 @@ export function startTui(options: StartTuiOptions): void {
       activeAbortController.abort();
       return true;
     },
+    setIterationBadge: (text: string) => {
+      iterationBadge = text;
+      if (fixedInput) renderFooterLine();
+    },
   };
 
   let isRendering = false;
   let renderQueued = false;
   let isBusy = false; // true while a request is in-flight (spinner running)
+  let iterationBadge = ''; // bottom-right overlay text (e.g. "⟳ iter 3")
 
   renderScreen = () => {
     if (!fixedInput) return;
@@ -579,6 +593,7 @@ export function startTui(options: StartTuiOptions): void {
       activeAbortController = undefined;
       ctx.requestSignal = undefined;
       isBusy = false;
+      iterationBadge = '';
       stopSpinner();
     }
 
