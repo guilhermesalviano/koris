@@ -10,6 +10,15 @@ interface WebServerOptions {
   logger: ILogger;
 }
 
+interface RateLimitEntry {
+  count: number;
+  windowStart: number;
+}
+
+const INDEX_RATE_LIMIT_WINDOW_MS = 60_000;
+const INDEX_RATE_LIMIT_MAX_REQUESTS = 60;
+const indexRateLimitStore = new Map<string, RateLimitEntry>();
+
 function createApp(options: WebServerOptions): Application {
   const { logger } = options;
   const app = express();
@@ -27,7 +36,29 @@ function createApp(options: WebServerOptions): Application {
 }
 
 function serveIndexHandler(publicDir: string) {
-  return (_: Request, res: Response) => {
+  return (req: Request, res: Response) => {
+    const now = Date.now();
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    const existing = indexRateLimitStore.get(clientIp);
+
+    if (!existing || now - existing.windowStart >= INDEX_RATE_LIMIT_WINDOW_MS) {
+      indexRateLimitStore.set(clientIp, { count: 1, windowStart: now });
+    } else if (existing.count >= INDEX_RATE_LIMIT_MAX_REQUESTS) {
+      res.status(429).json({ error: 'Too many requests to /. Please try again later.' });
+      return;
+    } else {
+      existing.count += 1;
+      indexRateLimitStore.set(clientIp, existing);
+    }
+
+    if (indexRateLimitStore.size > 5_000) {
+      for (const [ip, entry] of indexRateLimitStore.entries()) {
+        if (now - entry.windowStart >= INDEX_RATE_LIMIT_WINDOW_MS) {
+          indexRateLimitStore.delete(ip);
+        }
+      }
+    }
+
     res.sendFile(path.join(publicDir, '/chat/index.html'));
   };
 }

@@ -10,6 +10,40 @@ function sanitizeFilename(input: string): string {
     .trim();
 }
 
+function parseSearchParams(input: string): string | null {
+  const lower = input.toLowerCase();
+
+  let rest: string;
+  if (lower.startsWith('search')) {
+    rest = input.slice('search'.length);
+  } else if (lower.startsWith('find')) {
+    rest = input.slice('find'.length);
+  } else {
+    return null;
+  }
+
+  rest = rest.trimStart();
+  if (!rest) return null;
+
+  if (rest.toLowerCase().startsWith('for')) {
+    const afterFor = rest.slice('for'.length);
+    if (/^\s/.test(afterFor)) {
+      rest = afterFor.trimStart();
+    }
+  }
+
+  if (!rest) return null;
+
+  if (
+    (rest.startsWith('"') && rest.endsWith('"') && rest.length >= 2) ||
+    (rest.startsWith("'") && rest.endsWith("'") && rest.length >= 2)
+  ) {
+    rest = rest.slice(1, -1).trim();
+  }
+
+  return rest || null;
+}
+
 /**
  * Detect instruction type from user message.
  */
@@ -58,9 +92,9 @@ function detectInstruction(message: string): Instruction | null {
 
   // Search patterns
   if (lower.includes('search') || lower.includes('find')) {
-    const searchMatch = trimmed.match(/(?:search|find)\s+(?:for\s+)?["']?(.+?)["']?$/i);
-    if (searchMatch?.[1]) {
-      return { type: 'search', params: searchMatch[1] };
+    const params = parseSearchParams(trimmed);
+    if (params) {
+      return { type: 'search', params };
     }
   }
 

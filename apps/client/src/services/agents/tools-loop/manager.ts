@@ -26,6 +26,12 @@ async function toolsLoop(
     options,
   };
 
+  /**
+   * Todo:
+   * if AI Learn how to use weather and asked about a "Cat fact", it doesn't
+   * recognize "get skill" to learn
+   */
+
   const messageHistory = message.getHistory();
   const aiResponse = await messageProvider(logger, TOOL_CALL_HELPER + userMessage, channel, options, messageHistory);
   const responseText = normalizeResponse(aiResponse);

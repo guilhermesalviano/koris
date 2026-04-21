@@ -1,6 +1,7 @@
 import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/provider';
 import { config } from '../../../config'; 
 import { ILogger } from '../../../infrastructure/logger';
+import { validateBaseUrl } from '../../../utils/provider';
 
 type OllamaChatChunk = {
   message?: { 
@@ -31,7 +32,8 @@ class OllamaAIProvider implements AIProvider {
 
   constructor(logger: ILogger, opts?: { baseUrl?: string; model?: string }) {
     this.logger = logger;
-    this.baseUrl      = (opts?.baseUrl ?? config.AI.BASE_URL).replace(/\/+$/, '');
+    const resolvedBaseUrl = (opts?.baseUrl ?? config.AI.BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = validateBaseUrl(resolvedBaseUrl, config.AI.ALLOW_REMOTE_BASE_URL);
     this.defaultModel = opts?.model    ?? config.AI.MODEL;
   }
 

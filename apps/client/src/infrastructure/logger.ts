@@ -4,6 +4,7 @@ import {
 import path from 'path';
 import fs from 'fs';
 import { config } from '../config';
+import { sanitizeLogText, sanitizeMeta } from '../utils/sanitize-log-text';
 
 interface ILogger {
   info(message: string, meta?: Record<string, unknown>): void;
@@ -19,20 +20,26 @@ class Logger implements ILogger {
     this.logger = logger;
   }
 
+  private log(level: 'info' | 'error' | 'debug' | 'warn', message: string, meta?: Record<string, unknown>) {
+    const safeMessage = sanitizeLogText(message);
+    const safeMeta = sanitizeMeta(meta);
+    return this.logger.log(level, safeMessage, safeMeta);
+  }
+
   info(message: string, meta?: Record<string, unknown>) {
-    return this.logger.info(message, meta);
+    return this.log('info', message, meta);
   }
 
   error(message: string, meta?: Record<string, unknown>) {
-    return this.logger.error(message, meta);
+    return this.log('error', message, meta);
   }
 
   debug(message: string, meta?: Record<string, unknown>) {
-    return this.logger.debug(message, meta);
+    return this.log('debug', message, meta);
   }
 
   warn(message: string, meta?: Record<string, unknown>) {
-    return this.logger.warn(message, meta);
+    return this.log('warn', message, meta);
   }
 }
 
