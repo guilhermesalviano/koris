@@ -1,6 +1,37 @@
 import { defaultColors } from './colors';
 import type { TuiContext } from './types';
 
+// ── Title art variants ────────────────────────────────────────────────────
+// Each variant is an array of lines. The selector picks the largest art that
+// fits inside the inner content area (terminalWidth - 4).
+
+const TITLE_LARGE = [
+  `██╗  ██╗  ██████╗   █████╗  ██████╗ ██╗ ███████╗        █████╗   ██████╗  ███████╗ ███╗   ██╗ ████████╗`,
+  `██║ ██╔╝ ██╔═══██╗ ██╔══██╗ ██╔══██╗██║ ██╔════╝        ██╔══██╗ ██╔════╝ ██╔════╝ ████╗  ██║ ╚══██╔══╝`,
+  `█████╔╝  ██║   ██║ ███████║ ██████╔╝██║ ███████╗ █████╗ ███████║ ██║  ███╗█████╗   ██╔██╗ ██║    ██║   `,
+  `██╔═██╗  ██║   ██║ ██╔══██║ ██╔══██╗██║ ╚════██║ ╚════╝ ██╔══██║ ██║   ██║██╔══╝   ██║╚██╗██║    ██║   `,
+  `██║  ██╗ ╚██████╔╝ ██║  ██║ ██║  ██║██║ ███████║        ██║  ██║ ╚██████╔╝███████╗ ██║ ╚████║    ██║   `,
+  `╚═╝  ╚═╝  ╚═════╝  ╚═╝  ╚═╝ ╚═╝  ╚═╝╚═╝ ╚══════╝        ╚═╝  ╚═╝  ╚═════╝ ╚══════╝ ╚═╝  ╚═══╝    ╚═╝  `,
+];
+
+// 3-row compact art using Unicode box-drawing characters (~46 chars wide).
+// Letters: K O A R I S  ·  A G E N T
+const TITLE_MEDIUM = [
+  `╦╔  ╔═╗ ╔═╗ ╦═╗  ╦  ╔═╗    ╔═╗ ╔═╗ ╔═╗ ╔╗╔ ╔╦╗`,
+  `╠╩╗ ║ ║ ╠═╣ ╠╦╝  ║  ╚═╗    ╠═╣ ║ ╦ ╠═  ║╚╗  ║ `,
+  `╩ ╩ ╚═╝ ╩ ╩ ╩╚═  ╩  ╚═╝    ╩ ╩ ╚═╝ ╚═╝ ╝ ╚  ╩ `,
+];
+
+// Widths of the art lines (used to pick the right variant).
+const TITLE_LARGE_WIDTH = 104;
+const TITLE_MEDIUM_WIDTH = 46;
+
+function titleArtForWidth(innerWidth: number): string[] {
+  if (innerWidth >= TITLE_LARGE_WIDTH) return TITLE_LARGE;
+  if (innerWidth >= TITLE_MEDIUM_WIDTH) return TITLE_MEDIUM;
+  return []; // tiny: caller renders a plain text fallback
+}
+
 export function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string, showHints?: boolean): void {
   const { colors, println, terminalWidth } = ctx;
   const displayHints = showHints !== false;
@@ -37,17 +68,16 @@ export function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string
   const topBorder = `${colors.bright}${colors.cyan}┏${'━'.repeat(terminalWidth - 2)}┓${colors.reset}`;
   println(topBorder);
 
-  const titleContent = `
-██╗  ██╗  ██████╗   █████╗  ██████╗ ██╗ ███████╗        █████╗   ██████╗  ███████╗ ███╗   ██╗ ████████╗
-██║ ██╔╝ ██╔═══██╗ ██╔══██╗ ██╔══██╗██║ ██╔════╝        ██╔══██╗ ██╔════╝ ██╔════╝ ████╗  ██║ ╚══██╔══╝
-█████╔╝  ██║   ██║ ███████║ ██████╔╝██║ ███████╗ █████╗ ███████║ ██║  ███╗█████╗   ██╔██╗ ██║    ██║   
-██╔═██╗  ██║   ██║ ██╔══██║ ██╔══██╗██║ ╚════██║ ╚════╝ ██╔══██║ ██║   ██║██╔══╝   ██║╚██╗██║    ██║   
-██║  ██╗ ╚██████╔╝ ██║  ██║ ██║  ██║██║ ███████║        ██║  ██║ ╚██████╔╝███████╗ ██║ ╚████║    ██║   
-╚═╝  ╚═╝  ╚═════╝  ╚═╝  ╚═╝ ╚═╝  ╚═╝╚═╝ ╚══════╝        ╚═╝  ╚═╝  ╚═════╝ ╚══════╝ ╚═╝  ╚═══╝    ╚═╝
-  `;
-
-  for (const line of titleContent.trim().split('\n')) {
-    println(frameLine(`${colors.bright}${colors.green}${line}${colors.reset}`));
+  const artLines = titleArtForWidth(innerWidth);
+  if (artLines.length > 0) {
+    for (const line of artLines) {
+      println(frameLine(`${colors.bright}${colors.green}${line}${colors.reset}`));
+    }
+  } else {
+    // Terminal too narrow for any art: show a single centered label.
+    const label = `  ✦  KOARIS-AGENT  ✦  `;
+    const pad = ' '.repeat(Math.max(0, Math.floor((innerWidth - label.length) / 2)));
+    println(frameLine(`${pad}${colors.bright}${colors.green}${label}${colors.reset}`));
   }
 
   if (title) {

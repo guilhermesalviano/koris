@@ -1,3 +1,10 @@
+// Must run before any module-level LoggerFactory.create() calls (e.g. db-sqlite.ts).
+// Detecting --tui flag directly from argv here silences the console transport
+// globally, preventing any log output from breaking the TUI alt-screen layout.
+if (process.argv.includes('tui') || process.argv.includes('--tui')) {
+  process.env.LOG_SILENCE_CONSOLE = 'true';
+}
+
 import { initBot } from 'assistant-telegram-bot';
 import { startTUI } from './channels/tui';
 import { startWebServer } from './channels/web';
@@ -13,8 +20,6 @@ function hasFlag(flag: string): boolean {
 }
 
 function startCliMode(): void {
-  logger.info("🚀 Starting koris-agent...\n");
-
   const tuiMode = hasFlag("tui");
   const telegramMode = hasFlag("telegram");
   const webMode = hasFlag("web") || (!tuiMode && !telegramMode);
@@ -26,7 +31,6 @@ function startCliMode(): void {
   }
 
   if (tuiMode) {
-    logger.info("Mode: TUI\n");
     startTUI({ logger });
   }
 

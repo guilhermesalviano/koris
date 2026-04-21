@@ -21,11 +21,12 @@ export function startSpinner(
 
   let index = 0;
   const interval = setInterval(() => {
-    const text = `${frames[index]} ${label}...  Press Esc to cancel`;
+    const text = `${frames[index]} ${label}...  Press 'Esc' to cancel`;
+    const coloredText = `${colors.bright}${colors.gray}${text}${colors.reset}`;
     if (hooks) {
-      hooks.onFrame(text);
+      hooks.onFrame(coloredText);
     } else {
-      process.stdout.write(`\r${colors.dim}${colors.white}${text}${colors.reset}`);
+      process.stdout.write(`\r${coloredText}`);
     }
 
     index = (index + 1) % frames.length;

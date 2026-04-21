@@ -192,7 +192,7 @@ export function startTui(options: StartTuiOptions): void {
       return `${colors.dim}${colors.yellow}${hint.slice(0, terminalWidth)}${colors.reset}`;
     }
     if (!status) return '';
-    return `${colors.dim}${colors.gray}${status.slice(0, terminalWidth)}${colors.reset}`;
+    return status;
   };
 
   const inputFilter = fixedInput
