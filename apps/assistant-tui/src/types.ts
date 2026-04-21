@@ -62,4 +62,6 @@ export interface StartTuiOptions {
   aiModel?: string;
   /** List of commands shown in the autocomplete popup when the user types /. */
   commands?: CommandSuggestion[];
+  /** Placeholder text shown in the input when empty. Disappears on first keystroke. */
+  placeholder?: string;
 }

@@ -49,6 +49,9 @@ export function startTUI(params: { logger: ILogger }): void {
 
     footerText: ` / for commands  |  Model: ${config.AI.MODEL}`,
     
+    // Placeholder shown in empty input
+    placeholder: "let's make amazing things",
+    
     // Command detection
     isCommand,
 
