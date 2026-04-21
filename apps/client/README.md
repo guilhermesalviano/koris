@@ -1,4 +1,4 @@
-# opencrawdio (client)
+# koris-agent (client)
 
 Multi-interface AI agent system with:
 - **TUI**: Terminal user interface (readline-based)

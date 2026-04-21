@@ -3,7 +3,7 @@ import type { TuiContext } from './types';
 
 export function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string, showHints?: boolean): void {
   const { colors, println, terminalWidth } = ctx;
-  const appTitle = title ?? 'Assistant';
+  const appTitle = title ?? 'agent';
   const displayHints = showHints !== false;
 
   const topBorder = `${colors.bright}${colors.cyan}┏${'━'.repeat(terminalWidth - 2)}┓${colors.reset}`;
@@ -35,7 +35,7 @@ export function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string
     println();
   }
 
-  const modelLabel = aiModel || 'Assistant';
+  const modelLabel = aiModel || 'agent';
   println(`${colors.dim}${modelLabel} is ready to assist! What can I help you with?${colors.reset}`);
   println();
 }

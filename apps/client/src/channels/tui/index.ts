@@ -12,7 +12,7 @@ export function startTUI(params: { logger: ILogger }): void {
     fixedInput: true,
     
     // Beautiful title for welcome banner
-    title: 'opencrawdio - AI Assistant',
+    title: 'koris-agent - AI Assistant',
     
     // Show helpful quick tips
     showHints: false,

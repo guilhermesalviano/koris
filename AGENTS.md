@@ -1,10 +1,10 @@
-# opencrawdio Agent System
+# koris-agent Agent System
 
-**AI Coding Assistants**: This document describes the agent architecture and capabilities of opencrawdio. Use this as context when working with this codebase.
+**AI Coding Assistants**: This document describes the agent architecture and capabilities of koris-agent. Use this as context when working with this codebase.
 
 ## Architecture Overview
 
-opencrawdio is a multi-interface AI agent system that processes user messages and executes coding tasks. The system supports both TUI and Telegram Bot interfaces with a unified backend.
+koris-agent is a multi-interface AI agent system that processes user messages and executes coding tasks. The system supports both TUI and Telegram Bot interfaces with a unified backend.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -384,7 +384,7 @@ Send messages and receive real-time SSE responses with tool execution.
 ### Telegram Usage
 ```
 User: /start
-Bot: 👋 Welcome to opencrawdio! [...]
+Bot: 👋 Welcome to koris-agent! [...]
 
 User: read package.json
 Bot: [Ollama executes read_file tool]

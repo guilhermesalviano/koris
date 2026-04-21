@@ -13,7 +13,7 @@ function hasFlag(flag: string): boolean {
 }
 
 function startCliMode(): void {
-  logger.info("🚀 Starting opencrawdio...\n");
+  logger.info("🚀 Starting koris-agent...\n");
 
   const tuiMode = hasFlag("tui");
   const telegramMode = hasFlag("telegram");
@@ -21,7 +21,7 @@ function startCliMode(): void {
 
   if (!tuiMode && !telegramMode && !webMode) {
     logger.error("No mode provided.");
-    logger.error("Usage: pnpm --filter opencrawdio run dev:tui | pnpm --filter opencrawdio run dev:telegram | pnpm --filter opencrawdio run dev");
+    logger.error("Usage: pnpm --filter koris-agent run dev:tui | pnpm --filter koris-agent run dev:telegram | pnpm --filter koris-agent run dev");
     process.exit(1);
   }
 

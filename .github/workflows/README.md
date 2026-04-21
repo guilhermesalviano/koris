@@ -17,7 +17,7 @@ This directory contains CI workflows for linting, security tests, and CodeQL.
 
 - **Trigger**: push (main/develop), PR (main), manual dispatch
 - **Jobs**:
-  - `security-tests`: runs the security test suite (Vitest) for the client package (`pnpm --filter opencrawdio ...`)
+  - `security-tests`: runs the security test suite (Vitest) for the client package (`pnpm --filter koris-agent ...`)
   - `security-analysis`: runs `pnpm audit` and Trivy, uploads SARIF
 
 ### `codeql.yml` — CodeQL Analysis

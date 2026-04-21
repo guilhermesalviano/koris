@@ -1,10 +1,10 @@
-# opencrawdio
+# koris-agent
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D24.0.0-brightgreen.svg)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-10.18.3-orange.svg)](https://pnpm.io/)
-[![Security Tests](https://github.com/guilhermesalviano/opencrawdio/actions/workflows/tests.yml/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions/workflows/tests.yml)
-[![Lint](https://github.com/guilhermesalviano/opencrawdio/actions/workflows/lint.yml/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions/workflows/lint.yml)
-[![CodeQL](https://github.com/guilhermesalviano/opencrawdio/actions/workflows/codeql.yml/badge.svg)](https://github.com/guilhermesalviano/opencrawdio/actions/workflows/codeql.yml)
+[![Security Tests](https://github.com/guilhermesalviano/koris-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/guilhermesalviano/koris-agent/actions/workflows/tests.yml)
+[![Lint](https://github.com/guilhermesalviano/koris-agent/actions/workflows/lint.yml/badge.svg)](https://github.com/guilhermesalviano/koris-agent/actions/workflows/lint.yml)
+[![CodeQL](https://github.com/guilhermesalviano/koris-agent/actions/workflows/codeql.yml/badge.svg)](https://github.com/guilhermesalviano/koris-agent/actions/workflows/codeql.yml)
 
 An AI-powered coding agent (mock tool implementation for now) with two user interfaces:
 
@@ -67,10 +67,10 @@ pnpm start:tui
 pnpm test
 
 # Coverage (client)
-pnpm --filter opencrawdio test:coverage
+pnpm --filter koris-agent test:coverage
 
 # Security tests only (client)
-pnpm --filter opencrawdio test tests/security
+pnpm --filter koris-agent test tests/security
 ```
 
 ## Docs
