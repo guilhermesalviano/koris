@@ -7,6 +7,7 @@ import { IMessageService } from '../../message-service';
 import { executorWorker } from './executor-worker';
 import { learnerWorker } from './learner-worker';
 import { TOOL_CALL_HELPER } from '../../../constants';
+import { LoopContext } from '../../../types/tools';
 
 async function toolsLoop(
   logger: ILogger,
@@ -15,71 +16,36 @@ async function toolsLoop(
   message: IMessageService,
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
-  const toolsQueue = new ToolsQueue(logger);
-  const signal = options?.signal || new AbortController().signal;
-  const onProgress = options?.onProgress || (() => {});
-
-  const messageHistory = message.getHistory();
-
-  const prompt = TOOL_CALL_HELPER + userMessage;
-
-  const aiResponse = await messageProvider(
-    logger,
-    prompt,
-    channel,
-    options,
-    messageHistory
-  );
-
-  const responseText = normalizeResponse(aiResponse);
-  const callbacks = extractToolCalls(responseText);
-
-  if (callbacks.length === 0) return responseText;
-
-  const toolsToLearn = callbacks.filter(cb => cb.name === 'get_skill');
-  let toolsToExecute = callbacks.filter(cb => cb.name !== 'get_skill');
-  
-  if (toolsToLearn.length > 0) {
-    onProgress(`📚 Learning phase`);
-    onProgress(`Learning phase: ${toolsToLearn.length} skill(s) to learn`);
-    const learnerResponse = await learnerWorker(
-      toolsToLearn,
-      userMessage,
-      messageHistory,
-      logger,
-      channel,
-      toolsQueue,
-      signal,
-      onProgress,
-      options,
-    );
-    const newTools = extractToolCalls(learnerResponse);
-    onProgress(`New tools after learning phase: ${JSON.stringify(newTools)}`);
-    const combinedTools = [...toolsToExecute, ...newTools];
-
-    toolsToExecute = combinedTools;
-  }
-
-  if (toolsToExecute.length === 0) {
-    onProgress('✓ All tools processed');
-    return responseText;
-  }
-
-  onProgress(`⚙️ Execution phase, ${toolsToExecute.length} tool(s) to execute`);
-  const finalResponse = await executorWorker(
-    toolsToExecute,
-    messageHistory,
+  const ctx: LoopContext = {
     logger,
     channel,
     message,
-    toolsQueue,
-    signal,
-    onProgress,
+    toolsQueue: new ToolsQueue(logger),
+    signal: options?.signal ?? new AbortController().signal,
+    onProgress: options?.onProgress ?? (() => {}),
     options,
-    userMessage
-  );
+  };
 
-  return finalResponse;
+  const messageHistory = message.getHistory();
+  const aiResponse = await messageProvider(logger, TOOL_CALL_HELPER + userMessage, channel, options, messageHistory);
+  const responseText = normalizeResponse(aiResponse);
+
+  let callbacks = extractToolCalls(responseText);
+  if (callbacks.length === 0) return responseText;
+
+  const toLearn = callbacks.filter(cb => cb.name === 'get_skill');
+  let toExecute = callbacks.filter(cb => cb.name !== 'get_skill');
+
+  if (toLearn.length > 0) {
+    ctx.onProgress(`📚 Learning phase: ${toLearn.length} skill(s)`);
+    const learned = await learnerWorker(toLearn, userMessage, messageHistory, ctx);
+    toExecute = [...toExecute, ...extractToolCalls(learned)];
+  }
+
+  if (toExecute.length === 0) return responseText;
+
+  ctx.onProgress(`⚙️ Execution phase: ${toExecute.length} tool(s)`);
+  return executorWorker(toExecute, messageHistory, ctx.logger, ctx.channel, ctx.message, ctx.toolsQueue, ctx.signal, ctx.onProgress, ctx.options, userMessage);
 }
 
 export { toolsLoop };

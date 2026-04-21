@@ -46,6 +46,24 @@ ${toolResults}
 </tool_results>
 `;
 }
+
+export function buildSkillPrompt(
+  userRequest: string,
+  skillDocumentation: string
+): string {
+  return `
+    Answer the user request using ONLY the skills detailed in the provided documentation. Do not use external knowledge.
+
+    <user_request>
+    ${userRequest}
+    </user_request>
+
+    <skills_documentation>
+    ${skillDocumentation}
+    </skills_documentation>
+  `;
+}
+
 /**
  * Build prompt for final response after skill execution
  * This is the FINAL iteration - AI should provide a complete answer based on skill results

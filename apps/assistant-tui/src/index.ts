@@ -536,7 +536,7 @@ export function startTui(options: StartTuiOptions): void {
       return;
     }
 
-    println(`${colors.bgGray}${colors.white} ❯ ${trimmed} ${colors.reset}`);
+    println(`${colors.bgGray}${colors.white} ${trimmed} ${colors.reset}`);
     println();
     if (fixedInput) requestRender();
 
