@@ -103,11 +103,43 @@ export function startTUI(params: { logger: ILogger }): void {
           progressMessages.push(summary);
           const latest = progressMessages[progressMessages.length - 1];
           const dotColor = progressDotColors[(progressMessages.length - 1) % progressDotColors.length](ctx);
-          ctx.println(`${ctx.colors.dim}${ctx.colors.bright}${dotColor}●${ctx.colors.reset}${ctx.colors.dim} ${latest}${ctx.colors.reset} \n`);
+          const { headline, details } = splitProgressSummary(latest);
+
+          ctx.println(`${ctx.colors.dim}${ctx.colors.bright}${dotColor}●${ctx.colors.reset}${ctx.colors.dim} ${headline}${ctx.colors.reset}`);
+
+          if (details) {
+            ctx.println(`${ctx.colors.dim}${ctx.colors.gray}  └ ${details}${ctx.colors.reset}`);
+          }
+
+          ctx.println();
         }
       });
     },
   });
+}
+
+function splitProgressSummary(summary: string): { headline: string; details?: string } {
+  const value = summary.trim();
+  if (!value) {
+    return { headline: 'Working...' };
+  }
+
+  const splitters = [': ', ' - ', ' — '];
+  for (const splitter of splitters) {
+    const index = value.indexOf(splitter);
+    if (index <= 0) {
+      continue;
+    }
+
+    const headline = value.slice(0, index).trim();
+    const details = value.slice(index + splitter.length).trim();
+
+    if (headline && details) {
+      return { headline, details };
+    }
+  }
+
+  return { headline: value };
 }
 
 function defaultColor(name: 'cyan' | 'magenta' | 'yellow' | 'green' | 'blue') {
