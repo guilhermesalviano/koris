@@ -28,7 +28,14 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile --force || {
+            echo "Initial install failed, cleaning npm artifacts and pnpm store before retry..."
+            rm -f package-lock.json
+            find . -name node_modules -type d -prune -exec rm -rf {} +
+            pnpm store prune
+            pnpm install --frozen-lockfile --force
+          }
 
       - name: Build
         run: pnpm build
