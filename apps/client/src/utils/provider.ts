@@ -16,7 +16,8 @@ export function validateBaseUrl(baseUrl: string, allowRemote: boolean): string {
     }
 
     const host = parsed.hostname.toLowerCase();
-    const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    const normalizedHost = host.replace(/^\[(.*)\]$/, '$1');
+    const isLocalHost = normalizedHost === 'localhost' || normalizedHost === '127.0.0.1' || normalizedHost === '::1';
 
     if (!allowRemote && !isLocalHost) {
       throw new Error(
