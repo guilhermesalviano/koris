@@ -50,10 +50,7 @@ async function executorWorker(
   const normalizedToolResults = normalizeResponse(response);
   const extractToolResults = extractToolCalls(normalizedToolResults);
 
-  if (extractToolResults.length === 0) {
-    onProgress('AI returned final response');
-    return normalizedToolResults;
-  }
+  if (extractToolResults.length === 0) return normalizedToolResults;
 
   onProgress(`Tool call (${extractToolResults.length}) after execution phase: ${JSON.stringify(extractToolResults)}`);
 
