@@ -30,7 +30,7 @@ Remember: Use the curl_request tool to execute any HTTP/API calls shown in the s
  * Build prompt with tool execution results for next AI iteration
  */
 export function buildToolResultPrompt(
-  previousResponse: string,
+  originalUserRequest: string,
   toolResults: string
 ): string {
   return `
@@ -38,7 +38,7 @@ Analyze the tool execution results below to answer the user's request.
 Extract the relevant information from the results and provide a clear, direct answer. Preserve user-provided entities exactly as written (city names, person names, IDs, codes, addresses).
 
 <previous_context>
-${previousResponse}
+${originalUserRequest}
 </previous_context>
 
 <tool_results>

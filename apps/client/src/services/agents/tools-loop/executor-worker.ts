@@ -43,7 +43,7 @@ async function executorWorker(
     logger,
     buildToolResultPrompt(userMessage, toolResults),
     channel,
-    {...options, toolsEnabled: false},
+    options,
     messageHistory,
   );
 

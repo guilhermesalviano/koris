@@ -24,7 +24,12 @@ interface PromptConfig {
   systemPrompt?: string;
   includeSystemInfo?: boolean;
   includeTools?: boolean;
+  learnedSkillsLimit?: number;
+  learnedSkillsMaxChars?: number;
 }
+
+const DEFAULT_LEARNED_SKILLS_LIMIT = 10;
+const DEFAULT_LEARNED_SKILLS_MAX_CHARS = 8000;
 
 /**
  * Repository for building and managing AI prompts.
@@ -67,10 +72,7 @@ class PromptRepository {
 
     // Base system prompt
     const basePrompt = this.config.systemPrompt ?? SYSTEM_PROMPT;
-    const learnedSkillsPrompt = this.learnedSkillsRepository.getAll();
-    const baseHistory = basePrompt + "\n" + learnedSkillsPrompt.map((skill) => {
-      return `${skill.skill_name}: ${skill.skill_content}`;
-    }).join("\n");
+    const baseHistory = this.buildBaseHistoryPrompt(basePrompt);
     messages.push({ role: 'system', content: baseHistory });
 
     // System info context
@@ -80,6 +82,49 @@ class PromptRepository {
     }
 
     return messages;
+  }
+
+  /**
+   * Build base prompt + bounded learned skills context
+   */
+  private buildBaseHistoryPrompt(basePrompt: string): string {
+    const learnedSkillsLimit = this.config.learnedSkillsLimit ?? DEFAULT_LEARNED_SKILLS_LIMIT;
+    const learnedSkillsMaxChars = this.config.learnedSkillsMaxChars ?? DEFAULT_LEARNED_SKILLS_MAX_CHARS;
+    const learnedSkills = this.learnedSkillsRepository.getRecent(learnedSkillsLimit);
+
+    if (learnedSkills.length === 0 || learnedSkillsMaxChars <= 0) {
+      return basePrompt;
+    }
+
+    let usedChars = 0;
+    const learnedSkillsLines: string[] = [];
+
+    for (const skill of learnedSkills) {
+      const line = `${skill.skill_name}: ${skill.skill_content}`;
+      const remainingChars = learnedSkillsMaxChars - usedChars;
+
+      if (remainingChars <= 0) {
+        break;
+      }
+
+      if (line.length <= remainingChars) {
+        learnedSkillsLines.push(line);
+        usedChars += line.length;
+        continue;
+      }
+
+      if (remainingChars > 4) {
+        learnedSkillsLines.push(`${line.slice(0, remainingChars - 3)}...`);
+      }
+
+      break;
+    }
+
+    if (learnedSkillsLines.length === 0) {
+      return basePrompt;
+    }
+
+    return `${basePrompt}\n${learnedSkillsLines.join("\n")}`;
   }
 
   /**

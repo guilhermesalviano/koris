@@ -22,7 +22,7 @@ async function toolsLoop(
     message,
     toolsQueue: new ToolsQueue(logger),
     signal: options?.signal ?? new AbortController().signal,
-    onProgress: options?.onProgress ?? (() => {}),
+    onProgress: options?.onProgress ?? ((progress) => logger.info(progress)),
     options,
   };
 
