@@ -37,6 +37,11 @@ export interface SpinnerOptions {
   frames?: readonly string[];
 }
 
+export interface CommandSuggestion {
+  name: string;
+  description?: string;
+}
+
 export interface StartTuiOptions {
   onInput(input: string, ctx: TuiContext): Promise<string | AsyncIterable<string> | void>;
   onCommand?: (command: string, ctx: TuiContext) => Promise<TuiCommandResult | string | void>;
@@ -55,4 +60,6 @@ export interface StartTuiOptions {
   showHints?: boolean;
   fixedInput?: boolean;
   aiModel?: string;
+  /** List of commands shown in the autocomplete popup when the user types /. */
+  commands?: CommandSuggestion[];
 }

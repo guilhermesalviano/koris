@@ -299,6 +299,142 @@ export function startTui(options: StartTuiOptions): void {
   let isBusy = false; // true while a request is in-flight (spinner running)
   let iterationBadge = ''; // bottom-right overlay text (e.g. "⟳ iter 3")
 
+  // ── Autocomplete ────────────────────────────────────────────────────────────
+  const allCommands = options.commands ?? [];
+  let acSuggestions: typeof allCommands = [];
+  let acIndex = -1;
+  const AC_MAX_ROWS = 8;
+  // acPopupTop: topmost row of the reserved area (always AC_MAX_ROWS tall).
+  // Suggestions are rendered flush to the BOTTOM of that area.
+  // popupBottom = terminalHeight - 5 (just above the spinner row).
+  const acPopupBottom = () => terminalHeight - 5;
+  const acPopupTop = () => acPopupBottom() - AC_MAX_ROWS + 1;
+
+  const renderAc = () => {
+    if (!fixedInput) return;
+    process.stdout.write('\x1b7');
+
+    const count = Math.min(acSuggestions.length, AC_MAX_ROWS);
+
+    for (let i = 0; i < AC_MAX_ROWS; i++) {
+      const row = acPopupTop() + i;
+      process.stdout.write(ansi.cursorPos(row, 1));
+      process.stdout.write(ansi.clearLine);
+
+      // Only render rows in the bottom `count` slots.
+      const sugIdx = i - (AC_MAX_ROWS - count);
+      if (sugIdx < 0) continue;
+      const cmd = acSuggestions[sugIdx];
+      if (!cmd) continue;
+
+      const isSelected = sugIdx === acIndex;
+      const nameStr = cmd.name.padEnd(16);
+      const desc = cmd.description ? `  ${colors.dim}${cmd.description}${colors.reset}` : '';
+      if (isSelected) {
+        process.stdout.write(`\x1b[46m\x1b[30m ${nameStr}\x1b[0m\x1b[46m\x1b[30m${desc} \x1b[0m`);
+      } else {
+        process.stdout.write(`${colors.dim} ${nameStr}${desc}${colors.reset}`);
+      }
+    }
+
+    process.stdout.write('\x1b8');
+  };
+
+  const acDismiss = () => {
+    if (acSuggestions.length === 0 && acIndex === -1) return;
+    acSuggestions = [];
+    acIndex = -1;
+    renderAc();
+  };
+
+  const acUpdateFromInput = () => {
+    if (isBusy) { acDismiss(); return; }
+    const currentLine: string = (anyRl as any).line ?? '';
+    if (!currentLine.startsWith('/') || currentLine.includes(' ')) {
+      acDismiss();
+      return;
+    }
+    const query = currentLine.toLowerCase();
+    const next = allCommands.filter(c => c.name.toLowerCase().startsWith(query));
+    acSuggestions = next;
+    acIndex = next.length > 0 ? 0 : -1;
+    renderAc();
+  };
+
+  // Patch _ttyWrite to swallow ↑/↓ from readline history navigation while popup is open.
+  if (allCommands.length > 0) {
+    const originalTtyWrite = (anyRl as any)._ttyWrite?.bind(rl);
+    if (typeof originalTtyWrite === 'function') {
+      (anyRl as any)._ttyWrite = function (s: string, key?: { name?: string }) {
+        if (acSuggestions.length > 0 && (key?.name === 'up' || key?.name === 'down')) {
+          return; // consumed by our keypress handler
+        }
+        return originalTtyWrite(s, key);
+      };
+    }
+  }
+
+  const onAcKeypress = (_ch: string, key?: { name?: string; shift?: boolean }) => {
+    if (!fixedInput || isBusy || allCommands.length === 0) return;
+    const k = key?.name;
+
+    if (k === 'tab') {
+      if (acSuggestions.length === 0) {
+        acUpdateFromInput();
+        return;
+      }
+      acIndex = key?.shift
+        ? (acIndex <= 0 ? acSuggestions.length - 1 : acIndex - 1)
+        : (acIndex + 1) % acSuggestions.length;
+      const chosen = acSuggestions[acIndex].name;
+      (anyRl as any).line = chosen;
+      (anyRl as any).cursor = chosen.length;
+      if (typeof anyRl._refreshLine === 'function') (anyRl as any)._refreshLine();
+      renderAc();
+      return;
+    }
+
+    if (k === 'up' && acSuggestions.length > 0) {
+      acIndex = acIndex <= 0 ? acSuggestions.length - 1 : acIndex - 1;
+      renderAc();
+      return;
+    }
+
+    if (k === 'down' && acSuggestions.length > 0) {
+      acIndex = (acIndex + 1) % acSuggestions.length;
+      renderAc();
+      return;
+    }
+
+    // Enter with a selection: fill the line BEFORE readline emits 'line'.
+    if ((k === 'return' || k === 'enter') && acIndex >= 0 && acSuggestions[acIndex]) {
+      const chosen = acSuggestions[acIndex].name;
+      (anyRl as any).line = chosen;
+      (anyRl as any).cursor = chosen.length;
+      // acDismiss() will be called by the 'line' event handler.
+      return;
+    }
+
+    if (k === 'escape') {
+      acDismiss();
+      return;
+    }
+
+    // Any other key: update suggestions after readline has processed the keystroke.
+    if (k !== 'return' && k !== 'enter') {
+      setTimeout(acUpdateFromInput, 0);
+    }
+  };
+
+  // prependListener so we run BEFORE readline's own keypress handler.
+  const acInput = (anyRl as any).input as (NodeJS.EventEmitter & { prependListener?: Function }) | undefined;
+  if (typeof acInput?.prependListener === 'function') {
+    acInput.prependListener('keypress', onAcKeypress);
+  } else {
+    acInput?.on('keypress', onAcKeypress);
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
   renderScreen = () => {
     if (!fixedInput) return;
     if (isRendering) {
@@ -398,7 +534,8 @@ export function startTui(options: StartTuiOptions): void {
   rl.prompt();
 
   rl.on('line', async (input: string) => {
-    // Any user action implies “go back to bottom”.
+    // Dismiss autocomplete and go back to bottom on any submission.
+    acDismiss();
     scrollOffset = 0;
 
     const trimmed = input.trim();
@@ -471,6 +608,7 @@ export function startTui(options: StartTuiOptions): void {
 
   rl.on('close', () => {
     process.stdout.removeListener('resize', handleResize);
+    acInput?.removeListener('keypress', onAcKeypress);
     println(`\n${colors.dim}Session ended. Messages: ${session.messageCount}${colors.reset}`);
 
     if (inputFilter) {

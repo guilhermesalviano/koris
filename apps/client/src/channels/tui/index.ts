@@ -1,8 +1,25 @@
 import { startTui } from 'assistant-tui';
-import { handleCommand, isCommand } from '../../services/agents/commands';
+import { handleCommand, isCommand, getAvailableCommands } from '../../services/agents/commands';
 import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
 import { AgentHandlerFactory } from '../../services/agents/handler';
+
+const COMMAND_DESCRIPTIONS: Record<string, string> = {
+  '/help':   'show available commands',
+  '/start':  'welcome message',
+  '/clear':  'clear the screen',
+  '/stats':  'session statistics',
+  '/status': 'AI provider status',
+  '/reset':  'reset session',
+  '/exit':   'exit the TUI',
+  '/quit':   'exit the TUI',
+  '/bye':    'exit the TUI',
+};
+
+const TUI_COMMANDS = getAvailableCommands('tui').map((name) => ({
+  name,
+  description: COMMAND_DESCRIPTIONS[name],
+}));
 
 export function startTUI(params: { logger: ILogger }): void {
   const handler = AgentHandlerFactory.create(params.logger, 'tui');
@@ -34,6 +51,9 @@ export function startTUI(params: { logger: ILogger }): void {
     
     // Command detection
     isCommand,
+
+    // Autocomplete popup when user types /
+    commands: TUI_COMMANDS,
     
     // Format responses with better visual hierarchy
     formatResponse: (response, ctx) => {
