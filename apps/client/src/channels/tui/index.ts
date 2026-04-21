@@ -6,13 +6,20 @@ import { AgentHandlerFactory } from '../../services/agents/handler';
 
 export function startTUI(params: { logger: ILogger }): void {
   const handler = AgentHandlerFactory.create(params.logger, 'tui');
+  const progressDotColors = [
+    defaultColor('cyan'),
+    defaultColor('magenta'),
+    defaultColor('yellow'),
+    defaultColor('green'),
+    defaultColor('blue'),
+  ];
 
   startTui({
     // Modern fixed-input layout with scrollable history
     fixedInput: true,
     
     // Beautiful title for welcome banner
-    title: 'koris-agent - AI Assistant',
+    title: 'koris-agent',
     
     // Show helpful quick tips
     showHints: false,
@@ -22,6 +29,8 @@ export function startTUI(params: { logger: ILogger }): void {
     
     // Thinking indicator for responses
     assistantPrefix: '●',
+
+    footerText: `/ for commands  |  Model: ${config.AI.MODEL}`,
     
     // Command detection
     isCommand,
@@ -89,12 +98,18 @@ export function startTUI(params: { logger: ILogger }): void {
       
       return await handler.handle(message, {
         toolsEnabled: true,
+        signal: ctx.requestSignal,
         onProgress: (summary: string) => {
           progressMessages.push(summary);
           const latest = progressMessages[progressMessages.length - 1];
-          ctx.println(`${ctx.colors.dim}${ctx.colors.bright}● ${latest}${ctx.colors.reset} \n`);
+          const dotColor = progressDotColors[(progressMessages.length - 1) % progressDotColors.length](ctx);
+          ctx.println(`${ctx.colors.dim}${ctx.colors.bright}${dotColor}●${ctx.colors.reset}${ctx.colors.dim} ${latest}${ctx.colors.reset} \n`);
         }
       });
     },
   });
+}
+
+function defaultColor(name: 'cyan' | 'magenta' | 'yellow' | 'green' | 'blue') {
+  return (ctx: { colors: { cyan: string; magenta: string; yellow: string; green: string; blue: string } }) => ctx.colors[name];
 }

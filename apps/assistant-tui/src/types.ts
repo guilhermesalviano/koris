@@ -24,6 +24,8 @@ export interface TuiContext {
   contentBuffer: string[];
   terminalWidth: number;
   terminalHeight: number;
+  requestSignal?: AbortSignal;
+  cancelActiveRequest(): boolean;
 }
 
 export interface SpinnerOptions {
@@ -38,12 +40,15 @@ export interface StartTuiOptions {
   onCommand?: (command: string, ctx: TuiContext) => Promise<TuiCommandResult | string | void>;
   isCommand?: (line: string) => boolean;
   prompt?: string;
+  footerText?: string | ((ctx: TuiContext) => string);
   renderWelcome?: (ctx: TuiContext) => void;
   formatResponse?: (response: string, ctx: TuiContext) => string;
   spinner?: boolean | SpinnerOptions;
+  answerDoneSound?: boolean;
   confirmExit?: boolean;
   clearOnStart?: boolean;
   assistantPrefix?: string;
+  inputCursorMark?: string;
   title?: string;
   showHints?: boolean;
   fixedInput?: boolean;

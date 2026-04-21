@@ -26,6 +26,7 @@ export function startTui(options: StartTuiOptions): void {
   const isCommand = options.isCommand ?? ((line: string) => line.startsWith('/'));
   const renderWelcome = options.renderWelcome ?? ((ctx) => defaultWelcome(ctx, options.title, options.aiModel, options.showHints));
   const formatResponse = options.formatResponse ?? defaultFormatResponse;
+  const answerDoneSound = options.answerDoneSound ?? true;
   const confirmExit = options.confirmExit ?? true;
   const clearOnStart = options.clearOnStart ?? true;
   const assistantPrefix = options.assistantPrefix ?? '●';
@@ -166,6 +167,7 @@ export function startTui(options: StartTuiOptions): void {
   let renderScreen: () => void = () => undefined;
   let renderScheduled: NodeJS.Timeout | undefined;
   let spinnerStatus = '';
+  let activeAbortController: AbortController | undefined;
 
   const requestRender = () => {
     if (!fixedInput) return;
@@ -223,16 +225,30 @@ export function startTui(options: StartTuiOptions): void {
   });
 
   rl.setPrompt(prompt);
-  const footerText = `Commands: /help - /clear - /reset - /exit`;
   const renderFooterLine = () => {
     if (!fixedInput) return;
+    const footerText = typeof options.footerText === 'function'
+      ? options.footerText(ctx)
+      : (options.footerText ?? '/ for commands');
     // Save/restore cursor so footer paint never steals input cursor position.
     process.stdout.write('\x1b7');
     process.stdout.write(ansi.cursorPos(terminalHeight -1, 1));
     process.stdout.write(buildSeparatorLine(""));
     process.stdout.write(ansi.cursorPos(terminalHeight, 1));
     process.stdout.write(ansi.clearLine);
-    process.stdout.write(`${colors.bright}${colors.cyan}${footerText.slice(0, terminalWidth)}${colors.reset}`);
+    process.stdout.write(`${colors.bright}${colors.gray}${footerText.slice(0, terminalWidth)}${colors.reset}`);
+    process.stdout.write('\x1b8');
+  };
+
+  const renderSpinnerRow = () => {
+    if (!fixedInput || isRendering) {
+      return;
+    }
+
+    process.stdout.write('\x1b7');
+    process.stdout.write(ansi.cursorPos(terminalHeight - 4, 1));
+    process.stdout.write(ansi.clearLine);
+    process.stdout.write(buildSpinnerLine(spinnerStatus));
     process.stdout.write('\x1b8');
   };
 
@@ -254,10 +270,20 @@ export function startTui(options: StartTuiOptions): void {
     contentBuffer,
     terminalWidth,
     terminalHeight,
+    requestSignal: undefined,
+    cancelActiveRequest: () => {
+      if (!activeAbortController || activeAbortController.signal.aborted) {
+        return false;
+      }
+
+      activeAbortController.abort();
+      return true;
+    },
   };
 
   let isRendering = false;
   let renderQueued = false;
+  let isBusy = false; // true while a request is in-flight (spinner running)
 
   renderScreen = () => {
     if (!fixedInput) return;
@@ -304,6 +330,10 @@ export function startTui(options: StartTuiOptions): void {
       rl.prompt(true);
       renderFooterLine();
     }
+
+    // Show real cursor when idle; keep it hidden while busy to prevent
+    // it from jumping across the screen during spinner/render cycles.
+    process.stdout.write(isBusy ? ansi.cursorHide : ansi.cursorShow);
 
     isRendering = false;
 
@@ -456,6 +486,7 @@ export function startTui(options: StartTuiOptions): void {
       process.stdout.write(ansi.cursorPos(terminalHeight, 1));
       process.stdout.write(ansi.clearLine);
       process.stdout.write(`${colors.yellow}Are you sure you want to exit? (y/n)${colors.reset} `);
+      process.stdout.write(ansi.cursorShow);
       process.stdout.write('\x1b8'); // restore cursor
 
       const onKey = (key: string) => {
@@ -464,6 +495,9 @@ export function startTui(options: StartTuiOptions): void {
         if (k === 'y') {
           rl.close();
         } else {
+          const footerText = typeof options.footerText === 'function'
+            ? options.footerText(ctx)
+            : (options.footerText ?? '/ for commands');
           process.stdout.write('\x1b7');
           process.stdout.write(ansi.cursorPos(terminalHeight, 1));
           process.stdout.write(ansi.clearLine);
@@ -481,6 +515,10 @@ export function startTui(options: StartTuiOptions): void {
 
   async function handleNormalInput(message: string): Promise<void> {
     session.messageCount++;
+    isBusy = true;
+    if (fixedInput) process.stdout.write(ansi.cursorHide);
+    activeAbortController = new AbortController();
+    ctx.requestSignal = activeAbortController.signal;
 
     const spinnerEnabled = options.spinner !== false;
     const stopSpinner = startSpinner(
@@ -491,18 +529,37 @@ export function startTui(options: StartTuiOptions): void {
         ? {
             onFrame: (text) => {
               spinnerStatus = text;
-              requestRender();
+              renderSpinnerRow();
             },
             onStop: () => {
               spinnerStatus = '';
-              requestRender();
+              renderSpinnerRow();
             },
           }
         : undefined
     );
 
+    const onInputKeypress = (_value: string, key?: { name?: string }) => {
+      if (key?.name !== 'escape') {
+        return;
+      }
+
+      if (ctx.cancelActiveRequest()) {
+        println(`${colors.yellow}Request canceled.${colors.reset}`);
+        println();
+        if (fixedInput) {
+          requestRender();
+        }
+      }
+    };
+
+    (anyRl as { input?: NodeJS.EventEmitter }).input?.on('keypress', onInputKeypress);
+
+    let shouldPlayDoneSound = false;
+
     try {
       const response = await options.onInput(message, ctx);
+      shouldPlayDoneSound = true;
 
       if (isAsyncIterable(response)) {
         await renderStreamedResponse(response);
@@ -512,11 +569,21 @@ export function startTui(options: StartTuiOptions): void {
         println();
       }
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      println(`${colors.red}✗ Error:${colors.reset} ${msg}`);
-      println();
+      if (!isAbortError(error)) {
+        const msg = error instanceof Error ? error.message : String(error);
+        println(`${colors.red}✗ Error:${colors.reset} ${msg}`);
+        println();
+      }
     } finally {
+      (anyRl as { input?: NodeJS.EventEmitter }).input?.removeListener('keypress', onInputKeypress);
+      activeAbortController = undefined;
+      ctx.requestSignal = undefined;
+      isBusy = false;
       stopSpinner();
+    }
+
+    if (answerDoneSound && shouldPlayDoneSound) {
+      emitTerminalBell();
     }
 
     if (fixedInput) {
@@ -573,6 +640,23 @@ export function startTui(options: StartTuiOptions): void {
 /** Backwards-compatible alias. */
 export function startTUI(options: StartTuiOptions): void {
   startTui(options);
+}
+
+function emitTerminalBell(): void {
+  if (!process.stdout.isTTY) {
+    return;
+  }
+
+  process.stdout.write('\x07');
+}
+
+function isAbortError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const maybeError = error as { name?: string; message?: string };
+  return maybeError.name === 'AbortError' || maybeError.message === 'This operation was aborted';
 }
 
 function normalizeCommandResult(
