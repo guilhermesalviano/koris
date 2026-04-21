@@ -3,6 +3,7 @@ import { readFile } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { ToolCall, ToolResult } from "../../../../types/tools";
 import { config } from "../../../../config";
+import matter from 'gray-matter';
 
 const BASE_SKILLS_DIR = resolve(config.BASE_DIR, 'skills');
 
@@ -29,10 +30,12 @@ export async function executeGetSkill(
 
   const targetFile = join(requestedPath, 'SKILL.md');
   const content = await readFile(targetFile, 'utf-8');
+  const parsed = matter(content);
+  const onlyContent = parsed.content || content;
 
   return {
     toolName: 'get_skill',
     success: true,
-    result: content.slice(0, 5000),
+    result: onlyContent.slice(0, 5000),
   };
 }

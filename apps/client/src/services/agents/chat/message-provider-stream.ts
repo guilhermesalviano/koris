@@ -4,6 +4,7 @@ import { escapeTelegramMarkdown, isAbortError } from "../../../utils/telegram";
 import { PromptRepositoryFactory } from "../../../repositories/prompt";
 import { getAIProvider } from "../../providers";
 import { ToolCall } from "../../../types/tools";
+import { DatabaseServiceFactory } from "../../../infrastructure/db-sqlite";
 
 type ProcessedMessage = string | ToolCall[] | AsyncGenerator<string>;
 type ProcessOptions = { signal?: AbortSignal, toolsEnabled?: boolean };
@@ -15,7 +16,8 @@ async function messageProviderStream(
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
   const provider = getAIProvider({ logger });
-  const promptRepository = PromptRepositoryFactory.create();
+  const db = DatabaseServiceFactory.create();
+  const promptRepository = PromptRepositoryFactory.create(db);
   const payload = promptRepository.build({ userMessage: message, channel });
 
   // Cast MessagePayload to AIChatRequest (compatible types)

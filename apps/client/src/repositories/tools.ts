@@ -96,13 +96,13 @@ class ToolsRepository implements IToolsRepository {
       type: 'function',
       function: {
         name: 'curl_request',
-        description: 'Execute HTTP requests using curl. Useful for API calls, testing endpoints, and retrieving web data. Supports piping output through commands like jq for JSON transformation.',
+        description: 'Execute HTTP requests using curl. Use only parameters explicitly required by the selected skill. Do not invent extra shell transformations.',
         parameters: {
           type: 'object',
           properties: {
             url: {
               type: 'string',
-              description: 'URL to request (required). Examples: https://api.github.com/users/github, https://jsonplaceholder.typicode.com/posts/1',
+              description: 'URL to request (required). Keep values exactly as required by the skill.',
             },
             method: {
               type: 'string',

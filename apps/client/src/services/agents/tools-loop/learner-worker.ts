@@ -1,65 +1,60 @@
-import { config } from "../../../config";
-import { Message } from "../../../entities/message";
-import { ILogger } from "../../../infrastructure/logger";
 import { ToolCall } from "../../../types/tools";
-import { buildSkillLearningPrompt } from "../../../utils/prompt";
-import { normalizeResponse, shouldSkipToolCall } from "../../../utils/tool-calls";
-import { ToolsQueue } from "../../tools-queue";
+import { buildSkillLearningPrompt, buildSkillPrompt } from "../../../utils/prompt";
+import { normalizeResponse } from "../../../utils/tool-calls";
 import { LearnedSkillsRepositoryFactory } from "../../../repositories/learned-skills";
 import { DatabaseServiceFactory } from "../../../infrastructure/db-sqlite";
 import { messageProvider } from "../chat/message-provider";
-import { ProcessOptions } from "../../../types/agents";
+import { LoopContext } from "./context";
+import { config } from "../../../config";
+import type { Message } from "../../../entities/message";
 
 async function learnerWorker(
   toolCalls: ToolCall[],
+  originalUserRequest: string,
   messageHistory: Message[],
-  logger: ILogger,
-  channel: string,
-  toolsQueue: ToolsQueue,
-  signal: AbortSignal,
-  onProgress: (text: string) => void,
-  options?: ProcessOptions
+  ctx: LoopContext
 ): Promise<string> {
-  const toolsToExecute = toolCalls.filter(toolCall => 
-    toolCall && !shouldSkipToolCall(toolCall, messageHistory, logger)
-  );
-
   let accumulatedContext = "";
   const db = DatabaseServiceFactory.create();
   const skillsRepo = LearnedSkillsRepositoryFactory.create(db);
 
-  if (toolsToExecute.length > 0) {
-    const skillContent = await toolsQueue.handle(
-      toolsToExecute,
+  if (toolCalls.length > 0) {
+    const skillContent = await ctx.toolsQueue.handle(
+      toolCalls,
       { model: config.AI.MODEL },
-      signal
+      ctx.signal
     );
 
-    for (const toolCall of toolsToExecute) {
-      if (toolCall.name === 'get_skill') {
-        const skillName = toolCall.arguments.name ?? toolCall.arguments.skill_name;
-        const learningPrompt = buildSkillLearningPrompt(skillName as string,skillContent);
-        accumulatedContext += learningPrompt;
+    for (const toolCall of toolCalls) {
+      const skillName = toolCall.arguments.name ?? toolCall.arguments.skill_name;
+      const learningPrompt = buildSkillLearningPrompt(skillName as string, skillContent);
+      accumulatedContext += learningPrompt;
 
-        try {
+      const checkIfSkillAlreadyLearned = skillsRepo.exists(skillName as string);
+
+      try {
+        if (!checkIfSkillAlreadyLearned) {
           skillsRepo.save({
             skill_name: skillName as string,
             skill_content: learningPrompt,
           });
-          onProgress(`✓ Skill "${skillName}" learned and saved to database`);
-        } catch (error) {
-          logger.error('Failed to save learned skill', { skillName, error });
-          onProgress(`⚠ Skill "${skillName}" learned but failed to save to database`);
+          ctx.onProgress(`✓ Skill "${skillName}" learned and saved to database`);
+        } else {
+          ctx.onProgress(`- Skill "${skillName}" learned but already exists in database, skipping save`);
         }
+      } catch (error) {
+        ctx.logger.error('Failed to save learned skill', { skillName, error });
+        ctx.onProgress(`⚠ Skill "${skillName}" learned but failed to save to database`);
       }
     }
   }
 
+  const prompt = buildSkillPrompt(originalUserRequest, accumulatedContext);
   const response = await messageProvider(
-    logger,
-    accumulatedContext,
-    channel,
-    options,
+    ctx.logger,
+    prompt,
+    ctx.channel,
+    ctx.options,
     messageHistory
   );
 

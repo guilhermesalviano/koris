@@ -6,9 +6,10 @@ import type { AIChatRequest } from "../../../types/provider";
 import { PromptRepositoryFactory } from "../../../repositories/prompt";
 import { ToolCall } from "../../../types/tools";
 import { Message } from "../../../entities/message";
+import { ProcessOptions } from "../../../types/agents";
+import { DatabaseServiceFactory } from "../../../infrastructure/db-sqlite";
 
 type ProcessedMessage = string | ToolCall[] | AsyncGenerator<string>;
-type ProcessOptions = { signal?: AbortSignal, toolsEnabled?: boolean };
 
 async function messageProvider(
   logger: ILogger,
@@ -20,7 +21,13 @@ async function messageProvider(
   const provider = getAIProvider({ logger });
   const skillsRepository = new SkillsRepository(logger);
   const skills = skillsRepository.get();
-  const promptRepository = PromptRepositoryFactory.create();
+
+  /**
+   * Todo:
+   * passa prompt repository as dependency
+   */
+  const db = DatabaseServiceFactory.create();
+  const promptRepository = PromptRepositoryFactory.create(db);
   
   const historyMessages = messageHistory?.map(m => ({ role: m.role, content: m.content }));
   
@@ -32,7 +39,7 @@ async function messageProvider(
     messageHistory: historyMessages
   });
 
-  logger.info("Generated prompt:", payload as unknown as Record<string, unknown>);
+  logger.info(`Prompt generated in ${new Date().toISOString()}:`, payload as unknown as Record<string, unknown>);
 
   const chatRequest = payload as AIChatRequest;
 

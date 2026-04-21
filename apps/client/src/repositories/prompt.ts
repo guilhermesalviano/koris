@@ -3,6 +3,9 @@ import { ISystemInfoRepository, SystemInfoRepositoryFactory } from './system-inf
 import type { AIChatRequest, AIToolDefinition } from '../types/provider';
 import { IToolsRepository, ToolsRepositoryFactory } from './tools';
 import { MessageRole } from '../types/messages';
+import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
+import { IDatabaseService } from '../infrastructure/db-sqlite';
+import { SYSTEM_PROMPT } from '../constants';
 
 interface Message {
   role: MessageRole;
@@ -21,19 +24,23 @@ interface PromptConfig {
   systemPrompt?: string;
   includeSystemInfo?: boolean;
   includeTools?: boolean;
+  learnedSkillsLimit?: number;
+  learnedSkillsMaxChars?: number;
 }
+
+const DEFAULT_LEARNED_SKILLS_LIMIT = 10;
+const DEFAULT_LEARNED_SKILLS_MAX_CHARS = 8000;
 
 /**
  * Repository for building and managing AI prompts.
  * Composes system prompts, user messages, and tool definitions.
  */
 class PromptRepository {
-  private readonly defaultSystemPrompt = 'You are a Personal Assistant. Be direct.';
-
   constructor(
     private systemInfoRepository: ISystemInfoRepository,
     private toolsRepository: IToolsRepository,
-    private config: PromptConfig = {}
+    private learnedSkillsRepository: ILearnedSkillsRepository,
+    private config: PromptConfig = {},
   ) {}
 
   /**
@@ -64,8 +71,9 @@ class PromptRepository {
     const messages: Message[] = [];
 
     // Base system prompt
-    const basePrompt = this.config.systemPrompt ?? this.defaultSystemPrompt;
-    messages.push({ role: 'system', content: basePrompt });
+    const basePrompt = this.config.systemPrompt ?? SYSTEM_PROMPT;
+    const baseHistory = this.buildBaseHistoryPrompt(basePrompt);
+    messages.push({ role: 'system', content: baseHistory });
 
     // System info context
     if (this.config.includeSystemInfo !== false) {
@@ -74,6 +82,49 @@ class PromptRepository {
     }
 
     return messages;
+  }
+
+  /**
+   * Build base prompt + bounded learned skills context
+   */
+  private buildBaseHistoryPrompt(basePrompt: string): string {
+    const learnedSkillsLimit = this.config.learnedSkillsLimit ?? DEFAULT_LEARNED_SKILLS_LIMIT;
+    const learnedSkillsMaxChars = this.config.learnedSkillsMaxChars ?? DEFAULT_LEARNED_SKILLS_MAX_CHARS;
+    const learnedSkills = this.learnedSkillsRepository.getRecent(learnedSkillsLimit);
+
+    if (learnedSkills.length === 0 || learnedSkillsMaxChars <= 0) {
+      return basePrompt;
+    }
+
+    let usedChars = 0;
+    const learnedSkillsLines: string[] = [];
+
+    for (const skill of learnedSkills) {
+      const line = `${skill.skill_name}: ${skill.skill_content}`;
+      const remainingChars = learnedSkillsMaxChars - usedChars;
+
+      if (remainingChars <= 0) {
+        break;
+      }
+
+      if (line.length <= remainingChars) {
+        learnedSkillsLines.push(line);
+        usedChars += line.length;
+        continue;
+      }
+
+      if (remainingChars > 4) {
+        learnedSkillsLines.push(`${line.slice(0, remainingChars - 3)}...`);
+      }
+
+      break;
+    }
+
+    if (learnedSkillsLines.length === 0) {
+      return basePrompt;
+    }
+
+    return `${basePrompt}\n${learnedSkillsLines.join("\n")}`;
   }
 
   /**
@@ -131,16 +182,18 @@ class PromptRepository {
     return new PromptRepository(
       this.systemInfoRepository,
       this.toolsRepository,
+      this.learnedSkillsRepository,
       { ...this.config, ...config }
     );
   }
 }
 
 class PromptRepositoryFactory {
-  static create(config?: PromptConfig): PromptRepository {
+  static create(db: IDatabaseService, config?: PromptConfig): PromptRepository {
     const systemInfoRepository = SystemInfoRepositoryFactory.create();
     const toolsRepository = ToolsRepositoryFactory.create();
-    return new PromptRepository(systemInfoRepository, toolsRepository, config);
+    const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
+    return new PromptRepository(systemInfoRepository, toolsRepository, learnedSkillsRepository, config);
   }
 }
 

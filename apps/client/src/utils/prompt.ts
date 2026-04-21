@@ -19,21 +19,49 @@ NOW DO THIS:
    - Extract the HTTP method (GET, POST, PUT, DELETE, etc.)
    - Extract any headers or authentication required
    - Extract the request body if present
-   - Call the curl_request tool with these parameters
+  - Call the curl_request tool with these parameters
+  - Do NOT add any extra arguments, shell pipes, jq, grep, awk, sed, or transformations unless explicitly shown in the skill documentation
 5. After executing the curl request, analyze the response and provide a clear answer to the user
 Remember: Use the curl_request tool to execute any HTTP/API calls shown in the skill.
 ---`;
-// ORIGINAL USER REQUEST: "${originalUserRequest}"
 }
 
 /**
  * Build prompt with tool execution results for next AI iteration
  */
 export function buildToolResultPrompt(
-  previousResponse: string,
+  originalUserRequest: string,
   toolResults: string
 ): string {
-  return `Previous response:\n${previousResponse}\n\nTool execution results:\n${toolResults}`;
+  return `
+Analyze the tool execution results below to answer the user's request. 
+Extract the relevant information from the results and provide a clear, direct answer. Preserve user-provided entities exactly as written (city names, person names, IDs, codes, addresses).
+
+<previous_context>
+${originalUserRequest}
+</previous_context>
+
+<tool_results>
+${toolResults}
+</tool_results>
+`;
+}
+
+export function buildSkillPrompt(
+  userRequest: string,
+  skillDocumentation: string
+): string {
+  return `
+    Answer the user request using ONLY the skills detailed in the provided documentation. Do not use external knowledge.
+
+    <user_request>
+    ${userRequest}
+    </user_request>
+
+    <skills_documentation>
+    ${skillDocumentation}
+    </skills_documentation>
+  `;
 }
 
 /**

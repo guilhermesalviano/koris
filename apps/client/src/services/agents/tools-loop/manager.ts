@@ -1,26 +1,14 @@
-import { ILogger } from '../../../infrastructure/logger';
 import { messageProvider } from '../chat/message-provider';
 import { extractToolCalls, normalizeResponse } from '../../../utils/tool-calls';
 import { ToolsQueue } from '../../tools-queue';
-import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
-import { IMessageService } from '../../message-service';
 import { executorWorker } from './executor-worker';
 import { learnerWorker } from './learner-worker';
+import { TOOL_CALL_HELPER } from '../../../constants';
+import { LoopContext } from './context';
+import type { ProcessedMessage, ProcessOptions } from '../../../types/agents';
+import type { IMessageService } from '../../message-service';
+import type { ILogger } from '../../../infrastructure/logger';
 
-/**
- * Tools Loop Manager
- * 
- * Orchestrates the skill learning and execution flow:
- * 1. Get initial AI response with tool calls
- * 2. Filter out get_skill calls for learning phase
- * 3. Execute learning phase (learner-worker) to learn skills
- * 4. Execute execution phase (executor-worker) to use learned skills
- * 
- * The database stores learned skills for reuse across sessions:
- * - Learning context: prompt used to teach the skill
- * - Execution context: prompt and results from actual usage
- * - Metadata: execution count, timestamps, etc.
- */
 async function toolsLoop(
   logger: ILogger,
   userMessage: string,
@@ -28,67 +16,36 @@ async function toolsLoop(
   message: IMessageService,
   options?: ProcessOptions
 ): Promise<ProcessedMessage> {
-  const toolsQueue = new ToolsQueue(logger);
-  const signal = options?.signal || new AbortController().signal;
-  const onProgress = options?.onProgress || ((text) => logger.info(text));
-
-  // vai retornar apenas skills parendidas no primeiro run, visto que o session ID é zerado.
-  const messageHistory = message.getHistory();
-
-  const aiResponse = await messageProvider(
-    logger,
-    userMessage,
-    channel,
-    options,
-    messageHistory
-  );
-
-  const responseText = normalizeResponse(aiResponse);
-  const callbacks = extractToolCalls(responseText);
-
-  onProgress(`Tools to execute after learning phase: ${JSON.stringify(callbacks)}`);
-
-  if (callbacks.length === 0) return responseText;
-
-  const toolsToLearn = callbacks.filter(cb => cb.name === 'get_skill');
-  let toolsToExecute = callbacks.filter(cb => cb.name !== 'get_skill');
-  
-  if (toolsToLearn.length > 0) {
-    onProgress(`📚 Learning phase`);
-    onProgress(`Learning phase: ${toolsToLearn.length} skill(s) to learn`);
-    const learnerResponse = await learnerWorker(
-      toolsToLearn,
-      messageHistory,
-      logger,
-      channel,
-      toolsQueue,
-      signal,
-      onProgress,
-      options,
-    );
-    toolsToExecute.push(...extractToolCalls(learnerResponse));
-  }
-
-  if (toolsToExecute.length === 0) {
-    onProgress('✓ All tools processed');
-    return responseText;
-  }
-
-  onProgress(`⚙️ Execution phase`);
-  const finalResponse = await executorWorker(
-    toolsToExecute,
-    messageHistory,
+  const ctx: LoopContext = {
     logger,
     channel,
     message,
-    toolsQueue,
-    signal,
-    onProgress,
+    toolsQueue: new ToolsQueue(logger),
+    signal: options?.signal ?? new AbortController().signal,
+    onProgress: options?.onProgress ?? ((progress) => logger.info(progress)),
     options,
-    userMessage
-  );
+  };
 
-  return finalResponse;
+  const messageHistory = message.getHistory();
+  const aiResponse = await messageProvider(logger, TOOL_CALL_HELPER + userMessage, channel, options, messageHistory);
+  const responseText = normalizeResponse(aiResponse);
+
+  let callbacks = extractToolCalls(responseText);
+  if (callbacks.length === 0) return responseText;
+
+  const toLearn = callbacks.filter(cb => cb.name === 'get_skill');
+  let toExecute = callbacks.filter(cb => cb.name !== 'get_skill');
+
+  if (toLearn.length > 0) {
+    ctx.onProgress(`📚 Learning phase: ${toLearn.length} skill(s)`);
+    const learned = await learnerWorker(toLearn, userMessage, messageHistory, ctx);
+    toExecute = [...toExecute, ...extractToolCalls(learned)];
+  }
+
+  if (toExecute.length === 0) return responseText;
+
+  ctx.onProgress(`⚙️ Execution phase: ${toExecute.length} tool(s)`);
+  return executorWorker(toExecute, messageHistory, ctx.logger, ctx.channel, ctx.message, ctx.toolsQueue, ctx.signal, ctx.onProgress, ctx.options, userMessage);
 }
 
 export { toolsLoop };

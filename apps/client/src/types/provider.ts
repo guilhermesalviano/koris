@@ -1,9 +1,6 @@
-export type AIRole = 'system' | 'user' | 'assistant';
+import { Message } from "../repositories/prompt";
 
-export interface AIMessage {
-  role: AIRole;
-  content: string;
-}
+export type AIRole = 'system' | 'user' | 'assistant';
 
 export interface AIToolDefinition {
   type: 'function';
@@ -16,7 +13,7 @@ export interface AIToolDefinition {
 
 export interface AIChatRequest {
   model?: string;
-  messages: AIMessage[];
+  messages: Message[];
   temperature?: number;
   tools?: AIToolDefinition[];
 }
