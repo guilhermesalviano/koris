@@ -33,13 +33,25 @@ class AgentHandler {
     // Process AI messages with potential multi-round tool execution
     const response = await toolsLoop(this.logger, safeMessage, this.channel, this.messageService, { ...options });
 
-    // Streaming response: return directly, history is saved by the caller after the stream ends
+    // Streaming response: persist assistant text after stream completes.
     if (typeof response !== 'string') {
-      return response;
+      return this.persistAssistantStream(response);
     }
 
-    this.messageService.save({ role: 'assistant', content: response });
     return response;
+  }
+
+  private async *persistAssistantStream(stream: AsyncGenerator<string>): AsyncGenerator<string> {
+    let fullResponse = '';
+
+    for await (const chunk of stream) {
+      fullResponse += chunk;
+      yield chunk;
+    }
+
+    if (fullResponse.length > 0) {
+      this.messageService.save({ role: 'assistant', content: fullResponse });
+    }
   }
 }
 
