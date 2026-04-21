@@ -32,8 +32,13 @@ class AgentHandler {
 
     // Process AI messages with potential multi-round tool execution
     const response = await toolsLoop(this.logger, safeMessage, this.channel, this.messageService, { ...options });
-    this.messageService.save({ role: 'assistant', content: response });
 
+    // Streaming response: return directly, history is saved by the caller after the stream ends
+    if (typeof response !== 'string') {
+      return response;
+    }
+
+    this.messageService.save({ role: 'assistant', content: response });
     return response;
   }
 }

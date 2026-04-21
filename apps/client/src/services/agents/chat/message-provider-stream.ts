@@ -5,6 +5,7 @@ import { PromptRepositoryFactory } from "../../../repositories/prompt";
 import { getAIProvider } from "../../providers";
 import { ToolCall } from "../../../types/tools";
 import { DatabaseServiceFactory } from "../../../infrastructure/db-sqlite";
+import type { Message } from "../../../entities/message";
 
 type ProcessedMessage = string | ToolCall[] | AsyncGenerator<string>;
 type ProcessOptions = { signal?: AbortSignal, toolsEnabled?: boolean };
@@ -13,12 +14,14 @@ async function messageProviderStream(
   logger: ILogger,
   message: string,
   channel: string,
-  options?: ProcessOptions
+  options?: ProcessOptions,
+  messageHistory?: Message[]
 ): Promise<ProcessedMessage> {
   const provider = getAIProvider({ logger });
   const db = DatabaseServiceFactory.create();
   const promptRepository = PromptRepositoryFactory.create(db);
-  const payload = promptRepository.build({ userMessage: message, channel });
+  const historyMessages = messageHistory?.map(m => ({ role: m.role, content: m.content }));
+  const payload = promptRepository.build({ userMessage: message, channel, messageHistory: historyMessages });
 
   // Cast MessagePayload to AIChatRequest (compatible types)
   const chatRequest = payload as AIChatRequest;

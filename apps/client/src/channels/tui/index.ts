@@ -30,7 +30,7 @@ export function startTUI(params: { logger: ILogger }): void {
     // Thinking indicator for responses
     assistantPrefix: '●',
 
-    footerText: `/ for commands  |  Model: ${config.AI.MODEL}`,
+    footerText: ` / for commands  |  Model: ${config.AI.MODEL}`,
     
     // Command detection
     isCommand,

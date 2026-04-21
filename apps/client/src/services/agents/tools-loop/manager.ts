@@ -1,4 +1,5 @@
 import { messageProvider } from '../chat/message-provider';
+import { messageProviderStream } from '../chat/message-provider-stream';
 import { extractToolCalls, normalizeResponse } from '../../../utils/tool-calls';
 import { ToolsQueue } from '../../tools-queue';
 import { executorWorker } from './executor-worker';
@@ -8,6 +9,19 @@ import { LoopContext } from './context';
 import type { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import type { IMessageService } from '../../message-service';
 import type { ILogger } from '../../../infrastructure/logger';
+
+async function streamResponse(
+  logger: ILogger,
+  userMessage: string,
+  channel: string,
+  options: ProcessOptions | undefined,
+  messageHistory: import('../../../entities/message').Message[]
+): Promise<ProcessedMessage> {
+  const r = await messageProviderStream(logger, userMessage, channel, options, messageHistory);
+  // ToolCall[] is unexpected here; normalize it to a string so callers always get string | AsyncGenerator.
+  if (Array.isArray(r)) return normalizeResponse(r);
+  return r as ProcessedMessage;
+}
 
 async function toolsLoop(
   logger: ILogger,
@@ -33,11 +47,16 @@ async function toolsLoop(
    */
 
   const messageHistory = message.getHistory();
+
+  // Non-streaming call to detect tool calls.
   const aiResponse = await messageProvider(logger, TOOL_CALL_HELPER + userMessage, channel, options, messageHistory);
   const responseText = normalizeResponse(aiResponse);
-
   let callbacks = extractToolCalls(responseText);
-  if (callbacks.length === 0) return responseText;
+
+  // No tool calls — stream the response directly.
+  if (callbacks.length === 0) {
+    return streamResponse(logger, userMessage, channel, options, messageHistory);
+  }
 
   const toLearn = callbacks.filter(cb => cb.name === 'get_skill');
   let toExecute = callbacks.filter(cb => cb.name !== 'get_skill');
@@ -48,7 +67,9 @@ async function toolsLoop(
     toExecute = [...toExecute, ...extractToolCalls(learned)];
   }
 
-  if (toExecute.length === 0) return responseText;
+  if (toExecute.length === 0) {
+    return streamResponse(logger, userMessage, channel, options, messageHistory);
+  }
 
   ctx.onProgress(`⚙️  Execution phase: ${toExecute.length} tool(s)`);
   return executorWorker(toExecute, messageHistory, ctx.logger, ctx.channel, ctx.message, ctx.toolsQueue, ctx.signal, ctx.onProgress, ctx.options, userMessage);

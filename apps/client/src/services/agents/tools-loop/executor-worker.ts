@@ -1,10 +1,10 @@
 import { extractToolCalls, normalizeResponse } from "../../../utils/tool-calls";
 import { ToolCall } from "../../../types/tools";
-import { messageProvider } from "../chat/message-provider";
+import { messageProviderStream } from "../chat/message-provider-stream";
 import { buildToolResultPrompt } from "../../../utils/prompt";
 import { config } from "../../../config";
 import type { ILogger } from "../../../infrastructure/logger";
-import type { ProcessOptions } from "../../../types/agents";
+import type { ProcessOptions, ProcessedMessage } from "../../../types/agents";
 import type { Message } from "../../../entities/message";
 import type { IMessageService } from "../../message-service";
 import type { IToolsQueue } from "../../tools-queue";
@@ -22,7 +22,7 @@ async function executorWorker(
   userMessage: string,
   iteration: number = 1,
   maxIterations: number = 10
-): Promise<string> {
+): Promise<ProcessedMessage> {
   if (iteration >= maxIterations) {
     logger.warn('Max tool iterations reached', { 
       maxIterations,
@@ -39,23 +39,27 @@ async function executorWorker(
     signal
   );
 
-  const response = await messageProvider(
+  const synthesisPrompt = buildToolResultPrompt(userMessage, toolResults);
+  const response = await messageProviderStream(
     logger,
-    buildToolResultPrompt(userMessage, toolResults),
+    synthesisPrompt,
     channel,
     options,
     messageHistory,
   );
 
-  const normalizedToolResults = normalizeResponse(response);
-  const extractToolResults = extractToolCalls(normalizedToolResults);
+  // Stream = final answer (tui+ollama). Can't inspect for more tool calls — return directly.
+  if (typeof response !== 'string') return response as ProcessedMessage;
 
-  if (extractToolResults.length === 0) return normalizedToolResults;
+  const normalizedResponse = normalizeResponse(response);
+  const nextToolCalls = extractToolCalls(normalizedResponse);
 
-  onProgress(`Tool call (${extractToolResults.length}) after execution phase: ${JSON.stringify(extractToolResults)}`);
+  if (nextToolCalls.length === 0) return normalizedResponse;
+
+  onProgress(`Tool call (${nextToolCalls.length}) after execution phase: ${JSON.stringify(nextToolCalls)}`);
 
   return executorWorker(
-    extractToolResults,
+    nextToolCalls,
     message.getHistory(),
     logger,
     channel,

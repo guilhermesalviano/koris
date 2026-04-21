@@ -1,4 +1,4 @@
-export type ProcessedMessage = string;
+export type ProcessedMessage = string | AsyncGenerator<string>;
 export type ProcessOptions = {
   signal?: AbortSignal;
   toolsEnabled?: boolean;
