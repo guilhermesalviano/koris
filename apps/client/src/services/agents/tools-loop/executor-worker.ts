@@ -49,10 +49,19 @@ async function executorWorker(
   );
 
   // Stream = final answer (tui+ollama). Can't inspect for more tool calls — return directly.
-  if (typeof response !== 'string') return response as ProcessedMessage;
+  if (typeof response !== 'string' && !Array.isArray(response)) return response as ProcessedMessage;
 
-  const normalizedResponse = normalizeResponse(response);
-  const nextToolCalls = extractToolCalls(normalizedResponse);
+  const normalizedResponse = Array.isArray(response)
+    ? normalizeResponse({
+        tool_calls: response.map((toolCall) => ({
+          function: {
+            name: toolCall.name,
+            arguments: toolCall.arguments,
+          },
+        })),
+      })
+    : normalizeResponse(response);
+  const nextToolCalls = extractToolCalls(normalizedResponse, logger);
 
   if (nextToolCalls.length === 0) return normalizedResponse;
 
