@@ -1,4 +1,4 @@
-# opencrawdio Tests
+# koris-agent Tests
 
 Comprehensive test suite for all interfaces (TUI, Web, Telegram).
 
@@ -11,14 +11,14 @@ Run from the repo root.
 pnpm test
 
 # Client-only tests (watch / UI)
-pnpm --filter opencrawdio test:watch
-pnpm --filter opencrawdio test:ui
+pnpm --filter koris-agent test:watch
+pnpm --filter koris-agent test:ui
 
 # Coverage (client)
-pnpm --filter opencrawdio test:coverage
+pnpm --filter koris-agent test:coverage
 
 # Specific test file
-pnpm --filter opencrawdio test tests/unit/ai/ollama.provider.test.ts
+pnpm --filter koris-agent test tests/unit/ai/ollama.provider.test.ts
 ```
 
 ## Test Structure

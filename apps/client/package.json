@@ -1,5 +1,5 @@
 {
-  "name": "opencrawdio",
+  "name": "koris-agent",
   "version": "1.0.0",
   "description": "",
   "main": "dist/src/app.js",
@@ -20,15 +20,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/guilhermesalviano/opencrawdio.git"
+    "url": "git+https://github.com/guilhermesalviano/koris-agent.git"
   },
   "keywords": [],
   "author": "guilhermesalviano",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/guilhermesalviano/opencrawdio/issues"
+    "url": "https://github.com/guilhermesalviano/koris-agent/issues"
   },
-  "homepage": "https://github.com/guilhermesalviano/opencrawdio#readme",
+  "homepage": "https://github.com/guilhermesalviano/koris-agent#readme",
   "dependencies": {
     "assistant-telegram-bot": "workspace:*",
     "assistant-tui": "workspace:*",

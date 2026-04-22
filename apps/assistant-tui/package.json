@@ -28,7 +28,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/guilhermesalviano/opencrawdio.git"
+    "url": "git+https://github.com/guilhermesalviano/koris-agent.git"
   },
   "author": "guilhermesalviano",
   "license": "ISC",

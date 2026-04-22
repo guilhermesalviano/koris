@@ -44,12 +44,14 @@ class Logger implements ILogger {
 }
 
 class LoggerFactory {
-  static getOptions() {
+  static getOptions(silenceConsole = false) {
     const logsDir = path.join(config.BASE_DIR, 'logs');
 
-    const activeTransports: any[] = [
-      new transports.Console()
-    ];
+    const activeTransports: any[] = [];
+
+    if (!silenceConsole) {
+      activeTransports.push(new transports.Console());
+    }
 
     try {
       if (!fs.existsSync(logsDir)) {
@@ -70,7 +72,13 @@ class LoggerFactory {
         })
       );
     } catch (error) {
-      console.warn(`[LoggerFactory] Warning: Could not create log directory at ${logsDir}. Falling back to Console-only logging.`, error);
+      if (!silenceConsole) {
+        console.warn(`[LoggerFactory] Warning: Could not create log directory at ${logsDir}. Falling back to Console-only logging.`, error);
+        // Ensure at least console transport is present when file setup fails
+        if (!activeTransports.some(t => t instanceof transports.Console)) {
+          activeTransports.push(new transports.Console());
+        }
+      }
     }
 
     const options: LoggerOptions = {
@@ -85,8 +93,10 @@ class LoggerFactory {
     return options;
   }
 
-  static create(): ILogger {
-    const logger = createLogger(LoggerFactory.getOptions());
+  static create(silenceConsole?: boolean): ILogger {
+    // Auto-detect TUI mode from env var set before any modules load.
+    const shouldSilence = silenceConsole ?? process.env.LOG_SILENCE_CONSOLE === 'true';
+    const logger = createLogger(LoggerFactory.getOptions(shouldSilence));
     return new Logger(logger);
   }
 }
