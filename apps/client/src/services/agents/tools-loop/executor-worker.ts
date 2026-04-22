@@ -33,11 +33,15 @@ async function executorWorker(
   }
   onProgress(`Iteration ${iteration}`);
 
+  logger.info(`Executing tools (${JSON.stringify(toolCalls)})...`);
+
   const toolResults = await toolsQueue.handle(
     toolCalls,
     { model: config.AI.MODEL },
     signal
   );
+
+  logger.info(`Tool results: ${JSON.stringify(toolResults)}`);
 
   const synthesisPrompt = buildToolResultPrompt(userMessage, toolResults);
   const response = await messageProviderStream(
@@ -45,11 +49,11 @@ async function executorWorker(
     synthesisPrompt,
     channel,
     options,
-    messageHistory,
+    messageHistory
   );
 
-  // Stream = final answer (tui+ollama). Can't inspect for more tool calls — return directly.
-  if (typeof response !== 'string' && !Array.isArray(response)) return response as ProcessedMessage;
+  // Stream = final answer (tui+ollama). Can't inspect for more tool calls — return directly. typeof response !== 'string'
+  if (!Array.isArray(response)) return response as ProcessedMessage;
 
   const normalizedResponse = Array.isArray(response)
     ? normalizeResponse({
@@ -65,7 +69,7 @@ async function executorWorker(
 
   if (nextToolCalls.length === 0) return normalizedResponse;
 
-  onProgress(`Tool call (${nextToolCalls.length}) after execution phase: ${JSON.stringify(nextToolCalls)}`);
+  logger.info(`Tool call (${nextToolCalls.length}) after execution phase: ${JSON.stringify(nextToolCalls)}`);
 
   return executorWorker(
     nextToolCalls,

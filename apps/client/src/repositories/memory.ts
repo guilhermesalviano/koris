@@ -22,10 +22,10 @@ class MemoryRepository implements IMemoryRepository {
         memory.sessionId,
         memory.type,
         memory.content,
-        memory.embedding,
-        memory.tags,
-        memory.importance,
-        memory.createdAt
+        memory.embedding ?? null,
+        memory.tags ?? null,
+        memory.importance ?? null,
+        memory.createdAt.toISOString(),
       ]
     );
   }

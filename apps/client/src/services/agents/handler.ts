@@ -6,6 +6,7 @@ import { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import { SessionServiceFactory } from '../session-service';
 import { IMessageService, MessageServiceFactory } from '../message-service';
 import { toolsLoop } from './tools-loop/manager';
+import { summarizerWorker } from './summarizer';
 
 interface IAgentHandler {
   handle(message: unknown, options?: ProcessOptions): Promise<ProcessedMessage>;
@@ -35,14 +36,28 @@ class AgentHandler {
 
     // Streaming response: persist assistant text after stream completes.
     if (typeof response !== 'string') {
-      return this.persistAssistantStream(response);
+      return this.persistAssistantStream(response, safeMessage, options);
     }
     this.messageService.save({ role: 'assistant', content: response });
+
+    // Fire-and-forget background summarization
+    summarizerWorker(
+      this.messageService.getSessionId(),
+      safeMessage,
+      response,
+      this.logger,
+      this.channel,
+      options
+    ).catch((err) => this.logger.error('Background summarizer failed', { err }));
 
     return response;
   }
 
-  private async *persistAssistantStream(stream: AsyncGenerator<string>): AsyncGenerator<string> {
+  private async *persistAssistantStream(
+    stream: AsyncGenerator<string>,
+    userMessage: string,
+    options?: ProcessOptions
+  ): AsyncGenerator<string> {
     let fullResponse = '';
 
     for await (const chunk of stream) {
@@ -52,6 +67,16 @@ class AgentHandler {
 
     if (fullResponse.length > 0) {
       this.messageService.save({ role: 'assistant', content: fullResponse });
+
+      // Fire-and-forget background summarization after stream completes
+      summarizerWorker(
+        this.messageService.getSessionId(),
+        userMessage,
+        fullResponse,
+        this.logger,
+        this.channel,
+        options
+      ).catch((err) => this.logger.error('Background summarizer failed', { err }));
     }
   }
 }
