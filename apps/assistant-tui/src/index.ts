@@ -190,7 +190,11 @@ export function startTui(options: StartTuiOptions): void {
 
     process.once('exit', altScreenCleanup);
     process.once('SIGTERM', () => { altScreenCleanup(); process.exit(0); });
-    process.once('uncaughtException', (err) => { altScreenCleanup(); throw err; });
+    process.once('uncaughtException', (err) => {
+      altScreenCleanup();
+      console.error(err);
+      process.exit(1);
+    });
 
     clearScreen();
   }
