@@ -80,6 +80,31 @@ class DatabaseService implements IDatabaseService {
         );
       `);
 
+      /**
+       * Long term memory.
+       */
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS memories (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          type TEXT NOT NULL CHECK(type IN ('fact', 'summary', 'observation', 'decision')),
+          content TEXT NOT NULL,
+          embedding TEXT NULL,
+          tags TEXT NULL,
+          importance INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        );
+      `);
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_memories_session_id ON memories(session_id);
+        CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at);
+      `);
+
+      /**
+       * Short term memory.
+       */
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS messages (
           id TEXT PRIMARY KEY,
