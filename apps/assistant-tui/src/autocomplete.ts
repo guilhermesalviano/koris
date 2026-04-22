@@ -6,7 +6,7 @@ import type { CommandSuggestion } from './types';
 import type { TuiInternalState } from './renderer';
 
 export interface AutocompleteDeps {
-  state: Pick<TuiInternalState, 'isBusy' | 'terminalHeight'>;
+  state: Pick<TuiInternalState, 'isBusy' | 'terminalHeight' | 'inputLineCount'>;
   ansi: Ansi;
   colors: TuiColors;
   fixedInput: boolean;
@@ -23,7 +23,7 @@ const AC_MAX_ROWS = 8;
 export function createAutocomplete(deps: AutocompleteDeps) {
   const { state, ansi, colors, fixedInput, anyRl, rl, allCommands, placeholder } = deps;
 
-  const acPopupBottom = () => state.terminalHeight - 5;
+  const acPopupBottom = () => state.terminalHeight - state.inputLineCount - 4;
   const acPopupTop    = () => acPopupBottom() - AC_MAX_ROWS + 1;
 
   let acSuggestions: CommandSuggestion[] = [];
@@ -210,7 +210,14 @@ export function createAutocomplete(deps: AutocompleteDeps) {
     if (k === 'escape') { acDismiss(); return; }
 
     if (k !== 'return' && k !== 'enter') {
-      setTimeout(acUpdateFromInput, 0);
+      // Readline updates `line`/`cursor` after keypress handlers run. Defer one
+      // tick so wrapping math uses the updated buffer while typing.
+      setTimeout(() => {
+        if (typeof anyRl._refreshLine === 'function') {
+          anyRl._refreshLine();
+        }
+        acUpdateFromInput();
+      }, 0);
     }
   };
 

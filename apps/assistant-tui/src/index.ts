@@ -38,6 +38,7 @@ export function startTui(options: StartTuiOptions): void {
     activeAbortController: undefined,
     isBusy: false,
     iterationBadge: '',
+    inputLineCount: 1,
   };
 
   // ── Option constants ────────────────────────────────────────────────────────
