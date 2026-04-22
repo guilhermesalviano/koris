@@ -21,6 +21,19 @@ const TUI_COMMANDS = getAvailableCommands('tui').map((name) => ({
   description: COMMAND_DESCRIPTIONS[name],
 }));
 
+function applyInlineMarkdown(text: string, colors: {
+  reset: string;
+  bright: string;
+  dim: string;
+  yellow: string;
+}) {
+  let formatted = text.replace(/\*\*(.+?)\*\*/g, `${colors.bright}$1${colors.reset}`);
+  formatted = formatted.replace(/__(.+?)__/g, `${colors.bright}$1${colors.reset}`);
+  formatted = formatted.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, `${colors.dim}$1${colors.reset}`);
+  formatted = formatted.replace(/`([^`]+)`/g, `${colors.yellow}$1${colors.reset}`);
+  return formatted;
+}
+
 export function startTUI(params: { logger: ILogger }): void {
   const handler = AgentHandlerFactory.create(params.logger, 'tui');
   const progressDotColors = [
@@ -58,37 +71,57 @@ export function startTUI(params: { logger: ILogger }): void {
     // Autocomplete popup when user types /
     commands: TUI_COMMANDS,
     
-    // Format responses with better visual hierarchy
+    // Format AI markdown responses with better visual hierarchy
     formatResponse: (response, ctx) => {
       const { colors } = ctx;
       const lines = response.split('\n');
+      let inCodeBlock = false;
       
       return lines
         .map((line) => {
           const trimmed = line.trim();
+
+          if (trimmed.startsWith('```')) {
+            inCodeBlock = !inCodeBlock;
+            return `${colors.dim}${colors.gray}${line}${colors.reset}`;
+          }
+
+          if (inCodeBlock) {
+            return `${colors.green}${line}${colors.reset}`;
+          }
+
+          const h3 = line.match(/^#{3}\s+(.*)/);
+          if (h3) {
+            return `${colors.bright}${colors.yellow}▸ ${applyInlineMarkdown(h3[1], colors)}${colors.reset}`;
+          }
+
+          const h2 = line.match(/^#{2}\s+(.*)/);
+          if (h2) {
+            return `${colors.bright}${colors.cyan}▶ ${applyInlineMarkdown(h2[1], colors)}${colors.reset}`;
+          }
+
+          const h1 = line.match(/^#\s+(.*)/);
+          if (h1) {
+            return `${colors.bright}${colors.blue}◆ ${applyInlineMarkdown(h1[1], colors)}${colors.reset}`;
+          }
           
           // Bold headers (lines ending with :)
           if (trimmed.endsWith(':')) {
             return `${colors.bright}${colors.magenta}${line}${colors.reset}`;
           }
           
-          // Code fences
-          if (trimmed.startsWith('```')) {
-            return `${colors.dim}${colors.gray}${line}${colors.reset}`;
-          }
-          
           // Bullet points
           if (/^\s*([-•])\s+/.test(line)) {
             const content = line.replace(/^\s*[-•]\s+/, '');
-            return `  ${colors.cyan}•${colors.reset} ${content}`;
+            return `  ${colors.cyan}•${colors.reset} ${applyInlineMarkdown(content, colors)}`;
           }
           
           // Numbered lists
           if (/^\s*\d+\./.test(line)) {
-            return `  ${colors.yellow}${line.trim()}${colors.reset}`;
+            return `  ${applyInlineMarkdown(line.trimStart(), colors)}`;
           }
           
-          return line;
+          return applyInlineMarkdown(line, colors);
         })
         .join('\n');
     },
