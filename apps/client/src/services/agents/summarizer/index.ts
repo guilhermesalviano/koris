@@ -3,16 +3,22 @@ import { IMemoryService, SaveMemoryProps } from "../../memory-service";
 import type { ILogger } from "../../../infrastructure/logger";
 import type { ProcessOptions } from "../../../types/agents";
 import { getAIProvider } from "../../providers";
+import { MemoryType } from "../../../types/memory";
 
-const SUMMARIZATION_PROMPT = `Extract the most important information to remember from this interaction in 1–3 concise sentences.
-Focus on user preferences, facts, decisions, and key takeaways.
+const SUMMARIZATION_PROMPT = `
+Task: Provide a concise 1-3 sentence summary of the topic in messages.
+Constraints:
+- Prioritize specific facts, figures, dates, and actionable decisions.
+- Do not include introductory phrases (e.g., "The conversation was about...").
+- Output ONLY the summary text.
 
-Answer with only the sentences. No explanations or additional text.`;
+Formatting Rule: Strict brevity required.`;
 
 async function summarizerWorker(
   sessionId: string,
   ask: string,
   answer: string,
+  type: MemoryType,
   logger: ILogger,
   channel: string,
   memoryService: IMemoryService,
@@ -21,7 +27,7 @@ async function summarizerWorker(
   logger.info(`Summarizer worker started for session ${sessionId} in ${channel}`);
   const provider = getAIProvider({ logger });
 
-  const prompt = `${SUMMARIZATION_PROMPT}\n\nConversation:\nUser: ${ask}\nAssistant: ${answer}`;
+  const prompt = `${SUMMARIZATION_PROMPT}\n\\nUser: ${ask}\nAssistant: ${answer}`;
 
   try {
     const contentSummarized = await provider.chat({
@@ -29,11 +35,11 @@ async function summarizerWorker(
       }, { signal: options?.signal });
 
     const memory: SaveMemoryProps = {
-      type: "summary",
+      type: type,
       content: normalizeResponse(contentSummarized),
     };
 
-    memoryService.save(sessionId, memory);
+    memoryService.upsert(memory);
     logger.info(`Summarizer worker completed for session ${sessionId}`);
   } catch (error) {
     logger.error(`Failed to summarize for session ${sessionId}`, { error });

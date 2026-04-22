@@ -2,14 +2,14 @@ import { randomUUID } from "node:crypto";
 import { MemoryType } from "../types/memory";
 
 export class Memory {
-  public readonly id: string;
-  public readonly sessionId: string;
-  public readonly type: MemoryType;
-  public readonly content: string;
-  public readonly embedding?: string;
-  public readonly tags?: string;
-  public readonly importance?: number;
-  public readonly createdAt: Date;
+  public id: string;
+  public sessionId: string;
+  public type: MemoryType;
+  public content: string;
+  public embedding?: string;
+  public tags?: string;
+  public importance?: number;
+  public createdAt: Date;
 
   constructor(data: {
     id?: string;

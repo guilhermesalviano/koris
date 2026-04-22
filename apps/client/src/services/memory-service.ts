@@ -12,20 +12,23 @@ interface SaveMemoryProps {
 }
 
 interface IMemoryService {
-  save(sessionId: string, props: SaveMemoryProps): void;
-  getAll(sessionId: string): Memory[];
+  save(props: SaveMemoryProps): void;
+  upsert(props: SaveMemoryProps): void;
+  getAll(): Memory[];
 }
 
 class MemoryService implements IMemoryService {
   private memoryRepository: IMemoryRepository;
+  private sessionId: string;
 
-  constructor(memoryRepository: IMemoryRepository) {
+  constructor(memoryRepository: IMemoryRepository, sessionId: string) {
     this.memoryRepository = memoryRepository;
+    this.sessionId = sessionId;
   }
 
-  save(sessionId: string, props: SaveMemoryProps): void {
+  save(props: SaveMemoryProps): void {
     const memory = new Memory({
-      sessionId: sessionId,
+      sessionId: this.sessionId,
       type: props.type,
       content: props.content,
       embedding: props.embedding,
@@ -35,17 +38,55 @@ class MemoryService implements IMemoryService {
     this.memoryRepository.save(memory);
   }
 
-  getAll(sessionId: string): Memory[] {
-    return this.memoryRepository.getBySessionId(sessionId);
+  upsert(props: SaveMemoryProps): void {
+    const existing = this.memoryRepository
+      .getBySessionId(this.sessionId)
+      .find((m) => m.type === props.type);
+
+    if (existing) {
+      const updatedMemory = new Memory({
+        id: existing.id,
+        sessionId: existing.sessionId,
+        type: props.type,
+        content: this.mergeContent(existing.content, props.content),
+        embedding: props.embedding ?? existing.embedding,
+        tags: this.mergeTags(existing.tags, props.tags),
+        importance: Math.max(existing.importance ?? 0, props.importance ?? 0),
+        createdAt: existing.createdAt,
+      });
+
+      this.memoryRepository.update(updatedMemory);
+    } else {
+      this.save(props);
+    }
   }
 
+  getAll(): Memory[] {
+    return this.memoryRepository.getBySessionId(this.sessionId);
+  }
+
+  private mergeContent(oldContent: string, newContent: string): string {
+    if (oldContent.includes(newContent)) return oldContent;
+    if (newContent.includes(oldContent)) return newContent;
+
+    return `${oldContent}\n\n${newContent}`.trim();
+  }
+
+  private mergeTags(oldTags?: string, newTags?: string): string {
+    const toSet = (tags?: string) =>
+      tags ? tags.split(',').map((t) => t.trim()).filter(Boolean) : [];
+
+    const combined = [...new Set([...toSet(oldTags), ...toSet(newTags)])];
+
+    return combined.join(', ');
+  }
 }
 
 class MemoryServiceFactory {
-  public static create(db: IDatabaseService): MemoryService {
+  public static create(db: IDatabaseService, sessionId: string): MemoryService {
     const memoryRepository = MemoryRepositoryFactory.create(db);
 
-    return new MemoryService(memoryRepository);
+    return new MemoryService(memoryRepository, sessionId);
   }
 }
 

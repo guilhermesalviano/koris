@@ -43,6 +43,7 @@ class AgentHandler {
       this.messageService.getSessionId(),
       safeMessage,
       response,
+      "summary",
       this.logger,
       this.channel,
       this.memoryService,
@@ -71,6 +72,7 @@ class AgentHandler {
         this.messageService.getSessionId(),
         userMessage,
         fullResponse,
+        "summary",
         this.logger,
         this.channel,
         this.memoryService,
@@ -86,7 +88,7 @@ class AgentHandlerFactory {
 
     const sessionService = SessionServiceFactory.create(database, channel);
     const messageService = MessageServiceFactory.create(database, sessionService);
-    const memoryService = MemoryServiceFactory.create(database);
+    const memoryService = MemoryServiceFactory.create(database, sessionService.getSession().id);
 
     return new AgentHandler(logger, messageService, memoryService, channel);
   }

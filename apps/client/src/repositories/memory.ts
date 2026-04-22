@@ -5,6 +5,7 @@ import { MemoryType } from '../types/memory';
 
 interface IMemoryRepository {
   save(memory: Memory): void;
+  update(memory: Memory): void;
   getAll(): Memory[];
   getBySessionId(sessionId: string): Memory[];
   deleteById(id: string): void;
@@ -26,6 +27,20 @@ class MemoryRepository implements IMemoryRepository {
         memory.tags ?? null,
         memory.importance ?? null,
         memory.createdAt.toISOString(),
+      ]
+    );
+  }
+
+  update(memory: Memory): void {
+    this.db.run(
+      `UPDATE memories SET type = ?, content = ?, embedding = ?, tags = ?, importance = ? WHERE id = ?`,
+      [
+        memory.type,
+        memory.content,
+        memory.embedding ?? null,
+        memory.tags ?? null,
+        memory.importance ?? null,
+        memory.id,
       ]
     );
   }
