@@ -146,7 +146,7 @@ export function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string
     }
   } else {
     // Terminal too narrow for any art: show a single centered label.
-    const label = `  ✦  KOARIS-AGENT  ✦  `;
+    const label = `  ✦  KORIS-AGENT  ✦  `;
     const pad = ' '.repeat(Math.max(0, Math.floor((innerWidth - label.length) / 2)));
     println(frameLine(`${pad}${colors.bright}${gradientForLine(label, 0, 1)}${colors.reset}`));
   }

@@ -62,7 +62,7 @@ async function toolsLoop(
   let toExecute = callbacks.filter(cb => cb.name !== 'get_skill');
 
   if (toLearn.length > 0) {
-    ctx.onProgress(` Learning phase: ${toLearn.length} skill(s)`);
+    ctx.onProgress(`Learning phase: ${toLearn.length} skill(s)`);
     const learned = await learnerWorker(toLearn, userMessage, messageHistory, ctx);
     toExecute = [...toExecute, ...extractToolCalls(learned)];
   }
@@ -71,7 +71,7 @@ async function toolsLoop(
     return streamResponse(logger, userMessage, channel, options, messageHistory);
   }
 
-  ctx.onProgress(` Execution phase: ${toExecute.length} tool(s)`);
+  ctx.onProgress(`Execution phase: ${toExecute.length} tool(s)`);
   return executorWorker(toExecute, messageHistory, ctx.logger, ctx.channel, ctx.message, ctx.toolsQueue, ctx.signal, ctx.onProgress, ctx.options, userMessage);
 }
 
