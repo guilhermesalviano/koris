@@ -16,18 +16,85 @@ const TITLE_LARGE = [
 
 // 3-row compact art using Unicode box-drawing characters (~46 chars wide).
 // Letters: K O R I S
+//  A G E N T
 const TITLE_MEDIUM = [
-  `██╗  ██╗  ██████╗  ██████╗  ██╗ ███████╗`,
-  `██║ ██╔╝ ██╔═══██╗ ██╔══██╗ ██║ ██╔════╝`,
-  `█████╔╝  ██║   ██║ ██████╔╝ ██║ ███████╗`,
-  `██╔═██╗  ██║   ██║ ██╔══██╗ ██║ ╚════██║`,
-  `██║  ██╗ ╚██████╔╝ ██║  ██║ ██║ ███████║`,
-  `╚═╝  ╚═╝  ╚═════╝  ╚═╝  ╚═╝ ╚═╝ ╚══════╝`,
+  `██╗  ██╗  ██████╗  ██████╗  ██╗ ███████╗       `,
+  `██║ ██╔╝ ██╔═══██╗ ██╔══██╗ ██║ ██╔════╝       `,
+  `█████╔╝  ██║   ██║ ██████╔╝ ██║ ███████╗ █████╗`,
+  `██╔═██╗  ██║   ██║ ██╔══██╗ ██║ ╚════██║ ╚════╝`,
+  `██║  ██╗ ╚██████╔╝ ██║  ██║ ██║ ███████║       `,
+  `╚═╝  ╚═╝  ╚═════╝  ╚═╝  ╚═╝ ╚═╝ ╚══════╝       `,
+  `█████╗   ██████╗   ███████╗ ███╗   ██╗ ████████╗`,
+  `██╔══██╗ ██╔════╝  ██╔════╝ ████╗  ██║ ╚══██╔══╝`,
+  `███████║ ██║  ███╗ █████╗   ██╔██╗ ██║    ██║   `,
+  `██╔══██║ ██║   ██║ ██╔══╝   ██║╚██╗██║    ██║   `,
+  `██║  ██║ ╚██████╔╝ ███████╗ ██║ ╚████║    ██║   `,
+  `╚═╝  ╚═╝  ╚═════╝  ╚══════╝ ╚═╝  ╚═══╝    ╚═╝   `,
 ];
 
 // Widths of the art lines (used to pick the right variant).
 const TITLE_LARGE_WIDTH = 104;
 const TITLE_MEDIUM_WIDTH = 46;
+
+type Rgb = [number, number, number];
+
+const GRADIENT_PALETTE: readonly Rgb[] = [
+  [8, 60, 92],
+  [12, 112, 168],
+  [18, 168, 232],
+  [110, 230, 255],
+];
+
+function lerp(a: number, b: number, t: number): number {
+  return Math.round(a + (b - a) * t);
+}
+
+function mixRgb(a: Rgb, b: Rgb, t: number): Rgb {
+  return [
+    lerp(a[0], b[0], t),
+    lerp(a[1], b[1], t),
+    lerp(a[2], b[2], t),
+  ];
+}
+
+function paletteColorAt(t: number): Rgb {
+  if (GRADIENT_PALETTE.length === 1) return GRADIENT_PALETTE[0];
+  const clamped = Math.max(0, Math.min(1, t));
+  const scaled = clamped * (GRADIENT_PALETTE.length - 1);
+  const index = Math.floor(scaled);
+  const nextIndex = Math.min(index + 1, GRADIENT_PALETTE.length - 1);
+  const localT = scaled - index;
+  return mixRgb(GRADIENT_PALETTE[index], GRADIENT_PALETTE[nextIndex], localT);
+}
+
+function paintGradient(text: string, start: Rgb, end: Rgb): string {
+  const chars = Array.from(text);
+  if (chars.length === 0) return text;
+
+  const denominator = Math.max(1, chars.length - 1);
+  let output = '';
+
+  for (let i = 0; i < chars.length; i += 1) {
+    const ch = chars[i];
+    if (ch === ' ') {
+      output += ch;
+      continue;
+    }
+
+    const t = i / denominator;
+    const color = mixRgb(start, end, t);
+    output += `\x1b[38;2;${color[0]};${color[1]};${color[2]}m${ch}`;
+  }
+
+  return `${output}\x1b[0m`;
+}
+
+function gradientForLine(line: string, lineIndex: number, lineCount: number): string {
+  const rowT = lineCount <= 1 ? 0 : lineIndex / (lineCount - 1);
+  const start = paletteColorAt(Math.min(1, rowT * 0.7));
+  const end = paletteColorAt(Math.min(1, 0.25 + rowT * 0.75));
+  return paintGradient(line, start, end);
+}
 
 function titleArtForWidth(innerWidth: number): string[] {
   if (innerWidth >= TITLE_LARGE_WIDTH) return TITLE_LARGE;
@@ -73,14 +140,15 @@ export function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string
 
   const artLines = titleArtForWidth(innerWidth);
   if (artLines.length > 0) {
-    for (const line of artLines) {
-      println(frameLine(`${colors.bright}${colors.green}${line}${colors.reset}`));
+    for (let i = 0; i < artLines.length; i += 1) {
+      const line = artLines[i];
+      println(frameLine(`${colors.bright}${gradientForLine(line, i, artLines.length)}${colors.reset}`));
     }
   } else {
     // Terminal too narrow for any art: show a single centered label.
     const label = `  ✦  KOARIS-AGENT  ✦  `;
     const pad = ' '.repeat(Math.max(0, Math.floor((innerWidth - label.length) / 2)));
-    println(frameLine(`${pad}${colors.bright}${colors.green}${label}${colors.reset}`));
+    println(frameLine(`${pad}${colors.bright}${gradientForLine(label, 0, 1)}${colors.reset}`));
   }
 
   if (title) {
