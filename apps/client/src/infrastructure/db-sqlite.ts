@@ -69,6 +69,7 @@ class DatabaseService implements IDatabaseService {
    */
   private initializeSchema(): void {
     try {
+      // TODO: add topic and update after first message
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (
           id TEXT PRIMARY KEY,
@@ -82,6 +83,7 @@ class DatabaseService implements IDatabaseService {
 
       /**
        * Long term memory.
+       * TODO: vector search - nomic-embed-text
        */
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS memories (
