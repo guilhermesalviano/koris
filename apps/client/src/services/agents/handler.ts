@@ -37,6 +37,7 @@ class AgentHandler {
     if (typeof response !== 'string') {
       return this.persistAssistantStream(response);
     }
+    this.messageService.save({ role: 'assistant', content: response });
 
     return response;
   }
