@@ -7,7 +7,7 @@ import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import { IMessageService } from '../../message-service';
 import { isSkillAlreadyLearned } from '../../../utils/history';
 import { replacePlaceholders } from '../../../utils/prompt';
-import { SKILL_LEARNING_PROMPT, SKILL_RESULT_PROMPT } from '../../../constants';
+import { SKILL_LEARNING_PROMPT, SKILL_PROMPT } from '../../../constants';
 
 const MAX_TOOL_ITERATIONS = 10;
 
@@ -108,7 +108,7 @@ async function AIiteration(
       options = { ...options, toolsEnabled: true };
     } else if (isSkillExecution && filteredToolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
       processStatus = 'Skill executed. Extracting response...';
-      currentMessage = replacePlaceholders(SKILL_RESULT_PROMPT, { v1: toolResults });
+      currentMessage = replacePlaceholders(SKILL_PROMPT, { v1: toolResults });
     } else { 
       // Optional, user can see raw apis responses...
       logger.info('tool results', { toolResults });

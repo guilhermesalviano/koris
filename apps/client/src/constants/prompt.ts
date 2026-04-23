@@ -62,15 +62,6 @@ export const SKILL_LEARNING_PROMPT = `
 > Remember: Use the curl_request tool to execute any HTTP/API calls shown in the skill.
 `;
 
-export const SKILL_RESULT_PROMPT = `
-## The skill has been executed successfully. 
-Here are the results:
-<tool_results>
-{v1}
-</tool_results>
-Based on these results, provide an answer to the user.
-`;
-
 export const TOOLS_RESULT_PROMPT = `
 Analyze the tool execution results below to answer the user's request. 
 Extract the relevant information from the results and provide a clear, direct answer. Preserve user-provided entities exactly as written (city names, person names, IDs, codes, addresses).
@@ -84,7 +75,7 @@ Extract the relevant information from the results and provide a clear, direct an
 </tool_results>
 `;
 
-/*export const SKILL_PROMPT = `
+export const SKILL_PROMPT = `
 Answer the user request using ONLY the skills detailed in the provided documentation. Do not use external knowledge.
 
 <user_request>
@@ -94,4 +85,4 @@ Answer the user request using ONLY the skills detailed in the provided documenta
 <skills_documentation>
 {v2}
 </skills_documentation>
-`;*/
+`;
