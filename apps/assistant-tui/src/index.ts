@@ -200,18 +200,31 @@ export function startTui(options: StartTuiOptions): void {
   }
 
   // ── Resize handler ──────────────────────────────────────────────────────────
+  let welcomeLineCount = 0;
   const handleResize = () => {
     state.terminalWidth  = process.stdout.columns || 80;
     state.terminalHeight = process.stdout.rows    || 24;
     ctx.terminalWidth    = state.terminalWidth;
     ctx.terminalHeight   = state.terminalHeight;
+    clearScreen();
+    // Save messages that follow the welcome, then wipe the whole buffer
+    const savedMessages = state.contentBuffer.splice(welcomeLineCount);
+    state.contentBuffer.length = 0;
+    // Re-render welcome at new width (println appends to now-empty buffer)
+    renderWelcome(ctx);
+    welcomeLineCount = state.contentBuffer.length;
+    // Restore conversation messages after the new welcome
+    state.contentBuffer.push(...savedMessages);
     if (fixedInput) renderer.requestRender();
+    else rl.prompt();
   };
   process.stdout.on('resize', handleResize);
 
   // ── Initial render ──────────────────────────────────────────────────────────
   if (clearOnStart) clearScreen();
+  const bufferBeforeWelcome = state.contentBuffer.length;
   renderWelcome(ctx);
+  welcomeLineCount = state.contentBuffer.length - bufferBeforeWelcome;
   if (fixedInput) renderer.requestRender();
   rl.prompt();
 
