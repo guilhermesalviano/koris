@@ -23,7 +23,7 @@ async function streamResponse(
   return r as ProcessedMessage;
 }
 
-async function toolsLoop(
+async function manager(
   logger: ILogger,
   userMessage: string,
   channel: string,
@@ -48,12 +48,13 @@ async function toolsLoop(
 
   const messageHistory = message.getHistory();
 
-  // Non-streaming call to detect tool calls.
-  const aiResponse = await messageProvider(logger, TOOL_CALL_HELPER + userMessage, channel, options, messageHistory);
+  const prompt = `${TOOL_CALL_HELPER}\n ### USER REQUEST: ${userMessage}`;
+
+  const aiResponse = await messageProvider(logger, prompt, channel, options, messageHistory);
   const responseText = normalizeResponse(aiResponse);
   let callbacks = extractToolCalls(responseText);
 
-  // No tool calls — stream the response directly.
+  // No tool calls — stream the response directly
   if (callbacks.length === 0) {
     return streamResponse(logger, userMessage, channel, options, messageHistory);
   }
@@ -75,4 +76,4 @@ async function toolsLoop(
   return executorWorker(toExecute, messageHistory, ctx.logger, ctx.channel, ctx.message, ctx.toolsQueue, ctx.signal, ctx.onProgress, ctx.options, userMessage);
 }
 
-export { toolsLoop };
+export { manager };

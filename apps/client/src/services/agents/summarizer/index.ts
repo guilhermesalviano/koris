@@ -1,4 +1,3 @@
-import { normalizeResponse } from "../../../utils/tool-calls";
 import { IMemoryService, SaveMemoryProps } from "../../memory-service";
 import type { ILogger } from "../../../infrastructure/logger";
 import type { ProcessOptions } from "../../../types/agents";
@@ -14,7 +13,7 @@ async function summarizerWorker(
   logger: ILogger,
   channel: string,
   memoryService: IMemoryService,
-  options?: ProcessOptions
+  _options?: ProcessOptions
 ): Promise<void> {
   logger.info(`Summarizer worker started for session ${sessionId} in ${channel}`);
   const provider = getAIProvider({ logger });
@@ -26,13 +25,12 @@ Assistant: ${answer}
 `;
 
   try {
-    const contentSummarized = await provider.chat({
-        messages: [{ role: "user", content: prompt }] 
-      }, { signal: options?.signal });
+    const content = await provider
+      .chat({ messages: [{ role: "user", content: prompt }] });
 
     const memory: SaveMemoryProps = {
-      type: type,
-      content: normalizeResponse(contentSummarized),
+      type,
+      content,
     };
 
     memoryService.upsert(memory);

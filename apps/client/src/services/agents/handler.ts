@@ -5,7 +5,7 @@ import { DatabaseServiceFactory } from '../../infrastructure/db-sqlite';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import { SessionServiceFactory } from '../session-service';
 import { IMessageService, MessageServiceFactory } from '../message-service';
-import { toolsLoop } from './tools-loop/manager';
+import { manager } from './tools-loop/manager';
 import { summarizerWorker } from './summarizer';
 import { IMemoryService, MemoryServiceFactory } from '../memory-service';
 
@@ -25,18 +25,19 @@ class AgentHandler {
     const safeMessage = toSafeMessage(message);
 
     this.logger.info(`Processing message from ${this.channel}: "${previewMessage(safeMessage)}"`);
-    this.messageService.save({ role: 'user', content: safeMessage });
 
     if (isCommand(safeMessage)) {
+      this.messageService.save({ role: 'user', content: safeMessage });
       const result = handleCommand(safeMessage, { source: this.channel });
       return result.response || '';
     }
 
-    const response = await toolsLoop(this.logger, safeMessage, this.channel, this.messageService, { ...options });
+    const response = await manager(this.logger, safeMessage, this.channel, this.messageService, { ...options });
 
     if (typeof response !== 'string') {
       return this.persistAssistantStream(response, safeMessage, options);
     }
+    this.messageService.save({ role: 'user', content: safeMessage });
     this.messageService.save({ role: 'assistant', content: response });
 
     summarizerWorker(
@@ -66,6 +67,7 @@ class AgentHandler {
     }
 
     if (fullResponse.length > 0) {
+      this.messageService.save({ role: 'user', content: userMessage });
       this.messageService.save({ role: 'assistant', content: fullResponse });
 
       summarizerWorker(
