@@ -43,7 +43,8 @@ async function manager(
 
   /**
    * Todo - bug:
-   * tools execution is not calling after learning phase
+   * - tools execution is not calling after learning phase
+   * - don't recognize multiple questions in the same prompt
    */
   const messageHistory = message.getHistory();
   const prompt = replacePlaceholders(FIRST_PROMPT_HELPER, { v1: userMessage });
@@ -52,7 +53,6 @@ async function manager(
   const responseText = normalizeResponse(aiResponse);
   let callbacks = extractToolCalls(responseText);
 
-  // No tool calls — stream the response directly
   if (callbacks.length === 0) {
     return streamResponse(logger, userMessage, channel, options, messageHistory);
   }

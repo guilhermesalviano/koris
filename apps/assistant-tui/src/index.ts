@@ -128,8 +128,12 @@ export function startTui(options: StartTuiOptions): void {
   rendererRef.current = renderer;
   renderer.patchRefreshLine();
 
+  // ── rawBuffer: stores original println text for re-wrapping on resize ────────
+  const rawBuffer: string[] = [];
+
   // ── println (real implementation, uses renderer) ────────────────────────────
   println = (text = '') => {
+    rawBuffer.push(text);
     const lines = text
       .replace(/\r\n/g, '\n')
       .split('\n')
@@ -200,21 +204,29 @@ export function startTui(options: StartTuiOptions): void {
   }
 
   // ── Resize handler ──────────────────────────────────────────────────────────
-  let welcomeLineCount = 0;
+  let welcomeRawCount = 0;
   const handleResize = () => {
     state.terminalWidth  = process.stdout.columns || 80;
     state.terminalHeight = process.stdout.rows    || 24;
     ctx.terminalWidth    = state.terminalWidth;
     ctx.terminalHeight   = state.terminalHeight;
     clearScreen();
-    // Save messages that follow the welcome, then wipe the whole buffer
-    const savedMessages = state.contentBuffer.splice(welcomeLineCount);
+    // Save raw conversation entries (after welcome), wipe both buffers
+    const savedRaw = rawBuffer.splice(welcomeRawCount);
+    rawBuffer.length = 0;
     state.contentBuffer.length = 0;
-    // Re-render welcome at new width (println appends to now-empty buffer)
+    // Re-render welcome at new width
     renderWelcome(ctx);
-    welcomeLineCount = state.contentBuffer.length;
-    // Restore conversation messages after the new welcome
-    state.contentBuffer.push(...savedMessages);
+    welcomeRawCount  = rawBuffer.length;
+    // Re-wrap conversation messages at the new width
+    for (const text of savedRaw) {
+      rawBuffer.push(text);
+      const rewrapped = text
+        .replace(/\r\n/g, '\n')
+        .split('\n')
+        .flatMap((line) => (fixedInput ? wrapSingleLineForWidth(line, state.terminalWidth) : [line]));
+      state.contentBuffer.push(...rewrapped);
+    }
     if (fixedInput) renderer.requestRender();
     else rl.prompt();
   };
@@ -222,9 +234,8 @@ export function startTui(options: StartTuiOptions): void {
 
   // ── Initial render ──────────────────────────────────────────────────────────
   if (clearOnStart) clearScreen();
-  const bufferBeforeWelcome = state.contentBuffer.length;
   renderWelcome(ctx);
-  welcomeLineCount = state.contentBuffer.length - bufferBeforeWelcome;
+  welcomeRawCount  = rawBuffer.length;
   if (fixedInput) renderer.requestRender();
   rl.prompt();
 
@@ -252,6 +263,7 @@ export function startTui(options: StartTuiOptions): void {
     formatResponse,
     assistantPrefix,
     handleResize,
+    recordRaw: (text: string) => rawBuffer.push(text),
   });
 }
 
