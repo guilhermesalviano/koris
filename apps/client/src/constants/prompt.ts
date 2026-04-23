@@ -45,9 +45,9 @@ Assistant: {v2}
 `;
 
 export const SKILL_LEARNING_PROMPT = `
-You have just learned how to use "{v1}" skill. Here is the skill documentation:
+## You have just learned how to use "{v1}" skill. Here is the skill documentation:
 {v2}
-NOW DO THIS:
+## NOW DO THIS:
 1. Read the skill documentation above carefully
 2. Understand what this skill does and how to use it
 3. Map the user's request to the appropriate skill instructions
@@ -59,10 +59,11 @@ NOW DO THIS:
   - Call the curl_request tool with these parameters
   - Do NOT add any extra arguments, shell pipes, jq, grep, awk, sed, or transformations unless explicitly shown in the skill documentation
 5. After executing the curl request, analyze the response and provide a clear answer to the user
-Remember: Use the curl_request tool to execute any HTTP/API calls shown in the skill.
+> Remember: Use the curl_request tool to execute any HTTP/API calls shown in the skill.
 `;
 
-export const SKILL_RESULT_PROMPT = `The skill has been executed successfully. 
+export const SKILL_RESULT_PROMPT = `
+## The skill has been executed successfully. 
 Here are the results:
 <tool_results>
 {v1}
