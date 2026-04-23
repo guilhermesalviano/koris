@@ -3,6 +3,7 @@ import type { ILogger } from "../../../infrastructure/logger";
 import { getAIProvider } from "../../providers";
 import { MemoryType } from "../../../types/memory";
 import { SUMMARIZATION_PROMPT } from "../../../constants";
+import { replacePlaceholders } from "../../../utils/prompt";
 
 interface SummarizerWorkerProps {
   sessionId: string,
@@ -20,11 +21,7 @@ async function summarizerWorker(
   props.logger.info(`Summarizer worker started for session ${props.sessionId} in ${props.channel}`);
   const provider = getAIProvider({ logger: props.logger });
 
-  const prompt = `${SUMMARIZATION_PROMPT}
-### DATA TO SUMMARIZE:
-User: ${props.ask}
-Assistant: ${props.answer}
-`;
+  const prompt = replacePlaceholders(SUMMARIZATION_PROMPT, { v1: props.ask, v2: props.answer });
 
   try {
     const content = await provider

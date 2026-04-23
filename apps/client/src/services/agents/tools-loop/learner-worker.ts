@@ -1,5 +1,4 @@
 import { ToolCall } from "../../../types/tools";
-import { buildSkillLearningPrompt, buildSkillPrompt } from "../../../utils/prompt";
 import { normalizeResponse } from "../../../utils/tool-calls";
 import { LearnedSkillsRepositoryFactory } from "../../../repositories/learned-skills";
 import { DatabaseServiceFactory } from "../../../infrastructure/db-sqlite";
@@ -7,6 +6,8 @@ import { messageProvider } from "../chat/message-provider";
 import { LoopContext } from "./context";
 import { config } from "../../../config";
 import type { Message } from "../../../entities/message";
+import { SKILL_LEARNING_PROMPT, SKILL_RESULT_PROMPT } from "../../../constants";
+import { replacePlaceholders } from "../../../utils/prompt";
 
 async function learnerWorker(
   toolCalls: ToolCall[],
@@ -27,7 +28,7 @@ async function learnerWorker(
 
     for (const toolCall of toolCalls) {
       const skillName = toolCall.arguments.name ?? toolCall.arguments.skill_name;
-      const learningPrompt = buildSkillLearningPrompt(skillName as string, skillContent);
+      const learningPrompt = replacePlaceholders(SKILL_LEARNING_PROMPT, { v1: skillName as string, v2: skillContent });
       accumulatedContext += learningPrompt;
 
       const checkIfSkillAlreadyLearned = skillsRepo.exists(skillName as string);
@@ -49,7 +50,7 @@ async function learnerWorker(
     }
   }
 
-  const prompt = buildSkillPrompt(originalUserRequest, accumulatedContext);
+  const prompt = replacePlaceholders(SKILL_RESULT_PROMPT, { v1: originalUserRequest, v2: accumulatedContext });
   const response = await messageProvider(
     ctx.logger,
     prompt,

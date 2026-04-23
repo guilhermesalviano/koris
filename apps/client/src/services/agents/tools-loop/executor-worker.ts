@@ -1,13 +1,14 @@
 import { extractToolCalls, normalizeResponse } from "../../../utils/tool-calls";
 import { ToolCall } from "../../../types/tools";
 import { messageProviderStream } from "../chat/message-provider-stream";
-import { buildToolResultPrompt } from "../../../utils/prompt";
 import { config } from "../../../config";
 import type { ILogger } from "../../../infrastructure/logger";
 import type { ProcessOptions, ProcessedMessage } from "../../../types/agents";
 import type { Message } from "../../../entities/message";
 import type { IMessageService } from "../../message-service";
 import type { IToolsQueue } from "../../tools-queue";
+import { TOOLS_RESULT_PROMPT } from "../../../constants";
+import { replacePlaceholders } from "../../../utils/prompt";
 
 async function executorWorker(
   toolCalls: ToolCall[],
@@ -43,7 +44,7 @@ async function executorWorker(
 
   logger.info(`Tool results: ${JSON.stringify(toolResults)}`);
 
-  const synthesisPrompt = buildToolResultPrompt(userMessage, toolResults);
+  const synthesisPrompt = replacePlaceholders(TOOLS_RESULT_PROMPT, { v1: userMessage, v2: toolResults });
   const response = await messageProviderStream(
     logger,
     synthesisPrompt,

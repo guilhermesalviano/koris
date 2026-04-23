@@ -9,6 +9,7 @@ import { LoopContext } from './context';
 import type { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import type { IMessageService } from '../../message-service';
 import type { ILogger } from '../../../infrastructure/logger';
+import { replacePlaceholders } from '../../../utils/prompt';
 
 async function streamResponse(
   logger: ILogger,
@@ -42,11 +43,10 @@ async function manager(
 
   /**
    * Todo - bug:
-   * if AI Learn how to use weather and asked about a "Cat fact", it doesn't
-   * recognize "get skill" to learn
+   * tools execution is not calling after learning phase
    */
   const messageHistory = message.getHistory();
-  const prompt = `${FIRST_PROMPT_HELPER}\n ### USER REQUEST: ${userMessage}`;
+  const prompt = replacePlaceholders(FIRST_PROMPT_HELPER, { v1: userMessage });
 
   const aiResponse = await messageProvider(logger, prompt, channel, options, messageHistory);
   const responseText = normalizeResponse(aiResponse);
