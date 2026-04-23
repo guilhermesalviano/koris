@@ -4,15 +4,7 @@ import type { ILogger } from "../../../infrastructure/logger";
 import type { ProcessOptions } from "../../../types/agents";
 import { getAIProvider } from "../../providers";
 import { MemoryType } from "../../../types/memory";
-
-const SUMMARIZATION_PROMPT = `
-Task: Provide a concise 1-3 sentence summary of the topic in messages.
-Constraints:
-- Prioritize specific facts, figures, dates, and actionable decisions.
-- Do not include introductory phrases (e.g., "The conversation was about...").
-- Output ONLY the summary text.
-
-Formatting Rule: Strict brevity required.`;
+import { SUMMARIZATION_PROMPT } from "../../../constants";
 
 async function summarizerWorker(
   sessionId: string,
@@ -27,7 +19,11 @@ async function summarizerWorker(
   logger.info(`Summarizer worker started for session ${sessionId} in ${channel}`);
   const provider = getAIProvider({ logger });
 
-  const prompt = `${SUMMARIZATION_PROMPT}\n\\nUser: ${ask}\nAssistant: ${answer}`;
+  const prompt = `${SUMMARIZATION_PROMPT}
+### DATA TO SUMMARIZE:
+User: ${ask}
+Assistant: ${answer}
+`;
 
   try {
     const contentSummarized = await provider.chat({
