@@ -4,7 +4,7 @@ import { extractToolCalls, normalizeResponse } from '../../../utils/tool-calls';
 import { ToolsQueue } from '../../tools-queue';
 import { executorWorker } from './executor-worker';
 import { learnerWorker } from './learner-worker';
-import { TOOL_CALL_HELPER } from '../../../constants';
+import { FIRST_PROMPT_HELPER } from '../../../constants';
 import { LoopContext } from './context';
 import type { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import type { IMessageService } from '../../message-service';
@@ -41,14 +41,12 @@ async function manager(
   };
 
   /**
-   * Todo:
+   * Todo - bug:
    * if AI Learn how to use weather and asked about a "Cat fact", it doesn't
    * recognize "get skill" to learn
    */
-
   const messageHistory = message.getHistory();
-
-  const prompt = `${TOOL_CALL_HELPER}\n ### USER REQUEST: ${userMessage}`;
+  const prompt = `${FIRST_PROMPT_HELPER}\n ### USER REQUEST: ${userMessage}`;
 
   const aiResponse = await messageProvider(logger, prompt, channel, options, messageHistory);
   const responseText = normalizeResponse(aiResponse);
@@ -65,14 +63,24 @@ async function manager(
   if (toLearn.length > 0) {
     ctx.onProgress(`Learning phase: ${toLearn.length} skill(s)`);
     const learned = await learnerWorker(toLearn, userMessage, messageHistory, ctx);
-    toExecute = [...toExecute, ...extractToolCalls(learned)];
+    
+    const newCalls = extractToolCalls(learned);
+
+    const uniqueNewCalls = newCalls.filter(newCall => 
+      !toExecute.some(existing => 
+        existing.name === newCall.name && 
+        JSON.stringify(existing.arguments) === JSON.stringify(newCall.arguments)
+      )
+    );
+
+    toExecute = [...toExecute, ...uniqueNewCalls];
   }
 
   if (toExecute.length === 0) {
     return streamResponse(logger, userMessage, channel, options, messageHistory);
   }
 
-  ctx.onProgress(`Execution phase: ${toExecute.length} tool(s)`);
+  ctx.onProgress(`Execution phase: ${toExecute.length} tool(s) - ${toExecute.map(c => c.arguments.url).join('; ')}`);
   return executorWorker(toExecute, messageHistory, ctx.logger, ctx.channel, ctx.message, ctx.toolsQueue, ctx.signal, ctx.onProgress, ctx.options, userMessage);
 }
 

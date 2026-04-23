@@ -10,6 +10,19 @@ Data Integrity (Strict):
 - Exact Preservation: You must preserve user-provided entities exactly as written. This includes IDs, codes, person names, city names, and addresses.
 - No Modification: Do not auto-correct, translate, expand, or infer changes to these entities unless specifically instructed by the user.`;
 
+export const FIRST_PROMPT_HELPER = `
+You must call every tool call needed before responding to the user.
+
+STRATEGIC RULES:
+1. DECOMPOSE: Analyze the user's message for multiple distinct questions or requirements.
+2. PARALLEL EXECUTION: If the user asks for two or more things that don't depend on each other, trigger ALL tool calls in a single response.
+3. ITERATIVE REASONING: If a tool result reveals that more information is needed, immediately issue the subsequent tool calls. 
+
+OUTPUT BINDING:
+- If you see multiple tasks, you MUST generate an array of tool calls.
+- Before finishing, ask yourself: "Is there any part of the user's prompt that hasn't been verified by a tool?" If yes, call the tool.
+`;
+
 export const SUMMARIZATION_PROMPT = `
 Task: Distill the interaction into a single, high-density summary sentence.
 
@@ -23,12 +36,3 @@ Rules:
 
 Example: "User requested technical support for ID-992 and Assistant provided the firmware update link."
 `;
-
-export const TOOL_CALL_HELPER = `You must fully resolve every tool call before responding to the user.
-Rules:
-- If a tool call returns a result that requires another tool call, make that call immediately.
-- Do not stop after a single tool call if the user's request is not yet fully answered.
-- Only return a final response when all necessary tool calls are complete and their results have been incorporated.
-- Never return a partial or cut-off response. If unsure whether more tool calls are needed, make them.
-- Your response must directly address the original user request using all gathered tool results.
-`
