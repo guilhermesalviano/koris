@@ -8,6 +8,8 @@ import { IMessageService, MessageServiceFactory } from '../message-service';
 import { manager } from './tools-loop/manager';
 import { summarizerWorker } from './summarizer';
 import { IMemoryService, MemoryServiceFactory } from '../memory-service';
+import { conversationWorker } from './conversation';
+import { MemoryType } from '../../types/memory';
 
 interface IAgentHandler {
   handle(message: unknown, options?: ProcessOptions): Promise<ProcessedMessage>;
@@ -27,7 +29,11 @@ class AgentHandler {
     this.logger.info(`Processing message from ${this.channel}: "${previewMessage(safeMessage)}"`);
 
     if (isCommand(safeMessage)) {
-      this.messageService.save({ role: 'user', content: safeMessage });
+      conversationWorker(this.historyHelper(safeMessage, ''))
+        .catch((err) =>
+          this.logger.error('Background conversation processing failed', { err })
+        );
+
       const result = handleCommand(safeMessage, { source: this.channel });
       return result.response || '';
     }
@@ -37,19 +43,15 @@ class AgentHandler {
     if (typeof response !== 'string') {
       return this.persistAssistantStream(response, safeMessage, options);
     }
-    this.messageService.save({ role: 'user', content: safeMessage });
-    this.messageService.save({ role: 'assistant', content: response });
 
-    summarizerWorker(
-      this.messageService.getSessionId(),
-      safeMessage,
-      response,
-      "summary",
-      this.logger,
-      this.channel,
-      this.memoryService,
-      options
-    ).catch((err) => this.logger.error('Background summarizer failed', { err }));
+    conversationWorker(this.historyHelper(safeMessage, response))
+      .catch((err) => 
+        this.logger.error('Background conversation processing failed', { err })
+      );
+    summarizerWorker(this.summarizerHelper(safeMessage, response, options))
+      .catch((err) =>
+        this.logger.error('Background summarizer failed', { err })
+      );
 
     return response;
   }
@@ -67,20 +69,39 @@ class AgentHandler {
     }
 
     if (fullResponse.length > 0) {
-      this.messageService.save({ role: 'user', content: userMessage });
-      this.messageService.save({ role: 'assistant', content: fullResponse });
-
-      summarizerWorker(
-        this.messageService.getSessionId(),
-        userMessage,
-        fullResponse,
-        "summary",
-        this.logger,
-        this.channel,
-        this.memoryService,
-        options
-      ).catch((err) => this.logger.error('Background summarizer failed', { err }));
+      conversationWorker(this.historyHelper(userMessage, fullResponse))
+        .catch((err) =>
+          this.logger.error('Background conversation processing failed', { err })
+        );
+      summarizerWorker(this.summarizerHelper(userMessage, fullResponse, options))
+        .catch((err) =>
+          this.logger.error('Background summarizer failed', { err })
+        );
     }
+  }
+
+  private historyHelper(ask: string, answer: string) {
+    return {
+      sessionId: this.messageService.getSessionId(),
+      ask: ask,
+      answer: answer,
+      logger: this.logger,
+      channel: this.channel,
+      messageService: this.messageService,
+    };
+  }
+
+  private summarizerHelper(ask: string, answer: string, options?: ProcessOptions, type: MemoryType = "summary") {
+    return {
+      sessionId: this.messageService.getSessionId(),
+      ask,
+      answer,
+      type: type,
+      logger: this.logger,
+      channel: this.channel,
+      memoryService: this.memoryService,
+      options,
+    };
   }
 }
 

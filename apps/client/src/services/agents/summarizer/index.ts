@@ -5,7 +5,7 @@ import { getAIProvider } from "../../providers";
 import { MemoryType } from "../../../types/memory";
 import { SUMMARIZATION_PROMPT } from "../../../constants";
 
-async function summarizerWorker(
+interface SummarizerWorkerProps {
   sessionId: string,
   ask: string,
   answer: string,
@@ -13,15 +13,19 @@ async function summarizerWorker(
   logger: ILogger,
   channel: string,
   memoryService: IMemoryService,
-  _options?: ProcessOptions
+  options?: ProcessOptions
+}
+
+async function summarizerWorker(
+  props: SummarizerWorkerProps
 ): Promise<void> {
-  logger.info(`Summarizer worker started for session ${sessionId} in ${channel}`);
-  const provider = getAIProvider({ logger });
+  props.logger.info(`Summarizer worker started for session ${props.sessionId} in ${props.channel}`);
+  const provider = getAIProvider({ logger: props.logger });
 
   const prompt = `${SUMMARIZATION_PROMPT}
 ### DATA TO SUMMARIZE:
-User: ${ask}
-Assistant: ${answer}
+User: ${props.ask}
+Assistant: ${props.answer}
 `;
 
   try {
@@ -29,14 +33,14 @@ Assistant: ${answer}
       .chat({ messages: [{ role: "user", content: prompt }] });
 
     const memory: SaveMemoryProps = {
-      type,
+      type: props.type,
       content,
     };
 
-    memoryService.upsert(memory);
-    logger.info(`Summarizer worker completed for session ${sessionId}`);
+    props.memoryService.upsert(memory);
+    props.logger.info(`Summarizer worker completed for session ${props.sessionId}`);
   } catch (error) {
-    logger.error(`Failed to summarize for session ${sessionId}`, { error });
+    props.logger.error(`Failed to summarize for session ${props.sessionId}`, { error });
   }
 }
 
