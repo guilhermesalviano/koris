@@ -1,6 +1,5 @@
 import { IMemoryService, SaveMemoryProps } from "../../memory-service";
 import type { ILogger } from "../../../infrastructure/logger";
-import type { ProcessOptions } from "../../../types/agents";
 import { getAIProvider } from "../../providers";
 import { MemoryType } from "../../../types/memory";
 import { SUMMARIZATION_PROMPT } from "../../../constants";
@@ -13,7 +12,6 @@ interface SummarizerWorkerProps {
   logger: ILogger,
   channel: string,
   memoryService: IMemoryService,
-  options?: ProcessOptions
 }
 
 async function summarizerWorker(

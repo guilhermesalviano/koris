@@ -38,9 +38,9 @@ async function learnerWorker(
             skill_name: skillName as string,
             skill_content: learningPrompt,
           });
-          ctx.onProgress(`✓ Skill "${skillName}" learned and saved to database`);
+          ctx.logger.info(`✓ Skill "${skillName}" learned and saved to database`);
         } else {
-          ctx.onProgress(`- Skill "${skillName}" learned but already exists in database, skipping save`);
+          ctx.logger.warn(`- Skill "${skillName}" learned but already exists in database, skipping save`);
         }
       } catch (error) {
         ctx.logger.error('Failed to save learned skill', { skillName, error });

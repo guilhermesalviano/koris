@@ -21,7 +21,7 @@ class AgentHandler {
     private messageService: IMessageService,
     private memoryService: IMemoryService,
     private channel: string,
-    private sessionId = this.messageService.getSessionId(),
+    private sessionId: string,
   ) { }
 
   async handle(message: string, options?: ProcessOptions): Promise<ProcessedMessage> {
@@ -38,11 +38,11 @@ class AgentHandler {
     const response = await manager(this.logger, safeMessage, this.channel, this.messageService, { ...options });
 
     if (typeof response !== 'string') {
-      return this.persistAssistantStream(response, safeMessage, options);
+      return this.persistAssistantStream(response, safeMessage);
     }
 
     this.historyHelper(safeMessage, response);
-    this.summarizerHelper(safeMessage, response, options);
+    this.summarizerHelper(safeMessage, response);
 
     return response;
   }
@@ -50,7 +50,6 @@ class AgentHandler {
   private async *persistAssistantStream(
     stream: AsyncGenerator<string>,
     ask: string,
-    options?: ProcessOptions
   ): AsyncGenerator<string> {
     let fullResponse = '';
 
@@ -61,7 +60,7 @@ class AgentHandler {
 
     if (fullResponse.length > 0) {
       this.historyHelper(ask, fullResponse);
-      this.summarizerHelper(ask, fullResponse, options);
+      this.summarizerHelper(ask, fullResponse);
     }
   }
 
@@ -81,7 +80,7 @@ class AgentHandler {
       );
   }
 
-  private summarizerHelper(ask: string, answer: string, options?: ProcessOptions, type: MemoryType = "summary") {
+  private summarizerHelper(ask: string, answer: string, type: MemoryType = "summary") {
     const conversation = {
       sessionId: this.sessionId,
       ask,
@@ -90,7 +89,6 @@ class AgentHandler {
       logger: this.logger,
       channel: this.channel,
       memoryService: this.memoryService,
-      options,
     };
 
     summarizerWorker(conversation)
@@ -103,12 +101,14 @@ class AgentHandler {
 class AgentHandlerFactory {
   static create(logger: ILogger, channel: string): AgentHandler {
     const database = DatabaseServiceFactory.create();
-
+    
     const sessionService = SessionServiceFactory.create(database, channel);
-    const messageService = MessageServiceFactory.create(database, sessionService);
-    const memoryService = MemoryServiceFactory.create(database, sessionService.getSession().id);
+    const sessionId = sessionService.getSession().id;
 
-    return new AgentHandler(logger, messageService, memoryService, channel);
+    const messageService = MessageServiceFactory.create(database, sessionService);
+    const memoryService = MemoryServiceFactory.create(database, sessionId);
+
+    return new AgentHandler(logger, messageService, memoryService, channel, sessionId);
   }
 }
 

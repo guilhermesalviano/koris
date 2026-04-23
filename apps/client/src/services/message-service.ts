@@ -7,7 +7,6 @@ import { ISessionService } from "./session-service";
 interface IMessageService {
   save(props: { role: MessageRole; content: string }): void;
   getHistory(): Message[];
-  getSessionId(): string;
 }
 
 class MessageService implements IMessageService {
@@ -32,10 +31,6 @@ class MessageService implements IMessageService {
   getHistory(): Message[] {
     const sessionId = this.session.getSession().id;
     return this.messageRepository.getBySessionId(sessionId);
-  }
-
-  getSessionId(): string {
-    return this.session.getSession().id;
   }
 }
 
