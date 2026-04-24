@@ -6,7 +6,7 @@ import { messageProvider } from "../chat/message-provider";
 import { LoopContext } from "./context";
 import { config } from "../../../config";
 import type { Message } from "../../../entities/message";
-import { SKILL_LEARNING_PROMPT, SKILL_PROMPT } from "../../../constants";
+import { SKILL_LEARNING_PROMPT, SKILL_EXECUTION_PROMPT } from "../../../constants";
 import { replacePlaceholders } from "../../../utils/prompt";
 
 async function learnerWorker(
@@ -54,7 +54,7 @@ async function learnerWorker(
     }
   }
 
-  const prompt = replacePlaceholders(SKILL_PROMPT, { v1: originalUserRequest, v2: accumulatedContext });
+  const prompt = replacePlaceholders(SKILL_EXECUTION_PROMPT, { v1: originalUserRequest, v2: accumulatedContext });
   const response = await messageProvider(
     ctx.logger,
     prompt,
