@@ -28,6 +28,10 @@ async function learnerWorker(
 
     for (const toolCall of toolCalls) {
       const skillName = toolCall.arguments.name ?? toolCall.arguments.skill_name;
+      if (skillName === "get_skill") {
+        ctx.logger.warn(`Unexpected tool call "${toolCall.name}" in learnerWorker, skipping...`, { toolCall });
+        continue;
+      }
       const learningPrompt = replacePlaceholders(SKILL_LEARNING_PROMPT, { v1: skillName as string, v2: skillContent });
       accumulatedContext += learningPrompt;
 

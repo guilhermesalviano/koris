@@ -123,6 +123,19 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     return { toolName: 'curl_request', success: false, error: 'Missing required parameter: url' };
   }
 
+  // If the model passed a full shell command instead of just the URL, extract the URL from it.
+  // Match the last argument that looks like a URL or bare hostname.
+  if (/^\s*curl\s/i.test(url)) {
+    const words = shellWords(url.trim().slice(url.trim().indexOf(' ')).trim()) ?? [];
+    const extracted = [...words].reverse().find(
+      (w) => /^https?:\/\//i.test(w) || /^[a-zA-Z0-9]/.test(w) && w.includes('.')
+    );
+    if (extracted) {
+      logger.warn('curl_request received a shell command as URL; extracted URL', { original: url, extracted });
+      url = extracted.replace(/^["']|["']$/g, '');
+    }
+  }
+
   if (!url.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//)) {
     url = `https://${url}`;
   }
