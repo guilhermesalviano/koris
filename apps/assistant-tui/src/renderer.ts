@@ -37,6 +37,15 @@ export interface RendererDeps {
 export function createRenderer(deps: RendererDeps) {
   const { state, ansi, colors, fixedInput, rl, anyRl } = deps;
 
+  const getDisplayPos = (text: string) => {
+    const width = Math.max(1, state.terminalWidth);
+    const printableWidth = visibleWidth(text);
+    return {
+      rows: Math.floor(printableWidth / width),
+      cols: printableWidth % width,
+    };
+  };
+
   const maxContentLines = () => Math.max(1, state.terminalHeight - state.inputLineCount - 4);
 
   const ensureScrollOffsetInRange = () => {
@@ -174,14 +183,11 @@ export function createRenderer(deps: RendererDeps) {
     if (!fixedInput || typeof anyRl._refreshLine !== 'function') return;
     anyRl._refreshLine = () => {
       const prompt: string = rl.getPrompt();
-      const promptVW = visibleWidth(prompt);
       const inputText: string = (anyRl.line as string | undefined) ?? '';
       const cursor: number = (anyRl.cursor as number | undefined) ?? inputText.length;
-      const termWidth = Math.max(1, state.terminalWidth);
-
-      const totalVW = promptVW + visibleWidth(inputText);
+      const promptAndInputDisplay = getDisplayPos(`${prompt}${inputText}`);
       const newCount = Math.max(1, Math.min(
-        Math.ceil(totalVW / termWidth),
+        promptAndInputDisplay.rows + 1,
         Math.max(1, state.terminalHeight - 5),
       ));
       const oldCount = state.inputLineCount;
@@ -236,9 +242,9 @@ export function createRenderer(deps: RendererDeps) {
 
       // Position the visible cursor at the correct spot within the input.
       const textBeforeCursor = inputText.slice(0, cursor);
-      const cursorVirtualCol = promptVW + visibleWidth(textBeforeCursor);
-      const cursorRow = inputTopRow + Math.floor(cursorVirtualCol / termWidth);
-      const cursorCol = (cursorVirtualCol % termWidth) + 1; // 1-indexed
+      const cursorDisplay = getDisplayPos(`${prompt}${textBeforeCursor}`);
+      const cursorRow = inputTopRow + cursorDisplay.rows;
+      const cursorCol = cursorDisplay.cols + 1; // 1-indexed
       process.stdout.write(ansi.cursorPos(cursorRow, cursorCol));
 
       // Keep readline's internal row count in sync so any other internal
