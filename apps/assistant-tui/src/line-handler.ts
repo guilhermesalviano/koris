@@ -161,6 +161,7 @@ async function handleNormalInput(message: string, deps: LineHandlerDeps): Promis
     state.activeAbortController = undefined;
     ctx.requestSignal = undefined;
     state.isBusy = false;
+    state.userTyping = false;
     state.iterationBadge = '';
     stopSpinner();
   }

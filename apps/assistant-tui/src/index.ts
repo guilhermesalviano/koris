@@ -39,6 +39,7 @@ export function startTui(options: StartTuiOptions): void {
     isBusy: false,
     iterationBadge: '',
     inputLineCount: 1,
+    userTyping: false,
   };
 
   // ── Option constants ────────────────────────────────────────────────────────

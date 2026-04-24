@@ -18,6 +18,8 @@ export interface TuiInternalState {
   activeAbortController: AbortController | undefined;
   isBusy: boolean;
   iterationBadge: string;
+  /** True while the user is typing during a busy AI response; keeps cursor visible. */
+  userTyping: boolean;
 }
 
 export interface RendererDeps {
@@ -143,6 +145,7 @@ export function createRenderer(deps: RendererDeps) {
 
     // Input rows are positioned and rendered by patchRefreshLine/_refreshLine.
     rl.resume();
+    const inputLineCountBeforeRefresh = state.inputLineCount;
     if (typeof anyRl._refreshLine === 'function') {
       anyRl._refreshLine();
     } else {
@@ -150,9 +153,15 @@ export function createRenderer(deps: RendererDeps) {
       renderFooterLine();
     }
 
-    process.stdout.write(state.isBusy ? ansi.cursorHide : ansi.cursorShow);
+    process.stdout.write((state.isBusy && !state.userTyping) ? ansi.cursorHide : ansi.cursorShow);
 
     state.isRendering = false;
+
+    // If inputLineCount changed during _refreshLine (user typed a wrap),
+    // the content/chrome was rendered at wrong positions — fix on next frame.
+    if (state.inputLineCount !== inputLineCountBeforeRefresh) {
+      requestRender();
+    }
 
     if (state.renderQueued) {
       state.renderQueued = false;
@@ -244,6 +253,12 @@ export function createRenderer(deps: RendererDeps) {
       }
 
       renderFooterLine();
+
+      // Mark that user is actively typing (keeps cursor visible during streaming).
+      if (!state.isRendering) {
+        state.userTyping = true;
+        process.stdout.write(ansi.cursorShow);
+      }
 
       if (newCount !== oldCount && !state.isRendering) {
         requestRender();
