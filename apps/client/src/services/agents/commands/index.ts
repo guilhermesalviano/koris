@@ -1,20 +1,5 @@
-import readline from 'readline';
 import { config } from '../../../config';
-
-export interface CommandContext {
-  source: string;
-  session?: {
-    messageCount: number;
-    startTime: Date;
-  };
-  rl?: readline.Interface;
-}
-
-export interface CommandResult {
-  response?: string;
-  action?: 'exit' | 'clear' | 'reset' | 'none';
-  handled: boolean;
-}
+import type { CommandContext, CommandResult } from '../../../types/commands';
 
 export function handleCommand(command: string, context: CommandContext): CommandResult {
   const cmd = command.toLowerCase().split(' ')[0];
@@ -85,44 +70,14 @@ Type /help for available commands.`;
 }
 
 function handleHelp(context: CommandContext): CommandResult {
-  const message = context.source === 'telegram'
-    ? `*Available Commands:*
+  const message = `*Available Commands:*
 
 /start - Welcome message
 /help - Show this help
 /status - Check bot status
 /clear - Clear conversation history
 
-*Instructions I understand:*
-
-• "read <file>" - Read a file
-• "list <directory>" - List directory contents
-• "search <term>" - Search in files
-• "execute <command>" - Run a command
-• "write <file>" - Create/update a file
-
-Send me any message to interact!`
-    : `Available Commands:
-
-  /help     - Show this help message
-  /start    - Welcome message
-  /clear    - Clear the screen
-  /stats    - Show session statistics
-  /status   - Check bot status
-  /reset    - Reset session statistics
-  /exit     - Exit the TUI
-
-Instructions I understand:
-
-  • "read <file>" - Read a file
-  • "list <directory>" - List directory contents
-  • "search <term>" - Search in files
-  • "execute <command>" - Run a command
-  • "write <file>" - Create/update a file
-
-Tips:
-  • Press Ctrl+C to interrupt
-  • Type naturally - no special format needed`;
+Send me any message to interact!`;
 
   return formatCommandResult(message, context.source);
 }
