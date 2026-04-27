@@ -77,9 +77,9 @@ class PromptRepository {
 
     // TODO: get only old and relevant memories instead of all. Exclude actual session.
     const memory = this.memoryRepository.getAll().map(m => `${m.type}: ${m.content}`).join('\n');
-    const content = memory ? `${baseHistory}\nPersistent context from other sessions: ${memory}` : baseHistory;
+    const systemInstructions = memory ? `${baseHistory}\n Persistent context from other sessions: ${memory}` : baseHistory;
 
-    messages.push({ role: 'system', content });
+    messages.push({ role: 'system', content: systemInstructions });
 
     // System info context
     if (this.config.includeSystemInfo !== false) {
@@ -130,7 +130,7 @@ class PromptRepository {
       return basePrompt;
     }
 
-    return `${basePrompt}\n${learnedSkillsLines.join("\n")}`;
+    return `${basePrompt}\n ${learnedSkillsLines.join("\n")}`;
   }
 
   /**

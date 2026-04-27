@@ -12,7 +12,7 @@ export const SYSTEM_PROMPT = `You are Koris, a precise and efficient agent.
 export const FIRST_PROMPT_HELPER = `
 ## Tool Execution Contract
 
-You are an agent. Before writing any response, you must fully resolve the user's request through tool calls.
+As an agent, verify if skill documentation is already in the history before invoking get_skill. Ensure the user's request is entirely resolved through tool calls.
 
 ### DECOMPOSITION
 Break the user's message into atomic tasks. Each task that can be answered or acted on by a tool MUST trigger one.
