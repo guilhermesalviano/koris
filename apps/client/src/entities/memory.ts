@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { generateId } from "../utils/generate-id";
 import { MemoryType } from "../types/memory";
 
 export class Memory {
@@ -21,7 +21,7 @@ export class Memory {
     importance?: number;
     createdAt?: Date;
   }) {
-    this.id = data.id || randomUUID();
+    this.id = data.id || generateId();
     this.sessionId = data.sessionId;
     this.type = data.type;
     this.content = data.content;

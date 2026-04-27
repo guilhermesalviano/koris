@@ -1,3 +1,5 @@
+import { generateId } from "../utils/generate-id";
+
 export interface SessionProps {
   id?: string;
   source: string;
@@ -16,7 +18,7 @@ export class Session {
   public readonly metadata: Record<string, unknown>;
 
   constructor(props: SessionProps) {
-    this.id = props.id || crypto.randomUUID();
+    this.id = props.id || generateId();
     this.source = props.source;
     this.startedAt = props.startedAt || new Date().toISOString();
     this.endedAt = props.endedAt;
