@@ -1,9 +1,9 @@
 import { LearnedSkillsRepositoryFactory } from "../../../repositories/learned-skills";
 import { DatabaseServiceFactory } from "../../../infrastructure/db-sqlite";
-import { LoopContext } from "./context";
 import { config } from "../../../config";
 import { SKILL_LEARNING_PROMPT } from "../../../constants";
 import { replacePlaceholders } from "../../../utils/prompt";
+import type { LoopContext } from "./context";
 import type { ToolCall } from "../../../types/tools";
 import type { Message } from "../../../entities/message";
 

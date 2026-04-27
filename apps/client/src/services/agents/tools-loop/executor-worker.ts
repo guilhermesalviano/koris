@@ -4,9 +4,9 @@ import { config } from "../../../config";
 import { TOOLS_RESULT_PROMPT } from "../../../constants";
 import { replacePlaceholders } from "../../../utils/prompt";
 import type { ToolCall } from "../../../types/tools";
+import type { LoopContext } from "./context";
 import type { ProcessedMessage } from "../../../types/agents";
 import type { Message } from "../../../entities/message";
-import type { LoopContext } from "./context";
 
 async function executorWorker(
   toolCalls: ToolCall[],
