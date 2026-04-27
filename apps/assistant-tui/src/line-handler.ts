@@ -32,6 +32,8 @@ export interface LineHandlerDeps {
   formatResponse: (response: string, ctx: TuiContext) => string;
   assistantPrefix: string;
   handleResize: () => void;
+  /** Records raw text into the resize rawBuffer without writing to contentBuffer. */
+  recordRaw: (text: string) => void;
 }
 
 // ── Stream rendering ──────────────────────────────────────────────────────────
@@ -81,6 +83,12 @@ async function renderStreamedResponse(
 
   if (!out.trim()) return;
   renderCurrent(true);
+  // Record the final streamed response in rawBuffer for re-wrapping on resize
+  const finalFormatted = formatResponse(out, ctx);
+  const finalRawLines = finalFormatted.length > 0 ? finalFormatted.replace(/\r\n/g, '\n').split('\n') : [''];
+  finalRawLines[0] = `${colors.reset}${assistantPrefix}${colors.reset} ${finalRawLines[0]}`;
+  deps.recordRaw(finalRawLines.join('\n'));
+  deps.recordRaw('');
   state.contentBuffer.splice(baseIndex + renderedLineCount, 0, '');
   requestRender();
 }
@@ -153,6 +161,7 @@ async function handleNormalInput(message: string, deps: LineHandlerDeps): Promis
     state.activeAbortController = undefined;
     ctx.requestSignal = undefined;
     state.isBusy = false;
+    state.userTyping = false;
     state.iterationBadge = '';
     stopSpinner();
   }

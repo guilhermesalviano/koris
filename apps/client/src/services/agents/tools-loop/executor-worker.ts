@@ -1,55 +1,49 @@
 import { extractToolCalls, normalizeResponse } from "../../../utils/tool-calls";
-import { ToolCall } from "../../../types/tools";
 import { messageProviderStream } from "../chat/message-provider-stream";
-import { buildToolResultPrompt } from "../../../utils/prompt";
 import { config } from "../../../config";
-import type { ILogger } from "../../../infrastructure/logger";
-import type { ProcessOptions, ProcessedMessage } from "../../../types/agents";
+import { TOOLS_RESULT_PROMPT } from "../../../constants";
+import { replacePlaceholders } from "../../../utils/prompt";
+import type { ToolCall } from "../../../types/tools";
+import type { LoopContext } from "./context";
+import type { ProcessedMessage } from "../../../types/agents";
 import type { Message } from "../../../entities/message";
-import type { IMessageService } from "../../message-service";
-import type { IToolsQueue } from "../../tools-queue";
 
 async function executorWorker(
   toolCalls: ToolCall[],
-  messageHistory: Message[],
-  logger: ILogger,
-  channel: string,
-  message: IMessageService,
-  toolsQueue: IToolsQueue,
-  signal: AbortSignal,
-  onProgress: (text: string) => void,
-  options: ProcessOptions | undefined,
   userMessage: string,
+  messageHistory: Message[],
+  ctx: LoopContext,
   iteration: number = 1,
   maxIterations: number = 10
 ): Promise<ProcessedMessage> {
   if (iteration >= maxIterations) {
-    logger.warn('Max tool iterations reached', { 
+    ctx.logger.warn('Max tool iterations reached', { 
       maxIterations,
       userMessage
     });
     return `Maximum tool execution iterations (${maxIterations})`+
       ` reached. Please try rephrasing your request.`;
   }
-  onProgress(`Iteration ${iteration}`);
+  ctx.onProgress(`Iteration ${iteration}`);
 
-  const toolResults = await toolsQueue.handle(
+  ctx.logger.info(`Executing tools (${JSON.stringify(toolCalls)})...`);
+
+  const toolResults = await ctx.toolsQueue.handle(
     toolCalls,
     { model: config.AI.MODEL },
-    signal
+    ctx.signal
   );
 
-  const synthesisPrompt = buildToolResultPrompt(userMessage, toolResults);
+  ctx.logger.info(`Tool results: ${JSON.stringify(toolResults)}`);
+
+  const synthesisPrompt = replacePlaceholders(TOOLS_RESULT_PROMPT, { v1: userMessage, v2: toolResults });
   const response = await messageProviderStream(
-    logger,
+    ctx.logger,
     synthesisPrompt,
-    channel,
-    options,
-    messageHistory,
+    ctx.channel,
+    ctx.options,
+    messageHistory
   );
-
-  // Stream = final answer (tui+ollama). Can't inspect for more tool calls — return directly.
-  if (typeof response !== 'string' && !Array.isArray(response)) return response as ProcessedMessage;
 
   const normalizedResponse = Array.isArray(response)
     ? normalizeResponse({
@@ -61,23 +55,17 @@ async function executorWorker(
         })),
       })
     : normalizeResponse(response);
-  const nextToolCalls = extractToolCalls(normalizedResponse, logger);
+  const nextToolCalls = extractToolCalls(normalizedResponse, ctx.logger);
 
   if (nextToolCalls.length === 0) return normalizedResponse;
 
-  onProgress(`Tool call (${nextToolCalls.length}) after execution phase: ${JSON.stringify(nextToolCalls)}`);
+  ctx.logger.info(`Tool call (${nextToolCalls.length}) after execution phase: ${JSON.stringify(nextToolCalls)}`);
 
   return executorWorker(
     nextToolCalls,
-    message.getHistory(),
-    logger,
-    channel,
-    message,
-    toolsQueue,
-    signal,
-    onProgress,
-    options,
     userMessage,
+    messageHistory,
+    ctx,
     iteration + 1,
     maxIterations
   );

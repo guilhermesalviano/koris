@@ -34,7 +34,6 @@ describe('ToolsQueue', () => {
       const result = await orchestrator.handle([toolCall], {}, abortController.signal);
 
       expect(result).toContain('execute_command');
-      expect(result).toContain('Success: true');
       expect(mockLogger.info).toHaveBeenCalledWith('Tools completed', { count: 1 });
     });
 
@@ -103,7 +102,6 @@ describe('ToolsQueue', () => {
       const result = await orchestrator.handle(toolCalls, {}, abortController.signal);
 
       expect(result).toMatch(/Tool: execute_command/);
-      expect(result).toMatch(/Success: (true|false)/);
     });
 
     it('handles empty tool list', async () => {

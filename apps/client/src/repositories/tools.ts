@@ -60,25 +60,29 @@ class ToolsRepository implements IToolsRepository {
    * Used by AI to read skill documentation from SKILL.md files
    */
   private createSkillsTool(skills: Skill[]): AIToolDefinition {
-    const skillList = skills
-      .map(s => `- ${s.name}: ${s.path}`)
+    const skillDescriptions = skills
+      .map(s => `- ${s.name}: ${s.description}`)
       .join('\n');
 
     return {
       type: 'function',
       function: {
         name: 'get_skill',
-        description: 'Read the complete SKILL.md file for a specific skill.',
+        description: `Read the complete SKILL.md documentation for a skill before executing any task that skill covers.
+  Call this whenever you need implementation details, constraints, or required patterns for a task.
+  Available skills:\n${skillDescriptions}`,
         parameters: {
           type: 'object',
           properties: {
             skill_name: {
               type: 'string',
-              description: `Name of the skill to read. Skills: ${skills.map(s => `- ${s.name}: ${s.description}`).join('\n')}`,
+              enum: skills.map(s => s.name),
+              description: 'The skill to read documentation for.',
             },
             skill_path: {
               type: 'string',
-              description: `Path to the skill directory containing SKILL.md. Skills path: ${skillList}`,
+              enum: skills.map(s => s.path),
+              description: 'Path to the skill directory containing SKILL.md.',
             },
           },
           required: ['skill_name', 'skill_path'],

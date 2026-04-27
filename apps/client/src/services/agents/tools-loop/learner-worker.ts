@@ -1,64 +1,56 @@
-import { ToolCall } from "../../../types/tools";
-import { buildSkillLearningPrompt, buildSkillPrompt } from "../../../utils/prompt";
-import { normalizeResponse } from "../../../utils/tool-calls";
 import { LearnedSkillsRepositoryFactory } from "../../../repositories/learned-skills";
 import { DatabaseServiceFactory } from "../../../infrastructure/db-sqlite";
-import { messageProvider } from "../chat/message-provider";
-import { LoopContext } from "./context";
 import { config } from "../../../config";
+import { SKILL_LEARNING_PROMPT } from "../../../constants";
+import { replacePlaceholders } from "../../../utils/prompt";
+import type { LoopContext } from "./context";
+import type { ToolCall } from "../../../types/tools";
 import type { Message } from "../../../entities/message";
 
 async function learnerWorker(
   toolCalls: ToolCall[],
-  originalUserRequest: string,
-  messageHistory: Message[],
+  _originalUserRequest: string,
+  _messageHistory: Message[],
   ctx: LoopContext
-): Promise<string> {
-  let accumulatedContext = "";
+): Promise<boolean> {
+  const model = { model: config.AI.MODEL };
   const db = DatabaseServiceFactory.create();
   const skillsRepo = LearnedSkillsRepositoryFactory.create(db);
 
-  if (toolCalls.length > 0) {
+  if (toolCalls.length === 0) return false;
+
+  for (const toolCall of toolCalls) {
+    const skillName = (toolCall.arguments.name ?? toolCall.arguments.skill_name) as string;
+    if (skillName === "get_skill") {
+      ctx.logger.warn(`Unexpected tool call "${toolCall.name}" in learnerWorker, skipping...`, { toolCall });
+      continue;
+    }
+
     const skillContent = await ctx.toolsQueue.handle(
-      toolCalls,
-      { model: config.AI.MODEL },
+      [ toolCall ],
+      model,
       ctx.signal
     );
 
-    for (const toolCall of toolCalls) {
-      const skillName = toolCall.arguments.name ?? toolCall.arguments.skill_name;
-      const learningPrompt = buildSkillLearningPrompt(skillName as string, skillContent);
-      accumulatedContext += learningPrompt;
+    try {
+      const learningPrompt = replacePlaceholders(
+        SKILL_LEARNING_PROMPT,
+        { v1: skillName, v2: skillContent }
+      );
 
-      const checkIfSkillAlreadyLearned = skillsRepo.exists(skillName as string);
-
-      try {
-        if (!checkIfSkillAlreadyLearned) {
-          skillsRepo.save({
-            skill_name: skillName as string,
-            skill_content: learningPrompt,
-          });
-          ctx.onProgress(`✓ Skill "${skillName}" learned and saved to database`);
-        } else {
-          ctx.onProgress(`- Skill "${skillName}" learned but already exists in database, skipping save`);
-        }
-      } catch (error) {
-        ctx.logger.error('Failed to save learned skill', { skillName, error });
-        ctx.onProgress(`⚠ Skill "${skillName}" learned but failed to save to database`);
+      if (!skillsRepo.exists(skillName as string)) {
+        skillsRepo.save({ skill_name: skillName, skill_content: learningPrompt });
+        ctx.logger.info(`✓ Skill "${skillName}" learned and saved to database`);
+        continue;
       }
+      ctx.logger.warn(`- Skill "${skillName}" learned but already exists in database, skipping save`);
+    } catch (error) {
+      ctx.logger.error('Failed to save learned skill', { skillName, error });
+      ctx.onProgress(`⚠ Skill "${skillName}" learned but failed to save to database`);
+      return false;
     }
   }
-
-  const prompt = buildSkillPrompt(originalUserRequest, accumulatedContext);
-  const response = await messageProvider(
-    ctx.logger,
-    prompt,
-    ctx.channel,
-    ctx.options,
-    messageHistory
-  );
-
-  return normalizeResponse(response);
+  return true;
 }
 
 export { learnerWorker };

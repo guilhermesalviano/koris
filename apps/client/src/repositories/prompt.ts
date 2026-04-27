@@ -4,6 +4,7 @@ import type { AIChatRequest, AIToolDefinition } from '../types/provider';
 import { IToolsRepository, ToolsRepositoryFactory } from './tools';
 import { MessageRole } from '../types/messages';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
+import { IMemoryRepository, MemoryRepositoryFactory } from './memory';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { SYSTEM_PROMPT } from '../constants';
 
@@ -40,6 +41,7 @@ class PromptRepository {
     private systemInfoRepository: ISystemInfoRepository,
     private toolsRepository: IToolsRepository,
     private learnedSkillsRepository: ILearnedSkillsRepository,
+    private memoryRepository: IMemoryRepository,
     private config: PromptConfig = {},
   ) {}
 
@@ -70,10 +72,14 @@ class PromptRepository {
   private buildSystemPrompt(channel: string): Message[] {
     const messages: Message[] = [];
 
-    // Base system prompt
     const basePrompt = this.config.systemPrompt ?? SYSTEM_PROMPT;
     const baseHistory = this.buildBaseHistoryPrompt(basePrompt);
-    messages.push({ role: 'system', content: baseHistory });
+
+    // TODO: get only old and relevant memories instead of all. Exclude actual session.
+    const memory = this.buildMemoryContext();
+    const systemInstructions = memory ? `${baseHistory}\n Persistent context from other sessions: ${memory}` : baseHistory;
+
+    messages.push({ role: 'system', content: systemInstructions });
 
     // System info context
     if (this.config.includeSystemInfo !== false) {
@@ -82,6 +88,11 @@ class PromptRepository {
     }
 
     return messages;
+  }
+
+  private buildMemoryContext(): string {
+    const memories = this.memoryRepository.getAll().map(m => `${m.type}: ${m.content}`).join('\n');
+    return memories.slice(0, 8000);
   }
 
   /**
@@ -124,7 +135,7 @@ class PromptRepository {
       return basePrompt;
     }
 
-    return `${basePrompt}\n${learnedSkillsLines.join("\n")}`;
+    return `${basePrompt}\n ${learnedSkillsLines.join("\n")}`;
   }
 
   /**
@@ -183,6 +194,7 @@ class PromptRepository {
       this.systemInfoRepository,
       this.toolsRepository,
       this.learnedSkillsRepository,
+      this.memoryRepository,
       { ...this.config, ...config }
     );
   }
@@ -193,7 +205,8 @@ class PromptRepositoryFactory {
     const systemInfoRepository = SystemInfoRepositoryFactory.create();
     const toolsRepository = ToolsRepositoryFactory.create();
     const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
-    return new PromptRepository(systemInfoRepository, toolsRepository, learnedSkillsRepository, config);
+    const memoryRepository = MemoryRepositoryFactory.create(db);
+    return new PromptRepository(systemInfoRepository, toolsRepository, learnedSkillsRepository, memoryRepository, config);
   }
 }
 

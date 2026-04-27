@@ -3,10 +3,11 @@ import { messageProvider } from '../chat/message-provider';
 import { extractToolCalls } from '../../../utils/tool-calls';
 import { ToolsQueue } from '../../tools-queue';
 import { config } from '../../../config';
-import { buildSkillLearningPrompt, buildSkillResponsePrompt } from '../../../utils/prompt';
 import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import { IMessageService } from '../../message-service';
 import { isSkillAlreadyLearned } from '../../../utils/history';
+import { replacePlaceholders } from '../../../utils/prompt';
+import { SKILL_LEARNING_PROMPT, SKILL_EXECUTION_PROMPT } from '../../../constants';
 
 const MAX_TOOL_ITERATIONS = 10;
 
@@ -102,12 +103,12 @@ async function AIiteration(
 
       isSkillExecution = true;
       processStatus = 'Learning skill content';
-      currentMessage = buildSkillLearningPrompt('cat-fact-mock', toolResults); //, userMessage
+      currentMessage = replacePlaceholders(SKILL_LEARNING_PROMPT, { v1: 'cat-fact-mock', v2: toolResults });
 
       options = { ...options, toolsEnabled: true };
     } else if (isSkillExecution && filteredToolCalls.some(t => ['curl_request', 'execute_command'].includes(t.name))) {
       processStatus = 'Skill executed. Extracting response...';
-      currentMessage = buildSkillResponsePrompt(toolResults);
+      currentMessage = replacePlaceholders(SKILL_EXECUTION_PROMPT, { v1: userMessage, v2: toolResults });
     } else { 
       // Optional, user can see raw apis responses...
       logger.info('tool results', { toolResults });

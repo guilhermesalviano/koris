@@ -2,7 +2,7 @@ import { defaultColors, type TuiColors } from './colors';
 import type { TuiContext } from './types';
 
 export function buildBeautifulPrompt(colors: TuiColors = defaultColors): string {
-  return `${colors.bright}${colors.gray}❯${colors.reset}${colors.cyan}${colors.bright} ${colors.reset}`;
+  return `${colors.bright}${colors.gray}>${colors.reset}${colors.cyan}${colors.bright} ${colors.reset}`;
 }
 
 export function isAsyncIterable(value: unknown): value is AsyncIterable<string> {

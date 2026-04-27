@@ -6,30 +6,24 @@ import type { TuiContext } from './types';
 // fits inside the inner content area (terminalWidth - 4).
 
 const TITLE_LARGE = [
-  `██╗  ██╗  ██████╗  ██████╗  ██╗ ███████╗        █████╗   ██████╗  ███████╗ ███╗   ██╗ ████████╗`,
-  `██║ ██╔╝ ██╔═══██╗ ██╔══██╗ ██║ ██╔════╝        ██╔══██╗ ██╔════╝ ██╔════╝ ████╗  ██║ ╚══██╔══╝`,
-  `█████╔╝  ██║   ██║ ██████╔╝ ██║ ███████╗ █████╗ ███████║ ██║  ███╗█████╗   ██╔██╗ ██║    ██║   `,
-  `██╔═██╗  ██║   ██║ ██╔══██╗ ██║ ╚════██║ ╚════╝ ██╔══██║ ██║   ██║██╔══╝   ██║╚██╗██║    ██║   `,
-  `██║  ██╗ ╚██████╔╝ ██║  ██║ ██║ ███████║        ██║  ██║ ╚██████╔╝███████╗ ██║ ╚████║    ██║   `,
-  `╚═╝  ╚═╝  ╚═════╝  ╚═╝  ╚═╝ ╚═╝ ╚══════╝        ╚═╝  ╚═╝  ╚═════╝ ╚══════╝ ╚═╝  ╚═══╝    ╚═╝   `,
+  `██╗  ██╗  ██████╗  ██████╗  ██╗ ███████╗         █████╗   ██████╗  ███████╗ ███╗   ██╗ ████████╗`,
+  `██║ ██╔╝ ██╔═══██╗ ██╔══██╗ ██║ ██╔════╝        ██╔══██╗ ██╔════╝  ██╔════╝ ████╗  ██║ ╚══██╔══╝`,
+  `█████╔╝  ██║   ██║ ██████╔╝ ██║ ███████╗ █████╗ ███████║ ██║  ███╗ █████╗   ██╔██╗ ██║    ██║   `,
+  `██╔═██╗  ██║   ██║ ██╔══██╗ ██║ ╚════██║ ╚════╝ ██╔══██║ ██║   ██║ ██╔══╝   ██║╚██╗██║    ██║   `,
+  `██║  ██╗ ╚██████╔╝ ██║  ██║ ██║ ███████║        ██║  ██║ ╚██████╔╝ ███████╗ ██║ ╚████║    ██║   `,
+  `╚═╝  ╚═╝  ╚═════╝  ╚═╝  ╚═╝ ╚═╝ ╚══════╝        ╚═╝  ╚═╝  ╚═════╝  ╚══════╝ ╚═╝  ╚═══╝    ╚═╝   `,
 ];
 
 // 3-row compact art using Unicode box-drawing characters (~46 chars wide).
 // Letters: K O R I S
 //  A G E N T
 const TITLE_MEDIUM = [
-  `██╗  ██╗  ██████╗  ██████╗  ██╗ ███████╗       `,
-  `██║ ██╔╝ ██╔═══██╗ ██╔══██╗ ██║ ██╔════╝       `,
-  `█████╔╝  ██║   ██║ ██████╔╝ ██║ ███████╗ █████╗`,
-  `██╔═██╗  ██║   ██║ ██╔══██╗ ██║ ╚════██║ ╚════╝`,
-  `██║  ██╗ ╚██████╔╝ ██║  ██║ ██║ ███████║       `,
-  `╚═╝  ╚═╝  ╚═════╝  ╚═╝  ╚═╝ ╚═╝ ╚══════╝       `,
-  `█████╗   ██████╗   ███████╗ ███╗   ██╗ ████████╗`,
-  `██╔══██╗ ██╔════╝  ██╔════╝ ████╗  ██║ ╚══██╔══╝`,
-  `███████║ ██║  ███╗ █████╗   ██╔██╗ ██║    ██║   `,
-  `██╔══██║ ██║   ██║ ██╔══╝   ██║╚██╗██║    ██║   `,
-  `██║  ██║ ╚██████╔╝ ███████╗ ██║ ╚████║    ██║   `,
-  `╚═╝  ╚═╝  ╚═════╝  ╚══════╝ ╚═╝  ╚═══╝    ╚═╝   `,
+  `██╗  ██╗  ██████╗  ██████╗  ██╗ ███████╗ `,
+  `██║ ██╔╝ ██╔═══██╗ ██╔══██╗ ██║ ██╔════╝ `,
+  `█████╔╝  ██║   ██║ ██████╔╝ ██║ ███████╗ `,
+  `██╔═██╗  ██║   ██║ ██╔══██╗ ██║ ╚════██║ `,
+  `██║  ██╗ ╚██████╔╝ ██║  ██║ ██║ ███████║ `,
+  `╚═╝  ╚═╝  ╚═════╝  ╚═╝  ╚═╝ ╚═╝ ╚══════╝ `,
 ];
 
 // Widths of the art lines (used to pick the right variant).
@@ -39,10 +33,10 @@ const TITLE_MEDIUM_WIDTH = 46;
 type Rgb = [number, number, number];
 
 const GRADIENT_PALETTE: readonly Rgb[] = [
-  [8, 60, 92],
-  [12, 112, 168],
-  [18, 168, 232],
-  [110, 230, 255],
+  [180, 60, 0],
+  [220, 110, 20],
+  [255, 175, 80],
+  [255, 235, 200],
 ];
 
 function lerp(a: number, b: number, t: number): number {
@@ -130,19 +124,22 @@ export function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string
 
     return output;
   };
+  const orange = '\x1b[38;2;220;110;20m';
   const frameLine = (content = '') => {
     const fitted = fit(content);
-    return `${colors.bright}${colors.cyan}┃${colors.reset} ${fitted}${' '.repeat(Math.max(0, innerWidth - visibleWidth(fitted)))} ${colors.bright}${colors.cyan}┃${colors.reset}`;
+    return `${colors.bright}${orange}┃${colors.reset} ${fitted}${' '.repeat(Math.max(0, innerWidth - visibleWidth(fitted)))} ${colors.bright}${orange}┃${colors.reset}`;
   };
 
-  const topBorder = `${colors.bright}${colors.cyan}┏${'━'.repeat(terminalWidth - 2)}┓${colors.reset}`;
+  const topBorder = `${colors.bright}${orange}┏${'━'.repeat(terminalWidth - 2)}┓${colors.reset}`;
   println(topBorder);
 
   const artLines = titleArtForWidth(innerWidth);
   if (artLines.length > 0) {
+    const artWidth = artLines[0].trimEnd().length;
+    const artPad = ' '.repeat(Math.max(0, Math.floor((innerWidth - artWidth) / 2)));
     for (let i = 0; i < artLines.length; i += 1) {
       const line = artLines[i];
-      println(frameLine(`${colors.bright}${gradientForLine(line, i, artLines.length)}${colors.reset}`));
+      println(frameLine(`${artPad}${colors.bright}${gradientForLine(line, i, artLines.length)}${colors.reset}`));
     }
   } else {
     // Terminal too narrow for any art: show a single centered label.
@@ -152,7 +149,11 @@ export function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string
   }
 
   if (title) {
-    println(frameLine(`${colors.dim}${title}${colors.reset}`));
+    const center = (text: string) => {
+      const pad = ' '.repeat(Math.max(0, Math.floor((innerWidth - visibleWidth(text)) / 2)));
+      return `${pad}${text}`;
+    };
+    println(frameLine(center(`${colors.dim}${title}${colors.reset}`)));
   }
 
   const now = new Date();
@@ -164,10 +165,14 @@ export function defaultWelcome(ctx: TuiContext, title?: string, aiModel?: string
   });
 
   const modelLabel = aiModel || 'agent';
-  println(frameLine(`${colors.gray}Model:${colors.reset} ${modelLabel}`));
-  println(frameLine(`${colors.gray}Started:${colors.reset} ${timeStr}`));
+  const center = (text: string) => {
+    const pad = ' '.repeat(Math.max(0, Math.floor((innerWidth - visibleWidth(text)) / 2)));
+    return `${pad}${text}`;
+  };
+  println(frameLine(center(`${colors.gray}Model:${colors.reset} ${modelLabel}`)));
+  println(frameLine(center(`${colors.gray}Started:${colors.reset} ${timeStr}`)));
 
-  const bottomBorder = `${colors.bright}${colors.cyan}┗${'━'.repeat(terminalWidth - 2)}┛${colors.reset}`;
+  const bottomBorder = `${colors.bright}${orange}┗${'━'.repeat(terminalWidth - 2)}┛${colors.reset}`;
   println(bottomBorder);
 
   println();

@@ -5,7 +5,11 @@ import { DatabaseServiceFactory } from '../../infrastructure/db-sqlite';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import { SessionServiceFactory } from '../session-service';
 import { IMessageService, MessageServiceFactory } from '../message-service';
-import { toolsLoop } from './tools-loop/manager';
+import { manager } from './tools-loop/manager';
+import { summarizerWorker } from './summarizer';
+import { IMemoryService, MemoryServiceFactory } from '../memory-service';
+import { conversationWorker } from './conversation';
+import { MemoryType } from '../../types/memory';
 
 interface IAgentHandler {
   handle(message: unknown, options?: ProcessOptions): Promise<ProcessedMessage>;
@@ -15,34 +19,38 @@ class AgentHandler {
   constructor(
     private logger: ILogger,
     private messageService: IMessageService,
-    private channel: string
+    private memoryService: IMemoryService,
+    private channel: string,
+    private sessionId: string,
   ) { }
 
   async handle(message: string, options?: ProcessOptions): Promise<ProcessedMessage> {
     const safeMessage = toSafeMessage(message);
 
     this.logger.info(`Processing message from ${this.channel}: "${previewMessage(safeMessage)}"`);
-    this.messageService.save({ role: 'user', content: safeMessage });
 
-    // Handle commands using centralized handler
     if (isCommand(safeMessage)) {
-      const result = handleCommand(safeMessage, { source: this.channel });
-      return result.response || '';
+      const response = handleCommand(safeMessage, { source: this.channel }).response || '';
+      this.historyHelper(safeMessage, response);
+      return response;
     }
 
-    // Process AI messages with potential multi-round tool execution
-    const response = await toolsLoop(this.logger, safeMessage, this.channel, this.messageService, { ...options });
+    const response = await manager(this.logger, safeMessage, this.channel, this.messageService, { ...options });
 
-    // Streaming response: persist assistant text after stream completes.
     if (typeof response !== 'string') {
-      return this.persistAssistantStream(response);
+      return this.persistAssistantStream(response, safeMessage);
     }
-    this.messageService.save({ role: 'assistant', content: response });
+
+    this.historyHelper(safeMessage, response);
+    this.summarizerHelper(safeMessage, response);
 
     return response;
   }
 
-  private async *persistAssistantStream(stream: AsyncGenerator<string>): AsyncGenerator<string> {
+  private async *persistAssistantStream(
+    stream: AsyncGenerator<string>,
+    ask: string,
+  ): AsyncGenerator<string> {
     let fullResponse = '';
 
     for await (const chunk of stream) {
@@ -51,19 +59,56 @@ class AgentHandler {
     }
 
     if (fullResponse.length > 0) {
-      this.messageService.save({ role: 'assistant', content: fullResponse });
+      this.historyHelper(ask, fullResponse);
+      this.summarizerHelper(ask, fullResponse);
     }
+  }
+
+  private historyHelper(ask: string, answer: string) {
+    const conversation = {
+      sessionId: this.sessionId,
+      ask,
+      answer,
+      logger: this.logger,
+      channel: this.channel,
+      messageService: this.messageService,
+    };
+
+    conversationWorker(conversation)
+      .catch((err) =>
+        this.logger.error('Background conversation processing failed', { err })
+      );
+  }
+
+  private summarizerHelper(ask: string, answer: string, type: MemoryType = "summary") {
+    const conversation = {
+      sessionId: this.sessionId,
+      ask,
+      answer,
+      type,
+      logger: this.logger,
+      channel: this.channel,
+      memoryService: this.memoryService,
+    };
+
+    summarizerWorker(conversation)
+      .catch((err) =>
+        this.logger.error('Background summarizer failed', { err })
+      );
   }
 }
 
 class AgentHandlerFactory {
   static create(logger: ILogger, channel: string): AgentHandler {
     const database = DatabaseServiceFactory.create();
-
+    
     const sessionService = SessionServiceFactory.create(database, channel);
-    const messageService = MessageServiceFactory.create(database, sessionService);
+    const sessionId = sessionService.getSession().id;
 
-    return new AgentHandler(logger, messageService, channel);
+    const messageService = MessageServiceFactory.create(database, sessionService);
+    const memoryService = MemoryServiceFactory.create(database, sessionId);
+
+    return new AgentHandler(logger, messageService, memoryService, channel, sessionId);
   }
 }
 

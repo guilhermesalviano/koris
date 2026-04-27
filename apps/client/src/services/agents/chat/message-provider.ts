@@ -29,17 +29,19 @@ async function messageProvider(
   const db = DatabaseServiceFactory.create();
   const promptRepository = PromptRepositoryFactory.create(db);
   
-  const historyMessages = messageHistory?.map(m => ({ role: m.role, content: m.content }));
-  
+  const messagesHistory = messageHistory?.map(m => ({ role: m.role, content: m.content }));
+
+  // to fix: probaly, assistant messages is not saving im this prompt build... Its not good.
   const payload = promptRepository.build({ 
     userMessage: message, 
     channel, 
     skills, 
     toolsEnabled: options?.toolsEnabled,
-    messageHistory: historyMessages
+    messageHistory: messagesHistory
   });
-
-  logger.info(`Prompt generated in ${new Date().toISOString()}:`, payload as unknown as Record<string, unknown>);
+  
+  logger.debug(`paylod prompt value ${JSON.stringify(payload)}`);
+  // logger.info(`Prompt generated in ${new Date().toISOString()}:`, payload as unknown as Record<string, unknown>);
 
   const chatRequest = payload as AIChatRequest;
 

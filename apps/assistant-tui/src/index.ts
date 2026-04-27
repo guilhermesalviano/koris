@@ -39,6 +39,7 @@ export function startTui(options: StartTuiOptions): void {
     isBusy: false,
     iterationBadge: '',
     inputLineCount: 1,
+    userTyping: false,
   };
 
   // ── Option constants ────────────────────────────────────────────────────────
@@ -128,8 +129,12 @@ export function startTui(options: StartTuiOptions): void {
   rendererRef.current = renderer;
   renderer.patchRefreshLine();
 
+  // ── rawBuffer: stores original println text for re-wrapping on resize ────────
+  const rawBuffer: string[] = [];
+
   // ── println (real implementation, uses renderer) ────────────────────────────
   println = (text = '') => {
+    rawBuffer.push(text);
     const lines = text
       .replace(/\r\n/g, '\n')
       .split('\n')
@@ -200,18 +205,38 @@ export function startTui(options: StartTuiOptions): void {
   }
 
   // ── Resize handler ──────────────────────────────────────────────────────────
+  let welcomeRawCount = 0;
   const handleResize = () => {
     state.terminalWidth  = process.stdout.columns || 80;
     state.terminalHeight = process.stdout.rows    || 24;
     ctx.terminalWidth    = state.terminalWidth;
     ctx.terminalHeight   = state.terminalHeight;
+    clearScreen();
+    // Save raw conversation entries (after welcome), wipe both buffers
+    const savedRaw = rawBuffer.splice(welcomeRawCount);
+    rawBuffer.length = 0;
+    state.contentBuffer.length = 0;
+    // Re-render welcome at new width
+    renderWelcome(ctx);
+    welcomeRawCount  = rawBuffer.length;
+    // Re-wrap conversation messages at the new width
+    for (const text of savedRaw) {
+      rawBuffer.push(text);
+      const rewrapped = text
+        .replace(/\r\n/g, '\n')
+        .split('\n')
+        .flatMap((line) => (fixedInput ? wrapSingleLineForWidth(line, state.terminalWidth) : [line]));
+      state.contentBuffer.push(...rewrapped);
+    }
     if (fixedInput) renderer.requestRender();
+    else rl.prompt();
   };
   process.stdout.on('resize', handleResize);
 
   // ── Initial render ──────────────────────────────────────────────────────────
   if (clearOnStart) clearScreen();
   renderWelcome(ctx);
+  welcomeRawCount  = rawBuffer.length;
   if (fixedInput) renderer.requestRender();
   rl.prompt();
 
@@ -239,6 +264,7 @@ export function startTui(options: StartTuiOptions): void {
     formatResponse,
     assistantPrefix,
     handleResize,
+    recordRaw: (text: string) => rawBuffer.push(text),
   });
 }
 

@@ -4,11 +4,12 @@ import { extractToolCalls, normalizeResponse } from '../../../utils/tool-calls';
 import { ToolsQueue } from '../../tools-queue';
 import { executorWorker } from './executor-worker';
 import { learnerWorker } from './learner-worker';
-import { TOOL_CALL_HELPER } from '../../../constants';
-import { LoopContext } from './context';
+import { FIRST_PROMPT_HELPER } from '../../../constants';
+import { replacePlaceholders } from '../../../utils/prompt';
 import type { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import type { IMessageService } from '../../message-service';
 import type { ILogger } from '../../../infrastructure/logger';
+import type { LoopContext } from './context';
 
 async function streamResponse(
   logger: ILogger,
@@ -18,12 +19,11 @@ async function streamResponse(
   messageHistory: import('../../../entities/message').Message[]
 ): Promise<ProcessedMessage> {
   const r = await messageProviderStream(logger, userMessage, channel, options, messageHistory);
-  // ToolCall[] is unexpected here; normalize it to a string so callers always get string | AsyncGenerator.
   if (Array.isArray(r)) return normalizeResponse(r);
   return r as ProcessedMessage;
 }
 
-async function toolsLoop(
+async function manager(
   logger: ILogger,
   userMessage: string,
   channel: string,
@@ -40,20 +40,13 @@ async function toolsLoop(
     options,
   };
 
-  /**
-   * Todo:
-   * if AI Learn how to use weather and asked about a "Cat fact", it doesn't
-   * recognize "get skill" to learn
-   */
-
   const messageHistory = message.getHistory();
+  const prompt = replacePlaceholders(FIRST_PROMPT_HELPER, { v1: userMessage });
 
-  // Non-streaming call to detect tool calls.
-  const aiResponse = await messageProvider(logger, TOOL_CALL_HELPER + userMessage, channel, options, messageHistory);
+  const aiResponse = await messageProvider(logger, prompt, channel, options, messageHistory);
   const responseText = normalizeResponse(aiResponse);
   let callbacks = extractToolCalls(responseText);
 
-  // No tool calls — stream the response directly.
   if (callbacks.length === 0) {
     return streamResponse(logger, userMessage, channel, options, messageHistory);
   }
@@ -63,16 +56,20 @@ async function toolsLoop(
 
   if (toLearn.length > 0) {
     ctx.onProgress(`Learning phase: ${toLearn.length} skill(s)`);
-    const learned = await learnerWorker(toLearn, userMessage, messageHistory, ctx);
-    toExecute = [...toExecute, ...extractToolCalls(learned)];
+    await learnerWorker(toLearn, userMessage, messageHistory, ctx);
+
+    const aiResponse = await messageProvider(logger, prompt, channel, options, messageHistory);
+    const responseText = normalizeResponse(aiResponse);
+    toExecute = extractToolCalls(responseText);
   }
 
   if (toExecute.length === 0) {
     return streamResponse(logger, userMessage, channel, options, messageHistory);
   }
 
-  ctx.onProgress(`Execution phase: ${toExecute.length} tool(s)`);
-  return executorWorker(toExecute, messageHistory, ctx.logger, ctx.channel, ctx.message, ctx.toolsQueue, ctx.signal, ctx.onProgress, ctx.options, userMessage);
+  ctx.onProgress(`Execution phase: ${toExecute.length} tool(s) - ${toExecute.map(c => c.name).join(' - ')}`);
+
+  return executorWorker(toExecute, userMessage, messageHistory, ctx);
 }
 
-export { toolsLoop };
+export { manager };
