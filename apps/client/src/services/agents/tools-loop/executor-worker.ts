@@ -45,9 +45,6 @@ async function executorWorker(
     messageHistory
   );
 
-  // Stream = final answer (tui+ollama). Can't inspect for more tool calls — return directly. typeof response !== 'string'
-  if (!Array.isArray(response)) return response as ProcessedMessage;
-
   const normalizedResponse = Array.isArray(response)
     ? normalizeResponse({
         tool_calls: response.map((toolCall) => ({
