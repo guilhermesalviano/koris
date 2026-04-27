@@ -411,3 +411,81 @@ describe('executeCurl', () => {
     expect((result.result ?? '').length).toBeLessThanOrEqual(5000);
   });
 });
+
+// ── URL normalization (shell command passed as url) ───────────────────────────
+
+describe('executeCurl — URL normalization from shell command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+  });
+
+  /** Helper: return the URL argv element sent to curl (last non-flag arg). */
+  function capturedUrl(): string {
+    const [, curlArgs] = mockExecFilePromise.mock.calls[0]!;
+    // The URL is always the last arg before the optional -w marker
+    const wIdx = curlArgs.indexOf('-w');
+    const candidate = wIdx === -1 ? curlArgs[curlArgs.length - 1] : curlArgs[wIdx - 1];
+    return candidate as string;
+  }
+
+  it('extracts plain URL from "curl https://example.com"', async () => {
+    await executeCurl(mockLogger, { url: 'curl https://example.com' });
+    expect(capturedUrl()).toBe('https://example.com/');
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'curl_request received a shell command as URL; extracted URL',
+      expect.objectContaining({ original: 'curl https://example.com', extracted: 'https://example.com' }),
+    );
+  });
+
+  it('extracts URL when silent flag -s precedes it', async () => {
+    await executeCurl(mockLogger, { url: 'curl -s https://example.com' });
+    expect(capturedUrl()).toBe('https://example.com/');
+  });
+
+  it('extracts URL when multiple flags (-s -L) precede it', async () => {
+    await executeCurl(mockLogger, { url: 'curl -s -L https://example.com/path' });
+    expect(capturedUrl()).toBe('https://example.com/path');
+  });
+
+  it('does not mistake -X flag value as the URL', async () => {
+    await executeCurl(mockLogger, { url: 'curl -X GET https://api.example.com' });
+    expect(capturedUrl()).toBe('https://api.example.com/');
+  });
+
+  it('does not mistake -H header value as the URL', async () => {
+    await executeCurl(mockLogger, { url: "curl -H 'Authorization: Bearer tok' https://api.example.com" });
+    expect(capturedUrl()).toBe('https://api.example.com/');
+  });
+
+  it('extracts single-quoted URL from "curl \'https://example.com\'"', async () => {
+    await executeCurl(mockLogger, { url: "curl 'https://example.com'" });
+    expect(capturedUrl()).toBe('https://example.com/');
+  });
+
+  it('extracts double-quoted URL from \'curl "https://example.com"\'', async () => {
+    await executeCurl(mockLogger, { url: 'curl "https://example.com"' });
+    expect(capturedUrl()).toBe('https://example.com/');
+  });
+
+  it('preserves query string and path in the extracted URL', async () => {
+    await executeCurl(mockLogger, { url: 'curl https://api.example.com/v1/search?q=hello&limit=10' });
+    expect(capturedUrl()).toContain('https://api.example.com/v1/search');
+  });
+
+  it('is case-insensitive on the leading "curl" keyword', async () => {
+    await executeCurl(mockLogger, { url: 'CURL https://example.com' });
+    expect(capturedUrl()).toBe('https://example.com/');
+  });
+
+  it('does not treat a bare flag like -v as the URL', async () => {
+    // Flags start with '-', so they fail both URL-pattern checks and are skipped
+    await executeCurl(mockLogger, { url: 'curl -v https://example.com' });
+    expect(capturedUrl()).toBe('https://example.com/');
+  });
+
+  it('handles combined flags and method before URL without misidentification', async () => {
+    await executeCurl(mockLogger, { url: 'curl -s -X POST https://api.example.com/items' });
+    expect(capturedUrl()).toBe('https://api.example.com/items');
+  });
+});
