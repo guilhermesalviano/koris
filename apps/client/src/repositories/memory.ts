@@ -48,7 +48,7 @@ class MemoryRepository implements IMemoryRepository {
   getAll(): Memory[] {
     const rows = this.db.query<any>(
       `SELECT id, session_id, type, content, embedding, tags, importance, created_at FROM memories
-       ORDER BY created_at ASC`
+       ORDER BY created_at DESC`
     );
 
     return rows.map(this.mapRow);
@@ -58,7 +58,7 @@ class MemoryRepository implements IMemoryRepository {
     const rows = this.db.query<any>(
       `SELECT id, session_id, type, content, embedding, tags, importance, created_at FROM memories
        WHERE session_id = ?
-       ORDER BY created_at ASC`,
+       ORDER BY created_at DESC`,
       [sessionId]
     );
 

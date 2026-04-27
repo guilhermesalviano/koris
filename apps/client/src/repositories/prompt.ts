@@ -76,7 +76,7 @@ class PromptRepository {
     const baseHistory = this.buildBaseHistoryPrompt(basePrompt);
 
     // TODO: get only old and relevant memories instead of all. Exclude actual session.
-    const memory = this.memoryRepository.getAll().map(m => `${m.type}: ${m.content}`).join('\n');
+    const memory = this.buildMemoryContext();
     const systemInstructions = memory ? `${baseHistory}\n Persistent context from other sessions: ${memory}` : baseHistory;
 
     messages.push({ role: 'system', content: systemInstructions });
@@ -88,6 +88,11 @@ class PromptRepository {
     }
 
     return messages;
+  }
+
+  private buildMemoryContext(): string {
+    const memories = this.memoryRepository.getAll().map(m => `${m.type}: ${m.content}`).join('\n');
+    return memories.slice(0, 8000);
   }
 
   /**

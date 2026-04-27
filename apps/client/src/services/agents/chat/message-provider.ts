@@ -40,7 +40,7 @@ async function messageProvider(
     messageHistory: messagesHistory
   });
   
-  logger.info(`paylod prompt value ${JSON.stringify(payload)}`);
+  logger.debug(`paylod prompt value ${JSON.stringify(payload)}`);
   // logger.info(`Prompt generated in ${new Date().toISOString()}:`, payload as unknown as Record<string, unknown>);
 
   const chatRequest = payload as AIChatRequest;

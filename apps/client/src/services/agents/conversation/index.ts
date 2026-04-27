@@ -1,7 +1,7 @@
 import type { ILogger } from "../../../infrastructure/logger";
 import { IMessageService } from "../../message-service";
 
-interface conversationWorkerProps {
+interface ConversationWorkerProps {
   sessionId: string,
   ask: string,
   answer: string,
@@ -11,7 +11,7 @@ interface conversationWorkerProps {
 }
 
 async function conversationWorker(
-  props: conversationWorkerProps
+  props: ConversationWorkerProps
 ): Promise<void> {
   const { sessionId, ask, answer, logger, channel, messageService } = props;
   logger.info(`Conversation worker started for session ${sessionId} in ${channel}`);

@@ -72,13 +72,13 @@ class MemoryService implements IMemoryService {
     return `${oldContent}\n\n${newContent}`.trim();
   }
 
-  private mergeTags(oldTags?: string, newTags?: string): string {
+  private mergeTags(oldTags?: string, newTags?: string): string | undefined {
     const toSet = (tags?: string) =>
       tags ? tags.split(',').map((t) => t.trim()).filter(Boolean) : [];
 
     const combined = [...new Set([...toSet(oldTags), ...toSet(newTags)])];
 
-    return combined.join(', ');
+    return combined.length > 0 ? combined.join(', ') : undefined;
   }
 }
 
