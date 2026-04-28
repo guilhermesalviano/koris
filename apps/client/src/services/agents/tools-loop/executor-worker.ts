@@ -1,8 +1,8 @@
 import { extractToolCalls, normalizeResponse } from "../../../utils/tool-calls";
-import { messageProviderStream } from "../chat/message-provider-stream";
 import { config } from "../../../config";
 import { TOOLS_RESULT_PROMPT } from "../../../constants";
 import { replacePlaceholders } from "../../../utils/prompt";
+import { messageProvider } from "../chat/message-provider";
 import type { ToolCall } from "../../../types/tools";
 import type { LoopContext } from "./context";
 import type { ProcessedMessage } from "../../../types/agents";
@@ -26,7 +26,7 @@ async function executorWorker(
   }
   ctx.onProgress(`Iteration ${iteration}`);
 
-  ctx.logger.info(`Executing tools (${JSON.stringify(toolCalls)})...`);
+  ctx.logger.info(`Executing tools (${toolCalls})...`);
 
   const toolResults = await ctx.toolsQueue.handle(
     toolCalls,
@@ -34,27 +34,19 @@ async function executorWorker(
     ctx.signal
   );
 
-  ctx.logger.info(`Tool results: ${JSON.stringify(toolResults)}`);
+  ctx.logger.info(`Tool results: ${toolResults}`);
 
   const synthesisPrompt = replacePlaceholders(TOOLS_RESULT_PROMPT, { v1: userMessage, v2: toolResults });
-  const response = await messageProviderStream(
+  const response = await messageProvider(
     ctx.logger,
     synthesisPrompt,
     ctx.channel,
     ctx.options,
     messageHistory
   );
+  ctx.logger.info(`AI response is: ${response}`);
 
-  const normalizedResponse = Array.isArray(response)
-    ? normalizeResponse({
-        tool_calls: response.map((toolCall) => ({
-          function: {
-            name: toolCall.name,
-            arguments: toolCall.arguments,
-          },
-        })),
-      })
-    : normalizeResponse(response);
+  const normalizedResponse = normalizeResponse(response);
   const nextToolCalls = extractToolCalls(normalizedResponse, ctx.logger);
 
   if (nextToolCalls.length === 0) return normalizedResponse;

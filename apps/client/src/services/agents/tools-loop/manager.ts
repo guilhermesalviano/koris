@@ -4,7 +4,7 @@ import { extractToolCalls, normalizeResponse } from '../../../utils/tool-calls';
 import { ToolsQueue } from '../../tools-queue';
 import { executorWorker } from './executor-worker';
 import { learnerWorker } from './learner-worker';
-import { FIRST_PROMPT_HELPER } from '../../../constants';
+import { FIRST_PROMPT_HELPER, SKILL_READY_PROMPT } from '../../../constants';
 import { replacePlaceholders } from '../../../utils/prompt';
 import type { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import type { IMessageService } from '../../message-service';
@@ -48,6 +48,7 @@ async function manager(
   let callbacks = extractToolCalls(responseText);
 
   if (callbacks.length === 0) {
+    ctx.onProgress('No tools to execute, streaming final response');
     return streamResponse(logger, userMessage, channel, options, messageHistory);
   }
 
@@ -55,15 +56,18 @@ async function manager(
   let toExecute = callbacks.filter(cb => cb.name !== 'get_skill');
 
   if (toLearn.length > 0) {
-    ctx.onProgress(`Learning phase: ${toLearn.length} skill(s)`);
+    ctx.onProgress(`Learning phase: ${toLearn.length} skill(s) - ${toLearn.map(c => c.name).join(' - ')}`);
     await learnerWorker(toLearn, userMessage, messageHistory, ctx);
 
-    const aiResponse = await messageProvider(logger, prompt, channel, options, messageHistory);
+    const skillPrompt = replacePlaceholders(SKILL_READY_PROMPT, { v1: userMessage });
+    const aiResponse = await messageProvider(logger, skillPrompt, channel, options, message.getHistory());
+
     const responseText = normalizeResponse(aiResponse);
     toExecute = extractToolCalls(responseText);
   }
 
   if (toExecute.length === 0) {
+    ctx.onProgress('No tools to execute, streaming final response');
     return streamResponse(logger, userMessage, channel, options, messageHistory);
   }
 

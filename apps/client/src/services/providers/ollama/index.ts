@@ -302,7 +302,8 @@ class OllamaAIProvider implements AIProvider {
     if (chunk.message?.tool_calls && chunk.message.tool_calls.length > 0) {
       return JSON.stringify({ tool_calls: chunk.message.tool_calls });
     }
-    return chunk.message?.content ?? chunk.response ?? chunk.message?.thinking ?? '';
+    // Use || instead of ?? so empty-string content falls through to thinking/response
+    return chunk.message?.content || chunk.response || chunk.message?.thinking || '';
   }
 
   private isAbortError(err: unknown): boolean {

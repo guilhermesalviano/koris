@@ -48,27 +48,43 @@ export const SKILL_LEARNING_PROMPT = `
 5. Pass all user-provided values (city names, IDs, names) exactly as written — do not normalize or correct them.
 `;
 
-export const SKILL_EXECUTION_PROMPT = `
-Using ONLY the documentation below, answer the user request. Do not use external knowledge.
+export const SKILL_READY_PROMPT = `
+## TOOL CALL MANDATE
+Execute the tool call required to fulfill the user request. 
 
-### User request
+- **STRICT RULE:** You are a function-calling engine. 
+- **FORBIDDEN:** Do not explain why you are calling a tool. Do not summarize the documentation. Do not provide a plan.
+- **OUTPUT:** Provide ONLY the tool call in the required JSON format.
+
+### USER REQUEST
 {v1}
-
-### Skill documentation
-{v2}
 `;
 
 export const TOOLS_RESULT_PROMPT = `
-## Tool execution results analysis
-- Analyze the tool execution results below to answer the user's request. 
-Extract the relevant information from the results and provide a clear, direct answer.
-- Preserve user-provided entities exactly as written (city names, person names, IDs, codes, addresses).
+You are synthesizing tool results into a final response for the user.
 
-### Previous context
+## RULES
+- Preserve tool results exactly as returned, without generating new text or reformatting, unless the tool output is explicitly meant to be transformed (e.g. a JSON response from an API). In that case, only extract the relevant information without adding any interpretation or commentary.
+- Answer directly from the tool results — do not speculate or add information not present in the results.
+- If a tool returned an error or empty result, say so clearly and suggest next steps.
+- Preserve all user-provided entities exactly as written (names, IDs, codes, addresses, dates).
+- Do not add any information that is not present in the tool results.
+- Do not mention tools, functions, or internal implementation details in your response.
+- Do not repeat the user's question back to them.
+- Be concise — omit data from the results that is not relevant to the request.
+
+## CHAINING
+- If the tool results are incomplete or indicate that another tool call is required to fully answer the request, call that tool now instead of responding to the user.
+- Only respond to the user when you have enough information to fully answer the request.
+
+## USER REQUEST
 {v1}
 
-### Tool results
+## TOOL RESULTS
 {v2}
+
+### Final Output Requirement
+Provide a clear, direct answer based strictly on the data above. If the data is insufficient to answer the request, state exactly what is missing.
 `;
 
 export const SUMMARIZATION_PROMPT = `
