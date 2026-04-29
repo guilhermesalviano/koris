@@ -12,7 +12,7 @@ interface IToolsQueue {
     tools: ToolCall[],
     _agent: AIAgentRequest,
     signal: AbortSignal,
-  ): Promise<string>;
+  ): Promise<ToolResult[]>;
 }
 
 class ToolsQueue implements IToolsQueue {
@@ -25,7 +25,7 @@ class ToolsQueue implements IToolsQueue {
     tools: ToolCall[],
     _agent: AIAgentRequest,
     signal: AbortSignal,
-  ): Promise<string> {
+  ): Promise<ToolResult[]> {
     const limit = pLimit(this.maxWorkers);
 
     const promises = tools.map((tool) =>
@@ -43,7 +43,7 @@ class ToolsQueue implements IToolsQueue {
             toolName: tool.name,
             success: false,
             error: errorMsg,
-          };
+          } as ToolResult;
         }
       })
     );
@@ -52,13 +52,7 @@ class ToolsQueue implements IToolsQueue {
 
     this.logger.info('Tools completed', { count: results.length });
 
-    return results
-      .map((r) =>
-        r.success
-          ? `Tool: ${r.toolName}, Result: ${r.result}`
-          : `Tool: ${r.toolName}, Success: ${r.success}, Error: ${r.error}`
-      )
-      .join('\n');
+    return results;
   }
 
   async executeTool(logger: ILogger, toolCall: ToolCall): Promise<ToolResult> {

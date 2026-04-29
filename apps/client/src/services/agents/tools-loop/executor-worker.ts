@@ -28,12 +28,19 @@ async function executorWorker(
 
   ctx.logger.info(`Executing tools (${toolCalls})...`);
 
-  const toolResults = await ctx.toolsQueue.handle(
+  const toolResultsArray = await ctx.toolsQueue.handle(
     toolCalls,
     { model: config.AI.MODEL },
     ctx.signal
   );
 
+  const toolResults = toolResultsArray
+    .map((r) =>
+      r.success
+        ? `Tool: ${r.toolName}, Result: ${r.result}`
+        : `Tool: ${r.toolName}, Success: ${r.success}, Error: ${r.error}`
+    )
+    .join('\n');
   ctx.logger.info(`Tool results: ${toolResults}`);
 
   const synthesisPrompt = replacePlaceholders(TOOLS_RESULT_PROMPT, { v1: userMessage, v2: toolResults });

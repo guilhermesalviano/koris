@@ -28,7 +28,8 @@ async function messageProviderStream(
 
   // Stream directly in TUI when using Ollama.
   if (channel === 'tui' && provider.name === 'ollama') {
-    const stream = provider.chatStream(chatRequest, { signal: options?.signal });
+    const thinkRequest: AIChatRequest = { ...chatRequest, think: true };
+    const stream = provider.chatStream(thinkRequest, { signal: options?.signal });
 
     async function* safeStream(): AsyncGenerator<string> {
       try {

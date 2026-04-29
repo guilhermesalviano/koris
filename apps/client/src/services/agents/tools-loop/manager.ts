@@ -47,10 +47,7 @@ async function manager(
   const responseText = normalizeResponse(aiResponse);
   let callbacks = extractToolCalls(responseText);
 
-  if (callbacks.length === 0) {
-    ctx.onProgress('No tools to execute, streaming final response');
-    return streamResponse(logger, userMessage, channel, options, messageHistory);
-  }
+  if (callbacks.length === 0) return streamResponse(logger, userMessage, channel, options, messageHistory);
 
   const toLearn = callbacks.filter(cb => cb.name === 'get_skill');
   let toExecute = callbacks.filter(cb => cb.name !== 'get_skill');
