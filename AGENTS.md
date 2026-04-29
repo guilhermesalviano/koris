@@ -86,7 +86,7 @@ src/
 ├── app.ts                    Entry point
 ├── config/index.ts           Env + settings.json loader → exports `config`
 ├── constants/prompt.ts       All prompt templates (SYSTEM_PROMPT, FIRST_PROMPT_HELPER,
-│                             SKILL_LEARNING_PROMPT, SKILL_EXECUTION_PROMPT,
+│                             SKILL_LEARNING_PROMPT, SKILL_READY_PROMPT,
 │                             TOOLS_RESULT_PROMPT, SUMMARIZATION_PROMPT)
 ├── entities/
 │   ├── memory.ts             Memory entity (id, sessionId, type, content, embedding, tags)
@@ -235,7 +235,7 @@ Runs a shell command inside `BASE_DIR`. **Strict allowlist**: `ls`, `git`, `npm`
 | `args` | `string[]` | optional | Explicit args array; overrides tokenized command args |
 
 - Uses `spawnCommand()` with `shell: false` (no injection possible)
-- Truncates stdout to **5000 chars**; max buffer 10 MB
+- Truncates stdout to **20000 chars**
 
 ### `get_skill`
 

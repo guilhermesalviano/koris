@@ -1,6 +1,9 @@
 {
   "PORT": 3000,
   "TIMEZONE": "America/Sao_Paulo",
+  "gmail": {
+    "GATEWAY_HOST": "http://localhost:3000"
+  },
   "log": {
     "LEVEL": "debug"
   },
