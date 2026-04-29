@@ -29,6 +29,9 @@ class AgentHandler {
 
     this.logger.info(`Processing message from ${this.channel}: "${previewMessage(safeMessage)}"`);
 
+    // const result = (await handlePlan(safeMessage, this.logger, options)).response || '';
+
+    // todo: do not limit commands with slash, but with a list of known commands
     if (isCommand(safeMessage)) {
       const response = handleCommand(safeMessage, { source: this.channel }).response || '';
       this.historyHelper(safeMessage, response);

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { generateId } from "../utils/generate-id";
 import { MessageRole } from "../types/messages";
 
 export class Message {
@@ -15,7 +15,7 @@ export class Message {
     content: string;
     createdAt?: string;
   }) {
-    this.id = data.id || randomUUID();
+    this.id = data.id || generateId();
     this.sessionId = data.sessionId;
     this.role = data.role;
     this.content = data.content;
