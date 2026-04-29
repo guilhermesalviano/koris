@@ -103,9 +103,6 @@ async function renderStreamedResponse(
           const rawLines = formatted.replace(/\r\n/g, '\n').split('\n');
           rawLines[0] = `${colors.reset}${assistantPrefix}${colors.reset} ${rawLines[0]}`;
           rawLines.forEach((l) => all.push(...wrap(l)));
-        } else {
-          // Thinking ended but content not yet arrived
-          all.push(`${colors.reset}${assistantPrefix}${colors.reset}`);
         }
       }
     } else {
