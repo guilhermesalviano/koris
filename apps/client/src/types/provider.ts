@@ -16,6 +16,8 @@ export interface AIChatRequest {
   messages: Message[];
   temperature?: number;
   tools?: AIToolDefinition[];
+  /** When true, instructs the provider to emit a thinking/reasoning block. */
+  think?: boolean;
 }
 
 export interface AIChatOptions {

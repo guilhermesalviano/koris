@@ -92,3 +92,6 @@ public/             # Web assets (HTML, JS, CSS)
 tests/              # Unit and security tests
 logs/               # Runtime logs (created on first run)
 ```
+
+## Troubleshooting
+- If your responses seem cut off in the middle, try increasing the context length in Ollama

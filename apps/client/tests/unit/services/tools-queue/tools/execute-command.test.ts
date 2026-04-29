@@ -139,12 +139,12 @@ describe('executeCommand', () => {
     expect(call.args).toEqual(['explicit']);
   });
 
-  it('truncates stdout to 5000 characters', async () => {
-    mockSpawnCommand.mockResolvedValue({ code: 0, stdout: 'x'.repeat(6000), stderr: '' });
+  it('truncates stdout to 20000 characters', async () => {
+    mockSpawnCommand.mockResolvedValue({ code: 0, stdout: 'x'.repeat(21000), stderr: '' });
 
     const result = await executeCommand(mockLogger, { command: 'cat bigfile' });
 
-    expect((result.result ?? '').length).toBeLessThanOrEqual(5000);
+    expect((result.result ?? '').length).toBeLessThanOrEqual(20000);
   });
 
   it('forwards spawnCommand rejection as an error result', async () => {

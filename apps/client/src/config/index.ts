@@ -38,6 +38,7 @@ export const config = {
   TIMEZONE:    get('TIMEZONE',    'TIMEZONE',    'AMERICA/Sao_Paulo'),
   ENVIRONMENT: get('ENVIRONMENT', 'ENVIRONMENT',  'development'),
   PORT:        Number(get('PORT', 'PORT',         '3000')),
+  GMAIL_GATEWAY_HOST: get('GMAIL_GATEWAY_HOST', 'gmail.GATEWAY_HOST', 'http://localhost:3000'),
   BASE_DIR:    process.cwd(),
   AI: {
     PROVIDER: process.env.VITEST === 'true'

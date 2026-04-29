@@ -404,11 +404,11 @@ describe('executeCurl', () => {
     expect(result.error).toContain('timeout');
   });
 
-  it('truncates response to 5000 characters', async () => {
-    const longBody = 'x'.repeat(6000);
+  it('truncates response to 20000 characters', async () => {
+    const longBody = 'x'.repeat(21000);
     mockExecFilePromise.mockResolvedValue(`${longBody}\n---HTTP_STATUS:200---`);
     const result = await executeCurl(mockLogger, { url: 'https://example.com' });
-    expect((result.result ?? '').length).toBeLessThanOrEqual(5000);
+    expect((result.result ?? '').length).toBeLessThanOrEqual(20000);
   });
 });
 

@@ -2,6 +2,7 @@ import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/pr
 import { config } from '../../../config'; 
 import { ILogger } from '../../../infrastructure/logger';
 import { validateBaseUrl } from '../../../utils/provider';
+import { THINK_START, THINK_END } from '../../../constants/thinking';
 
 type OllamaChatChunk = {
   message?: { 
@@ -107,18 +108,32 @@ class OllamaAIProvider implements AIProvider {
         return;
       }
 
+      let streamInThinking = false;
+
       for await (const chunk of this.readNDJSON(body, bumpIdle)) {
         totalChunksReceived++;
         if (chunk.error) {
           this.logger.error('Ollama stream error chunk', { error: chunk.error });
           throw new Error(chunk.error);
         }
+
+        const chunkHasThinking = !!(chunk.message?.thinking && !chunk.message?.content && !chunk.response);
+
+        if (chunkHasThinking && !streamInThinking) {
+          streamInThinking = true;
+          yield THINK_START;
+        } else if (!chunkHasThinking && streamInThinking) {
+          streamInThinking = false;
+          yield THINK_END;
+        }
+
         const text = this.parseChunk(chunk);
         if (text) {
           totalCharsYielded += text.length;
           yield text;
         }
         if (chunk.done) {
+          if (streamInThinking) yield THINK_END;
           this.logger.debug('Ollama stream completed', { chunksReceived: totalChunksReceived });
           break;
         }
@@ -184,6 +199,7 @@ class OllamaAIProvider implements AIProvider {
         messages   : request.messages,
         tools      : request.tools,
         stream     : true,
+        ...(request.think ? { think: true } : {}),
         temperature: request.temperature,
       }),
       signal,
@@ -302,7 +318,14 @@ class OllamaAIProvider implements AIProvider {
     if (chunk.message?.tool_calls && chunk.message.tool_calls.length > 0) {
       return JSON.stringify({ tool_calls: chunk.message.tool_calls });
     }
-    return chunk.message?.content ?? chunk.response ?? chunk.message?.thinking ?? '';
+    // When thinking is present but content is empty, this is a thinking-only chunk.
+    // The thinking text is handled via THINK_START/THINK_END sentinels; return it only
+    // so the sentinel accumulator in chatStream can yield it inside the thinking block.
+    // For mixed chunks (thinking + content), prefer content.
+    if (chunk.message?.thinking && !chunk.message?.content) {
+      return chunk.message.thinking;
+    }
+    return chunk.message?.content || chunk.response || '';
   }
 
   private isAbortError(err: unknown): boolean {

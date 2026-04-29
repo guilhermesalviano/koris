@@ -33,7 +33,9 @@ describe('ToolsQueue', () => {
 
       const result = await orchestrator.handle([toolCall], {}, abortController.signal);
 
-      expect(result).toContain('execute_command');
+      expect(result).toBeInstanceOf(Array);
+      expect(result).toHaveLength(1);
+      expect(result[0].toolName).toBe('execute_command');
       expect(mockLogger.info).toHaveBeenCalledWith('Tools completed', { count: 1 });
     });
 
@@ -45,8 +47,9 @@ describe('ToolsQueue', () => {
 
       const result = await orchestrator.handle(toolCalls, {}, abortController.signal);
 
-      expect(result).toContain('execute_command');
-      expect(result.match(/execute_command/g)).toHaveLength(2);
+      expect(result).toBeInstanceOf(Array);
+      expect(result).toHaveLength(2);
+      expect(result.every((r) => r.toolName === 'execute_command')).toBe(true);
       expect(mockLogger.info).toHaveBeenCalledWith('Tools completed', { count: 2 });
     });
 
@@ -64,7 +67,8 @@ describe('ToolsQueue', () => {
         abortController.signal
       );
 
-      expect(result).toBeDefined();
+      expect(result).toBeInstanceOf(Array);
+      expect(result).toHaveLength(3);
       expect(mockLogger.info).toHaveBeenCalledWith('Tools completed', { count: 3 });
     });
 
@@ -76,7 +80,9 @@ describe('ToolsQueue', () => {
 
       const result = await orchestrator.handle([toolCall], {}, abortController.signal);
 
-      expect(result).toContain('execute_command');
+      expect(result).toBeInstanceOf(Array);
+      expect(result).toHaveLength(1);
+      expect(result[0].toolName).toBe('execute_command');
       expect(mockLogger.info).toHaveBeenCalledWith('Tools completed', { count: 1 });
     });
 
@@ -101,13 +107,14 @@ describe('ToolsQueue', () => {
 
       const result = await orchestrator.handle(toolCalls, {}, abortController.signal);
 
-      expect(result).toMatch(/Tool: execute_command/);
+      expect(result[0].toolName).toBe('execute_command');
+      expect(result[0]).toHaveProperty('success');
     });
 
     it('handles empty tool list', async () => {
       const result = await orchestrator.handle([], {}, abortController.signal);
 
-      expect(result).toBe('');
+      expect(result).toEqual([]);
       expect(mockLogger.info).toHaveBeenCalledWith('Tools completed', { count: 0 });
     });
 
@@ -120,8 +127,8 @@ describe('ToolsQueue', () => {
 
       const result = await orchestrator.handle(toolCalls, {}, abortController.signal);
 
-      const lines = result.split('\n\n');
-      expect(lines.filter(line => line.includes('Tool: execute_command')).length).toBe(3);
+      expect(result).toHaveLength(3);
+      result.forEach((r) => expect(r.toolName).toBe('execute_command'));
     });
 
     it('handles mixed success and failure results', async () => {
@@ -132,8 +139,8 @@ describe('ToolsQueue', () => {
 
       const result = await orchestrator.handle(toolCalls, {}, abortController.signal);
 
-      expect(result).toContain('Tool: execute_command');
-      expect(result).toContain('Success:');
+      expect(result).toHaveLength(2);
+      expect(result.every((r) => r.toolName === 'execute_command')).toBe(true);
     });
 
     it('continues execution if one tool fails', async () => {
@@ -145,8 +152,8 @@ describe('ToolsQueue', () => {
 
       const result = await orchestrator.handle(toolCalls, {}, abortController.signal);
 
-      const toolMatches = result.match(/Tool: execute_command/g);
-      expect(toolMatches?.length).toBe(3);
+      expect(result).toHaveLength(3);
+      expect(result.every((r) => r.toolName === 'execute_command')).toBe(true);
       expect(mockLogger.info).toHaveBeenCalledWith('Tools completed', { count: 3 });
     });
 
@@ -158,8 +165,10 @@ describe('ToolsQueue', () => {
 
       const result = await orchestrator.handle([toolCall], {}, abortController.signal);
 
-      expect(result).toContain('unknown_tool');
-      expect(result).toContain('Unknown tool');
+      expect(result).toHaveLength(1);
+      expect(result[0].toolName).toBe('unknown_tool');
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toContain('Unknown tool');
       expect(mockLogger.info).toHaveBeenCalledWith('Tools completed', { count: 1 });
     });
   });

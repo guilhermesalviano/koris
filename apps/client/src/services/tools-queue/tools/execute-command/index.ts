@@ -79,7 +79,7 @@ export async function executeCommand(logger: ILogger, args: Record<string, unkno
     return {
       toolName: 'execute_command',
       success: true,
-      result: result.stdout.slice(0, 5000),
+      result: result.stdout.slice(0, 20000),
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);

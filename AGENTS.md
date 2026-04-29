@@ -1,520 +1,476 @@
 # koris-agent Agent System
 
-**AI Coding Assistants**: This document describes the agent architecture and capabilities of koris-agent. Use this as context when working with this codebase.
+**AI Coding Assistants**: Authoritative architecture reference for the `koris-agent` monorepo. Read this before making changes.
 
-## Architecture Overview
+---
 
-koris-agent is a multi-interface AI agent system that processes user messages and executes coding tasks. The system supports both TUI and Telegram Bot interfaces with a unified backend.
+## Monorepo Overview
+
+| Package | Path | Description |
+|---|---|---|
+| `koris-agent` | `apps/client/` | Main runnable app — Telegram + TUI + Web channels |
+| `assistant-tui` | `apps/assistant-tui/` | Reusable readline-based TUI runner (CJS lib) |
+| `assistant-telegram-bot` | `apps/telegram-bot/` | Dependency-free Telegram polling bot module (CJS lib) |
+| `sh-compression` | `apps/sh-compression/` | CLI proxy + sub-instruction parsing helpers (CJS lib + `sh-compression` bin) |
+
+**Requires**: Node ≥ 24, pnpm 10.18.3
+
+### Root Scripts
+
+| Script | Command |
+|---|---|
+| `pnpm build` | `turbo run build` — builds all packages in dependency order |
+| `pnpm lint` | `turbo run lint` — TypeScript type-check across all packages |
+| `pnpm test` | `turbo run test` |
+| `pnpm test:coverage` | Vitest v8 coverage |
+| `pnpm test:mutation` | Stryker mutation testing |
+| `pnpm dev` | Starts `apps/client` in Telegram + Web mode (`tsx` watch) |
+| `pnpm dev:tui` | Starts `apps/client` in TUI mode |
+| `pnpm start` / `pnpm start:tui` | Runs compiled `dist/src/app.js` |
+
+---
+
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    User Interfaces                      │
-├──────────────────────┬──────────────────────────────────┤
-│   TUI Interface      │     Telegram Bot                 │
-│   (interface.ts)     │     (bot.ts)                     │
-└──────────┬───────────┴────────────┬─────────────────────┘
-           │                        │
-           └────────────┬───────────┘
-                        ▼
-           ┌────────────────────────┐
-           │   Message Processor    │
-           │   (processor.ts)       │
-           └────────────┬───────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                        User Interfaces                       │
+├─────────────────┬──────────────────┬─────────────────────────┤
+│   TUI           │   Web (Express)  │   Telegram Bot          │
+│ channels/tui/   │  channels/web/   │  channels/telegram/     │
+└────────┬────────┴────────┬─────────┴──────────┬──────────────┘
+         │                 │                     │
+         └─────────────────┼─────────────────────┘
+                           ▼
+             ┌─────────────────────────┐
+             │    AgentHandler         │
+             │  services/agents/       │
+             │    handler.ts           │
+             └──────────┬──────────────┘
                         │
-           ┌────────────┴───────────┐
-           │                        │
-           ▼                        ▼
-    ┌─────────────┐        ┌──────────────┐
-    │  Commands   │        │ Instructions │
-    │(commands.ts)│        │  Detection   │
-    └─────────────┘        └──────────────┘
+           ┌────────────┴────────────┐
+           ▼                         ▼
+   ┌──────────────┐        ┌─────────────────┐
+   │  Commands    │        │   manager()     │
+   │ commands/    │        │   tools-loop/   │
+   └──────────────┘        └──────────┬──────┘
+                                      │
+                   ┌──────────────────┼───────────────────┐
+                   ▼                  ▼                    ▼
+          ┌──────────────┐  ┌──────────────────┐  ┌─────────────────┐
+          │learnerWorker │  │ executorWorker   │  │ messageProvider │
+          │(get_skill →  │  │  (ToolsQueue →   │  │  (AI chat /     │
+          │learned_skills│  │ recursive loop)  │  │  chatStream)    │
+          └──────────────┘  └──────────────────┘  └─────────────────┘
+                                      │
+                        ┌─────────────┴──────────────┐
+                        ▼                            ▼
+                ┌──────────────┐             ┌──────────────┐
+                │ execute_     │             │ curl_request │
+                │ command      │             │              │
+                └──────────────┘             └──────────────┘
 ```
 
-## Core Components
+---
 
-### 1. Message Processor (`apps/client/src/agent/processor.ts`)
+## Entry Point (`apps/client/src/app.ts`)
 
-**Purpose**: Central hub for processing all user messages regardless of interface.
+Parses CLI flags `--tui`, `--telegram`, `--web` and starts the appropriate channel. Defaults to Telegram + Web if no flag given.
 
-**Functions**:
-- `handle(message: string, source: string): Promise<string>`
-  - Main entry point for all message processing
-  - Routes to appropriate handler (commands vs instructions)
-  - Returns formatted response string
+---
 
-**Message Flow**:
-1. Receives message from interface (TUI or Telegram)
-2. Checks if message is a command (starts with `/`)
-3. If command: delegates to centralized command handler
-4. If not command: detects instruction type and handles accordingly
-5. Returns response to calling interface
+## `apps/client/src` — Directory Reference
 
-**Instruction Types**:
-- `read_file` - Read file contents
-- `write_file` - Create or modify files
-- `list_dir` - List directory contents
-- `execute_command` - Execute shell commands
-- `search` - Search in files
-- `unknown` - Unrecognized instruction
+```
+src/
+├── app.ts                    Entry point
+├── config/index.ts           Env + settings.json loader → exports `config`
+├── constants/prompt.ts       All prompt templates (SYSTEM_PROMPT, FIRST_PROMPT_HELPER,
+│                             SKILL_LEARNING_PROMPT, SKILL_READY_PROMPT,
+│                             TOOLS_RESULT_PROMPT, SUMMARIZATION_PROMPT)
+├── entities/
+│   ├── memory.ts             Memory entity (id, sessionId, type, content, embedding, tags)
+│   ├── message.ts            Message entity (id, sessionId, role, content, createdAt)
+│   └── session.ts            Session entity (id, source, startedAt, messageCount, metadata)
+├── infrastructure/
+│   ├── db-sqlite.ts          SQLite wrapper (better-sqlite3); tables: sessions, messages,
+│   │                         memories, learned_skills; exports DatabaseServiceFactory
+│   └── logger.ts             Winston logger; ILogger; LoggerFactory.create();
+│                             5MB×5 rotation; silences console in TUI mode
+├── repositories/
+│   ├── learned-skills.ts     CRUD for learned_skills table
+│   ├── memory.ts             CRUD for memories table
+│   ├── message.ts            CRUD for messages table (getBySessionId)
+│   ├── prompt.ts             Builds full AIChatRequest (system + memory + skills + history + tools)
+│   ├── session.ts            CRUD for sessions table
+│   ├── skills.ts             Reads SKILL.md files from ./skills/ on disk
+│   ├── system-info.ts        Loads channel-aware system prompt context
+│   └── tools.ts              Returns AIToolDefinition[] for all registered tools
+├── services/
+│   ├── memory-service.ts     save, upsert (merges content/tags), getAll
+│   ├── message-service.ts    save (persists to DB), getHistory (by sessionId)
+│   ├── provider-health-service.ts  healthCheck() → {status, timestamp}
+│   ├── session-service.ts    getSession(), updateCount()
+│   ├── agents/               ← Core agent logic (see below)
+│   ├── providers/            ← AI providers (see below)
+│   └── tools-queue/          ← Tool execution (see below)
+├── channels/
+│   ├── telegram/index.ts     Telegram message handler + approval keyboard
+│   ├── tui/index.ts          TUI wiring (assistant-tui + markdown renderer)
+│   └── web/index.ts          Express 5: GET /, POST /api/chat (SSE), GET /health
+├── types/                    agents.ts, memory.ts, messages.ts, provider.ts, skills.ts, tools.ts
+└── utils/
+    ├── fields.ts             camelToSnakeCase()
+    ├── history.ts            isSkillAlreadyLearned()
+    ├── prompt.ts             replacePlaceholders()
+    ├── provider.ts           validateBaseUrl() — blocks remote URLs by default
+    ├── sanitize-log-text.ts  sanitizeLogText(), sanitizeMeta() — strips control chars, handles circular refs
+    ├── telegram.ts           escapeTelegramMarkdown(), isAbortError()
+    └── tool-calls.ts         extractToolCalls(), normalizeResponse(), shouldSkipToolCall()
+```
 
-### 2. Command Handler (`apps/client/src/agent/commands.ts`)
+---
 
-**Purpose**: Centralized command handling for both TUI and Telegram interfaces.
+## Agent Layer (`services/agents/`)
 
-**Key Functions**:
-- `handleCommand(command: string, context: CommandContext): CommandResult`
-- `isCommand(message: string): boolean`
-- `getAvailableCommands(source: string): string[]`
+### `handler.ts` — `AgentHandler` + `AgentHandlerFactory`
 
-**Available Commands**:
-| Command | tui | Telegram | Description |
-|---------|-----|----------|-------------|
+The main orchestrator. `AgentHandlerFactory.create(logger, channel)` wires DB → session → message → memory services, then returns an `AgentHandler`.
+
+**`AgentHandler.handle(message, options?)`**:
+1. Sanitizes input via `toSafeMessage()`
+2. `/command` → `handleCommand()`, persists exchange, returns
+3. Otherwise → `manager()` (agentic loop)
+4. If manager returns `AsyncGenerator` → `persistAssistantStream()` (yields chunks, buffers, persists)
+5. Fires `conversationWorker()` (DB persist) and `summarizerWorker()` (AI summarization → memories) as background tasks
+
+### `commands/index.ts`
+
+Slash command dispatcher. Exports: `handleCommand()`, `isCommand()`, `getAvailableCommands()`.
+
+| Command | TUI | Telegram | Notes |
+|---|---|---|---|
 | `/start` | ✅ | ✅ | Welcome message |
-| `/help` | ✅ | ✅ | Show available commands |
-| `/status` | ✅ | ✅ | Show bot/session status |
-| `/stats` | ✅ | ❌ | Show tui session statistics |
-| `/clear` | ✅ | ✅ | Clear screen/history |
+| `/help` | ✅ | ✅ | List commands |
+| `/status` | ✅ | ✅ | Session status |
+| `/stats` | ✅ | ❌ | TUI session stats |
+| `/clear` | ✅ | ✅ | Clear history |
 | `/reset` | ✅ | ✅ | Reset session |
-| `/exit` | ✅ | ❌ | Exit tui (not applicable for Telegram) |
+| `/exit` `/quit` `/bye` | ✅ | ❌ | TUI only |
 
-**CommandContext Interface**:
-```typescript
-interface CommandContext {
-  source: string;
-  session?: {
-    messageCount: number;
-    startTime: Date;
-  };
-  rl?: readline.Interface;
-}
-```
+Channel-aware: Telegram uses MarkdownV2; TUI uses plain text.
 
-**CommandResult Interface**:
-```typescript
-interface CommandResult {
-  response?: string;        // Text response to display
-  action?: 'exit' | 'clear' | 'reset' | 'none';  // Action to perform
-  handled: boolean;         // Whether command was recognized
-}
-```
+### `tools-loop/manager.ts` — `manager()`
 
-### 3. tui Interface (`apps/client/src/tui/interface.ts`)
+Agentic loop coordinator:
+1. Fetches message history
+2. Sends `FIRST_PROMPT_HELPER`-wrapped message to `messageProvider()` (non-stream, detects tool calls)
+3. No tool calls → falls through to `messageProviderStream()` for the final streamed answer
+4. Splits tool calls: `get_skill` → `learnerWorker` first, then re-queries AI; execute tools → `executorWorker`
 
-**Purpose**: Terminal-based interface with rich formatting and session management.
+### `tools-loop/executor-worker.ts` — `executorWorker()` (recursive, max 10)
 
-**Features**:
-- ANSI color-coded output (cyan prompts, green assistant, red errors)
-- Session tracking (message count, uptime)
-- Graceful Ctrl+C handling
-- Thinking indicators during processing
-- Response formatting (highlighted lists, code blocks)
+1. Reports `Iteration N` via `onProgress`
+2. Calls `ToolsQueue.handle()` with current tool calls
+3. Sends `TOOLS_RESULT_PROMPT` to `messageProviderStream()`
+4. Extracts further tool calls → recurses (max `maxIterations = 10`)
 
-**Session State**:
-```typescript
-interface SessionState {
-  messageCount: number;
-  startTime: Date;
-}
-```
+### `tools-loop/learner-worker.ts` — `learnerWorker()`
 
-**Color Scheme**:
-- `cyan` - User prompts and highlights
-- `green` - Assistant responses and success messages
-- `red` - Errors
-- `yellow` - Warnings
-- `gray/dim` - Secondary information
+1. Executes `get_skill` tool calls via `ToolsQueue`
+2. Builds `SKILL_LEARNING_PROMPT` with skill name + content
+3. Saves to `learned_skills` table if not already present
 
-### 4. Web Interface (`apps/client/src/channels/web/`)
+### `chat/message-provider.ts` / `message-provider-stream.ts`
 
-**Purpose**: Browser-based chat interface served via Express.
+Both call `PromptRepositoryFactory` to build the full `AIChatRequest`.
+- `messageProvider()` → `provider.chat()` (non-streaming)
+- `messageProviderStream()` → `provider.chatStream()` for Ollama+TUI; falls back to `provider.chat()` otherwise
 
-**Architecture**:
-- `server.ts` - Express server with SSE streaming
-- `public/index.html` - Main chat UI (Tailwind CSS + DM fonts)
-- `public/main.js` - Frontend logic with markdown rendering
-- `public/styles.css` - Custom styles (grid bg, scrollbars, code labels)
+### `conversation/index.ts` — `conversationWorker()`
 
-**Features**:
-- Real-time SSE streaming from `/api/chat`
-- Markdown rendering with syntax highlighting
-- Tool execution response handling
-- Server health check with status indicator
-- Character count for input (max 4000 chars)
+Persists `{role: user}` + `{role: assistant}` messages to DB after each turn (fire-and-forget).
 
-### 5. Telegram Bot (via `apps/telegram-bot`)
+### `summarizer/index.ts` — `summarizerWorker()`
 
-**Purpose**: Telegram interface for remote access to agent capabilities.
+Calls `provider.chat()` with `SUMMARIZATION_PROMPT`; upserts 1–3 sentence summary to the `memories` table.
 
-**Message Format**: Uses Telegram Markdown for formatting responses.
+---
 
-**Integration**: The main app (`apps/client`) wires Telegram events into `handle(message, 'telegram')` using the reusable `assistant-telegram-bot` module from `apps/telegram-bot`.
+## AI Providers (`services/providers/`)
 
+Selected via `config.AI.PROVIDER` (env `AI_PROVIDER`). Forced to `mock` when `VITEST=true`.
 
-## Agent Capabilities
+**Registry exports**: `getAIProvider({ logger })` (singleton cache), `clearProviderCache()`, `getSupportedProviders()` → `['ollama', 'mock']`.
 
-### Current (Ollama Integration + Tool Execution)
+### `OllamaAIProvider`
 
-The agent now provides:
+| Method | Behaviour |
+|---|---|
+| `chat(request, options?)` | Non-streaming `/api/chat`; handles `tool_calls` in JSON response; hard timeout 15m |
+| `chatStream(request, options?)` | Streaming NDJSON `/api/chat`; idle timeout 90s; hard timeout 15m; yields string chunks |
+| `healthCheck()` | `GET /api/version`; 5s timeout; returns `{ ok, detail: 'vX.Y.Z' }` |
 
-1. **AI Provider Integration**
-   - Ollama provider with streaming responses
-   - Mock provider for testing
-   - Tool calling with automatic detection and execution
-   - Configurable timeouts for remote models (IDLE_TIMEOUT=90s, HARD_TIMEOUT=15m)
+Defaults: model `gemma4:e2b`, base URL `http://localhost:11434`. Blocks non-localhost URLs unless `AI_ALLOW_REMOTE_BASE_URL=true`.
 
-2. **File Operations** (via Ollama tool calls)
-   - `read_file` - Read file contents with size limits
-   - `write_file` - Create/modify files with validation
-   - `list_dir` - List directory contents
-   - All paths validated to prevent directory traversal attacks
+### `MockAIProvider`
 
-3. **Command Execution**
-   - `execute_command` - Run shell commands with output capture
-   - Executed by AI model as tool calls
+No network calls. `chat()` echoes last user message. `chatStream()` yields the same string char-by-char. `healthCheck()` always returns `{ ok: true }`. Used in all unit tests.
 
-4. **Search Operations**
-   - `search` - Search files with pattern matching
-   - Returns file contents matching patterns
+---
 
-5. **System Information**
-   - Context-aware system prompts per interface
-   - Tool schemas automatically passed to AI model
+## Tools (`services/tools-queue/tools/`)
 
-### Tool Execution Architecture
+All tools implement `CommandFn = (logger: ILogger, args: Record<string, unknown>) => Promise<ToolResult>`.
 
-Tool calls flow:
-```
-User Message → Ollama Chat → Detects tool_calls in response
-              ↓
-        Tool Executor (tool-executor.ts)
-              ↓
-   [read_file | write_file | list_dir | search | execute_command]
-              ↓
-        Results formatted as JSON → Sent back to AI for continuation
-              ↓
-        Final response streamed to user
-```
+`ToolsQueue` (in `tools-queue/index.ts`) runs **up to 2 concurrent tools** (`p-limit(2)`) and dispatches via `COMMAND_MAP`.
 
-## Tool Detection Patterns
+### `execute_command`
 
-The agent detects instructions using pattern matching:
+Runs a shell command inside `BASE_DIR`. **Strict allowlist**: `ls`, `git`, `npm`, `cat`, `echo` only — anything else returns a security error.
 
-### Read File
-**Triggers**: `read`, `show me`, `cat`
-**Pattern**: `/(read|show|cat)\s+["']?([^\s"']+)["']?/i`
-**Example**: "read src/config.ts"
+| Arg | Type | Required | Notes |
+|---|---|---|---|
+| `command` | `string` | ✅ | Command name or tokenized string like `"ls -la"` |
+| `args` | `string[]` | optional | Explicit args array; overrides tokenized command args |
 
-### Write File
-**Triggers**: `write`, `create file`, `save`
-**Pattern**: `/(write|create|save).*?["']?([^\s"']+)["']?/i`
-**Example**: "create file config.json"
+- Uses `spawnCommand()` with `shell: false` (no injection possible)
+- Truncates stdout to **20000 chars**
 
-### List Directory
-**Triggers**: `list`, `ls`, `show directory`
-**Pattern**: `/(list|ls|directory)\s+["']?([^\s"']+)["']?/i`
-**Example**: "list src/"
+### `get_skill`
 
-### Execute Command
-**Triggers**: `run`, `execute`, `command`
-**Pattern**: `/(run|execute)(?:\s+command)?\s+["']?(.+?)["']?$/i`
-**Example**: "run npm install"
+Reads `./skills/<skill_path>/SKILL.md`, strips YAML frontmatter.
 
-### Search
-**Triggers**: `search`, `find`
-**Pattern**: `/(search|find)\s+(?:for\s+)?["']?(.+?)["']?$/i`
-**Example**: "search for config"
+| Arg | Type | Required | Notes |
+|---|---|---|---|
+| `skill_name` | `string` | ✅ | Logical skill name |
+| `skill_path` | `string` | ✅ | Relative sub-path under `skills/` |
 
-## Extension Guide
+- Path traversal guard: resolves and validates path stays inside `BASE_SKILLS_DIR`
+- Parses frontmatter with `gray-matter`; returns `.content` only
+- Truncates to **5000 chars**
 
-### Adding a New Command
+### `curl_request`
 
-1. Add command handler in `apps/client/src/agent/commands.ts`:
-```typescript
-case '/mycommand':
-  return handleMyCommand(context);
-```
+Makes HTTP requests via `execFile('curl', ...)` — no shell. Optional jq pipe (also shell-free).
 
-2. Implement handler function:
-```typescript
-function handleMyCommand(context: CommandContext): CommandResult {
-  const message = context.source === 'telegram'
-    ? `*Telegram formatted response*`
-    : `tui formatted response`;
-  
-  return {
-    response: message,
-    action: 'none',
-    handled: true,
-  };
-}
-```
+| Arg | Type | Required | Notes |
+|---|---|---|---|
+| `url` | `string` | ✅ | Target URL; auto-prefixes `https://`; extracts URL if model passed a full `curl ...` shell command |
+| `method` | `string` | optional | Default `GET`; allowed: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS |
+| `timeout` | `number` | optional | Seconds; default 30 |
+| `follow_redirects` | `boolean` | optional | Adds `-L`; default `true` |
+| `headers` | `Record<string,string>` | optional | Key-value header map |
+| `data` | `string` | optional | Request body (POST/PUT/PATCH only) |
+| `pipe` | `string` | optional | jq invocation e.g. `"| jq -r '.result'"` |
 
-3. Update command list in `getAvailableCommands()` if needed.
+- URL validated with `new URL()`; extracted from shell commands via `shellWords()` (no regex shell parsing)
+- `pipe` parsed into safe argv — **never passed to a shell**; rejects anything that doesn't start with `jq`
+- Injects `-w '\n---HTTP_STATUS:%{http_code}---'` to extract HTTP status without a shell
+- Returns `success: false` for HTTP 4xx/5xx
+- Truncates response to **5000 chars**
 
-### Adding a New Instruction Type
+### `shared/runtime.ts`
 
-1. Add type to `Instruction` interface in `processor.ts`:
-```typescript
-interface Instruction {
-  type: 'read_file' | 'write_file' | 'my_new_type' | ...;
-  params: string;
-}
-```
+Safe helpers used by all tools:
+- Arg extractors: `getRequiredStringArg`, `getOptionalStringArg`, `getOptionalStringArrayArg`, `getOptionalNumberArg`, `getOptionalBooleanArg`, `getOptionalStringRecord`, `isAllowedValue`
+- `execFilePromise(cmd, args, timeoutMs)` — wraps `execFile` with timeout + max buffer
+- `spawnCommand({ command, args, cwd, shell, maxOutputSize })` — wraps `spawn` with no shell, collects stdout/stderr
 
-2. Add detection pattern in `detectInstruction()`:
-```typescript
-if (lower.includes('my_trigger')) {
-  return { type: 'my_new_type', params: extractedParams };
-}
-```
+---
 
-3. Add handler in `handleInstruction()`:
-```typescript
-case 'my_new_type':
-  return mockMyNewType(instruction.params);
-```
+## Channels
 
-4. Implement mock function:
-```typescript
-function mockMyNewType(params: string): string {
-  return `Response for ${params}`;
-}
-```
+### Web (`channels/web/index.ts`)
 
-### Adding Ollama Integration
+Express 5 server. Exports: `createApp()`, `startWebServer()`.
 
-Ollama integration is now active with full tool support:
+| Route | Description |
+|---|---|
+| `GET /` | Serves `public/chat/index.html`; IP rate-limit: 60 req/60s (auto-evicts map > 5000 keys) |
+| `POST /api/chat` | SSE stream; calls `AgentHandler.handle()`; emits `{type:'progress'}` + `{type:'content_block_delta'}`; sends `[DONE]`; respects client disconnect via `AbortController` |
+| `GET /health` | Calls `provider-health-service.healthCheck()`; returns `{status, timestamp, details}` |
 
-**Current Implementation** (`apps/client/src/ai/providers/ollama.ts`):
-1. Streaming chat completions with timeout handling
-2. Automatic tool call detection in responses
-3. Tool execution via `tool-executor.ts`
-4. Response parsing with JSON fallback for tool_calls
-5. Comprehensive logging of all requests/responses
+Default port: `config.PORT` (env `PORT`, default 3000).
 
-**Tool Schema Handling**:
-```typescript
-// Tools automatically passed to Ollama in system prompt
-const tools = [
-  { name: 'read_file', description: '...' },
-  { name: 'write_file', description: '...' },
-  { name: 'list_dir', description: '...' },
-  { name: 'search', description: '...' },
-  { name: 'execute_command', description: '...' }
-];
+### TUI (`channels/tui/index.ts`)
 
-// Model responds with tool_calls array
-{
-  "tool_calls": [{
-    "name": "read_file",
-    "parameters": { "path": "src/config.ts" }
-  }]
-}
+Wires `assistant-tui` library with `AgentHandlerFactory`. Features:
+- Scrollable history with fixed input layout
+- Markdown renderer: headings → colored symbols, code blocks → green, bold/italic/inline-code
+- Command autocomplete popup triggered by `/`
+- Progress callbacks: parses `"Iteration N"` → badge; other progress → colored dot + headline/details
+- Streaming enabled for Ollama (`messageProviderStream`)
+- Model name shown in footer
 
-// Results formatted and sent back to model for continuation
-{
-  "role": "tool",
-  "content": "{ \"file_contents\": \"...\" }"
-}
-```
+### Telegram (`channels/telegram/index.ts`)
 
-**Timeout Configuration** (for slow remote models):
-- `IDLE_TIMEOUT`: 90s (time between chunks) - resets on each data chunk
-- `HARD_TIMEOUT`: 15m (total request time) - prevents hung requests
-- Configurable via environment variables
+Wraps `assistant-telegram-bot`. Exports: `handleMessage()`, `sendCode()`, `sendWithApproval()`.
+- Sends typing indicator (refreshed every 5s)
+- Resolves `AsyncGenerator` streams before sending
+- Tries MarkdownV2 first; falls back to plain text on parse error
+- `sendWithApproval()` sends inline keyboard with ✅ Approve / ❌ Reject buttons
+
+---
 
 ## Configuration
 
 ### Environment Variables
 
-See `apps/client/.env.example` for required configuration:
-- `TELEGRAM_BOT_TOKEN` - Telegram bot token
-- `LOG_LEVEL` - Logging level (info, debug, error)
-- `ENVIRONMENT` - Environment name (dev, prod)
+| Variable | Default | Description |
+|---|---|---|
+| `AI_PROVIDER` | `ollama` | Provider: `ollama` or `mock` |
+| `AI_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
+| `AI_MODEL` | `gemma4:e2b` | Model name |
+| `AI_ALLOW_REMOTE_BASE_URL` | `false` | Allow non-localhost Ollama URLs |
+| `AI_API_TOKEN` | `""` | Auth token for AI endpoint |
+| `TELEGRAM_BOT_TOKEN` | `""` | Bot token from @BotFather |
+| `TELEGRAM_WEBHOOK_URL` | `""` | Webhook URL (polling used by default) |
+| `PORT` | `3000` | Web server port |
+| `LOG_LEVEL` | `info` | Winston log level |
+| `LOG_SILENCE_CONSOLE` | `""` | Set `true` to suppress console output (auto-set in TUI) |
+| `TIMEZONE` | `AMERICA/Sao_Paulo` | Informational timezone |
+| `ENVIRONMENT` | `development` | Enables SQLite WAL mode in development |
+
+Config can also be read from **`settings.json`** (dot-path notation, e.g. `ai.MODEL`). Env vars take priority.
 
 ### Logging
 
-Logger is configured in `apps/client/src/infrastructure/logger.ts`:
-- Uses Winston for structured logging
-- Outputs to console (JSON format) and files
-- File transports: `logs/combined.log` (all) and `logs/error.log` (errors only)
-- Includes request/response data from AI providers
-- Maximum 5MB per file, 5 files rotation
-
-**Logging Coverage**:
-- All Ollama requests and responses
-- Tool execution and results
-- Errors with full stack traces
-- Mock provider responses (for testing)
-
-## Usage Examples
-
-### TUI Usage
-```bash
-# Start tui
-pnpm dev:tui
-
-# Example session
-> /help
-[Shows available commands]
-
-> read src/config.ts
-[Ollama processes and executes read_file tool]
-
-> /stats
-[Shows session statistics]
-
-> /exit
-[Exits cleanly]
-```
-
-### Web Interface Usage
-```bash
-# Start web server (runs at http://localhost:3000)
-pnpm dev
-
-# Or with production build
-pnpm build && pnpm start
-
-# Then visit http://localhost:3000 in browser
-```
-
-Send messages and receive real-time SSE responses with tool execution.
-
-### Telegram Usage
-```
-User: /start
-Bot: 👋 Welcome to koris-agent! [...]
-
-User: read package.json
-Bot: [Ollama executes read_file tool]
-
-User: /status
-Bot: ✅ Bot Status [...] 
-```
-
-## Testing
-
-### Manual Testing
-```bash
-# Build project
-pnpm build
-
-# Test tui with AI provider
-pnpm dev:tui
-
-# Test web interface
-pnpm dev  # Starts on http://localhost:3000
-
-# Test with Ollama
-# Ensure Ollama is running: ollama serve
-# Set in .env: AI_PROVIDER=ollama, AI_BASE_URL=http://localhost:11434, AI_MODEL=gemma4:e2b
-```
-
-### Automated Testing
-```bash
-# Run all tests (unit tests default to mock provider)
-pnpm test
-
-# Tests for each component
-- agents/commands: 19 tests
-- agents/processor: 13 tests  
-- AI providers (mock, ollama): 7 tests
-- System info: 1 test
-- Tools: 2 tests
-
-Total: 42 tests passing
-```
-
-**Test Configuration**:
-- Tests default to `AI_PROVIDER=mock` via `NODE_ENV=test` or `VITEST=true`
-- No Ollama server needed for unit tests
-- Integration tests can be added for live Ollama testing
-
-## Security Considerations
-
-1. **Command Execution**: All command executions should require user approval
-2. **File Operations**: Validate paths to prevent directory traversal
-3. **Token Management**: Never log or expose Telegram bot tokens
-4. **Input Sanitization**: Validate and sanitize all user inputs
-5. **Rate Limiting**: Implement rate limiting for Telegram bot
-
-## Performance Notes
-
-- tui interface uses async processing with visual feedback
-- Telegram bot should use webhook mode for production (currently polling)
-- Consider implementing message queuing for high-volume scenarios
-- Response caching could improve repeated queries
-
-## Dependencies
-
-### Core
-- `assistant-tui` - Reusable TUI runner
-- `assistant-telegram-bot` - Telegram connection module (polling)
-- `winston` - Structured logging
-- `dotenv` - Environment configuration
-
-### Development
-- `typescript` - Type safety
-- `tsx` - Development server with watch mode
-- `@types/*` - TypeScript definitions
-
-## File Structure
-
-```
-apps/
-├── client/                     # main runnable app
-│   ├── src/
-│   │   ├── ai/                 # AI provider layer
-│   │   │   ├── providers/      # ollama.ts, mock.ts
-│   │   │   ├── worker/         # tool-executor.ts
-│   │   │   └── prompt/         # system-info.ts, tools.ts
-│   │   ├── agent/              # processor.ts, commands.ts
-│   │   ├── channels/
-│   │   │   ├── tui/            # TUI interface
-│   │   │   └── web/            # Web interface (Express + public/)
-│   │   └── infrastructure/     # logger.ts
-│   ├── public/                 # Static assets (index.html, main.js, styles.css)
-│   ├── tests/                  # Unit + security tests (vitest)
-│   └── logs/                   # Runtime logs (combined.log, error.log)
-├── assistant-tui/              # Reusable TUI module
-├── telegram-bot/               # Reusable Telegram module
-└── sh-compression/             # Utility module
-
-.github/workflows/              # CI workflows (lint, test)
-AGENTS.md                       # System architecture (this file)
-README.md                       # Repo overview
-```
-
-## Contributing
-
-When modifying the agent system:
-
-1. **Maintain interface consistency**: Ensure both tui and Telegram interfaces work correctly
-2. **Update this document**: Keep agent capabilities and patterns documented
-3. **Follow TypeScript patterns**: Use proper types and interfaces
-4. **Test both interfaces**: Verify changes work in tui and Telegram
-5. **Handle errors gracefully**: Provide user-friendly error messages
-
-## AI Assistant Guidelines
-
-**When working on this codebase:**
-
-1. **Use centralized command handler** (`apps/client/src/agent/commands.ts`) for all command-related changes
-2. **Respect interface separation**: client-specific code in `apps/client/src/`, modules in `apps/*`
-3. **Update command responses**: Ensure proper formatting for both Telegram (Markdown) and tui (ANSI colors)
-4. **Mock before integrate**: Keep mock implementations until Ollama integration is ready
-5. **Maintain session state**: tui has session state, Telegram should track per-user state
-
-**Common patterns to follow:**
-- Use `handleCommand()` for slash commands
-- Use `detectInstruction()` for natural language instructions
-- Use `handle()` as the universal entry point
-- Format responses based on `source` parameter
-- Return `CommandResult` from command handlers with appropriate `action` values
+Winston logger (`infrastructure/logger.ts`):
+- File transports: `logs/combined.log` (all) and `logs/error.log` (errors)
+- Rotation: 5 MB × 5 files
+- Console transport silenced automatically in TUI mode
 
 ---
 
-**Last Updated**: 2026-04-12
-**Version**: 1.1.0
-**Status**: Ollama integration complete with tool execution. Web interface added.
+## CI / CD (`.github/workflows/`)
+
+| Workflow | Triggers | Key Steps |
+|---|---|---|
+| `tests.yml` | push/PR to `main`, `develop` | install → build → `test:coverage` → parse `coverage/coverage-final.json` → annotate (threshold 80%) → upload to Codecov |
+| `lint.yml` | push to `main`, `develop` | install → `pnpm lint` (TypeScript `--noEmit`) |
+| `codeql.yml` | weekly cron (Mon 02:00 UTC) + manual | CodeQL `security-extended` (200+ patterns: injection, traversal, XSS, ReDoS, etc.) → upload `.sarif` |
+
+---
+
+## Database Schema (SQLite via `better-sqlite3`)
+
+| Table | Key Columns |
+|---|---|
+| `sessions` | `id`, `source`, `started_at`, `ended_at`, `message_count`, `metadata` |
+| `messages` | `id`, `session_id`, `role`, `content`, `created_at` |
+| `memories` | `id`, `session_id`, `type`, `content`, `embedding`, `tags`, `importance` |
+| `learned_skills` | `id`, `session_id`, `skill_name`, `content` |
+
+---
+
+## Testing
+
+All tests in `apps/client/tests/unit/`, run with **Vitest**.
+
+```bash
+pnpm test                          # run all tests (uses mock provider)
+pnpm --filter koris-agent test:coverage
+```
+
+Tests default to `AI_PROVIDER=mock` whenever `VITEST=true` — no Ollama server needed.
+
+### Test Files
+
+| File | Covers |
+|---|---|
+| `entities/message.test.ts` | Message entity construction, uuid |
+| `entities/session.test.ts` | Session entity, messageCount, metadata |
+| `channels/web/index.test.ts` | Rate-limiting, health endpoint, SSE streaming, 400 handling |
+| `services/agent/commands.test.ts` | All slash commands, TUI vs Telegram formatting, exit guards |
+| `services/providers/ollama.provider.test.ts` | NDJSON streaming, non-stream fallback, tool forwarding |
+| `services/providers/mock.provider.test.ts` | Full mock provider contract, streaming, abort, healthCheck |
+| `services/tools-queue/index.test.ts` | Concurrency (p-limit), unknown tool, error handling |
+| `services/tools-queue/tools/curl-command.test.ts` | `parseJqArgs`, `shellWords`, `buildCurlArgs`, `executeCurl`; injection resistance; URL normalization |
+| `services/tools-queue/tools/execute-command.test.ts` | Allowlist enforcement, injection blocking, quoted args, truncation |
+| `services/tools-queue/tools/get-skill.test.ts` | Path traversal guard, frontmatter stripping, truncation |
+| `services/tools-queue/tools/shared/runtime.test.ts` | All arg extractors, edge cases |
+| `utils/history.test.ts` | `isSkillAlreadyLearned` across message roles |
+| `utils/tool-calls.test.ts` | `extractToolCalls`, `normalizeResponse`, `shouldSkipToolCall` |
+| `utils/fields.test.ts` | `camelToSnakeCase` |
+| `utils/prompt.test.ts` | `replacePlaceholders` |
+| `utils/provider.test.ts` | `validateBaseUrl` — localhost/remote/credentials |
+| `utils/sanitize-log-text.test.ts` | Control char removal, circular refs, Error objects |
+| `utils/telegram.test.ts` | `escapeTelegramMarkdown`, `isAbortError` |
+| `services/helpers/helpers.test.ts` | `toSafeMessage`, `previewMessage` |
+
+---
+
+## Security Principles
+
+1. **No shell** — all child processes use `execFile` / `spawn` with `shell: false`. Shell operators in inputs are inert.
+2. **Command allowlist** — `execute_command` blocks everything except `ls`, `git`, `npm`, `cat`, `echo`.
+3. **Path traversal guard** — `get_skill` resolves and bounds-checks every path against `BASE_SKILLS_DIR`.
+4. **URL validation** — `curl_request` parses URLs with `new URL()` and blocks remote AI endpoints unless explicitly allowed.
+5. **jq pipe isolation** — pipe strings are tokenized into argv arrays; only `jq` invocations are accepted; no shell is ever involved.
+6. **Token safety** — never log `TELEGRAM_BOT_TOKEN` or `AI_API_TOKEN`; `sanitizeMeta()` scrubs log output.
+7. **Rate limiting** — Web channel: 60 req/60s per IP.
+8. **CodeQL** — weekly `security-extended` scan covers 200+ vulnerability patterns.
+
+---
+
+## Extension Guide
+
+### Adding a New Tool
+
+1. Create `apps/client/src/services/tools-queue/tools/<tool-name>/index.ts` exporting a `CommandFn`.
+2. Register it in `tools/index.ts` `COMMAND_MAP`.
+3. Add its `AIToolDefinition` in `repositories/tools.ts`.
+4. Write tests in `tests/unit/services/tools-queue/tools/<tool-name>.test.ts`.
+
+### Adding a New Slash Command
+
+1. Add the case in `services/agents/commands/index.ts` → `handleCommand()`.
+2. Implement a handler function returning `CommandResult` with appropriate `action` and channel-aware formatting.
+3. Update `getAvailableCommands()` if it should appear in `/help`.
+
+### Adding a New Channel
+
+1. Create `channels/<name>/index.ts`.
+2. Wire it in `app.ts` behind a CLI flag.
+3. Pass `channel` string to `AgentHandlerFactory.create(logger, '<name>')`.
+
+---
+
+## File Structure Summary
+
+```
+apps/
+├── client/                        Main app
+│   ├── src/
+│   │   ├── app.ts
+│   │   ├── config/
+│   │   ├── constants/             Prompt templates
+│   │   ├── entities/              message, session, memory
+│   │   ├── infrastructure/        SQLite, Winston logger
+│   │   ├── repositories/          DB access + prompt builder
+│   │   ├── services/
+│   │   │   ├── agents/            handler, commands, tools-loop, chat, summarizer
+│   │   │   ├── providers/         ollama, mock
+│   │   │   └── tools-queue/       ToolsQueue + execute_command, get_skill, curl_request
+│   │   ├── channels/              tui, web, telegram
+│   │   ├── types/
+│   │   └── utils/
+│   ├── public/chat/               index.html, main.js, styles.css
+│   ├── tests/unit/
+│   ├── skills/                    SKILL.md files (runtime)
+│   └── logs/                      combined.log, error.log (runtime)
+├── assistant-tui/                 Reusable TUI lib
+├── telegram-bot/                  Reusable Telegram lib
+└── sh-compression/                CLI proxy + helpers
+
+.github/workflows/                 tests.yml, lint.yml, codeql.yml
+AGENTS.md                          This file
+README.md
+```
+
+---
+
+**Last Updated**: 2026-04-27
+**Version**: 1.2.0
+**Status**: Ollama integration active with full tool execution. Web, TUI, and Telegram channels operational.

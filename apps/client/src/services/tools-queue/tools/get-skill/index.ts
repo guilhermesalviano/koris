@@ -36,6 +36,6 @@ export async function executeGetSkill(
   return {
     toolName: 'get_skill',
     success: true,
-    result: onlyContent.slice(0, 5000),
+    result: onlyContent.slice(0, 20000),
   };
 }
