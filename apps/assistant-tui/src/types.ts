@@ -64,4 +64,10 @@ export interface StartTuiOptions {
   commands?: CommandSuggestion[];
   /** Placeholder text shown in the input when empty. Disappears on first keystroke. */
   placeholder?: string;
+  /** When set, text between these sentinel markers is treated as a thinking/reasoning block
+   *  and rendered separately above the main response (without the assistantPrefix). */
+  thinkingMarkers?: { start: string; end: string };
+  /** Optional custom renderer for the thinking block. Receives the raw thinking text,
+   *  TuiContext, and whether thinking is still in progress (stream not closed yet). */
+  formatThinking?: (content: string, ctx: TuiContext, inProgress: boolean) => string;
 }

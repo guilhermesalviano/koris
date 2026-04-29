@@ -71,46 +71,17 @@ export function startTUI(params: { logger: ILogger }): void {
 
     // Autocomplete popup when user types /
     commands: TUI_COMMANDS,
-    
+
+    // Thinking block markers — emitted by the Ollama provider when think:true
+    thinkingMarkers: { start: THINK_START, end: THINK_END },
+
     // Format AI markdown responses with better visual hierarchy
     formatResponse: (response, ctx) => {
       const { colors } = ctx;
-
-      // Extract and style thinking blocks
-      let thinkingContent = '';
-      let regularContent = response;
-
-      const startIdx = response.indexOf(THINK_START);
-      if (startIdx !== -1) {
-        const endIdx = response.indexOf(THINK_END);
-        if (endIdx !== -1) {
-          thinkingContent = response.slice(startIdx + THINK_START.length, endIdx);
-          regularContent = response.slice(endIdx + THINK_END.length);
-        } else {
-          // Still streaming thinking — no content yet
-          thinkingContent = response.slice(startIdx + THINK_START.length);
-          regularContent = '';
-        }
-      }
-
-      let result = '';
-
-      if (thinkingContent.trim()) {
-        const innerLines = thinkingContent
-          .trim()
-          .split('\n')
-          .map((line) => `${colors.dim}${colors.yellow}│ ${line}${colors.reset}`);
-        result += `${colors.dim}${colors.yellow}╭─ thinking ───${colors.reset}\n`;
-        result += innerLines.join('\n') + '\n';
-        result += `${colors.dim}${colors.yellow}╰${'─'.repeat(14)}${colors.reset}\n\n`;
-      }
-
-      if (!regularContent.trim()) return result.trimEnd();
-
-      const lines = regularContent.split('\n');
+      const lines = response.split('\n');
       let inCodeBlock = false;
 
-      result += lines
+      return lines
         .map((line) => {
           const trimmed = line.trim();
 
@@ -157,8 +128,6 @@ export function startTUI(params: { logger: ILogger }): void {
           return applyInlineMarkdown(line, colors);
         })
         .join('\n');
-
-      return result;
     },
     
     // Command handler with full context

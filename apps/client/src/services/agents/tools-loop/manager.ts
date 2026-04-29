@@ -43,7 +43,7 @@ async function manager(
   const messageHistory = message.getHistory();
   const prompt = replacePlaceholders(FIRST_PROMPT_HELPER, { v1: userMessage });
 
-  const aiResponse = await messageProvider(logger, prompt, channel, options, messageHistory);
+  const aiResponse = await messageProviderStream(logger, prompt, channel, options, messageHistory);
   const responseText = normalizeResponse(aiResponse);
   let callbacks = extractToolCalls(responseText);
 

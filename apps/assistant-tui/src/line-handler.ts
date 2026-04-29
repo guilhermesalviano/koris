@@ -6,6 +6,7 @@ import type { Ansi } from './ansi';
 import type { TuiColors } from './colors';
 import type { TuiContext, SessionState, StartTuiOptions } from './types';
 import type { TuiInternalState } from './renderer';
+import { splitThinking, defaultFormatThinking } from './formatting';
 
 export interface LineHandlerDeps {
   state: TuiInternalState;
@@ -43,13 +44,29 @@ async function renderStreamedResponse(
   deps: LineHandlerDeps,
 ): Promise<void> {
   const { state, colors, fixedInput, ctx, println, requestRender, formatResponse, assistantPrefix } = deps;
+  const thinkingMarkers = deps.options.thinkingMarkers;
   let out = '';
 
   if (!fixedInput) {
     for await (const chunk of stream) out += chunk;
     if (!out.trim()) return;
-    const formatted = formatResponse(out, ctx);
-    println(`${colors.reset}${assistantPrefix}${colors.reset} ${formatted}`);
+
+    if (thinkingMarkers) {
+      const { thinking, content, thinkingInProgress } = splitThinking(out, thinkingMarkers);
+      if (thinking.trim()) {
+        const box = deps.options.formatThinking
+          ? deps.options.formatThinking(thinking, ctx, thinkingInProgress)
+          : defaultFormatThinking(thinking, colors, thinkingInProgress);
+        println(box);
+        println();
+      }
+      const text = content.trim() ? content : out;
+      const formatted = formatResponse(text, ctx);
+      println(`${colors.reset}${assistantPrefix}${colors.reset} ${formatted}`);
+    } else {
+      const formatted = formatResponse(out, ctx);
+      println(`${colors.reset}${assistantPrefix}${colors.reset} ${formatted}`);
+    }
     println();
     return;
   }
@@ -59,20 +76,52 @@ async function renderStreamedResponse(
   let lastRenderedAt = 0;
   const minRenderIntervalMs = 25;
 
+  const wrap = (line: string) => wrapSingleLineForWidth(line, state.terminalWidth);
+
+  const buildLines = (): string[] => {
+    const all: string[] = [];
+
+    if (thinkingMarkers) {
+      const { thinking, content, thinkingInProgress } = splitThinking(out, thinkingMarkers);
+
+      if (thinking.trim() || thinkingInProgress) {
+        const box = deps.options.formatThinking
+          ? deps.options.formatThinking(thinking, ctx, thinkingInProgress)
+          : defaultFormatThinking(thinking, colors, thinkingInProgress);
+        box.replace(/\r\n/g, '\n').split('\n').forEach((l) => all.push(...wrap(l)));
+      }
+
+      if (!thinkingInProgress) {
+        if (thinking.trim()) all.push(''); // blank separator after closed box
+        const text = content.trim() ? content : '';
+        if (text.trim()) {
+          const formatted = formatResponse(text, ctx);
+          const rawLines = formatted.replace(/\r\n/g, '\n').split('\n');
+          rawLines[0] = `${colors.reset}${assistantPrefix}${colors.reset} ${rawLines[0]}`;
+          rawLines.forEach((l) => all.push(...wrap(l)));
+        } else {
+          // Thinking ended but content not yet arrived
+          all.push(`${colors.reset}${assistantPrefix}${colors.reset}`);
+        }
+      }
+    } else {
+      const formatted = formatResponse(out, ctx);
+      const rawLines = formatted.length > 0 ? formatted.replace(/\r\n/g, '\n').split('\n') : [''];
+      rawLines[0] = `${colors.reset}${assistantPrefix}${colors.reset} ${rawLines[0]}`;
+      rawLines.forEach((l) => all.push(...wrap(l)));
+    }
+
+    return all;
+  };
+
   const renderCurrent = (force = false) => {
     const now = Date.now();
     if (!force && now - lastRenderedAt < minRenderIntervalMs) return;
     lastRenderedAt = now;
 
-    const formatted = formatResponse(out, ctx);
-    const rawLines = formatted.length > 0 ? formatted.replace(/\r\n/g, '\n').split('\n') : [''];
-    rawLines[0] = `${colors.reset}${assistantPrefix}${colors.reset} ${rawLines[0]}`;
-    const prefixedLines = rawLines.flatMap((line) =>
-      wrapSingleLineForWidth(line, state.terminalWidth),
-    );
-
-    state.contentBuffer.splice(baseIndex, renderedLineCount, ...prefixedLines);
-    renderedLineCount = prefixedLines.length;
+    const lines = buildLines();
+    state.contentBuffer.splice(baseIndex, renderedLineCount, ...lines);
+    renderedLineCount = lines.length;
     requestRender();
   };
 
@@ -83,11 +132,10 @@ async function renderStreamedResponse(
 
   if (!out.trim()) return;
   renderCurrent(true);
-  // Record the final streamed response in rawBuffer for re-wrapping on resize
-  const finalFormatted = formatResponse(out, ctx);
-  const finalRawLines = finalFormatted.length > 0 ? finalFormatted.replace(/\r\n/g, '\n').split('\n') : [''];
-  finalRawLines[0] = `${colors.reset}${assistantPrefix}${colors.reset} ${finalRawLines[0]}`;
-  deps.recordRaw(finalRawLines.join('\n'));
+
+  // Record the final rendered output in rawBuffer for re-wrapping on resize.
+  const finalLines = buildLines();
+  deps.recordRaw(finalLines.join('\n'));
   deps.recordRaw('');
   state.contentBuffer.splice(baseIndex + renderedLineCount, 0, '');
   requestRender();

@@ -19,6 +19,55 @@ export function applyInlineMarkdown(text: string, colors: TuiColors = defaultCol
   return formatted;
 }
 
+/** Split accumulated stream text into thinking and content parts. */
+export function splitThinking(
+  text: string,
+  markers: { start: string; end: string },
+): { thinking: string; content: string; thinkingInProgress: boolean } {
+  const si = text.indexOf(markers.start);
+  if (si === -1) return { thinking: '', content: text, thinkingInProgress: false };
+
+  const ei = text.indexOf(markers.end, si + markers.start.length);
+  if (ei === -1) {
+    return {
+      thinking: text.slice(si + markers.start.length),
+      content: '',
+      thinkingInProgress: true,
+    };
+  }
+  return {
+    thinking: text.slice(si + markers.start.length, ei),
+    content: text.slice(ei + markers.end.length),
+    thinkingInProgress: false,
+  };
+}
+
+const PADDING = '  ';
+
+/**
+ * Default thinking block renderer.
+ * Produces a dim box with 2-space padding on each content line.
+ * When `inProgress` is true the footer line is omitted (box still open).
+ */
+export function defaultFormatThinking(
+  content: string,
+  colors: TuiColors,
+  inProgress: boolean,
+): string {
+  const trimmed = content.trim();
+  if (!trimmed) return inProgress ? `${colors.bright}${colors.gray}${PADDING}╭─ thinking...${colors.reset}` : '';
+
+  const header = `${colors.bright}${colors.gray}${PADDING}╭─ thinking ${'─'.repeat(3)}${colors.reset}`;
+  const innerLines = trimmed
+    .split('\n')
+    .map((line) => `${colors.bright}${colors.gray}${PADDING}│ ${line}${colors.reset}`);
+  const footer = inProgress
+    ? `${colors.bright}${colors.gray}${PADDING}│${colors.reset}`
+    : `${colors.bright}${colors.gray}${PADDING}╰${'─'.repeat(14)}${colors.reset}`;
+
+  return [header, ...innerLines, footer].join('\n');
+}
+
 export function defaultFormatResponse(response: string, ctx: TuiContext): string {
   const { colors } = ctx;
   const lines = response.split('\n');
