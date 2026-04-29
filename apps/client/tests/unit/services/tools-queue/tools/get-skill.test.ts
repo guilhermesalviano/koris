@@ -85,14 +85,14 @@ describe('executeGetSkill', () => {
     expect(result.result).toBe('plain skill content');
   });
 
-  it('truncates result to 5000 characters', async () => {
-    mockReadFile.mockResolvedValue('a'.repeat(6000));
+  it('truncates result to 20000 characters', async () => {
+    mockReadFile.mockResolvedValue('a'.repeat(21000));
 
     const result = await executeGetSkill(mockLogger, {
       skill_name: 'big',
       skill_path: 'big',
     });
 
-    expect((result.result ?? '').length).toBe(5000);
+    expect((result.result ?? '').length).toBe(20000);
   });
 });

@@ -222,7 +222,7 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     return {
       toolName: 'curl_request',
       success: httpStatus >= 200 && httpStatus < 300,
-      result: `${output}`.slice(0, 5000),
+      result: `${output}`.slice(0, 20000),
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);

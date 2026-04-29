@@ -64,7 +64,7 @@ async function renderStreamedResponse(
         println(box);
         println();
       }
-      const text = content.trim() ? content : out;
+      const text = content.trim() ? content : '';
       const formatted = formatResponse(text, ctx);
       println(`${colors.reset}${assistantPrefix}${colors.reset} ${formatted}`);
     } else {

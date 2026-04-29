@@ -41,7 +41,7 @@ async function executorWorker(
         : `Tool: ${r.toolName}, Success: ${r.success}, Error: ${r.error}`
     )
     .join('\n');
-  ctx.logger.info(`Tool results: ${toolResults}`);
+  ctx.logger.info(`Tool results: ${JSON.stringify(toolCalls)}`);
 
   const synthesisPrompt = replacePlaceholders(TOOLS_RESULT_PROMPT, { v1: userMessage, v2: toolResults });
   const response = await messageProvider(
@@ -51,7 +51,6 @@ async function executorWorker(
     ctx.options,
     messageHistory
   );
-  ctx.logger.info(`AI response is: ${response}`);
 
   const normalizedResponse = normalizeResponse(response);
   const nextToolCalls = extractToolCalls(normalizedResponse, ctx.logger);

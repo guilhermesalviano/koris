@@ -35,7 +35,7 @@ async function messageProviderStream(
 
   const chatRequest = payload as AIChatRequest;
 
-  // Stream directly in TUI when using Ollama.
+  // Stream directly in TUI for the active AI provider
   if (channel === 'tui') {
     const thinkRequest: AIChatRequest = { ...chatRequest, think: true };
     const stream = provider.chatStream(thinkRequest, { signal: options?.signal });
