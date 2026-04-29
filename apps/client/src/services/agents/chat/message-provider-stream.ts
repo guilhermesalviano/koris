@@ -1,14 +1,15 @@
 import { ILogger } from "../../../infrastructure/logger";
 import { AIChatRequest } from "../../../types/provider";
 import { escapeTelegramMarkdown, isAbortError } from "../../../utils/telegram";
+import { SkillsRepository } from "../../../repositories/skills";
 import { PromptRepositoryFactory } from "../../../repositories/prompt";
 import { getAIProvider } from "../../providers";
 import { ToolCall } from "../../../types/tools";
 import { DatabaseServiceFactory } from "../../../infrastructure/db-sqlite";
+import { ProcessOptions } from "../../../types/agents";
 import type { Message } from "../../../entities/message";
 
 type ProcessedMessage = string | ToolCall[] | AsyncGenerator<string>;
-type ProcessOptions = { signal?: AbortSignal, toolsEnabled?: boolean };
 
 async function messageProviderStream(
   logger: ILogger,
@@ -18,16 +19,24 @@ async function messageProviderStream(
   messageHistory?: Message[]
 ): Promise<ProcessedMessage> {
   const provider = getAIProvider({ logger });
+  const skillsRepository = new SkillsRepository(logger);
+  const skills = skillsRepository.get();
+
   const db = DatabaseServiceFactory.create();
   const promptRepository = PromptRepositoryFactory.create(db);
-  const historyMessages = messageHistory?.map(m => ({ role: m.role, content: m.content }));
-  const payload = promptRepository.build({ userMessage: message, channel, messageHistory: historyMessages });
+  const messagesHistory = messageHistory?.map(m => ({ role: m.role, content: m.content }));
+  const payload = promptRepository.build({
+    userMessage: message,
+    channel,
+    skills,
+    toolsEnabled: options?.toolsEnabled,
+    messageHistory: messagesHistory,
+  });
 
-  // Cast MessagePayload to AIChatRequest (compatible types)
   const chatRequest = payload as AIChatRequest;
 
   // Stream directly in TUI when using Ollama.
-  if (channel === 'tui' && provider.name === 'ollama') {
+  if (channel === 'tui') {
     const thinkRequest: AIChatRequest = { ...chatRequest, think: true };
     const stream = provider.chatStream(thinkRequest, { signal: options?.signal });
 

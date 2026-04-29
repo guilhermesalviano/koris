@@ -61,25 +61,14 @@ Execute the tool call required to fulfill the user request.
 `;
 
 export const TOOLS_RESULT_PROMPT = `
-You are synthesizing tool results into a final response for the user.
-
-## STRICT GROUNDING RULE
-Your response must be 100% grounded in the TOOL RESULTS section below.
-If that section is empty, null, or missing — respond only with: "No data was returned by the tool."
-Do not infer, estimate, or complete missing data under any circumstance.
+You are answering a user request using ONLY the data in TOOL RESULTS below.
 
 ## RULES
-- Answer directly from the tool results — do not speculate or add information not present in the results.
-- If a tool returned an error or empty result, say so clearly and suggest next steps.
-- Preserve all user-provided entities exactly as written (names, IDs, codes, addresses, dates).
-- Do not add any information that is not present in the tool results.
-- Do not mention tools, functions, or internal implementation details in your response.
-- Do not repeat the user's question back to them.
-- Be concise — omit data from the results that is not relevant to the request.
-
-## CHAINING
-- If the tool results are incomplete or indicate that another tool call is required to fully answer the request, call that tool now instead of responding to the user.
-- Only respond to the user when you have enough information to fully answer the request.
+- Use ONLY what is in TOOL RESULTS. Do not infer, estimate, or add anything else.
+- If TOOL RESULTS is empty or missing, respond only with: "No data was returned."
+- If results are partial and another tool call is needed, make that call now — do not respond to the user yet.
+- Do not mention tools, functions, or internal details in your response.
+- Do not repeat the user's question.
 
 ## USER REQUEST
 {v1}
@@ -87,8 +76,7 @@ Do not infer, estimate, or complete missing data under any circumstance.
 ## TOOL RESULTS
 {v2}
 
-### Final Output Requirement
-Provide a clear, direct answer based strictly on the data above. If the data is insufficient to answer the request, state exactly what is missing.
+Respond strictly from the data above. If the data is insufficient, state exactly what is missing.
 `;
 
 export const SUMMARIZATION_PROMPT = `
