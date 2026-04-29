@@ -3,7 +3,7 @@ import { handleCommand, isCommand, getAvailableCommands } from '../../services/a
 import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
 import { AgentHandlerFactory } from '../../services/agents/handler';
-import { THINK_START, THINK_END } from '../../constants/thinking';
+import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../constants/thinking';
 
 const COMMAND_DESCRIPTIONS: Record<string, string> = {
   '/help':   'show available commands',
@@ -74,6 +74,10 @@ export function startTUI(params: { logger: ILogger }): void {
 
     // Thinking block markers — emitted by the Ollama provider when think:true
     thinkingMarkers: { start: THINK_START, end: THINK_END },
+
+    // Resets rendering anchor after tool execution so the AI response always
+    // appears below progress messages (Learning phase / Execution phase).
+    responseAnchor: RESPONSE_ANCHOR,
 
     // Format AI markdown responses with better visual hierarchy
     formatResponse: (response, ctx) => {

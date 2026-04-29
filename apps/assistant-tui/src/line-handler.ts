@@ -45,10 +45,14 @@ async function renderStreamedResponse(
 ): Promise<void> {
   const { state, colors, fixedInput, ctx, println, requestRender, formatResponse, assistantPrefix } = deps;
   const thinkingMarkers = deps.options.thinkingMarkers;
+  const responseAnchor = deps.options.responseAnchor;
   let out = '';
 
   if (!fixedInput) {
-    for await (const chunk of stream) out += chunk;
+    for await (const chunk of stream) {
+      if (responseAnchor && chunk === responseAnchor) continue;
+      out += chunk;
+    }
     if (!out.trim()) return;
 
     if (thinkingMarkers) {
@@ -71,7 +75,7 @@ async function renderStreamedResponse(
     return;
   }
 
-  const baseIndex = state.contentBuffer.length;
+  let baseIndex = state.contentBuffer.length;
   let renderedLineCount = 0;
   let lastRenderedAt = 0;
   const minRenderIntervalMs = 25;
@@ -126,6 +130,36 @@ async function renderStreamedResponse(
   };
 
   for await (const chunk of stream) {
+    // RESPONSE_ANCHOR: tool execution completed; reset the rendering anchor
+    // to below any progress messages so the final response appears after them.
+    if (responseAnchor && chunk === responseAnchor) {
+      // Commit current state (thinking box) — strip the empty placeholder if present.
+      if (thinkingMarkers && out) {
+        const { thinking, thinkingInProgress } = splitThinking(out, thinkingMarkers);
+        if (thinking.trim() && !thinkingInProgress) {
+          const box = deps.options.formatThinking
+            ? deps.options.formatThinking(thinking, ctx, false)
+            : defaultFormatThinking(thinking, colors, false);
+          const finalLines: string[] = [];
+          box.replace(/\r\n/g, '\n').split('\n').forEach((l) => finalLines.push(...wrap(l)));
+          finalLines.push(''); // blank after thinking box
+          state.contentBuffer.splice(baseIndex, renderedLineCount, ...finalLines);
+          renderedLineCount = finalLines.length;
+        } else {
+          renderCurrent(true);
+        }
+      } else {
+        renderCurrent(true);
+      }
+
+      // Move anchor to end of buffer (after progress lines).
+      baseIndex = state.contentBuffer.length;
+      renderedLineCount = 0;
+      out = '';
+      requestRender();
+      continue;
+    }
+
     out += chunk;
     renderCurrent();
   }

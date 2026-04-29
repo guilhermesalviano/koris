@@ -70,4 +70,11 @@ export interface StartTuiOptions {
   /** Optional custom renderer for the thinking block. Receives the raw thinking text,
    *  TuiContext, and whether thinking is still in progress (stream not closed yet). */
   formatThinking?: (content: string, ctx: TuiContext, inProgress: boolean) => string;
+  /**
+   * When set, receiving this sentinel in the stream signals that tool execution has
+   * completed and the AI final response is about to start. The renderer resets its
+   * content anchor to below any progress messages that were printed during tool execution,
+   * ensuring the final response always appears AFTER the progress lines.
+   */
+  responseAnchor?: string;
 }
