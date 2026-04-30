@@ -1,5 +1,5 @@
 import pLimit from "p-limit";
-import { COMMAND_MAP } from "./tools";
+import { COMMAND_MAP } from "../../tools";
 import type { AIAgentRequest, IToolsQueue, ToolCall, ToolResult } from "../../../../types/tools";
 import type { ILogger } from "../../../../infrastructure/logger";
 

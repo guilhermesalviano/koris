@@ -1,7 +1,7 @@
-import { DatabaseServiceFactory } from '../../../../../../infrastructure/db-sqlite';
-import { HeartbeatRepositoryFactory } from '../../../../../../repositories/heartbeat';
-import type { ILogger } from '../../../../../../infrastructure/logger';
-import type { ToolResult } from '../../../../../../types/tools';
+import { DatabaseServiceFactory } from '../../../../infrastructure/db-sqlite';
+import { HeartbeatRepositoryFactory } from '../../../../repositories/heartbeat';
+import type { ILogger } from '../../../../infrastructure/logger';
+import type { ToolResult } from '../../../../types/tools';
 import { getRequiredStringArg } from '../shared/runtime';
 
 export async function deleteTask(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {

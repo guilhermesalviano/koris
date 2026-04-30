@@ -1,10 +1,10 @@
-import { DatabaseServiceFactory } from '../../../../../../infrastructure/db-sqlite';
-import { HeartbeatRepositoryFactory } from '../../../../../../repositories/heartbeat';
-import { Heartbeat } from '../../../../../../entities/heartbeat';
-import type { ILogger } from '../../../../../../infrastructure/logger';
-import type { ToolResult } from '../../../../../../types/tools';
+import { DatabaseServiceFactory } from '../../../../infrastructure/db-sqlite';
+import { HeartbeatRepositoryFactory } from '../../../../repositories/heartbeat';
+import { Heartbeat } from '../../../../entities/heartbeat';
+import type { ILogger } from '../../../../infrastructure/logger';
+import type { ToolResult } from '../../../../types/tools';
 import { getRequiredStringArg } from '../shared/runtime';
-import { isValidCronExpression } from '../../../../../../utils/heartbeat';
+import { isValidCronExpression } from '../../../../utils/heartbeat';
 
 export async function setTask(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const task = getRequiredStringArg(args, 'task');
