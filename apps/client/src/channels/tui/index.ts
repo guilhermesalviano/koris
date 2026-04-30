@@ -30,7 +30,7 @@ function applyInlineMarkdown(text: string, colors: {
 }) {
   let formatted = text.replace(/\*\*(.+?)\*\*/g, `${colors.bright}$1${colors.reset}`);
   formatted = formatted.replace(/__(.+?)__/g, `${colors.bright}$1${colors.reset}`);
-  formatted = formatted.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, `${colors.dim}$1${colors.reset}`);
+  formatted = formatted.replace(/(?<!\*)\*(?!\*)([^*\n]*\w[^*\n]*)(?<!\*)\*(?!\*)/g, `${colors.dim}$1${colors.reset}`);
   formatted = formatted.replace(/`([^`]+)`/g, `${colors.yellow}$1${colors.reset}`);
   return formatted;
 }

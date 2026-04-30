@@ -7,6 +7,14 @@
   "log": {
     "LEVEL": "debug"
   },
+  "heartbeat": {
+    "ENABLED": true,
+    "ACTIVE_HOURS": {
+      "START": "08:00",
+      "END": "22:00"
+    },
+    "INTERVAL_MS": 1800000
+  },
   "telegram": {
     "BOT_TOKEN": "YOUR_BOT_TOKEN",
     "USE_POLLING": true

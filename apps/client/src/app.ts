@@ -12,8 +12,29 @@ import { LoggerFactory } from './infrastructure/logger';
 import { handleMessage } from './channels/telegram';
 import { config } from './config';
 import { AgentHandlerFactory } from './services/agents/handler';
+import { heartbeat } from './services/agents/heartbeat';
 
 const logger = LoggerFactory.create();
+
+// tests
+const date = new Date();
+heartbeat({ logger, date }).catch((error) => {
+  logger.error('Initial heartbeat failed:', error);
+});
+
+setInterval(async () => {
+  const date = new Date();
+  logger.info(`[${date.toISOString()}] Agent waking up...`);
+
+  try {
+    if (config.HEARTBEAT.ENABLED) {
+      await heartbeat({ logger, date });
+    }
+  } catch (error: any) {
+    logger.error('Agent failed:', error);
+  }
+}, config.HEARTBEAT.INTERVAL_MS);
+
 
 function hasFlag(flag: string): boolean {
   return process.argv.includes(flag) || process.argv.includes(`--${flag}`);

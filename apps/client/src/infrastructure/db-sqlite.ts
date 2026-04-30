@@ -69,6 +69,16 @@ class DatabaseService implements IDatabaseService {
    */
   private initializeSchema(): void {
     try {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS heartbeat (
+          id TEXT PRIMARY KEY,
+          task TEXT NOT NULL,
+          cron_expression TEXT NOT NULL,
+          last_run DATETIME,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
       // TODO: add topic and update after first message
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (

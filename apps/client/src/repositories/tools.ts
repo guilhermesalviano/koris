@@ -3,141 +3,198 @@ import { Skill } from '../types/skills';
 
 interface IToolsRepository {
   getAll(skills?: Skill[]): AIToolDefinition[];
-  getSkillTool(skills: Skill[]): AIToolDefinition;
-  getCurlTool(): AIToolDefinition;
 }
 
-/**
- * Repository for managing AI tool definitions
- * Handles creation and aggregation of tools for the AI provider
- */
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'] as const;
+
+function cloneTools(tools: AIToolDefinition[]): AIToolDefinition[] {
+  return tools.map(({ type, function: fn }) => ({
+    type,
+    function: { ...fn, parameters: structuredClone(fn.parameters) },
+  }));
+}
+
+function buildSkillList(skills: Skill[]): string {
+  return skills.map(s => `- ${s.name}: ${s.description}`).join('\n');
+}
+
+function skillsTool(skills: Skill[]): AIToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: 'get_skill',
+      description: `Read the complete SKILL.md documentation for a skill before executing any task that skill covers.
+Call this whenever you need implementation details, constraints, or required patterns for a task.
+Available skills:\n${buildSkillList(skills)}`,
+      parameters: {
+        type: 'object',
+        properties: {
+          skill_name: {
+            type: 'string',
+            enum: skills.map(s => s.name),
+            description: 'The skill to read documentation for.',
+          },
+          skill_path: {
+            type: 'string',
+            enum: skills.map(s => s.path),
+            description: 'Path to the skill directory containing SKILL.md.',
+          },
+        },
+        required: ['skill_name', 'skill_path'],
+      },
+    },
+  };
+}
+
+function curlTool(): AIToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: 'curl_request',
+      description:
+        'Execute HTTP requests using curl. Use only parameters explicitly required by the selected skill. Do not invent extra shell transformations.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: 'URL to request (required). Keep values exactly as required by the skill.',
+          },
+          method: {
+            type: 'string',
+            enum: HTTP_METHODS,
+            description: 'HTTP method (default: GET)',
+          },
+          headers: {
+            type: 'object',
+            description:
+              'Custom HTTP headers. Example: {"Authorization": "Bearer token", "Content-Type": "application/json"}',
+          },
+          data: {
+            type: 'string',
+            description: 'Request body for POST/PUT/PATCH. Can be JSON string or form data.',
+          },
+          follow_redirects: {
+            type: 'boolean',
+            description: 'Follow HTTP redirects (default: true)',
+          },
+          timeout: {
+            type: 'number',
+            description: 'Request timeout in seconds (default: 30)',
+          },
+          pipe: {
+            type: 'string',
+            description:
+              'Optional: pipe the response through a command. Examples: "| jq \'.fact\'", "| grep search_term", "| head -5". Useful for extracting specific data from JSON or text responses.',
+          },
+        },
+        required: ['url'],
+      },
+    },
+  };
+}
+
+function reminderTool(): AIToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: 'set_reminder',
+      description:
+        'Save a reminder or scheduled task for the user. Call this when the user asks to be reminded about something or wants to schedule a recurring task. Extract the appropriate cron expression from natural language (e.g. "every day at 9am" → "0 9 * * *", "every Monday morning" → "0 9 * * 1").',
+      parameters: {
+        type: 'object',
+        properties: {
+          task: {
+            type: 'string',
+            description: 'Clear description of what the user wants to be reminded about or the task to schedule.',
+          },
+          cron_expression: {
+            type: 'string',
+            description:
+              'Standard 5-field cron expression derived from the user\'s request. Format: "minute hour day-of-month month day-of-week". Examples: "0 9 * * *" (daily at 9am), "0 9 * * 1" (every Monday at 9am), "0 8 1 * *" (1st of every month at 8am), "*/30 * * * *" (every 30 minutes).',
+          },
+        },
+        required: ['task', 'cron_expression'],
+      },
+    },
+  };
+}
+
+function listRemindersTool(): AIToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: 'list_reminders',
+      description: 'List all saved reminders and scheduled tasks. Call this when the user asks to see, check, or review their reminders.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  };
+}
+
+function updateReminderTool(): AIToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: 'update_reminder',
+      description: 'Update an existing reminder. Call this when the user wants to change the description or schedule of a reminder. Use list_reminders first if the ID is not known.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'The UUID of the reminder to update.',
+          },
+          task: {
+            type: 'string',
+            description: 'New description for the reminder (optional).',
+          },
+          cron_expression: {
+            type: 'string',
+            description: 'New 5-field cron expression for the schedule (optional). Examples: "0 9 * * *" (daily at 9am), "0 9 * * 1" (every Monday at 9am).',
+          },
+        },
+        required: ['id'],
+      },
+    },
+  };
+}
+
+function deleteReminderTool(): AIToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: 'delete_reminder',
+      description: 'Delete a reminder by ID. Call this when the user wants to remove or cancel a reminder. Use list_reminders first if the ID is not known.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'The UUID of the reminder to delete.',
+          },
+        },
+        required: ['id'],
+      },
+    },
+  };
+}
+
 class ToolsRepository implements IToolsRepository {
-  /**
-   * Get all available tools
-   * Includes: get_skill (for skills), curl_request (for HTTP)
-   */
   getAll(skills?: Skill[]): AIToolDefinition[] {
-    // this.logger.debug('Building AI tools', { skillCount: skills?.length ?? 0 });
+    const tools: AIToolDefinition[] = [];
 
-    let tools: AIToolDefinition[] = [];
+    if (skills?.length) tools.push(skillsTool(skills));
+    tools.push(curlTool());
+    tools.push(reminderTool());
+    tools.push(listRemindersTool());
+    tools.push(updateReminderTool());
+    tools.push(deleteReminderTool());
 
-    if (skills && skills.length > 0) {
-      tools.push(this.createSkillsTool(skills));
-    }
-
-    // Always add curl tool for HTTP requests
-    tools.push(this.createCurlTool());
-
-    // Clone parameters to avoid mutation
-    const result = tools.map((tool) => ({
-      type: tool.type,
-      function: {
-        ...tool.function,
-        parameters: structuredClone(tool.function.parameters),
-      },
-    }));
-
-    // this.logger.debug('AI tools built', { toolCount: result.length, toolNames: result.map(t => t.function.name) });
-    return result;
-  }
-
-  /**
-   * Get get_skill tool for loading skill definitions
-   */
-  getSkillTool(skills: Skill[]): AIToolDefinition {
-    return this.createSkillsTool(skills);
-  }
-
-  /**
-   * Get curl_request tool for HTTP calls
-   */
-  getCurlTool(): AIToolDefinition {
-    return this.createCurlTool();
-  }
-
-  /**
-   * Create get_skill tool definition
-   * Used by AI to read skill documentation from SKILL.md files
-   */
-  private createSkillsTool(skills: Skill[]): AIToolDefinition {
-    const skillDescriptions = skills
-      .map(s => `- ${s.name}: ${s.description}`)
-      .join('\n');
-
-    return {
-      type: 'function',
-      function: {
-        name: 'get_skill',
-        description: `Read the complete SKILL.md documentation for a skill before executing any task that skill covers.
-  Call this whenever you need implementation details, constraints, or required patterns for a task.
-  Available skills:\n${skillDescriptions}`,
-        parameters: {
-          type: 'object',
-          properties: {
-            skill_name: {
-              type: 'string',
-              enum: skills.map(s => s.name),
-              description: 'The skill to read documentation for.',
-            },
-            skill_path: {
-              type: 'string',
-              enum: skills.map(s => s.path),
-              description: 'Path to the skill directory containing SKILL.md.',
-            },
-          },
-          required: ['skill_name', 'skill_path'],
-        },
-      },
-    };
-  }
-
-  /**
-   * Create curl_request tool definition
-   * Used by AI to make HTTP requests to APIs
-   */
-  private createCurlTool(): AIToolDefinition {
-    return {
-      type: 'function',
-      function: {
-        name: 'curl_request',
-        description: 'Execute HTTP requests using curl. Use only parameters explicitly required by the selected skill. Do not invent extra shell transformations.',
-        parameters: {
-          type: 'object',
-          properties: {
-            url: {
-              type: 'string',
-              description: 'URL to request (required). Keep values exactly as required by the skill.',
-            },
-            method: {
-              type: 'string',
-              enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
-              description: 'HTTP method (default: GET)',
-            },
-            headers: {
-              type: 'object',
-              description: 'Custom HTTP headers. Example: {"Authorization": "Bearer token", "Content-Type": "application/json"}',
-            },
-            data: {
-              type: 'string',
-              description: 'Request body for POST/PUT/PATCH. Can be JSON string or form data.',
-            },
-            follow_redirects: {
-              type: 'boolean',
-              description: 'Follow HTTP redirects (default: true)',
-            },
-            timeout: {
-              type: 'number',
-              description: 'Request timeout in seconds (default: 30)',
-            },
-            pipe: {
-              type: 'string',
-              description: 'Optional: pipe the response through a command. Examples "| jq \'.fact\'", "| grep search_term", "| head -5". Useful for extracting specific data from JSON or text responses.',
-            },
-          },
-          required: ['url'],
-        },
-      },
-    };
+    return cloneTools(tools);
   }
 }
 
