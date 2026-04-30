@@ -2,17 +2,16 @@ import { config } from "../../config";
 import { ILogger } from "../../infrastructure/logger";
 import { DatabaseServiceFactory } from "../../infrastructure/db-sqlite";
 import { HeartbeatRepositoryFactory } from "../../repositories/heartbeat";
-import { IAgentHandler } from "./handler";
 import { isCronDue } from "../../utils/heartbeat";
+import { messageProvider } from "../agents/chat/message-provider";
 
 interface HeartbeatProps {
   logger: ILogger;
-  handler: IAgentHandler;
   date: Date;
 }
 
 async function heartbeat(props: HeartbeatProps) {
-  const { logger, handler, date } = props;
+  const { logger, date } = props;
 
   const [ start, end ] = activeHoursHelper();
 
@@ -41,12 +40,11 @@ async function heartbeat(props: HeartbeatProps) {
     logger.info(`Heartbeat: Executing task "${task.id}" — ${task.task}`);
 
     try {
-      const result = await handler.handle(task.task);
+      // refactor - usar um novo tipo de manager para heartbeat tasks, que não precisa de message history, channel, etc. Talvez só passar o texto da task e um contexto com logger.
+      const result = await messageProvider(logger, task.task, "tui", { toolsEnabled: true }, []);
 
-      if (typeof result !== 'string' && result != null && Symbol.asyncIterator in (result as object)) {
-        // Drain the async generator; the AgentHandler persists the conversation internally.
-        for await (const _chunk of result as AsyncGenerator<string>) { /* drain */ }
-      }
+      // response can be a reminder in Telegram, summarization of my Emails, a document of estudy from something(create a file to it.) 
+      logger.info(`Heartbeat results: ${result}`);
 
       repo.updateLastRun(task.id, date);
       logger.info(`Heartbeat: Task "${task.id}" completed successfully.`);

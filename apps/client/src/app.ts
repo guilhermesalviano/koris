@@ -12,14 +12,13 @@ import { LoggerFactory } from './infrastructure/logger';
 import { handleMessage } from './channels/telegram';
 import { config } from './config';
 import { AgentHandlerFactory } from './services/agents/handler';
-import { heartbeat } from './services/agents/heartbeat';
+import { heartbeat } from './services/sub-agents/heartbeat';
 
 const logger = LoggerFactory.create();
-const handler = AgentHandlerFactory.create(logger, 'tui');
 
 // tests
 const date = new Date();
-heartbeat({ logger, handler, date }).catch((error) => {
+heartbeat({ logger, date }).catch((error) => {
   logger.error('Initial heartbeat failed:', error);
 });
 
@@ -29,10 +28,10 @@ setInterval(async () => {
 
   try {
     if (config.HEARTBEAT.ENABLED) {
-      await heartbeat({ logger, handler, date });
+      await heartbeat({ logger, date });
     }
   } catch (error: any) {
-    logger.error('Agent failed:', error);
+    logger.error('Heartbeat failed:', error);
   }
 }, config.HEARTBEAT.INTERVAL_MS);
 
@@ -41,10 +40,16 @@ function hasFlag(flag: string): boolean {
   return process.argv.includes(flag) || process.argv.includes(`--${flag}`);
 }
 
+/**
+ * Todo: make it run in background
+ * - Run a NEW command to connect via tui or web;
+ * - Always connect to channels(telegram) if token is provided;
+ */
 function startCliMode(): void {
   const tuiMode = hasFlag("tui");
   const telegramMode = hasFlag("telegram");
   const webMode = hasFlag("web") || (!tuiMode && !telegramMode);
+  const handler = AgentHandlerFactory.create(logger, tuiMode ? 'tui' : telegramMode ? 'telegram' : 'web');
 
   if (!tuiMode && !telegramMode && !webMode) {
     logger.error("No mode provided.");

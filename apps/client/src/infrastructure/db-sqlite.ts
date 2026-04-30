@@ -39,7 +39,7 @@ class DatabaseService implements IDatabaseService {
   private verbose: boolean;
 
   constructor(options: DatabaseOptions = {}) {
-    this.filepath = options.filepath || path.join(config.BASE_DIR, 'temp', 'database.db');
+    this.filepath = options.filepath || path.join(config.BASE_DIR, 'memory', 'database.db');
     this.verbose = options.verbose ?? config.ENVIRONMENT === 'development';
     
     try {
