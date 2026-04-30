@@ -1,4 +1,4 @@
-import { CommandFn } from '../../../types/tools';
+import { CommandFn } from '../../../../../types/tools';
 import { executeCurl } from './curl-request';
 import { executeCommand } from './execute-command';
 import { executeGetSkill } from './get-skill';

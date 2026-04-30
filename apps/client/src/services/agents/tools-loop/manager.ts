@@ -1,7 +1,7 @@
 import { messageProvider } from '../chat/message-provider';
 import { messageProviderStream } from '../chat/message-provider-stream';
 import { extractToolCalls, normalizeResponse } from '../../../utils/tool-calls';
-import { ToolsQueue } from '../../tools-queue';
+import { ToolsQueue } from './tools-queue';
 import { executorWorker } from './executor-worker';
 import { learnerWorker } from './learner-worker';
 import { FIRST_PROMPT_HELPER, SKILL_READY_PROMPT } from '../../../constants';

@@ -1,8 +1,8 @@
-import { ILogger } from "../../../../infrastructure/logger";
+import { ILogger } from "../../../../../../infrastructure/logger";
 import { readFile } from 'fs/promises';
 import { join, resolve, sep } from 'node:path';
-import { ToolCall, ToolResult } from "../../../../types/tools";
-import { config } from "../../../../config";
+import { ToolCall, ToolResult } from "../../../../../../types/tools";
+import { config } from "../../../../../../config";
 import matter from 'gray-matter';
 
 const BASE_SKILLS_DIR = resolve(config.BASE_DIR, 'skills');

@@ -1,7 +1,7 @@
-import { ILogger } from "../../../../infrastructure/logger";
+import { ILogger } from "../../../../../../infrastructure/logger";
 import { URL } from 'node:url';
 import { spawn } from 'node:child_process';
-import { ToolResult } from "../../../../types/tools";
+import { ToolResult } from "../../../../../../types/tools";
 import {
   execFilePromise,
   getOptionalBooleanArg,

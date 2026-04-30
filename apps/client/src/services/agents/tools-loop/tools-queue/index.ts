@@ -1,19 +1,7 @@
 import pLimit from "p-limit";
-import { ToolCall, ToolResult } from "../../types/tools";
 import { COMMAND_MAP } from "./tools";
-import type { ILogger } from "../../infrastructure/logger";
-
-interface AIAgentRequest {
-  model?: string;
-}
-
-interface IToolsQueue {
-  handle(
-    tools: ToolCall[],
-    _agent: AIAgentRequest,
-    signal: AbortSignal,
-  ): Promise<ToolResult[]>;
-}
+import type { AIAgentRequest, IToolsQueue, ToolCall, ToolResult } from "../../../../types/tools";
+import type { ILogger } from "../../../../infrastructure/logger";
 
 class ToolsQueue implements IToolsQueue {
   constructor(
