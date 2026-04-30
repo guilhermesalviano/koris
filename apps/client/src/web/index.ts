@@ -1,9 +1,9 @@
 import express, { type Request, type Response, type Application } from 'express';
-import { healthCheck } from '../../services/provider-health-service';
-import { ILogger } from '../../infrastructure/logger';
-import { config } from '../../config';
+import { healthCheck } from '../services/provider-health-service';
+import { ILogger } from '../infrastructure/logger';
+import { config } from '../config';
 import path from 'node:path';
-import { IAgentHandler } from '../../services/agents/handler';
+import { IAgentHandler } from '../services/agents/handler';
 
 interface WebServerOptions {
   logger: ILogger;

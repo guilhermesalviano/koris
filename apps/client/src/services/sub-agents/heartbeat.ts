@@ -43,7 +43,7 @@ async function heartbeat(props: HeartbeatProps) {
       // refactor - usar um novo tipo de manager para heartbeat tasks, que não precisa de message history, channel, etc. Talvez só passar o texto da task e um contexto com logger.
       const result = await messageProvider(logger, task.task, "tui", { toolsEnabled: true }, []);
 
-      // response can be a reminder in Telegram, summarization of my Emails, a document of estudy from something(create a file to it.) 
+      // response can be a reminder in Telegram, summarization of my Emails, a document of estudy from something(create a file to keep it in temp) 
       logger.info(`Heartbeat results: ${result}`);
 
       repo.updateLastRun(task.id, date);
