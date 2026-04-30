@@ -38,8 +38,30 @@ function matchesCronField(field: string, value: number): boolean {
 }
 
 /**
- * Returns true when `date` falls within the 5-field cron schedule.
- * Field order: minute hour day-of-month month day-of-week (0=Sun … 6=Sat)
+ * Returns true for patterns that fire every minute — minute field is '*' or '* /1'.
+ * These are never allowed as scheduled tasks.
+ */
+export function isEveryMinute(expr: string): boolean {
+  const [minuteF] = expr.trim().split(/\s+/);
+  return minuteF === '*' || minuteF === '*/1';
+}
+
+/**
+ * Returns true when the expression has a specific hour (hour field != '*'),
+ * OR when it is an explicit repeat-by-minutes schedule (e.g. '* /30 * * * *').
+ * A plain wildcard hour without a minute-step means "no hour provided" -> false.
+ */
+export function hasSpecificHour(expr: string): boolean {
+  const [minuteF, hourF] = expr.trim().split(/\s+/);
+  if (hourF !== '*') return true;
+  // Allow */N (N >= 2) in the minute field — it is a deliberate repeat specification.
+  return /^\*\/([2-9]|[1-9]\d+)$/.test(minuteF);
+}
+
+
+/**
+ * Returns true when "date" falls within the 5-field cron schedule.
+ * Field order: minute hour day-of-month month day-of-week (0=Sun ... 6=Sat)
  */
 export function matchesCron(expr: string, date: Date): boolean {
   const [minuteF, hourF, domF, monthF, dowF] = expr.trim().split(/\s+/);
@@ -53,8 +75,8 @@ export function matchesCron(expr: string, date: Date): boolean {
 }
 
 /**
- * Returns true if the cron expression has a scheduled minute between `since`
- * (exclusive) and `now` (inclusive), meaning the task is overdue.
+ * Returns true if the cron expression has a scheduled minute between "since"
+ * (exclusive) and "now" (inclusive), meaning the task is overdue.
  */
 export function isCronDue(expr: string, now: Date, since: Date): boolean {
   const sinceMs = since.getTime();

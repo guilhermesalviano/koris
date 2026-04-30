@@ -4,7 +4,7 @@ import { Heartbeat } from '../../../../entities/heartbeat';
 import type { ILogger } from '../../../../infrastructure/logger';
 import type { ToolResult } from '../../../../types/tools';
 import { getRequiredStringArg } from '../shared/runtime';
-import { isValidCronExpression } from '../../../../utils/heartbeat';
+import { isValidCronExpression, isEveryMinute, hasSpecificHour } from '../../../../utils/heartbeat';
 
 export async function setTask(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const task = getRequiredStringArg(args, 'task');
@@ -23,6 +23,22 @@ export async function setTask(logger: ILogger, args: Record<string, unknown>): P
       toolName: 'set_task',
       success: false,
       error: `Invalid cron expression: "${cronExpression}". Expected 5-field standard cron format (e.g. "0 9 * * 1" for every Monday at 9am).`,
+    };
+  }
+
+  if (isEveryMinute(cronExpression)) {
+    return {
+      toolName: 'set_task',
+      success: false,
+      error: 'Tasks that run every minute are not allowed. Please provide a less frequent schedule.',
+    };
+  }
+
+  if (!hasSpecificHour(cronExpression)) {
+    return {
+      toolName: 'set_task',
+      success: false,
+      error: 'No specific hour was provided. Ask the user what hour they want this task to run (e.g. "0 9 * * *" for 9am daily).',
     };
   }
 
