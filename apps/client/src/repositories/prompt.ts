@@ -49,7 +49,7 @@ class PromptRepository {
    * Build complete prompt payload for AI provider
    */
   build(params: BuildPromptParams): AIChatRequest {
-    const messages = this.buildMessages(params);
+    const messages = this.buildHistory(params);
     const tools = this.buildTools(params);
 
     return { messages, tools };
@@ -58,11 +58,11 @@ class PromptRepository {
   /**
    * Build all messages (system + history + user)
    */
-  private buildMessages(params: BuildPromptParams): Message[] {
+  private buildHistory({ channel, userMessage, messageHistory }: BuildPromptParams): Message[] {
     return [
-      ...this.buildSystemPrompt(params.channel),
-      ...(params.messageHistory || []),
-      this.buildUserMessage(params.userMessage),
+      ...this.buildSystemPrompt(channel),
+      ...(messageHistory || []),
+      this.buildUserMessage(userMessage),
     ];
   }
 
@@ -148,14 +148,14 @@ class PromptRepository {
   /**
    * Build tools if enabled
    */
-  private buildTools(params: BuildPromptParams): AIToolDefinition[] | undefined {
-    const toolsEnabled = params.toolsEnabled ?? this.config.includeTools ?? true;
+  private buildTools({ skills, toolsEnabled }: BuildPromptParams): AIToolDefinition[] | undefined {
+    const toolsEnabledFinal = toolsEnabled ?? this.config.includeTools ?? true;
     
-    if (!toolsEnabled) {
+    if (!toolsEnabledFinal) {
       return undefined;
     }
 
-    return this.toolsRepository.getAll(params.skills);
+    return this.toolsRepository.getAll(skills);
   }
 
   /**

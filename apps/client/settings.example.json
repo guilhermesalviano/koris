@@ -1,4 +1,5 @@
 {
+  "TEMP_FOLDER": "./temp",
   "PORT": 3000,
   "TIMEZONE": "America/Sao_Paulo",
   "gmail": {

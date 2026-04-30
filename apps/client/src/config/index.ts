@@ -41,6 +41,7 @@ export const config = {
     GATEWAY_HOST: get('gmail.GATEWAY_HOST', 'http://localhost:3000'),
   },
   BASE_DIR:    process.cwd(),
+  TEMP_FOLDER: get('TEMP_FOLDER', './temp'),
   HEARTBEAT: {
     ENABLED: get('heartbeat.ENABLED', 'true') === 'true',
     INTERVAL_MS: Number(get('heartbeat.INTERVAL_MS', (30 * 60 * 1000).toString())), // Default to 30 minutes
