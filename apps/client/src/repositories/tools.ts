@@ -100,7 +100,7 @@ function createTaskTool(): AIToolDefinition {
     function: {
       name: 'set_task',
       description:
-        'Save a reminder or scheduled task for the user. Call this when the user asks to be reminded about something or wants to schedule a recurring task. Extract the appropriate cron expression from natural language (e.g. "every day at 9am" → "0 9 * * *", "every Monday morning" → "0 9 * * 1").',
+        'Save a reminder or scheduled task for the user. DEFAULT BEHAVIOR: always create a one-time task by pinning the exact minute, hour, day-of-month, and month — NEVER use * for day-of-month or month unless the user explicitly asks for a recurring schedule (e.g. "every day", "every Monday", "every month"). Only use wildcard (*) fields when the user clearly requests a recurring pattern.',
       parameters: {
         type: 'object',
         properties: {
@@ -111,7 +111,10 @@ function createTaskTool(): AIToolDefinition {
           cron_expression: {
             type: 'string',
             description:
-              'Standard 5-field cron expression derived from the user\'s request. Format: "minute hour day-of-month month day-of-week". Examples: "0 9 * * *" (daily at 9am), "0 9 * * 1" (every Monday at 9am), "0 8 1 * *" (1st of every month at 8am), "*/30 * * * *" (every 30 minutes).',
+              'Standard 5-field cron expression. Format: "minute hour day-of-month month day-of-week". ' +
+              'DEFAULT — one-time: always pin minute, hour, day-of-month and month to specific values (e.g. "30 9 15 6 *" = once on June 15th at 9:30am). ' +
+              'ONLY use wildcards (*) when the user explicitly requests recurrence: ' +
+              '"0 9 * * *" (every day at 9am), "0 9 * * 1" (every Monday at 9am), "0 8 1 * *" (1st of every month at 8am), "*/30 * * * *" (every 30 min).',
           },
         },
         required: ['task', 'cron_expression'],
