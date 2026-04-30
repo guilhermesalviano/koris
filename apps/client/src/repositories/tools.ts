@@ -36,7 +36,6 @@ Available skills:\n${buildSkillList(skills)}`,
           },
           skill_path: {
             type: 'string',
-            enum: skills.map(s => s.path),
             description: 'Path to the skill directory containing SKILL.md.',
           },
         },
