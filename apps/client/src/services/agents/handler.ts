@@ -10,6 +10,7 @@ import { summarizerWorker } from './summarizer';
 import { IMemoryService, MemoryServiceFactory } from '../memory-service';
 import { conversationWorker } from './conversation';
 import { MemoryType } from '../../types/memory';
+import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../constants/thinking';
 
 interface IAgentHandler {
   handle(message: unknown, options?: ProcessOptions): Promise<ProcessedMessage>;
@@ -61,9 +62,10 @@ class AgentHandler {
       yield chunk;
     }
 
-    if (fullResponse.length > 0) {
-      this.historyHelper(ask, fullResponse);
-      this.summarizerHelper(ask, fullResponse);
+    const cleanResponse = stripStreamMarkers(fullResponse);
+    if (cleanResponse.length > 0) {
+      this.historyHelper(ask, cleanResponse);
+      this.summarizerHelper(ask, cleanResponse);
     }
   }
 
@@ -99,6 +101,22 @@ class AgentHandler {
         this.logger.error('Background summarizer failed', { err })
       );
   }
+}
+
+/** Strips internal stream sentinel markers before persisting to DB. */
+function stripStreamMarkers(text: string): string {
+  const thinkPattern = new RegExp(
+    `${escapeRegex(THINK_START)}[\\s\\S]*?(?:${escapeRegex(THINK_END)}|$)`,
+    'g',
+  );
+  return text
+    .replace(thinkPattern, '')
+    .replace(new RegExp(escapeRegex(RESPONSE_ANCHOR), 'g'), '')
+    .trim();
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[\x00-\x1f\\^$.|?*+()[\]{}]/g, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
 }
 
 class AgentHandlerFactory {
