@@ -1,13 +1,13 @@
 import express, { type Request, type Response, type Application } from 'express';
 import { healthCheck } from '../../services/provider-health-service';
-
 import { ILogger } from '../../infrastructure/logger';
 import { config } from '../../config';
 import path from 'node:path';
-import { AgentHandlerFactory } from '../../services/agents/handler';
+import { IAgentHandler } from '../../services/agents/handler';
 
 interface WebServerOptions {
   logger: ILogger;
+  handler: IAgentHandler;
 }
 
 interface RateLimitEntry {
@@ -20,7 +20,7 @@ const INDEX_RATE_LIMIT_MAX_REQUESTS = 60;
 const indexRateLimitStore = new Map<string, RateLimitEntry>();
 
 function createApp(options: WebServerOptions): Application {
-  const { logger } = options;
+  const { logger, handler } = options;
   const app = express();
 
   app.use(express.json());
@@ -29,7 +29,7 @@ function createApp(options: WebServerOptions): Application {
   app.use(express.static(publicDir));
 
   app.get('/', serveIndexHandler(publicDir));
-  app.post('/api/chat', createChatHandler(logger));
+  app.post('/api/chat', createChatHandler(handler));
   app.get('/health', createHealthHandler(logger));
 
   return app;
@@ -70,9 +70,7 @@ function createHealthHandler(logger: ILogger) {
   };
 }
 
-function createChatHandler(logger: ILogger) {
-  const handler = AgentHandlerFactory.create(logger, 'web');
-
+function createChatHandler(handler: IAgentHandler) {
   return async (req: Request, res: Response) => {
     const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
     if (!message) {
@@ -144,8 +142,8 @@ function setupSseHeaders(res: Response): void {
   res.flushHeaders();
 }
 
-async function startWebServer(logger: ILogger): Promise<void> {
-  const app = createApp({ logger });
+async function startWebServer(logger: ILogger, handler: IAgentHandler): Promise<void> {
+  const app = createApp({ logger, handler });
 
   app.listen(config.PORT, () => {
     logger.info(`Server running at http://localhost:${config.PORT}`);

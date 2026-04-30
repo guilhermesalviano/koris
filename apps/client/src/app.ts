@@ -15,10 +15,11 @@ import { AgentHandlerFactory } from './services/agents/handler';
 import { heartbeat } from './services/agents/heartbeat';
 
 const logger = LoggerFactory.create();
+const handler = AgentHandlerFactory.create(logger, 'tui');
 
 // tests
 const date = new Date();
-heartbeat({ logger, date }).catch((error) => {
+heartbeat({ logger, handler, date }).catch((error) => {
   logger.error('Initial heartbeat failed:', error);
 });
 
@@ -28,7 +29,7 @@ setInterval(async () => {
 
   try {
     if (config.HEARTBEAT.ENABLED) {
-      await heartbeat({ logger, date });
+      await heartbeat({ logger, handler, date });
     }
   } catch (error: any) {
     logger.error('Agent failed:', error);
@@ -52,12 +53,11 @@ function startCliMode(): void {
   }
 
   if (tuiMode) {
-    startTUI({ logger });
+    startTUI({ logger, handler });
   }
 
   if (telegramMode) {
     logger.info("Mode: Telegram Bot\n");
-    const handler = AgentHandlerFactory.create(logger, 'telegram');
 
     const bot = initBot({
       token: config.TELEGRAM.BOT_TOKEN,
@@ -81,7 +81,7 @@ function startCliMode(): void {
 
   if (webMode) {
     logger.info("Mode: Web Server\n");
-    startWebServer(logger).catch((error) => {
+    startWebServer(logger, handler).catch((error) => {
       logger.error("Failed to start web server:", error);
       process.exit(1);
     });

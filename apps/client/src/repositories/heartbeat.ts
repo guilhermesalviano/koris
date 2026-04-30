@@ -63,6 +63,10 @@ class HeartbeatRepository implements IHeartbeatRepository {
     return this.getById(id);
   }
 
+  updateLastRun(id: string, lastRun: Date): void {
+    this.db.run(`UPDATE heartbeat SET last_run = ? WHERE id = ?`, [lastRun.toISOString(), id]);
+  }
+
   deleteById(id: string): boolean {
     const result = this.db.run(`DELETE FROM heartbeat WHERE id = ?`, [id]);
     return result.changes > 0;

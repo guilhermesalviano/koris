@@ -2,7 +2,7 @@ import { startTui } from 'assistant-tui';
 import { handleCommand, isCommand, getAvailableCommands } from '../../services/agents/commands';
 import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
-import { AgentHandlerFactory } from '../../services/agents/handler';
+import { IAgentHandler } from '../../services/agents/handler';
 import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../constants/thinking';
 
 const COMMAND_DESCRIPTIONS: Record<string, string> = {
@@ -35,8 +35,9 @@ function applyInlineMarkdown(text: string, colors: {
   return formatted;
 }
 
-export function startTUI(params: { logger: ILogger }): void {
-  const handler = AgentHandlerFactory.create(params.logger, 'tui');
+export function startTUI(params: { logger: ILogger, handler: IAgentHandler }): void {
+  const { handler } = params;
+
   const progressDotColors = [
     defaultColor('cyan'),
     defaultColor('magenta'),
