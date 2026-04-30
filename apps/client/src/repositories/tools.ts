@@ -94,11 +94,11 @@ function curlTool(): AIToolDefinition {
   };
 }
 
-function reminderTool(): AIToolDefinition {
+function createTaskTool(): AIToolDefinition {
   return {
     type: 'function',
     function: {
-      name: 'set_reminder',
+      name: 'set_task',
       description:
         'Save a reminder or scheduled task for the user. Call this when the user asks to be reminded about something or wants to schedule a recurring task. Extract the appropriate cron expression from natural language (e.g. "every day at 9am" → "0 9 * * *", "every Monday morning" → "0 9 * * 1").',
       parameters: {
@@ -120,12 +120,12 @@ function reminderTool(): AIToolDefinition {
   };
 }
 
-function listRemindersTool(): AIToolDefinition {
+function listTasksTool(): AIToolDefinition {
   return {
     type: 'function',
     function: {
-      name: 'list_reminders',
-      description: 'List all saved reminders and scheduled tasks. Call this when the user asks to see, check, or review their reminders.',
+      name: 'list_tasks',
+      description: 'List all saved tasks and scheduled tasks. Call this when the user asks to see, check, or review their tasks.',
       parameters: {
         type: 'object',
         properties: {},
@@ -135,22 +135,22 @@ function listRemindersTool(): AIToolDefinition {
   };
 }
 
-function updateReminderTool(): AIToolDefinition {
+function updateTaskTool(): AIToolDefinition {
   return {
     type: 'function',
     function: {
-      name: 'update_reminder',
-      description: 'Update an existing reminder. Call this when the user wants to change the description or schedule of a reminder. Use list_reminders first if the ID is not known.',
+      name: 'update_task',
+      description: 'Update an existing task. Call this when the user wants to change the description or schedule of a task. Use list_tasks first if the ID is not known.',
       parameters: {
         type: 'object',
         properties: {
           id: {
             type: 'string',
-            description: 'The UUID of the reminder to update.',
+            description: 'The UUID of the task to update.',
           },
           task: {
             type: 'string',
-            description: 'New description for the reminder (optional).',
+            description: 'New description for the task (optional).',
           },
           cron_expression: {
             type: 'string',
@@ -163,18 +163,18 @@ function updateReminderTool(): AIToolDefinition {
   };
 }
 
-function deleteReminderTool(): AIToolDefinition {
+function deleteTaskTool(): AIToolDefinition {
   return {
     type: 'function',
     function: {
-      name: 'delete_reminder',
-      description: 'Delete a reminder by ID. Call this when the user wants to remove or cancel a reminder. Use list_reminders first if the ID is not known.',
+      name: 'delete_task',
+      description: 'Delete a task by ID. Call this when the user wants to remove or cancel a task. Use list_tasks first if the ID is not known.',
       parameters: {
         type: 'object',
         properties: {
           id: {
             type: 'string',
-            description: 'The UUID of the reminder to delete.',
+            description: 'The UUID of the task to delete.',
           },
         },
         required: ['id'],
@@ -189,10 +189,10 @@ class ToolsRepository implements IToolsRepository {
 
     if (skills?.length) tools.push(skillsTool(skills));
     tools.push(curlTool());
-    tools.push(reminderTool());
-    tools.push(listRemindersTool());
-    tools.push(updateReminderTool());
-    tools.push(deleteReminderTool());
+    tools.push(createTaskTool());
+    tools.push(listTasksTool());
+    tools.push(updateTaskTool());
+    tools.push(deleteTaskTool());
 
     return cloneTools(tools);
   }

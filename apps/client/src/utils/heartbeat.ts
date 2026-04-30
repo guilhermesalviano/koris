@@ -3,12 +3,3 @@ const CRON_REGEX = /^(\*|[0-9,\-*/]+)\s+(\*|[0-9,\-*/]+)\s+(\*|[0-9,\-*/]+)\s+(\
 export function isValidCronExpression(expr: string): boolean {
   return CRON_REGEX.test(expr.trim());
 }
-
-export interface HeartbeatRow {
-  id: string;
-  task: string;
-  cron_expression: string;
-  last_run: string | null;
-  created_at: string;
-  [key: string]: unknown;
-}
