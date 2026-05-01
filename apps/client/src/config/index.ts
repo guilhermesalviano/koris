@@ -26,10 +26,9 @@ function deepGet(obj: Record<string, unknown>, path: string): unknown {
 }
 
 function get(attr: string, fallback: string): string {
-  return (
-    (deepGet(fileConfig, attr) as string | undefined) ??
-    fallback
-  );
+  const val = deepGet(fileConfig, attr);
+  if (val === undefined || val === null) return fallback;
+  return String(val);
 }
 
 export const config = {

@@ -16,25 +16,26 @@ import { heartbeat } from './services/sub-agents/heartbeat';
 
 const logger = LoggerFactory.create();
 
-// tests
-const date = new Date();
-heartbeat({ logger, date }).catch((error) => {
-  logger.error('Initial heartbeat failed:', error);
-});
+let heartbeatRunning = false;
 
-setInterval(async () => {
+async function heartbeatHandle() {
+  if (!config.HEARTBEAT.ENABLED || heartbeatRunning) return;
+
+  heartbeatRunning = true;
   const date = new Date();
   logger.info(`[${date.toISOString()}] Agent waking up...`);
 
   try {
-    if (config.HEARTBEAT.ENABLED) {
-      await heartbeat({ logger, date });
-    }
+    await heartbeat({ logger, date });
   } catch (error: any) {
     logger.error('Heartbeat failed:', error);
+  } finally {
+    heartbeatRunning = false;
   }
-}, config.HEARTBEAT.INTERVAL_MS);
+}
 
+heartbeatHandle();
+setInterval(heartbeatHandle, config.HEARTBEAT.INTERVAL_MS);
 
 type StopFn = () => void;
 

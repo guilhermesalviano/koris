@@ -1,7 +1,7 @@
 import { config } from "../../config";
 import { DatabaseServiceFactory } from "../../infrastructure/db-sqlite";
 import { HeartbeatRepositoryFactory } from "../../repositories/heartbeat";
-// import { isCronDue } from "../../utils/heartbeat";
+import { isCronDue } from "../../utils/heartbeat";
 import { PromptRepositoryFactory } from "../../repositories/prompt";
 import { getAIProvider } from "../providers";
 import { SkillsRepository } from "../../repositories/skills";
@@ -51,12 +51,12 @@ async function heartbeat(props: HeartbeatProps) {
 
   // if dont have task, keep necessity to execute AI 
   for (const task of tasks) {
-    // const since = task.lastRun ?? new Date(date.getTime() - config.HEARTBEAT.INTERVAL_MS);
+    const since = task.lastRun ?? new Date(date.getTime() - config.HEARTBEAT.INTERVAL_MS);
 
-    // if (!isCronDue(task.cronExpression, date, since)) {
-    //   logger.info(`Heartbeat: Task "${task.id}" not due yet (cron: ${task.cronExpression}).`);
-    //   continue;
-    // }
+    if (!isCronDue(task.cronExpression, date, since)) {
+      logger.info(`Heartbeat: Task "${task.id}" not due yet (cron: ${task.cronExpression}).`);
+      continue;
+    }
 
     logger.info(`Heartbeat: Executing task "${task.id}" — ${task.task}`);
     const prompt = replacePlaceholders(HEARTBEAT_PROMPT, { v1: `task: ${task.task} and type: ${task.type}` });
@@ -101,7 +101,7 @@ async function heartbeat(props: HeartbeatProps) {
         }
       }
 
-      saveTaskResult({ taskId: task.id, date, result: executorResult || String(result), logger });
+      saveTaskResult({ taskId: task.id, date, result: executorResult || result, logger });
 
       // response can be a reminder in Telegram, summarization of my Emails, a document of estudy from something(create a file to keep it in temp) 
       logger.info(`Heartbeat results: ${executorResult || result}`);
