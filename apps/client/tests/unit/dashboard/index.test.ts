@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
 import type { ILogger } from '../../../src/infrastructure/logger';
 import type { IAgentHandler } from '../../../src/services/main-agent/handler';
+import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../src/constants/thinking';
 
 type Handler = (req: Request, res: Response) => void;
 type AsyncHandler = (req: Request, res: Response) => Promise<void>;
@@ -216,6 +217,39 @@ describe('createChatHandler', () => {
     expect(res.flushHeaders).toHaveBeenCalled();
     expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"type":"progress"'));
     expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"text":"done"'));
+    expect(res.write).toHaveBeenCalledWith('data: [DONE]\n\n');
+    expect(res.end).toHaveBeenCalled();
+  });
+
+  it('filters internal stream markers from async responses before sending SSE chunks', async () => {
+    mockAgentHandle.mockImplementation(async (_msg: string, options: { onProgress?: (s: string) => void }) => {
+      options.onProgress?.('working');
+
+      return (async function* (): AsyncGenerator<string> {
+        yield THINK_START;
+        yield 'internal reasoning';
+        yield THINK_END;
+        yield RESPONSE_ANCHOR;
+        yield 'hello';
+        yield ' world';
+      })();
+    });
+
+    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+
+    const { createChatHandler } = await loadWebModule();
+    const handler = createChatHandler(mockHandler) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    req.body = { message: 'hello' } as Request['body'];
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"type":"progress"'));
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"text":"hello"'));
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"text":" world"'));
+    expect(res.write).not.toHaveBeenCalledWith(expect.stringContaining('internal reasoning'));
+    expect(res.write).not.toHaveBeenCalledWith(expect.stringContaining(RESPONSE_ANCHOR));
     expect(res.write).toHaveBeenCalledWith('data: [DONE]\n\n');
     expect(res.end).toHaveBeenCalled();
   });

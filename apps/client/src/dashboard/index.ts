@@ -5,6 +5,8 @@ import { ILogger } from '../infrastructure/logger';
 import { config } from '../config';
 import path from 'node:path';
 import { IAgent } from '../services/agents/main-agent/agent';
+import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../constants/thinking';
+import { stripInternalStreamMarkers } from '../utils/stream-markers';
 
 interface WebServerOptions {
   logger: ILogger;
@@ -112,13 +114,8 @@ function createChatHandler(agent: IAgent) {
           });
         }
       });
-      
-      if (clientClosed) return;
 
-      writeSse({
-        type: 'content_block_delta',
-        delta: { text: result },
-      });
+      await writeResponse(result, writeSse, () => clientClosed || res.writableEnded || res.destroyed);
 
       if (clientClosed) return;
       res.write('data: [DONE]\n\n');
@@ -137,6 +134,63 @@ function createChatHandler(agent: IAgent) {
       res.off('close', onClose);
     }
   };
+}
+
+function isAsyncIterable(value: unknown): value is AsyncIterable<string> {
+  if (!value || typeof value !== 'object') return false;
+  const maybe = value as { [Symbol.asyncIterator]?: unknown };
+  return typeof maybe[Symbol.asyncIterator] === 'function';
+}
+
+async function writeResponse(
+  result: unknown,
+  writeSse: (payload: unknown) => void,
+  isClosed: () => boolean,
+): Promise<void> {
+  if (typeof result === 'string') {
+    writeTextChunk(stripInternalStreamMarkers(result), writeSse);
+    return;
+  }
+
+  if (!isAsyncIterable(result)) {
+    writeTextChunk(String(result), writeSse);
+    return;
+  }
+
+  let inThinking = false;
+
+  for await (const chunk of result) {
+    if (isClosed()) {
+      return;
+    }
+
+    if (chunk === THINK_START) {
+      inThinking = true;
+      continue;
+    }
+
+    if (chunk === THINK_END) {
+      inThinking = false;
+      continue;
+    }
+
+    if (inThinking || chunk === RESPONSE_ANCHOR) {
+      continue;
+    }
+
+    writeTextChunk(chunk, writeSse);
+  }
+}
+
+function writeTextChunk(text: string, writeSse: (payload: unknown) => void): void {
+  if (!text) {
+    return;
+  }
+
+  writeSse({
+    type: 'content_block_delta',
+    delta: { text },
+  });
 }
 
 function setupSseHeaders(res: Response): void {
