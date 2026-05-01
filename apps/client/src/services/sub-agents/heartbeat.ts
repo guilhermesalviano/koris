@@ -49,6 +49,7 @@ async function heartbeat(props: HeartbeatProps) {
     return;
   }
 
+  // if dont have task, keep necessity to execute AI 
   for (const task of tasks) {
     // const since = task.lastRun ?? new Date(date.getTime() - config.HEARTBEAT.INTERVAL_MS);
 
@@ -58,7 +59,7 @@ async function heartbeat(props: HeartbeatProps) {
     // }
 
     logger.info(`Heartbeat: Executing task "${task.id}" — ${task.task}`);
-    const prompt = replacePlaceholders(HEARTBEAT_PROMPT, { v1: `- ${task.task}` });
+    const prompt = replacePlaceholders(HEARTBEAT_PROMPT, { v1: `task: ${task.task} and type: ${task.type}` });
 
     try {
       // refactor - usar um novo tipo de manager para heartbeat tasks, que não precisa de message history, channel, etc. Talvez só passar o texto da task e um contexto com logger.
@@ -78,23 +79,26 @@ async function heartbeat(props: HeartbeatProps) {
       if (!isAsyncGen(result)) {
         const responseText = normalizeResponse(result);
         const toExecute = extractToolCalls(responseText);
-  
-        const executed = await executorWorker(
-          toExecute,
-          task.task,
-          [],
-          {
-            logger,
-            channel: 'tui',
-            message: messageService,
-            toolsQueue,
-            signal: new AbortController().signal,
-            onProgress: (progress) => logger.info(progress),
-            options: { toolsEnabled: true },
-          },
-        );
 
-        executorResult = await toText(executed);
+        if (toExecute.length === 0) {
+          executorResult = responseText;
+        } else {
+          const executed = await executorWorker(
+            toExecute,
+            task.task,
+            [],
+            {
+              logger,
+              channel: 'tui',
+              message: messageService,
+              toolsQueue,
+              signal: new AbortController().signal,
+              onProgress: (progress) => logger.info(progress),
+              options: { toolsEnabled: true },
+            },
+          );
+          executorResult = await toText(executed);
+        }
       }
 
       saveTaskResult({ taskId: task.id, date, result: executorResult || String(result), logger });

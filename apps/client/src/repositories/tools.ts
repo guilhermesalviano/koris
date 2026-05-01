@@ -107,6 +107,11 @@ function createTaskTool(): AIToolDefinition {
             type: 'string',
             description: 'Clear description of what the user wants to be reminded about or the task to schedule.',
           },
+          type: {
+            type: 'string',
+            enum: ['reminder', 'scheduled_task'],
+            description: 'Type of the task (optional, defaults to "reminder"): "reminder" for one-time or recurring reminders to the user, "scheduled_task" for automated background tasks to be executed by the agent.',
+          },
           cron_expression: {
             type: 'string',
             description:
@@ -142,7 +147,7 @@ function updateTaskTool(): AIToolDefinition {
     type: 'function',
     function: {
       name: 'update_task',
-      description: 'Update an existing task. Call this when the user wants to change the description or schedule of a task. Use list_tasks first if the ID is not known.',
+      description: 'Update an existing task. Call this when the user wants to change the description, type, or schedule of a task. Use list_tasks first if the ID is not known.',
       parameters: {
         type: 'object',
         properties: {
@@ -153,6 +158,11 @@ function updateTaskTool(): AIToolDefinition {
           task: {
             type: 'string',
             description: 'New description for the task (optional).',
+          },
+          type: {
+            type: 'string',
+            enum: ['reminder', 'scheduled_task'],
+            description: 'New type for the task (optional): "reminder" or "scheduled_task".',
           },
           cron_expression: {
             type: 'string',

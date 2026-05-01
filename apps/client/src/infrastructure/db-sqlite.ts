@@ -73,6 +73,7 @@ class DatabaseService implements IDatabaseService {
         CREATE TABLE IF NOT EXISTS heartbeat (
           id TEXT PRIMARY KEY,
           task TEXT NOT NULL,
+          type TEXT NOT NULL CHECK(type IN ('reminder', 'scheduled_task')),
           cron_expression TEXT NOT NULL,
           last_run DATETIME,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP

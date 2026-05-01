@@ -2,8 +2,9 @@ import { DatabaseServiceFactory } from '../../../../infrastructure/db-sqlite';
 import { HeartbeatRepositoryFactory } from '../../../../repositories/heartbeat';
 import type { ILogger } from '../../../../infrastructure/logger';
 import type { ToolResult } from '../../../../types/tools';
-import { getOptionalStringArg, getRequiredStringArg } from '../shared/runtime';
+import { getOptionalStringArg, getRequiredStringArg, isAllowedValue } from '../shared/runtime';
 import { isValidCronExpression, isEveryMinute, hasSpecificHour } from '../../../../utils/heartbeat';
+import { TASK_TYPES } from '../../../../types/task';
 
 export async function updateTask(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const id = getRequiredStringArg(args, 'id');
@@ -14,12 +15,21 @@ export async function updateTask(logger: ILogger, args: Record<string, unknown>)
 
   const task = getOptionalStringArg(args, 'task') ?? undefined;
   const cronExpression = getOptionalStringArg(args, 'cron_expression') ?? undefined;
+  const rawType = getOptionalStringArg(args, 'type') ?? undefined;
 
-  if (!task && !cronExpression) {
+  if (!task && !cronExpression && !rawType) {
     return {
       toolName: 'update_task',
       success: false,
-      error: 'At least one of "task" or "cron_expression" must be provided.',
+      error: 'At least one of "task", "type", or "cron_expression" must be provided.',
+    };
+  }
+
+  if (rawType && !isAllowedValue(rawType, TASK_TYPES)) {
+    return {
+      toolName: 'update_task',
+      success: false,
+      error: `Invalid type: "${rawType}". Must be one of: ${TASK_TYPES.join(', ')}.`,
     };
   }
 
@@ -56,6 +66,7 @@ export async function updateTask(logger: ILogger, args: Record<string, unknown>)
 
     const updated = repo.update(id, {
       task,
+      type: rawType as typeof TASK_TYPES[number] | undefined,
       cronExpression: cronExpression?.trim(),
     });
 

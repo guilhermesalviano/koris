@@ -3,12 +3,14 @@ import { HeartbeatRepositoryFactory } from '../../../../repositories/heartbeat';
 import { Heartbeat } from '../../../../entities/heartbeat';
 import type { ILogger } from '../../../../infrastructure/logger';
 import type { ToolResult } from '../../../../types/tools';
-import { getRequiredStringArg } from '../shared/runtime';
+import { getRequiredStringArg, getOptionalStringArg, isAllowedValue } from '../shared/runtime';
 import { isValidCronExpression, isEveryMinute, hasSpecificHour } from '../../../../utils/heartbeat';
+import { TASK_TYPES, TaskType } from '../../../../types/task';
 
 export async function setTask(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const task = getRequiredStringArg(args, 'task');
   const cronExpression = getRequiredStringArg(args, 'cron_expression');
+  const rawType = getOptionalStringArg(args, 'type') ?? 'reminder';
 
   if (!task) {
     return { toolName: 'set_task', success: false, error: 'Missing required parameter: task' };
@@ -16,6 +18,14 @@ export async function setTask(logger: ILogger, args: Record<string, unknown>): P
 
   if (!cronExpression) {
     return { toolName: 'set_task', success: false, error: 'Missing required parameter: cron_expression' };
+  }
+
+  if (!isAllowedValue(rawType, TASK_TYPES)) {
+    return {
+      toolName: 'set_task',
+      success: false,
+      error: `Invalid parameter: type. Must be one of: ${TASK_TYPES.join(', ')}.`,
+    };
   }
 
   if (!isValidCronExpression(cronExpression)) {
@@ -44,10 +54,10 @@ export async function setTask(logger: ILogger, args: Record<string, unknown>): P
 
   try {
     const repo = HeartbeatRepositoryFactory.create(DatabaseServiceFactory.create());
-    const heartbeat = new Heartbeat({ task, cronExpression: cronExpression.trim() });
+    const heartbeat = new Heartbeat({ task, type: rawType as TaskType, cronExpression: cronExpression.trim() });
     repo.save(heartbeat);
 
-    logger.info('Task saved', { id: heartbeat.id, task, cronExpression });
+    logger.info('Task saved', { id: heartbeat.id, task, type: rawType, cronExpression });
 
     return {
       toolName: 'set_task',
