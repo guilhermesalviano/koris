@@ -1,8 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { ToolsQueue } from '../../../../src/services/tools-queue';
+import { ToolsQueueFactory } from '../../../../src/services/tools-queue';
+import { AgnosticExecutionTool } from '../../../../src/services/tools';
 import { ILogger } from '../../../../src/infrastructure/logger';
 
-// Mock logger
 const mockLogger: ILogger = {
   info: vi.fn(),
   debug: vi.fn(),
@@ -11,11 +11,11 @@ const mockLogger: ILogger = {
 };
 
 describe('ToolsQueue', () => {
-  let orchestrator: ToolsQueue;
+  let orchestrator: ReturnType<typeof ToolsQueueFactory.create>;
   let abortController: AbortController;
 
   beforeEach(() => {
-    orchestrator = new ToolsQueue(mockLogger, 2);
+    orchestrator = ToolsQueueFactory.create(mockLogger, 2);
     abortController = new AbortController();
     vi.clearAllMocks();
   });
@@ -54,18 +54,14 @@ describe('ToolsQueue', () => {
     });
 
     it('respects concurrency limit with single worker', async () => {
-      const limitedOrchestrator = new ToolsQueue(mockLogger, 1);
-      
+      const limitedOrchestrator = ToolsQueueFactory.create(mockLogger, 1);
+
       const toolCalls = Array.from({ length: 3 }, (_, i) => ({
         name: 'execute_command',
         arguments: { command: `echo "test${i}"` },
       }));
 
-      const result = await limitedOrchestrator.handle(
-        toolCalls,
-        {},
-        abortController.signal
-      );
+      const result = await limitedOrchestrator.handle(toolCalls, {}, abortController.signal);
 
       expect(result).toBeInstanceOf(Array);
       expect(result).toHaveLength(3);
@@ -175,28 +171,28 @@ describe('ToolsQueue', () => {
 
   describe('constructor', () => {
     it('uses default maxWorkers of 2', () => {
-      const orch = new ToolsQueue(mockLogger);
+      const orch = ToolsQueueFactory.create(mockLogger);
       expect(orch).toBeDefined();
     });
 
     it('accepts custom maxWorkers', () => {
-      const orch = new ToolsQueue(mockLogger, 4);
+      const orch = ToolsQueueFactory.create(mockLogger, 4);
       expect(orch).toBeDefined();
     });
   });
 
-  describe('executeTool', () => {
+  describe('AgnosticExecutionTool', () => {
     it('logs tool execution', async () => {
-      const toolCall = {
-        name: 'execute_command',
-        arguments: { command: 'echo "test"' },
-      };
+      const tool = new AgnosticExecutionTool({ execute_command: vi.fn().mockResolvedValue({ toolName: 'execute_command', success: true, result: '' }) } as any);
+      const toolCall = { name: 'execute_command', arguments: { command: 'echo "test"' } };
 
-      await orchestrator.executeTool(mockLogger, toolCall);
+      await tool.handle(mockLogger, toolCall);
 
       expect(mockLogger.debug).toHaveBeenCalledWith('Executing tool', expect.objectContaining({
-        toolName: 'execute_command'
+        toolName: 'execute_command',
       }));
     });
   });
 });
+
+

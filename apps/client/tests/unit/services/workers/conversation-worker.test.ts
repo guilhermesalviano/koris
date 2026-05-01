@@ -12,55 +12,59 @@ function makeMessageService() {
 
 describe('ConversationWorker', () => {
   it('saves user message with correct role and content', async () => {
+    const logger = makeLogger();
     const messageSvc = makeMessageService();
-    const worker = ConversationWorkerFactory.create(messageSvc as any);
+    const worker = ConversationWorkerFactory.create(logger, messageSvc as any);
 
-    await worker.run({ sessionId: 's1', ask: 'hello', answer: 'hi', logger: makeLogger(), channel: 'tui' });
+    await worker.run({ sessionId: 's1', ask: 'hello', answer: 'hi', channel: 'tui' });
 
     expect(messageSvc.save).toHaveBeenCalledWith({ role: 'user', content: 'hello' });
   });
 
   it('saves assistant message with correct role and content', async () => {
+    const logger = makeLogger();
     const messageSvc = makeMessageService();
-    const worker = ConversationWorkerFactory.create(messageSvc as any);
+    const worker = ConversationWorkerFactory.create(logger, messageSvc as any);
 
-    await worker.run({ sessionId: 's1', ask: 'hello', answer: 'hi', logger: makeLogger(), channel: 'tui' });
+    await worker.run({ sessionId: 's1', ask: 'hello', answer: 'hi', channel: 'tui' });
 
     expect(messageSvc.save).toHaveBeenCalledWith({ role: 'assistant', content: 'hi' });
   });
 
   it('calls save exactly twice (user + assistant)', async () => {
+    const logger = makeLogger();
     const messageSvc = makeMessageService();
-    const worker = ConversationWorkerFactory.create(messageSvc as any);
+    const worker = ConversationWorkerFactory.create(logger, messageSvc as any);
 
-    await worker.run({ sessionId: 's1', ask: 'q', answer: 'a', logger: makeLogger(), channel: 'web' });
+    await worker.run({ sessionId: 's1', ask: 'q', answer: 'a', channel: 'web' });
 
     expect(messageSvc.save).toHaveBeenCalledTimes(2);
   });
 
   it('does not throw when save throws', async () => {
+    const logger = makeLogger();
     const messageSvc = makeMessageService();
     messageSvc.save.mockImplementationOnce(() => { throw new Error('db error'); });
-    const worker = ConversationWorkerFactory.create(messageSvc as any);
+    const worker = ConversationWorkerFactory.create(logger, messageSvc as any);
 
     await expect(
-      worker.run({ sessionId: 's1', ask: 'q', answer: 'a', logger: makeLogger(), channel: 'web' })
+      worker.run({ sessionId: 's1', ask: 'q', answer: 'a', channel: 'web' })
     ).resolves.toBeUndefined();
   });
 
   it('logs an error when save fails', async () => {
+    const logger = makeLogger();
     const messageSvc = makeMessageService();
     messageSvc.save.mockImplementationOnce(() => { throw new Error('db error'); });
-    const logger = makeLogger();
-    const worker = ConversationWorkerFactory.create(messageSvc as any);
+    const worker = ConversationWorkerFactory.create(logger, messageSvc as any);
 
-    await worker.run({ sessionId: 's1', ask: 'q', answer: 'a', logger, channel: 'web' });
+    await worker.run({ sessionId: 's1', ask: 'q', answer: 'a', channel: 'web' });
 
     expect(logger.error).toHaveBeenCalled();
   });
 
   it('has name "conversationWorker"', () => {
-    const worker = ConversationWorkerFactory.create(makeMessageService() as any);
+    const worker = ConversationWorkerFactory.create(makeLogger(), makeMessageService() as any);
     expect((worker as any).name).toBe('conversationWorker');
   });
 });
