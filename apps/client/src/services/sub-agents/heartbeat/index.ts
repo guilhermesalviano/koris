@@ -4,15 +4,14 @@ import { HeartbeatRepositoryFactory, IHeartbeatRepository } from "../../../repos
 import { isCronDue } from "../../../utils/heartbeat";
 import { IPromptRepository, PromptRepositoryFactory } from "../../../repositories/prompt";
 import { getAIProvider } from "../../providers";
-import { SkillsRepository } from "../../../repositories/skills";
+import { ISkillsRepository, SkillsRepositoryFactory } from "../../../repositories/skills";
 import { replacePlaceholders } from "../../../utils/prompt";
 import { HEARTBEAT_PROMPT } from "../../../constants";
 import type { ILogger } from "../../../infrastructure/logger";
 import { extractToolCalls, normalizeResponse } from "../../../utils/tool-calls";
-
 import { IMessageService, MessageServiceFactory } from "../../message-service";
 import { SessionServiceFactory } from "../../session-service";
-import { ToolsQueue } from "../../tools-queue";
+import { IToolsQueue, ToolsQueue } from "../../tools-queue";
 import { ExecutorWorkerFactory } from "../../workers/executor-worker";
 import { mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
@@ -21,17 +20,17 @@ class Heartbeat {
   constructor(
     private logger: ILogger,
     private promptRepository: IPromptRepository,
-    private repo: IHeartbeatRepository,
+    private heartbeatRepository: IHeartbeatRepository,
+    private skillsRepository: ISkillsRepository,
     private messageService: IMessageService,
-    private toolsQueue: ToolsQueue,
+    private toolsQueue: IToolsQueue, 
   ) { }
 
   async handler(date: Date): Promise<void> {
     const provider = getAIProvider({ logger: this.logger });
     const executorWorker = ExecutorWorkerFactory.create();
-    const tasks = this.repo.getAll();
-    const skillsRepository = new SkillsRepository(this.logger);
-    const skills = skillsRepository.get();
+    const tasks = this.heartbeatRepository.getAll();
+    const skills = this.skillsRepository.get();
 
     const [ start, end ] = this.activeHoursHelper();
 
@@ -104,7 +103,7 @@ class Heartbeat {
         // response can be a reminder in Telegram, summarization of my Emails, a document of estudy from something(create a file to keep it in temp) 
         this.logger.info(`Heartbeat results: ${executorResult || result}`);
 
-        this.repo.updateLastRun(task.id, date);
+        this.heartbeatRepository.updateLastRun(task.id, date);
         this.logger.info(`Heartbeat: Task "${task.id}" completed successfully.`);
       } catch (err) {
         this.logger.error(`Heartbeat: Task "${task.id}" failed.`, { err });
@@ -166,11 +165,13 @@ class HeartbeatFactory {
   static create(logger: ILogger, channel: string): Heartbeat {
     const db = DatabaseServiceFactory.create();
     const promptRepository = PromptRepositoryFactory.create(db);
-    const repo = HeartbeatRepositoryFactory.create(db);
+    const heartbeatRepository = HeartbeatRepositoryFactory.create(db);
+    const skillsRepository = SkillsRepositoryFactory.create(logger);
     const sessionService = SessionServiceFactory.create(db, channel);
     const messageService = MessageServiceFactory.create(db, sessionService);
     const toolsQueue = new ToolsQueue(logger);
-    return new Heartbeat(logger, promptRepository, repo, messageService, toolsQueue);
+
+    return new Heartbeat(logger, promptRepository, heartbeatRepository, skillsRepository, messageService, toolsQueue);
   }
 }
 

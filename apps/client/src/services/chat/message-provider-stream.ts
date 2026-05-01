@@ -1,6 +1,6 @@
 import { ILogger } from "../../infrastructure/logger";
 import { escapeTelegramMarkdown, isAbortError } from "../../utils/telegram";
-import { SkillsRepository } from "../../repositories/skills";
+import { SkillsRepositoryFactory } from "../../repositories/skills";
 import { PromptRepositoryFactory } from "../../repositories/prompt";
 import { getAIProvider } from "../providers";
 import { DatabaseServiceFactory } from "../../infrastructure/db-sqlite";
@@ -18,7 +18,7 @@ class messageProviderStream implements IMessageProvider {
     messageHistory?: Message[]
   ): Promise<ProcessedMessage> {
     const provider = getAIProvider({ logger });
-    const skillsRepository = new SkillsRepository(logger);
+    const skillsRepository = SkillsRepositoryFactory.create(logger);
     const skills = skillsRepository.get();
 
     const db = DatabaseServiceFactory.create();

@@ -1,7 +1,7 @@
 import { getAIProvider } from "../providers";
 import { escapeTelegramMarkdown, isAbortError } from "../../utils/telegram";
 import { ILogger } from "../../infrastructure/logger";
-import { SkillsRepository } from "../../repositories/skills";
+import { SkillsRepositoryFactory } from "../../repositories/skills";
 import type { AIChatRequest, IMessageProvider } from "../../types/provider";
 import { PromptRepositoryFactory } from "../../repositories/prompt";
 import type { Message } from "../../entities/message";
@@ -18,7 +18,7 @@ class messageProvider implements IMessageProvider {
     messageHistory?: Message[]
   ): Promise<ProcessedMessage> {
     const provider = getAIProvider({ logger });
-    const skillsRepository = new SkillsRepository(logger);
+    const skillsRepository = SkillsRepositoryFactory.create(logger);
     const skills = skillsRepository.get();
 
     /**
