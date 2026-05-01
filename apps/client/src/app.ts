@@ -23,7 +23,11 @@ interface ICliRuntime {
   webServer: Awaited<ReturnType<typeof startWebServer>>;
 };
 
-class CliApplication {
+interface ICliApplication {
+  start(): Promise<void>;
+}
+
+class CliApplication implements ICliApplication {
   private runtime: ICliRuntime | null = null;
   private isShuttingDown = false;
 
