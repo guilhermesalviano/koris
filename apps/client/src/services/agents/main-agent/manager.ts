@@ -79,16 +79,22 @@ class Manager {
     let toExecute = callbacks.filter(cb => cb.name !== 'get_skill');
 
     if (toLearn.length > 0) {
-      ctx.onProgress(`Learning phase: ${toLearn.length} skill(s) - ${toLearn.map(c => c.name).join(' - ')}`);
+      const skillNames = toLearn.map(c => c.arguments.skill_name ?? c.arguments.name ?? c.name).join(', ');
+      ctx.onProgress(`Learning phase: ${toLearn.length} skill(s) - ${skillNames}`);
       const learner = LearnerWorkerFactory.create(this.logger);
       await learner.run({ toolCalls: toLearn, userMessage, messageHistory, ctx });
 
       const skillPrompt = replacePlaceholders(SKILL_READY_PROMPT, { v1: userMessage });
       const aiResponse = await this.messageProvider.handler(skillPrompt, ctx.channel, ctx.options, ctx.message.getHistory());
-      const responseText = normalizeResponse(aiResponse);
-      toExecute = extractToolCalls(responseText);
+      const responseText = await this.resolveToString(aiResponse);
+      const allToolCalls = extractToolCalls(responseText);
 
       // Model answered directly from skill knowledge - no tool calls needed.
+      if (allToolCalls.length === 0) return responseText;
+
+      // Filter out any get_skill calls the model may have re-emitted after learning.
+      toExecute = allToolCalls.filter(cb => cb.name !== 'get_skill');
+
       if (toExecute.length === 0) return responseText;
     }
 
@@ -165,6 +171,22 @@ class Manager {
 
   private isAsyncGen(val: unknown): val is AsyncGenerator<string> {
     return typeof val === 'object' && val !== null && Symbol.asyncIterator in val;
+  }
+
+  private async resolveToString(response: ProcessedMessage): Promise<string> {
+    if (this.isAsyncGen(response)) {
+      const chunks: string[] = [];
+      let inThinking = false;
+      for await (const chunk of response) {
+        if (chunk === THINK_START) { inThinking = true; continue; }
+        if (chunk === THINK_END)   { inThinking = false; continue; }
+        if (inThinking) continue;
+        if (chunk === RESPONSE_ANCHOR) continue;
+        chunks.push(chunk);
+      }
+      return chunks.join('');
+    }
+    return normalizeResponse(response);
   }
 }
 
