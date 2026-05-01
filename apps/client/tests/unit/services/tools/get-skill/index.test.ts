@@ -11,7 +11,7 @@ vi.mock('fs/promises', () => ({
   readFile: mockReadFile,
 }));
 
-import { executeGetSkill } from '../../../../../src/services/tools-queue/tools/get-skill';
+import { executeGetSkill } from '../../../../../src/services/tools/get-skill';
 
 const mockLogger: ILogger = {
   info: vi.fn(),

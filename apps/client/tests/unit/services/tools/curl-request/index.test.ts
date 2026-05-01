@@ -35,9 +35,9 @@ const { mockExecFilePromise, mockSpawnCommand, mockSpawn } = vi.hoisted(() => ({
 }));
 
 vi.mock(
-  '../../../../../src/services/tools-queue/tools/shared/runtime',
+  '../../../../../src/services/tools/shared/runtime',
   async (importOriginal) => {
-    const original = await importOriginal<typeof import('../../../../../src/services/tools-queue/tools/shared/runtime')>();
+    const original = await importOriginal<typeof import('../../../../../src/services/tools/shared/runtime')>();
     return {
       ...original,
       execFilePromise: mockExecFilePromise,
@@ -60,7 +60,7 @@ import {
   shellWords,
   buildCurlArgs,
   executeCurl,
-} from '../../../../../src/services/tools-queue/tools/curl-request';
+} from '../../../../../src/services/tools/curl-request';
 import type { ILogger } from '../../../../../src/infrastructure/logger';
 
 // ── helpers ─────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MockAIProvider, MockAIProviderFactory } from '../../../../src/services/providers/mock';
-import type { ILogger } from '../../../../src/infrastructure/logger';
+import { MockAIProvider, MockAIProviderFactory } from '../../../../../src/services/providers/mock';
+import type { ILogger } from '../../../../../src/infrastructure/logger';
 
 describe('MockAIProvider', () => {
   const logger: ILogger = {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { OllamaAIProvider } from '../../../../src/services/providers/ollama';
-import { LoggerFactory } from '../../../../src/infrastructure/logger';
+import { OllamaAIProvider } from '../../../../../src/services/providers/ollama';
+import { LoggerFactory } from '../../../../../src/infrastructure/logger';
 
 describe('OllamaAIProvider', () => {
   const originalFetch = globalThis.fetch;

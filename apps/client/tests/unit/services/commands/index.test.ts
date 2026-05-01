@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getAvailableCommands, handleCommand, isCommand } from '../../../../src/services/agents/commands';
+import { getAvailableCommands, handleCommand, isCommand } from '../../../../src/services/commands';
 
 describe('Command Handler', () => {
   describe('isCommand', () => {

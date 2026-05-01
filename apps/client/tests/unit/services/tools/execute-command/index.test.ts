@@ -30,9 +30,9 @@ const { mockSpawnCommand } = vi.hoisted(() => ({
 }));
 
 vi.mock(
-  '../../../../../src/services/tools-queue/tools/shared/runtime',
+  '../../../../../src/services/tools/shared/runtime',
   async (importOriginal) => {
-    const original = await importOriginal<typeof import('../../../../../src/services/tools-queue/tools/shared/runtime')>();
+    const original = await importOriginal<typeof import('../../../../../src/services/tools/shared/runtime')>();
     return {
       ...original,
       spawnCommand: mockSpawnCommand,
@@ -42,7 +42,7 @@ vi.mock(
 
 // ── imports (after mocks) ───────────────────────────────────────────────────
 
-import { executeCommand } from '../../../../../src/services/tools-queue/tools/execute-command';
+import { executeCommand } from '../../../../../src/services/tools/execute-command';
 import type { ILogger } from '../../../../../src/infrastructure/logger';
 
 // ── helpers ─────────────────────────────────────────────────────────────────

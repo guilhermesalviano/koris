@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
-import type { ILogger } from '../../../../src/infrastructure/logger';
+import type { ILogger } from '../../../src/infrastructure/logger';
+import type { IAgentHandler } from '../../../src/services/main-agent/handler';
 
 type Handler = (req: Request, res: Response) => void;
 type AsyncHandler = (req: Request, res: Response) => Promise<void>;
@@ -8,21 +9,13 @@ type AsyncHandler = (req: Request, res: Response) => Promise<void>;
 const {
   mockHealthCheck,
   mockAgentHandle,
-  mockAgentFactoryCreate,
 } = vi.hoisted(() => ({
   mockHealthCheck: vi.fn(),
   mockAgentHandle: vi.fn(),
-  mockAgentFactoryCreate: vi.fn(),
 }));
 
-vi.mock('../../../../src/services/provider-health-service', () => ({
+vi.mock('../../../src/services/provider-health-service', () => ({
   healthCheck: mockHealthCheck,
-}));
-
-vi.mock('../../../../src/services/agents/handler', () => ({
-  AgentHandlerFactory: {
-    create: mockAgentFactoryCreate,
-  },
 }));
 
 interface MockResponse {
@@ -37,9 +30,9 @@ interface MockResponse {
   off: ReturnType<typeof vi.fn>;
 }
 
-async function loadWebModule(): Promise<typeof import('../../../../src/channels/web')> {
+async function loadWebModule(): Promise<typeof import('../../../src/dashboard')> {
   vi.resetModules();
-  return import('../../../../src/channels/web');
+  return import('../../../src/dashboard');
 }
 
 function makeRequest(ip: string): Request {
@@ -78,8 +71,6 @@ describe('serveIndexHandler', () => {
     vi.clearAllMocks();
     mockHealthCheck.mockReset();
     mockAgentHandle.mockReset();
-    mockAgentFactoryCreate.mockReset();
-    mockAgentFactoryCreate.mockReturnValue({ handle: mockAgentHandle });
   });
 
   it('serves index.html when request is within the rate limit', async () => {
@@ -186,21 +177,14 @@ describe('createHealthHandler', () => {
 describe('createChatHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAgentFactoryCreate.mockReset();
     mockAgentHandle.mockReset();
-    mockAgentFactoryCreate.mockReturnValue({ handle: mockAgentHandle });
   });
 
   it('returns 400 when message is missing', async () => {
-    const logger = {
-      info: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-    } as ILogger;
+    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
 
     const { createChatHandler } = await loadWebModule();
-    const handler = createChatHandler(logger) as AsyncHandler;
+    const handler = createChatHandler(mockHandler) as AsyncHandler;
     const req = makeRequest('127.0.0.1');
     const res = makeResponse();
 
@@ -212,20 +196,15 @@ describe('createChatHandler', () => {
   });
 
   it('streams progress + final response in SSE format', async () => {
-    const logger = {
-      info: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-      warn: vi.fn(),
-    } as ILogger;
-
     mockAgentHandle.mockImplementation(async (_msg: string, options: { onProgress?: (s: string) => void }) => {
       options.onProgress?.('working');
       return 'done';
     });
 
+    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+
     const { createChatHandler } = await loadWebModule();
-    const handler = createChatHandler(logger) as AsyncHandler;
+    const handler = createChatHandler(mockHandler) as AsyncHandler;
     const req = makeRequest('127.0.0.1');
     req.body = { message: 'hello' } as Request['body'];
     const res = makeResponse();
