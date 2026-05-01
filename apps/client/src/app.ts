@@ -6,64 +6,94 @@ if (process.argv.includes('tui') || process.argv.includes('--tui')) {
 }
 
 import { initBot } from 'assistant-telegram-bot';
-import { startTUI } from './channels/tui';
-import { startWebServer } from './channels/web';
+import { startTUI } from './tui';
+import { startWebServer } from './web';
 import { LoggerFactory } from './infrastructure/logger';
 import { handleMessage } from './channels/telegram';
 import { config } from './config';
 import { AgentHandlerFactory } from './services/agents/handler';
+import { heartbeat } from './services/sub-agents/heartbeat';
 
 const logger = LoggerFactory.create();
+
+let heartbeatRunning = false;
+
+async function heartbeatHandle() {
+  if (!config.HEARTBEAT.ENABLED || heartbeatRunning) return;
+
+  heartbeatRunning = true;
+  const date = new Date();
+  logger.info(`[${date.toISOString()}] Agent waking up...`);
+
+  try {
+    await heartbeat({ logger, date });
+  } catch (error: any) {
+    logger.error('Heartbeat failed:', error);
+  } finally {
+    heartbeatRunning = false;
+  }
+}
+
+heartbeatHandle();
+setInterval(heartbeatHandle, config.HEARTBEAT.INTERVAL_MS);
+
+type StopFn = () => void;
+
+interface ChannelDefinition {
+  name: string;
+  enabled: () => boolean;
+  start: () => StopFn | void;
+}
 
 function hasFlag(flag: string): boolean {
   return process.argv.includes(flag) || process.argv.includes(`--${flag}`);
 }
 
+const channels: ChannelDefinition[] = [
+  {
+    name: 'telegram',
+    enabled: () => !!config.TELEGRAM.BOT_TOKEN,
+    start: () => {
+      const handler = AgentHandlerFactory.create(logger, 'telegram');
+      const bot = initBot({
+        token: config.TELEGRAM.BOT_TOKEN,
+        polling: true,
+        onMessage: (msg) => handleMessage(handler, msg),
+      });
+      logger.info("Telegram is ready!");
+      return () => bot.stopPolling();
+    },
+  },
+];
+
 function startCliMode(): void {
-  const tuiMode = hasFlag("tui");
-  const telegramMode = hasFlag("telegram");
-  const webMode = hasFlag("web") || (!tuiMode && !telegramMode);
+  const stopFns: StopFn[] = [];
 
-  if (!tuiMode && !telegramMode && !webMode) {
-    logger.error("No mode provided.");
-    logger.error("Usage: pnpm --filter koris-agent run dev:tui | pnpm --filter koris-agent run dev:telegram | pnpm --filter koris-agent run dev");
+  for (const channel of channels) {
+    if (!channel.enabled()) continue;
+    logger.info(`Starting channel: ${channel.name}`);
+    const stop = channel.start();
+    if (typeof stop === 'function') stopFns.push(stop);
+  }
+
+  const shutdown = () => {
+    logger.info("\n👋 Shutting down gracefully...");
+    stopFns.forEach((stop) => stop());
+    process.exit(0);
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+
+  const handler = AgentHandlerFactory.create(logger, 'web');
+  startWebServer(logger, handler).catch((error) => {
+    logger.error("Failed to start web server:", error);
     process.exit(1);
-  }
+  });
 
-  if (tuiMode) {
-    startTUI({ logger });
-  }
-
-  if (telegramMode) {
-    logger.info("Mode: Telegram Bot\n");
-    const handler = AgentHandlerFactory.create(logger, 'telegram');
-
-    const bot = initBot({
-      token: config.TELEGRAM.BOT_TOKEN,
-      polling: true,
-      onMessage: (msg) => handleMessage(handler, msg),
-    });
-    logger.info("✅ Bot is ready! Send a message to your bot on Telegram.\n");
-
-    process.on("SIGINT", () => {
-      logger.info("\n👋 Shutting down gracefully...");
-      bot.stopPolling();
-      process.exit(0);
-    });
-
-    process.on("SIGTERM", () => {
-      logger.info("\n👋 Shutting down gracefully...");
-      bot.stopPolling();
-      process.exit(0);
-    });
-  }
-
-  if (webMode) {
-    logger.info("Mode: Web Server\n");
-    startWebServer(logger).catch((error) => {
-      logger.error("Failed to start web server:", error);
-      process.exit(1);
-    });
+  if (hasFlag('tui')) {
+    const handler = AgentHandlerFactory.create(logger, 'tui');
+    startTUI({ logger, handler });
   }
 }
 

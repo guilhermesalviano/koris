@@ -1,9 +1,9 @@
 import { startTui } from 'assistant-tui';
-import { handleCommand, isCommand, getAvailableCommands } from '../../services/agents/commands';
-import { config } from '../../config';
-import { ILogger } from '../../infrastructure/logger';
-import { AgentHandlerFactory } from '../../services/agents/handler';
-import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../constants/thinking';
+import { handleCommand, isCommand, getAvailableCommands } from '../services/agents/commands';
+import { config } from '../config';
+import { ILogger } from '../infrastructure/logger';
+import { IAgentHandler } from '../services/agents/handler';
+import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../constants/thinking';
 
 const COMMAND_DESCRIPTIONS: Record<string, string> = {
   '/help':   'show available commands',
@@ -30,13 +30,14 @@ function applyInlineMarkdown(text: string, colors: {
 }) {
   let formatted = text.replace(/\*\*(.+?)\*\*/g, `${colors.bright}$1${colors.reset}`);
   formatted = formatted.replace(/__(.+?)__/g, `${colors.bright}$1${colors.reset}`);
-  formatted = formatted.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, `${colors.dim}$1${colors.reset}`);
+  formatted = formatted.replace(/(?<!\*)\*(?!\*)([^*\n]*\w[^*\n]*)(?<!\*)\*(?!\*)/g, `${colors.dim}$1${colors.reset}`);
   formatted = formatted.replace(/`([^`]+)`/g, `${colors.yellow}$1${colors.reset}`);
   return formatted;
 }
 
-export function startTUI(params: { logger: ILogger }): void {
-  const handler = AgentHandlerFactory.create(params.logger, 'tui');
+export function startTUI(params: { logger: ILogger, handler: IAgentHandler }): void {
+  const { handler } = params;
+
   const progressDotColors = [
     defaultColor('cyan'),
     defaultColor('magenta'),

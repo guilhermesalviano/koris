@@ -39,7 +39,7 @@ class DatabaseService implements IDatabaseService {
   private verbose: boolean;
 
   constructor(options: DatabaseOptions = {}) {
-    this.filepath = options.filepath || path.join(config.BASE_DIR, 'temp', 'database.db');
+    this.filepath = options.filepath || path.join(config.BASE_DIR, 'memory', 'database.db');
     this.verbose = options.verbose ?? config.ENVIRONMENT === 'development';
     
     try {
@@ -69,6 +69,17 @@ class DatabaseService implements IDatabaseService {
    */
   private initializeSchema(): void {
     try {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS heartbeat (
+          id TEXT PRIMARY KEY,
+          task TEXT NOT NULL,
+          type TEXT NOT NULL CHECK(type IN ('reminder', 'scheduled_task')),
+          cron_expression TEXT NOT NULL,
+          last_run DATETIME,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
       // TODO: add topic and update after first message
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (

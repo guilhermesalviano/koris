@@ -34,7 +34,7 @@ async function learnerWorker(
     const skillContent = skillResults
       .map((r) => r.success ? r.result ?? '' : r.error ?? '')
       .join('\n')
-      .replace(/<GMAIL_GATEWAY_HOST>/g, config.GMAIL_GATEWAY_HOST);
+      .replace(/<GMAIL_GATEWAY_HOST>/g, config.GMAIL.GATEWAY_HOST);
 
     try {
       const learningPrompt = replacePlaceholders(

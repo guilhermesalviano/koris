@@ -1,4 +1,5 @@
 {
+  "TEMP_FOLDER": "./temp",
   "PORT": 3000,
   "TIMEZONE": "America/Sao_Paulo",
   "gmail": {
@@ -6,6 +7,14 @@
   },
   "log": {
     "LEVEL": "debug"
+  },
+  "heartbeat": {
+    "ENABLED": true,
+    "ACTIVE_HOURS": {
+      "START": "08:00",
+      "END": "22:00"
+    },
+    "INTERVAL_MS": 1800000
   },
   "telegram": {
     "BOT_TOKEN": "YOUR_BOT_TOKEN",

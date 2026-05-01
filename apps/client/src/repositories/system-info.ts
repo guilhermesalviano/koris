@@ -1,17 +1,14 @@
 import os from 'node:os';
 
 interface ISystemInfoRepository {
-  getSystemInfo(params: { channel: string }): SystemInfo;
-  formatAsPrompt(info: SystemInfo): string;
   loadSystemInfoPrompt(params: { channel: string }): string;
 }
 
 export interface SystemInfo {
   source: string;
   platform: string;
-  release: string;
-  nodeVersion: string;
   workingDirectory: string;
+  datetime: string;
 }
 
 /**
@@ -20,15 +17,22 @@ export interface SystemInfo {
  */
 class SystemInfoRepository implements ISystemInfoRepository {
   /**
+   * Load and format system info in one call (convenience method)
+   */
+  loadSystemInfoPrompt(params: { channel: string }): string {
+    const info = this.getSystemInfo(params);
+    return this.formatAsPrompt(info);
+  }
+
+  /**
    * Collect current system information
    */
-  getSystemInfo(params: { channel: string }): SystemInfo {
+  private getSystemInfo(params: { channel: string }): SystemInfo {
     return {
       source: params.channel,
       platform: os.platform(),
-      release: os.release(),
-      nodeVersion: process.version,
       workingDirectory: process.cwd(),
+      datetime: new Date().toISOString(),
     };
   }
 
@@ -36,22 +40,13 @@ class SystemInfoRepository implements ISystemInfoRepository {
    * Format system info as prompt text
    * inactivated temporarily
    */
-  formatAsPrompt(info: SystemInfo): string {
-    return '';
+  private formatAsPrompt(info: SystemInfo): string {
     return [
       'Session context, use it to compose your response, if needed:',
       `- source: ${info.source}`,
-      `- os: ${info.platform} ${info.release}`,
+      `- datetime: ${info.datetime}`,
       `- cwd: ${info.workingDirectory}`,
     ].join('\n');
-  }
-
-  /**
-   * Load and format system info in one call (convenience method)
-   */
-  loadSystemInfoPrompt(params: { channel: string }): string {
-    const info = this.getSystemInfo(params);
-    return this.formatAsPrompt(info);
   }
 }
 

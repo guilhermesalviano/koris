@@ -25,34 +25,43 @@ function deepGet(obj: Record<string, unknown>, path: string): unknown {
   }, obj);
 }
 
-function get(envKey: string, filePath: string, fallback: string): string {
-  return (
-    process.env[envKey] ??
-    (deepGet(fileConfig, filePath) as string | undefined) ??
-    fallback
-  );
+function get(attr: string, fallback: string): string {
+  const val = deepGet(fileConfig, attr);
+  if (val === undefined || val === null) return fallback;
+  return String(val);
 }
 
 export const config = {
-  LOG_LEVEL:   get('LOG_LEVEL',   'log.LEVEL',   'info'),
-  TIMEZONE:    get('TIMEZONE',    'TIMEZONE',    'AMERICA/Sao_Paulo'),
-  ENVIRONMENT: get('ENVIRONMENT', 'ENVIRONMENT',  'development'),
-  PORT:        Number(get('PORT', 'PORT',         '3000')),
-  GMAIL_GATEWAY_HOST: get('GMAIL_GATEWAY_HOST', 'gmail.GATEWAY_HOST', 'http://localhost:3000'),
+  LOG_LEVEL:   get('log.LEVEL',   'info'),
+  TIMEZONE:    get('TIMEZONE',    'AMERICA/Sao_Paulo'),
+  ENVIRONMENT: get('ENVIRONMENT', 'development'),
+  PORT:        Number(get('PORT', '3000')),
+  GMAIL: {
+    GATEWAY_HOST: get('gmail.GATEWAY_HOST', 'http://localhost:3000'),
+  },
   BASE_DIR:    process.cwd(),
+  TEMP_FOLDER: get('TEMP_FOLDER', './temp'),
+  HEARTBEAT: {
+    ENABLED: get('heartbeat.ENABLED', 'true') === 'true',
+    INTERVAL_MS: Number(get('heartbeat.INTERVAL_MS', (30 * 60 * 1000).toString())), // Default to 30 minutes
+    ACTIVE_HOURS: {
+      START: get('heartbeat.ACTIVE_HOURS.START', '08:00'),
+      END: get('heartbeat.ACTIVE_HOURS.END', '22:00'),
+    },
+  },
   AI: {
     PROVIDER: process.env.VITEST === 'true'
       ? 'mock'
-      : get('AI_PROVIDER', 'ai.PROVIDER', 'ollama'),
-    BASE_URL:  get('AI_BASE_URL',  'ai.BASE_URL',  'http://localhost:11434'),
-    ALLOW_REMOTE_BASE_URL: get('AI_ALLOW_REMOTE_BASE_URL', 'ai.ALLOW_REMOTE_BASE_URL', 'false') === 'true',
-    API_TOKEN: get('AI_API_TOKEN', 'ai.API_TOKEN', ''),
-    MODEL:     get('AI_MODEL',     'ai.MODEL',     'gemma4:e2b'),
+      : get('ai.PROVIDER', 'ollama'),
+    BASE_URL:  get('ai.BASE_URL',  'http://localhost:11434'),
+    ALLOW_REMOTE_BASE_URL: get('ai.ALLOW_REMOTE_BASE_URL', 'false') === 'true',
+    API_TOKEN: get('ai.API_TOKEN', ''),
+    MODEL:     get('ai.MODEL',     'gemma4:e2b'),
   },
   TELEGRAM: {
-    BOT_TOKEN:   get('TELEGRAM_BOT_TOKEN',   'telegram.BOT_TOKEN',   ''),
-    WEBHOOK_URL: get('TELEGRAM_WEBHOOK_URL', 'telegram.WEBHOOK_URL', ''),
-    USE_POLLING: get('TELEGRAM_USE_POLLING', 'telegram.USE_POLLING', 'true') === 'true',
+    BOT_TOKEN:   get('telegram.BOT_TOKEN',   ''),
+    WEBHOOK_URL: get('telegram.WEBHOOK_URL', ''),
+    USE_POLLING: get('telegram.USE_POLLING', 'true') === 'true',
   },
 } as const;
 
