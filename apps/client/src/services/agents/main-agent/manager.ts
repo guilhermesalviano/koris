@@ -1,20 +1,20 @@
 
-import { extractToolCalls, normalizeResponse } from '../../utils/tool-calls';
-import { ToolsQueue } from '../tools-queue';
-import { ExecutorWorkerFactory } from './executor-worker';
-import { LearnerWorkerFactory } from './learner-worker';
-import { FIRST_PROMPT_HELPER, SKILL_READY_PROMPT } from '../../constants';
-import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../constants/thinking';
-import { replacePlaceholders } from '../../utils/prompt';
-import type { ProcessedMessage, ProcessOptions } from '../../types/agents';
-import type { IMessageService } from '../message-service';
-import type { ILogger } from '../../infrastructure/logger';
-import type { LoopContext } from '../../types/context';
-import type { ToolCall } from '../../types/tools';
-import type { Message } from '../../entities/message';
-import { MessageProviderFactory } from '../chat/message-provider';
-import type { IMessageProvider } from '../../types/provider';
-import type { IWorker } from '../../types/workers';
+import { extractToolCalls, normalizeResponse } from '../../../utils/tool-calls';
+import { ToolsQueue } from '../../tools-queue';
+import { ExecutorWorkerFactory } from '../../workers/executor-worker';
+import { LearnerWorkerFactory } from '../../workers/learner-worker';
+import { FIRST_PROMPT_HELPER, SKILL_READY_PROMPT } from '../../../constants';
+import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../../constants/thinking';
+import { replacePlaceholders } from '../../../utils/prompt';
+import { MessageProviderFactory } from '../../chat/message-provider';
+import type { ProcessedMessage, ProcessOptions } from '../../../types/agents';
+import type { IMessageService } from '../../message-service';
+import type { ILogger } from '../../../infrastructure/logger';
+import type { Message } from '../../../entities/message';
+import type { IMessageProvider } from '../../../types/provider';
+import type { LoopContext } from '../../../types/context';
+import type { ToolCall } from '../../../types/tools';
+import type { IWorker } from '../../../types/workers';
 
 interface ManagerArgs {
   logger: ILogger;
