@@ -90,4 +90,4 @@ class MemoryServiceFactory {
   }
 }
 
-export { MemoryServiceFactory, IMemoryService, SaveMemoryProps }
+export { IMemoryService, MemoryService, MemoryServiceFactory }

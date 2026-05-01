@@ -115,4 +115,4 @@ class HeartbeatRepositoryFactory {
   }
 }
 
-export { IHeartbeatRepository, HeartbeatRepositoryFactory, UpdateHeartbeatInput };
+export { IHeartbeatRepository, HeartbeatRepository, HeartbeatRepositoryFactory };

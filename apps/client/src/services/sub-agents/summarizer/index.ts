@@ -1,4 +1,4 @@
-import { IMemoryService, SaveMemoryProps } from "../../memory-service";
+import { IMemoryService } from "../../memory-service";
 import type { ILogger } from "../../../infrastructure/logger";
 import { getAIProvider } from "../../providers";
 import { MemoryType } from "../../../types/memory";
@@ -27,7 +27,7 @@ async function summarizerWorker(
     const content = await provider
       .chat({ messages: [{ role: "user", content: prompt }] });
 
-    const memory: SaveMemoryProps = {
+    const memory = {
       type: props.type,
       content,
     };

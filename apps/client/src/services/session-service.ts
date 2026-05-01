@@ -43,4 +43,4 @@ class SessionServiceFactory {
   }
 }
 
-export { SessionServiceFactory, ISessionService }
+export { ISessionService, SessionService,  SessionServiceFactory }

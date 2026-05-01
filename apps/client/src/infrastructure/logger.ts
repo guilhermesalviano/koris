@@ -101,4 +101,4 @@ class LoggerFactory {
   }
 }
 
-export { ILogger, LoggerFactory };
+export { ILogger, Logger, LoggerFactory };

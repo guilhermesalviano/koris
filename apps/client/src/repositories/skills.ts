@@ -81,4 +81,4 @@ class SkillsRepositoryFactory {
   }
 }
 
-export { ISkillsRepository, SkillsRepositoryFactory };
+export { ISkillsRepository, SkillsRepository, SkillsRepositoryFactory };
