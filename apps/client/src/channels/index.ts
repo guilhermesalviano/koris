@@ -28,7 +28,12 @@ export const channels: ChannelDefinition[] = [
   },
 ];
 
-class ChannelsManager {
+interface IChannelsManager {
+  startAll(): void;
+  stopAll(): void;
+}
+
+class ChannelsManager implements IChannelsManager {
   private stopFns: StopFn[] = [];
 
   constructor(private logger: ILogger, private agent: IAgent) {}
@@ -59,4 +64,4 @@ class ChannelsSingleton {
   }
 }
 
-export { ChannelsSingleton };
+export { IChannelsManager, ChannelsSingleton };

@@ -3,10 +3,11 @@ import { LoggerFactory, type ILogger } from '../infrastructure/logger';
 import { HeartbeatFactory } from '../services/agents/sub-agents/heartbeat';
 
 interface HeartbeatController {
+  start(): void;
   stop(): void;
 }
 
-class HeartbeatRunner {
+class HeartbeatRunner implements HeartbeatController {
   private isRunning = false;
   private timer: ReturnType<typeof setInterval> | null = null;
 
@@ -69,4 +70,4 @@ function startHeartbeat(): HeartbeatController {
   return runner;
 }
 
-export { startHeartbeat };
+export { startHeartbeat, HeartbeatController };

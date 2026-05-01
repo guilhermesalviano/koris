@@ -7,101 +7,99 @@ if (process.argv.includes('tui') || process.argv.includes('--tui')) {
 
 import { startTUI } from './tui';
 import { startWebServer } from './dashboard';
-import { LoggerFactory } from './infrastructure/logger';
-import { AgentFactory } from './services/agents/main-agent/agent';
-import { startHeartbeat } from './heartbeat';
-import { ChannelsSingleton } from './channels';
+import { LoggerFactory, ILogger } from './infrastructure/logger';
+import { AgentFactory, IAgent } from './services/agents/main-agent/agent';
+import { HeartbeatController, startHeartbeat } from './heartbeat';
+import { ChannelsSingleton, IChannelsManager } from './channels';
+import { SHUTDOWN_SIGNALS } from './constants/tui';
+import { hasFlag, logError } from './utils/runtime';
 
-const TUI_FLAG = 'tui';
-const SHUTDOWN_SIGNALS = ['SIGINT', 'SIGTERM'] as const;
 const logger = LoggerFactory.create();
 
-type CliRuntime = {
-  agent: ReturnType<typeof AgentFactory.create>;
-  channels: ReturnType<typeof ChannelsSingleton.getInstance>;
-  heartbeat: ReturnType<typeof startHeartbeat>;
+interface ICliRuntime {
+  agent: IAgent;
+  channels: IChannelsManager;
+  heartbeat: HeartbeatController;
   webServer: Awaited<ReturnType<typeof startWebServer>>;
 };
 
-function hasFlag(flag: string, argv: string[] = process.argv): boolean {
-  return argv.includes(flag) || argv.includes(`--${flag}`);
-}
+class CliApplication {
+  private runtime: ICliRuntime | null = null;
+  private isShuttingDown = false;
 
-function logError(message: string, error: unknown): void {
-  logger.error(message, {
-    error: error instanceof Error ? error.message : String(error),
-  });
-}
+  constructor(private readonly logger: ILogger) {}
 
-async function createCliRuntime(): Promise<CliRuntime> {
-  const agent = AgentFactory.create(logger, 'tui');
-  const channels = ChannelsSingleton.getInstance(logger, agent);
-
-  channels.startAll();
-  const heartbeat = startHeartbeat();
-
-  try {
-    const webServer = await startWebServer(logger, agent);
-    return { agent, channels, heartbeat, webServer };
-  } catch (error) {
-    channels.stopAll();
-    heartbeat.stop();
-    throw error;
+  async start(): Promise<void> {
+    this.runtime = await this.createCliRuntime();
+    this.registerShutdownHandlers();
+    this.startTuiIfEnabled();
   }
-}
 
-function createShutdownHandler(runtime: CliRuntime) {
-  let isShuttingDown = false;
+  private async createCliRuntime(): Promise<ICliRuntime> {
+    const agent = AgentFactory.create(this.logger, 'tui');
+    const channels = ChannelsSingleton.getInstance(this.logger, agent);
 
-  return async (reason: string, exitCode?: number): Promise<void> => {
-    if (isShuttingDown) {
+    channels.startAll();
+    const heartbeat = startHeartbeat();
+
+    try {
+      const webServer = await startWebServer(this.logger, agent);
+      return { agent, channels, heartbeat, webServer };
+    } catch (error) {
+      channels.stopAll();
+      heartbeat.stop();
+      throw error;
+    }
+  }
+
+  private registerShutdownHandlers(): void {
+    for (const signal of SHUTDOWN_SIGNALS) {
+      process.once(signal, () => {
+        void this.shutdown(signal, 0);
+      });
+    }
+
+    process.once('beforeExit', () => {
+      void this.shutdown('beforeExit');
+    });
+  }
+
+  private startTuiIfEnabled(): void {
+    if (!this.runtime || !hasFlag('tui')) {
       return;
     }
 
-    isShuttingDown = true;
-    logger.info(`Shutting down application (${reason})...`);
+    startTUI({ logger: this.logger, agent: this.runtime.agent });
+  }
 
-    runtime.channels.stopAll();
-    runtime.heartbeat.stop();
+  private async shutdown(reason: string, exitCode?: number): Promise<void> {
+    if (this.isShuttingDown || !this.runtime) {
+      return;
+    }
+
+    this.isShuttingDown = true;
+    this.logger.info(`Shutting down application (${reason})...`);
+
+    this.runtime.channels.stopAll();
+    this.runtime.heartbeat.stop();
 
     try {
-      await runtime.webServer.stop();
+      await this.runtime.webServer.stop();
     } catch (error) {
-      logError(`Failed to stop web server during ${reason}.`, error);
+      logError(this.logger, `Failed to stop web server during ${reason}.`, error);
     }
 
     if (exitCode !== undefined) {
       process.exit(exitCode);
     }
-  };
-}
-
-function registerShutdownHandlers(runtime: CliRuntime): void {
-  const shutdown = createShutdownHandler(runtime);
-
-  for (const signal of SHUTDOWN_SIGNALS) {
-    process.once(signal, () => {
-      void shutdown(signal, 0);
-    });
-  }
-
-  process.once('beforeExit', () => {
-    void shutdown('beforeExit');
-  });
-}
-
-async function startCliMode(): Promise<void> {
-  const runtime = await createCliRuntime();
-  registerShutdownHandlers(runtime);
-
-  if (hasFlag(TUI_FLAG)) {
-    startTUI({ logger, agent: runtime.agent });
   }
 }
+
+const app = new CliApplication(logger);
 
 if (require.main === module) {
-  startCliMode().catch((error) => {
-    logError('Failed to start application.', error);
+  app.start().catch((error) => {
+    logError(logger, 'Failed to start application.', error);
     process.exit(1);
   });
 }
