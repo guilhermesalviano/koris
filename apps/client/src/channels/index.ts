@@ -27,3 +27,36 @@ export const channels: ChannelDefinition[] = [
     },
   },
 ];
+
+class ChannelsManager {
+  private stopFns: StopFn[] = [];
+
+  constructor(private logger: ILogger, private agent: IAgent) {}
+
+  startAll() {
+    for (const channel of channels) {
+      if (!channel.enabled()) continue;
+      this.logger.info(`Starting channel: ${channel.name}`);
+      const stop = channel.start(this.logger, this.agent);
+      if (typeof stop === 'function') this.stopFns.push(stop);
+    }
+  }
+
+  stopAll() {
+    this.logger.info("\n👋 Shutting down gracefully...");
+    this.stopFns.forEach((stop) => stop());
+  }
+}
+
+class ChannelsSingleton {
+  private static instance: ChannelsManager;
+
+  static getInstance(logger: ILogger, agent: IAgent): ChannelsManager {
+    if (!ChannelsSingleton.instance) {
+      ChannelsSingleton.instance = new ChannelsManager(logger, agent);
+    }
+    return ChannelsSingleton.instance;
+  }
+}
+
+export { ChannelsSingleton };

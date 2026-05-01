@@ -2,6 +2,10 @@ import { config } from '../config';
 import { LoggerFactory, type ILogger } from '../infrastructure/logger';
 import { HeartbeatFactory } from '../services/agents/sub-agents/heartbeat';
 
+interface HeartbeatController {
+  stop(): void;
+}
+
 class HeartbeatRunner {
   private isRunning = false;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -59,7 +63,7 @@ class HeartbeatRunner {
   }
 }
 
-function startHeartbeat(): HeartbeatRunner {
+function startHeartbeat(): HeartbeatController {
   const runner = new HeartbeatRunner(LoggerFactory.create(), config.HEARTBEAT.INTERVAL_MS);
   runner.start();
   return runner;

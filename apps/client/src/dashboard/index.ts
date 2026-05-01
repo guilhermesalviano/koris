@@ -1,4 +1,5 @@
 import express, { type Request, type Response, type Application } from 'express';
+import { type Server } from 'node:http';
 import { healthCheck } from '../services/provider-health-service';
 import { ILogger } from '../infrastructure/logger';
 import { config } from '../config';
@@ -8,6 +9,10 @@ import { IAgent } from '../services/agents/main-agent/agent';
 interface WebServerOptions {
   logger: ILogger;
   agent: IAgent;
+}
+
+interface WebServerHandle {
+  stop(): Promise<void>;
 }
 
 interface RateLimitEntry {
@@ -142,12 +147,28 @@ function setupSseHeaders(res: Response): void {
   res.flushHeaders();
 }
 
-async function startWebServer(logger: ILogger, agent: IAgent): Promise<void> {
-  const app = createApp({ logger, agent });
-
-  app.listen(config.PORT, () => {
-    logger.info(`Server running at http://localhost:${config.PORT}`);
+function stopServer(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
   });
 }
 
+async function startWebServer(logger: ILogger, agent: IAgent): Promise<WebServerHandle> {
+  const app = createApp({ logger, agent });
+  const server = app.listen(config.PORT, () => {
+    logger.info(`Server running at http://localhost:${config.PORT}`);
+  });
+
+  return {
+    stop: () => stopServer(server),
+  };
+}
+
 export { createApp, startWebServer, createChatHandler, createHealthHandler, serveIndexHandler };
+export type { WebServerHandle };
