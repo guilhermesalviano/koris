@@ -1,8 +1,12 @@
 import type { AIToolDefinition } from '../types/provider';
 import { Skill } from '../types/skills';
 
+interface GetAllOptions {
+  includeTaskTools?: boolean;
+}
+
 interface IToolsRepository {
-  getAll(skills?: Skill[]): AIToolDefinition[];
+  getAll(skills?: Skill[], options?: GetAllOptions): AIToolDefinition[];
 }
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'] as const;
@@ -196,15 +200,19 @@ function deleteTaskTool(): AIToolDefinition {
 }
 
 class ToolsRepository implements IToolsRepository {
-  getAll(skills?: Skill[]): AIToolDefinition[] {
+  getAll(skills?: Skill[], options?: GetAllOptions): AIToolDefinition[] {
     const tools: AIToolDefinition[] = [];
+    const includeTaskTools = options?.includeTaskTools ?? true;
 
     if (skills?.length) tools.push(skillsTool(skills));
     tools.push(curlTool());
-    tools.push(createTaskTool());
-    tools.push(listTasksTool());
-    tools.push(updateTaskTool());
-    tools.push(deleteTaskTool());
+
+    if (includeTaskTools) {
+      tools.push(createTaskTool());
+      tools.push(listTasksTool());
+      tools.push(updateTaskTool());
+      tools.push(deleteTaskTool());
+    }
 
     return cloneTools(tools);
   }

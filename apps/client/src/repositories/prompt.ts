@@ -25,6 +25,7 @@ interface PromptConfig {
   systemPrompt?: string;
   includeSystemInfo?: boolean;
   includeTools?: boolean;
+  includeTaskTools?: boolean;
   learnedSkillsLimit?: number;
   learnedSkillsMaxChars?: number;
 }
@@ -162,7 +163,9 @@ class PromptRepository implements IPromptRepository {
       return undefined;
     }
 
-    return this.toolsRepository.getAll(skills);
+    return this.toolsRepository.getAll(skills, {
+      includeTaskTools: this.config.includeTaskTools ?? true,
+    });
   }
 
   /**

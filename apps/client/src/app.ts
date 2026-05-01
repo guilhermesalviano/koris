@@ -17,12 +17,12 @@ import { HeartbeatFactory } from './services/sub-agents/heartbeat';
 
 const logger = LoggerFactory.create();
 
-let heartbeatRunning = false;
+let isHeartbeatRunning = false;
 
 async function heartbeatHandle() {
-  if (!config.HEARTBEAT.ENABLED || heartbeatRunning) return;
+  if (!config.HEARTBEAT.ENABLED || isHeartbeatRunning) return;
 
-  heartbeatRunning = true;
+  isHeartbeatRunning = true;
   const date = new Date();
   logger.info(`[${date.toISOString()}] Agent waking up...`);
 
@@ -32,12 +32,12 @@ async function heartbeatHandle() {
   } catch (error: any) {
     logger.error('Heartbeat failed:', error);
   } finally {
-    heartbeatRunning = false;
+    isHeartbeatRunning = false;
   }
 }
 
 heartbeatHandle();
-setInterval(heartbeatHandle, config.HEARTBEAT.INTERVAL_MS);
+setInterval(heartbeatHandle, 60 * 1000);
 
 type StopFn = () => void;
 

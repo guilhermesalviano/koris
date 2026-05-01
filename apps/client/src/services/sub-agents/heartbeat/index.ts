@@ -56,19 +56,19 @@ class Heartbeat {
       }
 
       this.logger.info(`Heartbeat: Executing task "${task.id}" — ${task.task}`);
-      const prompt = replacePlaceholders(HEARTBEAT_PROMPT, { v1: `task: ${task.task} and type: ${task.type}` });
+      const prompt = replacePlaceholders(HEARTBEAT_PROMPT, { v1: `${task.type}`, v2: `task: ${task.task}` });
 
       try {
         // refactor - usar um novo tipo de manager para heartbeat tasks, que não precisa de message history, channel, etc. Talvez só passar o texto da task e um contexto com logger.
-        const payload = this.promptRepository.build({
-          userMessage: prompt, 
-          channel: 'tui', 
-          skills, 
-          toolsEnabled: true,
-          messageHistory: []
-        });
+        const payload = this.promptRepository.withConfig({ includeTaskTools: false }).build({
+        userMessage: prompt, 
+        channel: 'tui', 
+        skills, 
+        toolsEnabled: true,
+        messageHistory: []
+      });
 
-        this.logger.debug(`heartbeat prompt value ${JSON.stringify(payload)}`);
+        // this.logger.debug(`heartbeat prompt value ${JSON.stringify(payload)}`);
       
         const result = await provider.chat(payload);
 
