@@ -109,6 +109,7 @@ class OllamaAIProvider implements AIProvider {
       }
 
       let streamInThinking = false;
+      let jsonBuffer = '';
 
       for await (const chunk of this.readNDJSON(body, bumpIdle)) {
         totalChunksReceived++;
@@ -127,15 +128,46 @@ class OllamaAIProvider implements AIProvider {
           yield THINK_END;
         }
 
-        const text = this.parseChunk(chunk);
-        if (text) {
-          totalCharsYielded += text.length;
-          yield text;
+        // Yield thinking content immediately — never buffer it.
+        if (chunkHasThinking) {
+          const text = this.parseChunk(chunk);
+          if (text) { totalCharsYielded += text.length; yield text; }
+          continue;
         }
+
         if (chunk.done) {
           if (streamInThinking) yield THINK_END;
+
+          if (chunk.message?.tool_calls && chunk.message.tool_calls.length > 0) {
+            // Tool call response: yield only the clean parsed JSON, discarding
+            // the raw JSON fragments that were streamed in intermediate chunks.
+            const toolCallJson = JSON.stringify({ tool_calls: chunk.message.tool_calls });
+            totalCharsYielded += toolCallJson.length;
+            yield toolCallJson;
+          } else if (jsonBuffer) {
+            // Content looked like JSON but was actually prose — flush it.
+            const finalText = this.parseChunk(chunk);
+            const full = jsonBuffer + (finalText ?? '');
+            totalCharsYielded += full.length;
+            yield full;
+          } else {
+            const text = this.parseChunk(chunk);
+            if (text) { totalCharsYielded += text.length; yield text; }
+          }
+
           this.logger.debug('Ollama stream completed', { chunksReceived: totalChunksReceived });
           break;
+        }
+
+        // Non-done, non-thinking chunk: buffer if it looks like JSON being built.
+        const text = this.parseChunk(chunk);
+        if (text) {
+          if (jsonBuffer || text.trimStart().startsWith('{')) {
+            jsonBuffer += text;
+          } else {
+            totalCharsYielded += text.length;
+            yield text;
+          }
         }
       }
 

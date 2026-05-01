@@ -37,8 +37,8 @@ class LearnerWorker implements IWorker {
 
     for (const toolCall of toolCalls) {
       const skillName = (toolCall.arguments.name ?? toolCall.arguments.skill_name) as string;
-      if (skillName === "get_skill") {
-        this.logger.warn(`Unexpected tool call "${toolCall.name}" in learnerWorker, skipping...`, { toolCall });
+      if (!skillName || typeof skillName !== 'string') {
+        this.logger.warn(`Skipping tool call with missing skill_name`, { toolCall });
         continue;
       }
 
