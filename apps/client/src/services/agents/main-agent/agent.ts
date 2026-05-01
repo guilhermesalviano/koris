@@ -45,7 +45,6 @@ class Agent implements IAgent {
     }
 
     const response = await this.manager.run({
-      logger: this.logger,
       userMessage: safeMessage,
       channel: this.channel,
       message: this.messageService,
@@ -133,12 +132,11 @@ class AgentFactory {
     
     const sessionService = SessionServiceFactory.create(database, channel);
     const sessionId = sessionService.getSession().id;
-
     const messageService = MessageServiceFactory.create(database, sessionService);
     const memoryService = MemoryServiceFactory.create(database, sessionId);
-    const conversationWorker = ConversationWorkerFactory.create(messageService);
-    const summarizerWorker = new SummarizerFactory().create();
-    const manager = ManagerFactory.create();
+    const conversationWorker = ConversationWorkerFactory.create(logger, messageService);
+    const summarizerWorker = SummarizerFactory.create(logger);
+    const manager = ManagerFactory.create(logger);
 
     return new Agent(
       logger,

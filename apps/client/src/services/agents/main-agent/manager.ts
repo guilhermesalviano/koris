@@ -1,6 +1,6 @@
 
 import { extractToolCalls, normalizeResponse } from '../../../utils/tool-calls';
-import { ToolsQueue } from '../../tools-queue';
+import { ToolsQueueFactory } from '../../tools-queue';
 import { ExecutorWorkerFactory } from '../../workers/executor-worker';
 import { LearnerWorkerFactory } from '../../workers/learner-worker';
 import { FIRST_PROMPT_HELPER, SKILL_READY_PROMPT } from '../../../constants';
@@ -13,11 +13,10 @@ import type { ILogger } from '../../../infrastructure/logger';
 import type { Message } from '../../../entities/message';
 import type { IMessageProvider } from '../../../types/provider';
 import type { LoopContext } from '../../../types/context';
-import type { ToolCall } from '../../../types/tools';
+import type { IToolsQueue, ToolCall } from '../../../types/tools';
 import type { IWorker } from '../../../types/workers';
 
 interface ManagerArgs {
-  logger: ILogger;
   userMessage: string;
   channel: string;
   message: IMessageService;
@@ -31,26 +30,27 @@ interface IManager {
 
 class Manager {
   constructor(
+    private logger: ILogger,
     public name: string,
+    private toolsQueue: IToolsQueue,
     private messageProvider: IMessageProvider
   ) { }
 
   async run(args: ManagerArgs): Promise<ProcessedMessage> {
-    const { logger, userMessage, channel, message, options } = args;
+    const { userMessage, channel, message, options } = args;
     const messageHistory = message.getHistory();
 
     const ctx: LoopContext = {
-      logger,
       channel,
       message,
-      toolsQueue: new ToolsQueue(logger),
+      toolsQueue: this.toolsQueue,
       signal: options?.signal ?? new AbortController().signal,
-      onProgress: options?.onProgress ?? ((progress) => logger.info(progress)),
+      onProgress: options?.onProgress ?? ((progress) => this.logger.info(progress)),
       options,
     };
 
     const prompt = replacePlaceholders(FIRST_PROMPT_HELPER, { v1: userMessage });
-    const streamResult = await this.messageProvider.handler(logger, prompt, channel, options, messageHistory);
+    const streamResult = await this.messageProvider.handler(prompt, channel, options, messageHistory);
 
     // Non-streaming path (Telegram, Web, non-Ollama).
     if (!this.isAsyncGen(streamResult)) {
@@ -80,11 +80,11 @@ class Manager {
 
     if (toLearn.length > 0) {
       ctx.onProgress(`Learning phase: ${toLearn.length} skill(s) - ${toLearn.map(c => c.name).join(' - ')}`);
-      const learner = LearnerWorkerFactory.create();
+      const learner = LearnerWorkerFactory.create(this.logger);
       await learner.run({ toolCalls: toLearn, userMessage, messageHistory, ctx });
 
       const skillPrompt = replacePlaceholders(SKILL_READY_PROMPT, { v1: userMessage });
-      const aiResponse = await this.messageProvider.handler(ctx.logger, skillPrompt, ctx.channel, ctx.options, ctx.message.getHistory());
+      const aiResponse = await this.messageProvider.handler(skillPrompt, ctx.channel, ctx.options, ctx.message.getHistory());
       const responseText = normalizeResponse(aiResponse);
       toExecute = extractToolCalls(responseText);
 
@@ -98,7 +98,7 @@ class Manager {
     }
 
     ctx.onProgress(`Execution phase: ${toExecute.length} tool(s) - ${toExecute.map(c => c.name).join(' - ')}`);
-    const executor = ExecutorWorkerFactory.create();
+    const executor = ExecutorWorkerFactory.create(this.logger);
     return executor.run({ toolCalls: toExecute, userMessage, messageHistory, ctx });
   }
 
@@ -169,9 +169,10 @@ class Manager {
 }
 
 class ManagerFactory {
-  static create(): IWorker {
-    const messageProvider = MessageProviderFactory.create();
-    return new Manager('Manager', messageProvider);
+  static create(logger: ILogger): IWorker {
+    const messageProvider = MessageProviderFactory.create(logger);
+    const toolsQueue = ToolsQueueFactory.create(logger);
+    return new Manager(logger, 'Manager', toolsQueue, messageProvider);
   }
 }
 

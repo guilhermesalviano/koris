@@ -16,6 +16,7 @@ import { ExecutorWorkerFactory } from "../../../workers/executor-worker";
 import { ISubAgent } from "../../../../types/agents";
 import { mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
+import { AgnosticExecutionToolFactory } from "../../../tools";
 
 class Heartbeat implements ISubAgent {
   constructor(
@@ -28,8 +29,8 @@ class Heartbeat implements ISubAgent {
   ) { }
 
   async handler(date: Date): Promise<void> {
-    const provider = getAIProvider({ logger: this.logger });
-    const executorWorker = ExecutorWorkerFactory.create();
+    const provider = getAIProvider(this.logger);
+    const executorWorker = ExecutorWorkerFactory.create(this.logger);
     const tasks = this.heartbeatRepository.getAll();
     const skills = this.skillsRepository.get();
 
@@ -170,7 +171,8 @@ class HeartbeatFactory {
     const skillsRepository = SkillsRepositoryFactory.create(logger);
     const sessionService = SessionServiceFactory.create(db, channel);
     const messageService = MessageServiceFactory.create(db, sessionService);
-    const toolsQueue = new ToolsQueue(logger);
+    const agnosticExecutionTool = AgnosticExecutionToolFactory.create();
+    const toolsQueue = new ToolsQueue(logger, agnosticExecutionTool);
 
     return new Heartbeat(logger, promptRepository, heartbeatRepository, skillsRepository, messageService, toolsQueue);
   }

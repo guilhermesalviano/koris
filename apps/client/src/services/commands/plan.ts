@@ -9,7 +9,7 @@ import { ILogger } from "../../infrastructure/logger";
 async function handlePlan(message: string, logger: ILogger, options?: ProcessOptions): Promise<CommandResult> {
   const prompt = replacePlaceholders(PLAN_PROMPT, { v1: message });
 
-  const provider = getAIProvider({ logger });
+  const provider = getAIProvider(logger);
   const chatRequest: AIChatRequest = {
     messages: [{ role: 'user', content: prompt }], 
     ...options?.toolsEnabled ? { tools: [] } : {} 

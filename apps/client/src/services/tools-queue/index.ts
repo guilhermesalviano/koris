@@ -1,11 +1,12 @@
 import pLimit from "p-limit";
-import { COMMAND_MAP } from "../tools";
 import type { AIAgentRequest, IToolsQueue, ToolCall, ToolResult } from "../../types/tools";
 import type { ILogger } from "../../infrastructure/logger";
+import { AgnosticExecutionToolFactory, IAgnosticExecutionTool } from "../tools";
 
 class ToolsQueue implements IToolsQueue {
   constructor(
     private logger: ILogger,
+    private agnosticExecutionTool: IAgnosticExecutionTool,
     private maxWorkers: number = 2
   ) { }
 
@@ -23,7 +24,7 @@ class ToolsQueue implements IToolsQueue {
         }
 
         try {
-          return await this.executeTool(this.logger, tool);
+          return await this.agnosticExecutionTool.handle(this.logger, tool);
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
           this.logger.error('Tool execution failed', { toolName: tool.name, error: errorMsg });
@@ -42,33 +43,13 @@ class ToolsQueue implements IToolsQueue {
 
     return results;
   }
+}
 
-  async executeTool(logger: ILogger, toolCall: ToolCall): Promise<ToolResult> {
-    const { name, arguments: args } = toolCall;
-    logger.debug('Executing tool', {
-      toolName: name,
-      args,
-    });
-
-    try {
-      const command = COMMAND_MAP[name];
-      if (command) return await command(logger, args);
-
-      return {
-        toolName: name,
-        success: false,
-        error: `Unknown tool: ${name}`,
-      };
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      logger.error('Tool execution error', { toolName: name, error: errorMsg });
-      return {
-        toolName: name,
-        success: false,
-        error: errorMsg,
-      };
-    }
+class ToolsQueueFactory {
+  static create(logger: ILogger, maxWorkers: number = 2): ToolsQueue {
+    const agnosticExecutionTool = AgnosticExecutionToolFactory.create();
+    return new ToolsQueue(logger, agnosticExecutionTool, maxWorkers);
   }
 }
 
-export { ToolsQueue, IToolsQueue };
+export { IToolsQueue, ToolsQueue, ToolsQueueFactory };

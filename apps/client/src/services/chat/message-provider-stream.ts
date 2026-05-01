@@ -9,16 +9,18 @@ import type { AIChatRequest, IMessageProvider } from "../../types/provider";
 import type { Message } from "../../entities/message";
 
 class messageProviderStream implements IMessageProvider {
+  constructor(
+    private logger: ILogger,
+  ) { }
 
   async handler(
-    logger: ILogger,
     message: string,
     channel: string,
     options?: ProcessOptions,
     messageHistory?: Message[]
   ): Promise<ProcessedMessage> {
-    const provider = getAIProvider({ logger });
-    const skillsRepository = SkillsRepositoryFactory.create(logger);
+    const provider = getAIProvider(this.logger);
+    const skillsRepository = SkillsRepositoryFactory.create(this.logger);
     const skills = skillsRepository.get();
 
     const db = DatabaseServiceFactory.create();
@@ -70,10 +72,9 @@ class messageProviderStream implements IMessageProvider {
 }
 
 class MessageProviderFactory {
-  static create(): IMessageProvider {
-    return new messageProviderStream();
+  static create(logger: ILogger): IMessageProvider {
+    return new messageProviderStream(logger);
   }
 }
-
 
 export { MessageProviderFactory };

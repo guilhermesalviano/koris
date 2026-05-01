@@ -7,6 +7,7 @@ import type { LoopContext } from "../../types/context";
 import type { ToolCall } from "../../types/tools";
 import type { Message } from "../../entities/message";
 import { IWorker } from "../../types/workers";
+import { ILogger } from "../../infrastructure/logger";
 
 interface LearnerWorkerArgs {
   toolCalls: ToolCall[];
@@ -18,8 +19,8 @@ interface LearnerWorkerArgs {
 }
 
 class LearnerWorker implements IWorker {
-
   constructor(
+    private logger: ILogger,
     public name: string = 'learnerWorker',
     private model = { model: config.AI.MODEL },
     private skillsRepo: ILearnedSkillsRepository
@@ -37,7 +38,7 @@ class LearnerWorker implements IWorker {
     for (const toolCall of toolCalls) {
       const skillName = (toolCall.arguments.name ?? toolCall.arguments.skill_name) as string;
       if (skillName === "get_skill") {
-        ctx.logger.warn(`Unexpected tool call "${toolCall.name}" in learnerWorker, skipping...`, { toolCall });
+        this.logger.warn(`Unexpected tool call "${toolCall.name}" in learnerWorker, skipping...`, { toolCall });
         continue;
       }
 
@@ -59,12 +60,12 @@ class LearnerWorker implements IWorker {
 
         if (!this.skillsRepo.exists(skillName as string)) {
           this.skillsRepo.save({ skill_name: skillName, skill_content: learningPrompt });
-          ctx.logger.info(`✓ Skill "${skillName}" learned and saved to database`);
+          this.logger.info(`✓ Skill "${skillName}" learned and saved to database`);
           continue;
         }
-        ctx.logger.warn(`- Skill "${skillName}" learned but already exists in database, skipping save`);
+        this.logger.warn(`- Skill "${skillName}" learned but already exists in database, skipping save`);
       } catch (error) {
-        ctx.logger.error('Failed to save learned skill', { skillName, error });
+        this.logger.error('Failed to save learned skill', { skillName, error });
         ctx.onProgress(`⚠ Skill "${skillName}" learned but failed to save to database`);
         return false;
       }
@@ -74,11 +75,11 @@ class LearnerWorker implements IWorker {
 }
 
 class LearnerWorkerFactory {
-  static create(): IWorker {
+  static create(logger: ILogger): IWorker {
     const model = { model: config.AI.MODEL };
     const db = DatabaseServiceFactory.create();
     const skillsRepo = LearnedSkillsRepositoryFactory.create(db);
-    return new LearnerWorker('learnerWorker', model, skillsRepo);
+    return new LearnerWorker(logger, 'learnerWorker', model, skillsRepo);
   }
 }
 

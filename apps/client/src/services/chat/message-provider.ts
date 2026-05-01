@@ -9,16 +9,18 @@ import { ProcessedMessage, ProcessOptions } from "../../types/agents";
 import { DatabaseServiceFactory } from "../../infrastructure/db-sqlite";
 
 class messageProvider implements IMessageProvider {
+  constructor(
+    private logger: ILogger,
+  ) { }
 
   async handler(
-    logger: ILogger,
     message: string,
     channel: string,
     options?: ProcessOptions,
     messageHistory?: Message[]
   ): Promise<ProcessedMessage> {
-    const provider = getAIProvider({ logger });
-    const skillsRepository = SkillsRepositoryFactory.create(logger);
+    const provider = getAIProvider(this.logger);
+    const skillsRepository = SkillsRepositoryFactory.create(this.logger);
     const skills = skillsRepository.get();
 
     /**
@@ -59,8 +61,8 @@ class messageProvider implements IMessageProvider {
 }
 
 class MessageProviderFactory {
-  static create(): IMessageProvider {
-    return new messageProvider();
+  static create(logger: ILogger): IMessageProvider {
+    return new messageProvider(logger);
   }
 }
 

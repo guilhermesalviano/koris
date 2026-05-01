@@ -47,9 +47,7 @@ const cache = new ProviderCache();
  * 
  * @throws {Error} If configured provider is not supported
  */
-export function getAIProvider(params: { logger: ILogger }): AIProvider {
-  const { logger } = params;
-
+export function getAIProvider(logger: ILogger): AIProvider {
   const cached = cache.get(logger);
   if (cached) {
     return cached;

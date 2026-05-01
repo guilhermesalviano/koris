@@ -65,7 +65,7 @@ function serveIndexHandler(publicDir: string) {
 
 function createHealthHandler(logger: ILogger) {
   return async (_: Request, res: Response) => {
-    const { status, timestamp, details } = await healthCheck({ logger });
+    const { status, timestamp, details } = await healthCheck(logger);
     res.status((status === 'ok' ? 200 : 500)).json({ status, timestamp, details });
   };
 }

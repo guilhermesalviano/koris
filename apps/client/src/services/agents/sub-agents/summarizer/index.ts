@@ -11,18 +11,20 @@ interface SummarizerWorkerProps {
   ask: string,
   answer: string,
   type: MemoryType,
-  logger: ILogger,
   channel: string,
   memoryService: IMemoryService,
 }
 
 class Summarizer implements ISubAgent {
+  constructor(
+    private logger: ILogger,
+  ) { }
 
   async handler(
     props: SummarizerWorkerProps
   ): Promise<void> {
-    props.logger.info(`Summarizer worker started for session ${props.sessionId} in ${props.channel}`);
-    const provider = getAIProvider({ logger: props.logger });
+    this.logger.info(`Summarizer worker started for session ${props.sessionId} in ${props.channel}`);
+    const provider = getAIProvider(this.logger);
 
     const prompt = replacePlaceholders(SUMMARIZATION_PROMPT, { v1: props.ask, v2: props.answer });
 
@@ -36,16 +38,16 @@ class Summarizer implements ISubAgent {
       };
 
       props.memoryService.upsert(memory);
-      props.logger.info(`Summarizer worker completed for session ${props.sessionId}`);
+      this.logger.info(`Summarizer worker completed for session ${props.sessionId}`);
     } catch (error) {
-      props.logger.error(`Failed to summarize for session ${props.sessionId}`, { error });
+      this.logger.error(`Failed to summarize for session ${props.sessionId}`, { error });
     }
   }
 }
 
 class SummarizerFactory {
-  create() {
-    return new Summarizer();
+  static create(logger: ILogger) {
+    return new Summarizer(logger);
   }
 }
 

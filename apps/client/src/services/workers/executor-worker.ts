@@ -9,6 +9,7 @@ import type { Message } from "../../entities/message";
 import { MessageProviderFactory } from "../chat/message-provider";
 import { IWorker } from "../../types/workers";
 import { IMessageProvider } from "../../types/provider";
+import { ILogger } from "../../infrastructure/logger";
 interface ExecutorWorkerArgs {
   toolCalls: ToolCall[];
   userMessage: string;
@@ -19,8 +20,8 @@ interface ExecutorWorkerArgs {
 }
 
 class ExecutorWorker implements IWorker {
-
   constructor(
+    private logger: ILogger,
     public name: string,
     private messageProvider: IMessageProvider
   ) { }
@@ -29,7 +30,7 @@ class ExecutorWorker implements IWorker {
     const { toolCalls, userMessage, messageHistory, ctx, iteration = 1, maxIterations = 10 } = args;
 
     if (iteration >= maxIterations) {
-      ctx.logger.warn('Max tool iterations reached', {
+      this.logger.warn('Max tool iterations reached', {
         maxIterations,
         userMessage
       });
@@ -38,7 +39,7 @@ class ExecutorWorker implements IWorker {
     }
     ctx.onProgress(`Iteration ${iteration}`);
 
-    ctx.logger.info(`Executing tools (${toolCalls})...`);
+    this.logger.info(`Executing tools (${toolCalls})...`);
 
     const toolResultsArray = await ctx.toolsQueue.handle(
       toolCalls,
@@ -53,11 +54,10 @@ class ExecutorWorker implements IWorker {
           : `Tool: ${r.toolName}, Success: ${r.success}, Error: ${r.error}`
       )
       .join('\n');
-    ctx.logger.info(`Tool results: ${JSON.stringify(toolCalls)}`);
+    this.logger.info(`Tool results: ${JSON.stringify(toolCalls)}`);
 
     const synthesisPrompt = replacePlaceholders(TOOLS_RESULT_PROMPT, { v1: userMessage, v2: toolResults });
     const response = await this.messageProvider.handler(
-      ctx.logger,
       synthesisPrompt,
       ctx.channel,
       ctx.options,
@@ -65,11 +65,11 @@ class ExecutorWorker implements IWorker {
     );
 
     const normalizedResponse = normalizeResponse(response);
-    const nextToolCalls = extractToolCalls(normalizedResponse, ctx.logger);
+    const nextToolCalls = extractToolCalls(normalizedResponse, this.logger);
 
     if (nextToolCalls.length === 0) return normalizedResponse;
 
-    ctx.logger.info(`Tool call (${nextToolCalls.length}) after execution phase: ${JSON.stringify(nextToolCalls)}`);
+    this.logger.info(`Tool call (${nextToolCalls.length}) after execution phase: ${JSON.stringify(nextToolCalls)}`);
 
     return this.run({
       toolCalls: nextToolCalls,
@@ -84,9 +84,9 @@ class ExecutorWorker implements IWorker {
 }
 
 class ExecutorWorkerFactory {
-  static create(): IWorker {
-    const messageProvider = MessageProviderFactory.create();
-    return new ExecutorWorker('executorWorker', messageProvider );
+  static create(logger: ILogger): IWorker {
+    const messageProvider = MessageProviderFactory.create(logger);
+    return new ExecutorWorker(logger, 'executorWorker', messageProvider);
   }
 }
 

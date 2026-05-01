@@ -1,8 +1,8 @@
 import { getAIProvider } from "./providers";
 import { ILogger } from "../infrastructure/logger";
 
-async function healthCheck(params: { logger: ILogger }): Promise<{ status: 'ok' | 'error'; timestamp: string; details?: string }> {
-  const provider = getAIProvider(params);
+async function healthCheck(logger: ILogger): Promise<{ status: 'ok' | 'error'; timestamp: string; details?: string }> {
+  const provider = getAIProvider(logger);
   try {
     const health = await provider.healthCheck();
     return { status: health.ok === true ? 'ok' : 'error', timestamp: new Date().toISOString() };
