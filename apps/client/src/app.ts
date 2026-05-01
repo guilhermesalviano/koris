@@ -12,7 +12,8 @@ import { LoggerFactory } from './infrastructure/logger';
 import { handleMessage } from './channels/telegram';
 import { config } from './config';
 import { AgentHandlerFactory } from './services/main-agent/handler';
-import { heartbeat } from './services/sub-agents/heartbeat';
+import { HeartbeatFactory } from './services/sub-agents/heartbeat';
+
 
 const logger = LoggerFactory.create();
 
@@ -26,7 +27,8 @@ async function heartbeatHandle() {
   logger.info(`[${date.toISOString()}] Agent waking up...`);
 
   try {
-    await heartbeat({ logger, date });
+    const agent = HeartbeatFactory.create(logger, 'tui');
+    await agent.handler(date);
   } catch (error: any) {
     logger.error('Heartbeat failed:', error);
   } finally {
@@ -68,6 +70,7 @@ const channels: ChannelDefinition[] = [
 
 function startCliMode(): void {
   const stopFns: StopFn[] = [];
+  const handler = AgentHandlerFactory.create(logger, 'tui');
 
   for (const channel of channels) {
     if (!channel.enabled()) continue;
@@ -85,14 +88,12 @@ function startCliMode(): void {
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 
-  const handler = AgentHandlerFactory.create(logger, 'web');
   startWebServer(logger, handler).catch((error) => {
     logger.error("Failed to start web server:", error);
     process.exit(1);
   });
 
   if (hasFlag('tui')) {
-    const handler = AgentHandlerFactory.create(logger, 'tui');
     startTUI({ logger, handler });
   }
 }

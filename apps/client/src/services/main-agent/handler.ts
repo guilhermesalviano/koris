@@ -5,22 +5,25 @@ import { DatabaseServiceFactory } from '../../infrastructure/db-sqlite';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import { SessionServiceFactory } from '../session-service';
 import { IMessageService, MessageServiceFactory } from '../message-service';
-import { manager } from '../workers/manager';
+import { ManagerWorkerFactory } from '../workers/manager';
+import { ConversationWorkerFactory } from '../workers/conversation-worker';
 import { summarizerWorker } from '../sub-agents/summarizer';
 import { IMemoryService, MemoryServiceFactory } from '../memory-service';
-import { conversationWorker } from '../workers/conversation-worker';
 import { MemoryType } from '../../types/memory';
 import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../constants/thinking';
+import { IWorker } from '../../types/workers';
 
 interface IAgentHandler {
   handle(message: unknown, options?: ProcessOptions): Promise<ProcessedMessage>;
 }
 
-class AgentHandler {
+class AgentHandler implements IAgentHandler {
   constructor(
     private logger: ILogger,
     private messageService: IMessageService,
     private memoryService: IMemoryService,
+    private conversationWorker: IWorker,
+    private managerWorker: IWorker,
     private channel: string,
     private sessionId: string,
   ) { }
@@ -39,7 +42,13 @@ class AgentHandler {
       return response;
     }
 
-    const response = await manager(this.logger, safeMessage, this.channel, this.messageService, { ...options });
+    const response = await this.managerWorker.run({
+      logger: this.logger,
+      userMessage: safeMessage,
+      channel: this.channel,
+      message: this.messageService,
+      options: { ...options },
+    });
 
     if (typeof response !== 'string') {
       return this.persistAssistantStream(response, safeMessage);
@@ -70,17 +79,14 @@ class AgentHandler {
   }
 
   private historyHelper(ask: string, answer: string) {
-    const conversation = {
+    this.conversationWorker.run({
       sessionId: this.sessionId,
       ask,
       answer,
       logger: this.logger,
       channel: this.channel,
-      messageService: this.messageService,
-    };
-
-    conversationWorker(conversation)
-      .catch((err) =>
+    })
+      .catch((err: unknown) =>
         this.logger.error('Background conversation processing failed', { err })
       );
   }
@@ -128,8 +134,18 @@ class AgentHandlerFactory {
 
     const messageService = MessageServiceFactory.create(database, sessionService);
     const memoryService = MemoryServiceFactory.create(database, sessionId);
+    const conversationWorker = ConversationWorkerFactory.create(messageService);
+    const managerWorker = ManagerWorkerFactory.create();
 
-    return new AgentHandler(logger, messageService, memoryService, channel, sessionId);
+    return new AgentHandler(
+      logger,
+      messageService,
+      memoryService,
+      conversationWorker,
+      managerWorker,
+      channel,
+      sessionId,
+    );
   }
 }
 

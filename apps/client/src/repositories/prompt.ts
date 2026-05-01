@@ -32,11 +32,18 @@ interface PromptConfig {
 const DEFAULT_LEARNED_SKILLS_LIMIT = 10;
 const DEFAULT_LEARNED_SKILLS_MAX_CHARS = 8000;
 
+interface IPromptRepository {
+  build(params: BuildPromptParams): AIChatRequest;
+  appendAssistant(payload: AIChatRequest, content: string): AIChatRequest;
+  appendUser(payload: AIChatRequest, content: string): AIChatRequest;
+  withConfig(config: Partial<PromptConfig>): PromptRepository;
+}
+
 /**
  * Repository for building and managing AI prompts.
  * Composes system prompts, user messages, and tool definitions.
  */
-class PromptRepository {
+class PromptRepository implements IPromptRepository {
   constructor(
     private systemInfoRepository: ISystemInfoRepository,
     private toolsRepository: IToolsRepository,
@@ -215,6 +222,6 @@ export {
   MessageRole,
   BuildPromptParams,
   PromptConfig,
-  PromptRepository,
+  IPromptRepository,
   PromptRepositoryFactory,
 };
