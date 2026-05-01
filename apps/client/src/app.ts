@@ -9,12 +9,13 @@ import { startTUI } from './tui';
 import { startWebServer } from './dashboard';
 import { LoggerFactory, ILogger } from './infrastructure/logger';
 import { AgentFactory, IAgent } from './services/agents/main-agent/agent';
-import { HeartbeatController, startHeartbeat } from './heartbeat';
+import { IHeartbeatRunner, HeartbeatSingleton } from './heartbeat';
 import { ChannelsSingleton, IChannelsManager } from './channels';
 import { SHUTDOWN_SIGNALS } from './constants/tui';
 import { hasFlag, logError } from './utils/runtime';
 import { DatabaseServiceFactory } from './infrastructure/db-sqlite';
 import { SessionServiceFactory } from './services/session-service';
+import { config } from './config';
 
 const logger = LoggerFactory.create();
 const CHANNELS = ['tui', 'telegram', 'web'] as const;
@@ -24,7 +25,7 @@ type CliChannel = typeof CHANNELS[number];
 interface ICliRuntime {
   agent: IAgent;
   channels: IChannelsManager;
-  heartbeat: HeartbeatController;
+  heartbeat: IHeartbeatRunner;
   webServer: Awaited<ReturnType<typeof startWebServer>>;
 };
 
@@ -51,10 +52,12 @@ class CliApplication implements ICliApplication {
     const db = DatabaseServiceFactory.create();
     const session = SessionServiceFactory.create(db, this.channel);
     const agent = AgentFactory.create(this.logger, this.channel, db, session);
+
     const channels = ChannelsSingleton.getInstance(this.logger, agent);
+    const heartbeat = HeartbeatSingleton.getInstance(this.logger, config.HEARTBEAT.INTERVAL_MS);
 
     channels.startAll();
-    const heartbeat = startHeartbeat();
+    heartbeat.start();
 
     try {
       const webServer = await startWebServer(this.logger, agent);
