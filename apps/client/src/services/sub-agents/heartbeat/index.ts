@@ -15,8 +15,9 @@ import { IToolsQueue, ToolsQueue } from "../../tools-queue";
 import { ExecutorWorkerFactory } from "../../workers/executor-worker";
 import { mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
+import { ISubAgent } from "../../../types/agents";
 
-class Heartbeat {
+class Heartbeat implements ISubAgent {
   constructor(
     private logger: ILogger,
     private promptRepository: IPromptRepository,

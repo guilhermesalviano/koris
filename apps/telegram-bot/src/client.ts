@@ -122,20 +122,13 @@ export class TelegramBot {
   }
 
   private async getUpdates(): Promise<TelegramUpdate[]> {
-    try {
-      const updates = await this.apiRequest<TelegramUpdate[]>('getUpdates', {
-        offset: this.offset,
-        timeout: 30,
-        allowed_updates: ['message', 'edited_message', 'callback_query'],
-      });
+    const updates = await this.apiRequest<TelegramUpdate[]>('getUpdates', {
+      offset: this.offset,
+      timeout: 30,
+      allowed_updates: ['message', 'edited_message', 'callback_query'],
+    });
 
-      return updates || [];
-    } catch (error) {
-      this.pollingErrorHandlers.forEach((handler) => {
-        handler(error instanceof Error ? error : new Error(String(error)));
-      });
-      return [];
-    }
+    return updates || [];
   }
 
   private startPolling(): void {

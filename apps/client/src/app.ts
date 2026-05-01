@@ -11,7 +11,7 @@ import { startWebServer } from './dashboard';
 import { LoggerFactory } from './infrastructure/logger';
 import { handleMessage } from './channels/telegram';
 import { config } from './config';
-import { AgentHandlerFactory } from './services/main-agent/handler';
+import { AgentFactory } from './services/main-agent/agent';
 import { HeartbeatFactory } from './services/sub-agents/heartbeat';
 
 
@@ -56,11 +56,11 @@ const channels: ChannelDefinition[] = [
     name: 'telegram',
     enabled: () => !!config.TELEGRAM.BOT_TOKEN,
     start: () => {
-      const handler = AgentHandlerFactory.create(logger, 'telegram');
+      const agent = AgentFactory.create(logger, 'telegram');
       const bot = initBot({
         token: config.TELEGRAM.BOT_TOKEN,
         polling: true,
-        onMessage: (msg) => handleMessage(handler, msg),
+        onMessage: (msg) => handleMessage(agent, msg),
       });
       logger.info("Telegram is ready!");
       return () => bot.stopPolling();
@@ -70,7 +70,7 @@ const channels: ChannelDefinition[] = [
 
 function startCliMode(): void {
   const stopFns: StopFn[] = [];
-  const handler = AgentHandlerFactory.create(logger, 'tui');
+  const agent = AgentFactory.create(logger, 'tui');
 
   for (const channel of channels) {
     if (!channel.enabled()) continue;
@@ -88,13 +88,13 @@ function startCliMode(): void {
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 
-  startWebServer(logger, handler).catch((error) => {
+  startWebServer(logger, agent).catch((error) => {
     logger.error("Failed to start web server:", error);
     process.exit(1);
   });
 
   if (hasFlag('tui')) {
-    startTUI({ logger, handler });
+    startTUI({ logger, agent });
   }
 }
 

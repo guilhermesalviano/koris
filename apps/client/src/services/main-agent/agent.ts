@@ -5,25 +5,27 @@ import { DatabaseServiceFactory } from '../../infrastructure/db-sqlite';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import { SessionServiceFactory } from '../session-service';
 import { IMessageService, MessageServiceFactory } from '../message-service';
-import { ManagerWorkerFactory } from '../workers/manager';
 import { ConversationWorkerFactory } from '../workers/conversation-worker';
-import { summarizerWorker } from '../sub-agents/summarizer';
+import { SummarizerFactory } from '../sub-agents/summarizer';
 import { IMemoryService, MemoryServiceFactory } from '../memory-service';
 import { MemoryType } from '../../types/memory';
 import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../constants/thinking';
 import { IWorker } from '../../types/workers';
+import { IManager, ManagerFactory } from '../workers/manager';
+import { ISubAgent } from '../../types/agents';
 
-interface IAgentHandler {
+interface IAgent {
   handle(message: unknown, options?: ProcessOptions): Promise<ProcessedMessage>;
 }
 
-class AgentHandler implements IAgentHandler {
+class Agent implements IAgent {
   constructor(
     private logger: ILogger,
     private messageService: IMessageService,
     private memoryService: IMemoryService,
     private conversationWorker: IWorker,
-    private managerWorker: IWorker,
+    private summarizerWorker: ISubAgent,
+    private manager: IManager,
     private channel: string,
     private sessionId: string,
   ) { }
@@ -42,7 +44,7 @@ class AgentHandler implements IAgentHandler {
       return response;
     }
 
-    const response = await this.managerWorker.run({
+    const response = await this.manager.run({
       logger: this.logger,
       userMessage: safeMessage,
       channel: this.channel,
@@ -102,8 +104,8 @@ class AgentHandler implements IAgentHandler {
       memoryService: this.memoryService,
     };
 
-    summarizerWorker(conversation)
-      .catch((err) =>
+    this.summarizerWorker.handler(conversation)
+      .catch((err: unknown) =>
         this.logger.error('Background summarizer failed', { err })
       );
   }
@@ -125,8 +127,8 @@ function escapeRegex(s: string): string {
   return s.replace(/[\x00-\x1f\\^$.|?*+()[\]{}]/g, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
 }
 
-class AgentHandlerFactory {
-  static create(logger: ILogger, channel: string): AgentHandler {
+class AgentFactory {
+  static create(logger: ILogger, channel: string): Agent {
     const database = DatabaseServiceFactory.create();
     
     const sessionService = SessionServiceFactory.create(database, channel);
@@ -135,18 +137,20 @@ class AgentHandlerFactory {
     const messageService = MessageServiceFactory.create(database, sessionService);
     const memoryService = MemoryServiceFactory.create(database, sessionId);
     const conversationWorker = ConversationWorkerFactory.create(messageService);
-    const managerWorker = ManagerWorkerFactory.create();
+    const summarizerWorker = new SummarizerFactory().create();
+    const manager = ManagerFactory.create();
 
-    return new AgentHandler(
+    return new Agent(
       logger,
       messageService,
       memoryService,
       conversationWorker,
-      managerWorker,
+      summarizerWorker,
+      manager,
       channel,
       sessionId,
     );
   }
 }
 
-export { AgentHandlerFactory, IAgentHandler }
+export { IAgent, Agent, AgentFactory }

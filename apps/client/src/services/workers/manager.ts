@@ -16,7 +16,7 @@ import { MessageProviderFactory } from '../chat/message-provider';
 import type { IMessageProvider } from '../../types/provider';
 import type { IWorker } from '../../types/workers';
 
-interface ManagerWorkerArgs {
+interface ManagerArgs {
   logger: ILogger;
   userMessage: string;
   channel: string;
@@ -24,13 +24,18 @@ interface ManagerWorkerArgs {
   options?: ProcessOptions;
 }
 
-class ManagerWorker implements IWorker {
+interface IManager {
+  name: string;
+  run(args: ManagerArgs): Promise<ProcessedMessage>;
+}
+
+class Manager {
   constructor(
     public name: string,
     private messageProvider: IMessageProvider
   ) { }
 
-  async run(args: ManagerWorkerArgs): Promise<ProcessedMessage> {
+  async run(args: ManagerArgs): Promise<ProcessedMessage> {
     const { logger, userMessage, channel, message, options } = args;
     const messageHistory = message.getHistory();
 
@@ -163,11 +168,11 @@ class ManagerWorker implements IWorker {
   }
 }
 
-class ManagerWorkerFactory {
+class ManagerFactory {
   static create(): IWorker {
     const messageProvider = MessageProviderFactory.create();
-    return new ManagerWorker('managerWorker', messageProvider);
+    return new Manager('Manager', messageProvider);
   }
 }
 
-export { ManagerWorkerFactory };
+export { IManager, Manager, ManagerFactory };

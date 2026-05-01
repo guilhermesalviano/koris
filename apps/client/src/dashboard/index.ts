@@ -3,11 +3,11 @@ import { healthCheck } from '../services/provider-health-service';
 import { ILogger } from '../infrastructure/logger';
 import { config } from '../config';
 import path from 'node:path';
-import { IAgentHandler } from '../services/main-agent/handler';
+import { IAgent } from '../services/main-agent/agent';
 
 interface WebServerOptions {
   logger: ILogger;
-  handler: IAgentHandler;
+  agent: IAgent;
 }
 
 interface RateLimitEntry {
@@ -20,7 +20,7 @@ const INDEX_RATE_LIMIT_MAX_REQUESTS = 60;
 const indexRateLimitStore = new Map<string, RateLimitEntry>();
 
 function createApp(options: WebServerOptions): Application {
-  const { logger, handler } = options;
+  const { logger, agent } = options;
   const app = express();
 
   app.use(express.json());
@@ -29,7 +29,7 @@ function createApp(options: WebServerOptions): Application {
   app.use(express.static(publicDir));
 
   app.get('/', serveIndexHandler(publicDir));
-  app.post('/api/chat', createChatHandler(handler));
+  app.post('/api/chat', createChatHandler(agent));
   app.get('/health', createHealthHandler(logger));
 
   return app;
@@ -70,7 +70,7 @@ function createHealthHandler(logger: ILogger) {
   };
 }
 
-function createChatHandler(handler: IAgentHandler) {
+function createChatHandler(agent: IAgent) {
   return async (req: Request, res: Response) => {
     const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
     if (!message) {
@@ -97,7 +97,7 @@ function createChatHandler(handler: IAgentHandler) {
     setupSseHeaders(res);
 
     try {
-      const result = await handler.handle(message, {
+      const result = await agent.handle(message, {
         signal: abortController.signal,
         onProgress: (summary: string) => {
           if (clientClosed) return;
@@ -142,8 +142,8 @@ function setupSseHeaders(res: Response): void {
   res.flushHeaders();
 }
 
-async function startWebServer(logger: ILogger, handler: IAgentHandler): Promise<void> {
-  const app = createApp({ logger, handler });
+async function startWebServer(logger: ILogger, agent: IAgent): Promise<void> {
+  const app = createApp({ logger, agent });
 
   app.listen(config.PORT, () => {
     logger.info(`Server running at http://localhost:${config.PORT}`);
