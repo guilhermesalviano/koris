@@ -7,12 +7,12 @@ import { IMessageService, MessageServiceFactory } from '../../message-service';
 import { ConversationWorkerFactory } from '../../workers/conversation-worker';
 import { SummarizerFactory } from '../sub-agents/summarizer';
 import { IMemoryService, MemoryServiceFactory } from '../../memory-service';
-import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../../constants/thinking';
 import { IManager, ManagerFactory } from './manager';
 import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import { MemoryType } from '../../../types/memory';
 import { IWorker } from '../../../types/workers';
 import { ISubAgent } from '../../../types/agents';
+import { stripInternalStreamMarkers } from '../../../utils/stream-markers';
 
 interface IAgent {
   handle(message: unknown, options?: ProcessOptions): Promise<ProcessedMessage>;
@@ -72,7 +72,7 @@ class Agent implements IAgent {
       yield chunk;
     }
 
-    const cleanResponse = stripStreamMarkers(fullResponse);
+    const cleanResponse = stripInternalStreamMarkers(fullResponse);
     if (cleanResponse.length > 0) {
       this.historyHelper(ask, cleanResponse);
       this.summarizerHelper(ask, cleanResponse);
@@ -107,22 +107,6 @@ class Agent implements IAgent {
         this.logger.error('Background summarizer failed', { err })
       );
   }
-}
-
-/** Strips internal stream sentinel markers before persisting to DB. */
-function stripStreamMarkers(text: string): string {
-  const thinkPattern = new RegExp(
-    `${escapeRegex(THINK_START)}[\\s\\S]*?(?:${escapeRegex(THINK_END)}|$)`,
-    'g',
-  );
-  return text
-    .replace(thinkPattern, '')
-    .replace(new RegExp(escapeRegex(RESPONSE_ANCHOR), 'g'), '')
-    .trim();
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[\x00-\x1f\\^$.|?*+()[\]{}]/g, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
 }
 
 class AgentFactory {

@@ -2,6 +2,7 @@ import { TelegramMessage, InlineKeyboardMarkup } from 'assistant-telegram-bot';
 import { getBot } from 'assistant-telegram-bot';
 import { IAgent } from '../../services/agents/main-agent/agent';
 import { ILogger } from '../../infrastructure/logger';
+import { stripInternalStreamMarkers } from '../../utils/stream-markers';
 
 const TYPING_INTERVAL_MS = 5_000;
 
@@ -27,11 +28,11 @@ async function sendMessageWithMarkdownFallback(chatId: number, text: string): Pr
 }
 
 async function resolveResponse(response: unknown): Promise<string> {
-  if (typeof response === 'string') return response;
+  if (typeof response === 'string') return stripInternalStreamMarkers(response);
   if (isAsyncIterable(response)) {
     let out = '';
     for await (const chunk of response) out += chunk;
-    return out;
+    return stripInternalStreamMarkers(out);
   }
   return String(response);
 }
