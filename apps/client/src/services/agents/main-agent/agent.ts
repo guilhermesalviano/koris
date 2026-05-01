@@ -84,7 +84,6 @@ class Agent implements IAgent {
       sessionId: this.sessionId,
       ask,
       answer,
-      logger: this.logger,
       channel: this.channel,
     })
       .catch((err: unknown) =>
