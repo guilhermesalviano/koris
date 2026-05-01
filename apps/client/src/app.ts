@@ -7,11 +7,11 @@ if (process.argv.includes('tui') || process.argv.includes('--tui')) {
 
 import { initBot } from 'assistant-telegram-bot';
 import { startTUI } from './tui';
-import { startWebServer } from './web';
+import { startWebServer } from './dashboard';
 import { LoggerFactory } from './infrastructure/logger';
 import { handleMessage } from './channels/telegram';
 import { config } from './config';
-import { AgentHandlerFactory } from './services/agents/handler';
+import { AgentHandlerFactory } from './services/main-agent/handler';
 import { heartbeat } from './services/sub-agents/heartbeat';
 
 const logger = LoggerFactory.create();

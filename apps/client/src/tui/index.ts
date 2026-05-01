@@ -1,8 +1,8 @@
 import { startTui } from 'assistant-tui';
-import { handleCommand, isCommand, getAvailableCommands } from '../services/agents/commands';
+import { handleCommand, isCommand, getAvailableCommands } from '../services/commands';
 import { config } from '../config';
 import { ILogger } from '../infrastructure/logger';
-import { IAgentHandler } from '../services/agents/handler';
+import { IAgentHandler } from '../services/main-agent/handler';
 import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../constants/thinking';
 
 const COMMAND_DESCRIPTIONS: Record<string, string> = {
