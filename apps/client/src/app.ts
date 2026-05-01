@@ -56,6 +56,14 @@ class CliApplication implements ICliApplication {
     }
   }
 
+  private startTuiIfEnabled(): void {
+    if (!this.runtime || !hasFlag('tui')) {
+      return;
+    }
+
+    startTUI({ logger: this.logger, agent: this.runtime.agent });
+  }
+
   private registerShutdownHandlers(): void {
     for (const signal of SHUTDOWN_SIGNALS) {
       process.once(signal, () => {
@@ -66,14 +74,6 @@ class CliApplication implements ICliApplication {
     process.once('beforeExit', () => {
       void this.shutdown('beforeExit');
     });
-  }
-
-  private startTuiIfEnabled(): void {
-    if (!this.runtime || !hasFlag('tui')) {
-      return;
-    }
-
-    startTUI({ logger: this.logger, agent: this.runtime.agent });
   }
 
   private async shutdown(reason: string, exitCode?: number): Promise<void> {

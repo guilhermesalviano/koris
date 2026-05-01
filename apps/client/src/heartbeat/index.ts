@@ -52,7 +52,7 @@ class HeartbeatRunner implements HeartbeatController {
     this.logger.info(`[${date.toISOString()}] Agent waking up...`);
 
     try {
-      const agent = HeartbeatFactory.create(this.logger, 'tui');
+      const agent = HeartbeatFactory.create(this.logger);
       await agent.handler(date);
     } catch (error) {
       this.logger.error('Heartbeat failed.', {

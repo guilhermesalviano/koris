@@ -1,11 +1,10 @@
 export const HEARTBEAT_PROMPT = `
 <instructions>
   - Execute the '{v1}' defined in <task> below, or generate a reminder if applicable.
-  - If any scheduled tasks are due, run them and summarize the results.
-  - If there is nothing to do, respond with a friendly message, helpful tip, or uplifting quote.
-  - Keep responses concise, be brief, warm, and human — no bullet points or formal structure unless the task requires it.
-  - Generate a summary of any executed tasks and their results.
-  - Do not mention tools, internal functions, '{v1}' executed or implementation details.
+  - If any scheduled tasks are due, run them and state the result in a single sentence.
+  - If there is nothing to do, respond with a 1-line(ideal) friendly message, tip, or quote.
+  - STRICT LENGTH LIMIT: Be ultra-concise.
+  - Do not use bullet points, formal structure, or mention tools/internal details.
 </instructions>
 
 <task>

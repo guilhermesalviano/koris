@@ -9,8 +9,6 @@ import { replacePlaceholders } from "../../../../utils/prompt";
 import { HEARTBEAT_PROMPT } from "../../../../constants";
 import type { ILogger } from "../../../../infrastructure/logger";
 import { extractToolCalls, normalizeResponse } from "../../../../utils/tool-calls";
-import { IMessageService, MessageServiceFactory } from "../../../message-service";
-import { SessionServiceFactory } from "../../../session-service";
 import { IToolsQueue, ToolsQueue } from "../../../tools-queue";
 import { ExecutorWorkerFactory } from "../../../workers/executor-worker";
 import { ISubAgent } from "../../../../types/agents";
@@ -24,7 +22,6 @@ class Heartbeat implements ISubAgent {
     private promptRepository: IPromptRepository,
     private heartbeatRepository: IHeartbeatRepository,
     private skillsRepository: ISkillsRepository,
-    private messageService: IMessageService,
     private toolsQueue: IToolsQueue, 
   ) { }
 
@@ -89,7 +86,6 @@ class Heartbeat implements ISubAgent {
               ctx: {
                 logger: this.logger,
                 channel: 'tui',
-                message: this.messageService,
                 toolsQueue: this.toolsQueue,
                 signal: new AbortController().signal,
                 onProgress: (progress: string) => this.logger.info(progress),
@@ -164,17 +160,15 @@ class Heartbeat implements ISubAgent {
 }
 
 class HeartbeatFactory {
-  static create(logger: ILogger, channel: string): Heartbeat {
+  static create(logger: ILogger): Heartbeat {
     const db = DatabaseServiceFactory.create();
     const promptRepository = PromptRepositoryFactory.create(db);
     const heartbeatRepository = HeartbeatRepositoryFactory.create(db);
     const skillsRepository = SkillsRepositoryFactory.create(logger);
-    const sessionService = SessionServiceFactory.create(db, channel);
-    const messageService = MessageServiceFactory.create(db, sessionService);
     const agnosticExecutionTool = AgnosticExecutionToolFactory.create();
     const toolsQueue = new ToolsQueue(logger, agnosticExecutionTool);
 
-    return new Heartbeat(logger, promptRepository, heartbeatRepository, skillsRepository, messageService, toolsQueue);
+    return new Heartbeat(logger, promptRepository, heartbeatRepository, skillsRepository, toolsQueue);
   }
 }
 
