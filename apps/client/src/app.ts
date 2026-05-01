@@ -5,77 +5,28 @@ if (process.argv.includes('tui') || process.argv.includes('--tui')) {
   process.env.LOG_SILENCE_CONSOLE = 'true';
 }
 
-import { initBot } from 'assistant-telegram-bot';
 import { startTUI } from './tui';
 import { startWebServer } from './dashboard';
 import { LoggerFactory } from './infrastructure/logger';
-import { handleMessage } from './channels/telegram';
-import { config } from './config';
 import { AgentFactory } from './services/agents/main-agent/agent';
-import { HeartbeatFactory } from './services/agents/sub-agents/heartbeat';
-
+import { startHeartbeat } from './heartbeat';
+import { channels, StopFn } from './channels';
 
 const logger = LoggerFactory.create();
-
-let isHeartbeatRunning = false;
-
-async function heartbeatHandle() {
-  if (!config.HEARTBEAT.ENABLED || isHeartbeatRunning) return;
-
-  isHeartbeatRunning = true;
-  const date = new Date();
-  logger.info(`[${date.toISOString()}] Agent waking up...`);
-
-  try {
-    const agent = HeartbeatFactory.create(logger, 'tui');
-    await agent.handler(date);
-  } catch (error: any) {
-    logger.error('Heartbeat failed:', error);
-  } finally {
-    isHeartbeatRunning = false;
-  }
-}
-
-heartbeatHandle();
-setInterval(heartbeatHandle, 60 * 1000);
-
-type StopFn = () => void;
-
-interface ChannelDefinition {
-  name: string;
-  enabled: () => boolean;
-  start: () => StopFn | void;
-}
 
 function hasFlag(flag: string): boolean {
   return process.argv.includes(flag) || process.argv.includes(`--${flag}`);
 }
 
-const channels: ChannelDefinition[] = [
-  {
-    name: 'telegram',
-    enabled: () => !!config.TELEGRAM.BOT_TOKEN,
-    start: () => {
-      const agent = AgentFactory.create(logger, 'telegram');
-      const bot = initBot({
-        token: config.TELEGRAM.BOT_TOKEN,
-        polling: true,
-        onMessage: (msg) => handleMessage(agent, msg),
-      });
-      logger.info("Telegram is ready!");
-      return () => bot.stopPolling();
-    },
-  },
-];
-
 function startCliMode(): void {
   const stopFns: StopFn[] = [];
   const agent = AgentFactory.create(logger, 'tui');
+  startHeartbeat();
 
   for (const channel of channels) {
     if (!channel.enabled()) continue;
     logger.info(`Starting channel: ${channel.name}`);
-    const stop = channel.start();
+    const stop = channel.start(logger, agent);
     if (typeof stop === 'function') stopFns.push(stop);
   }
 
