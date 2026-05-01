@@ -1,8 +1,8 @@
 import { handleCommand, isCommand } from '../../commands';
 import { previewMessage, toSafeMessage } from './helpers';
 import { ILogger } from '../../../infrastructure/logger';
-import { DatabaseServiceFactory } from '../../../infrastructure/db-sqlite';
-import { SessionServiceFactory } from '../../session-service';
+import { IDatabaseService } from '../../../infrastructure/db-sqlite';
+import { ISessionService } from '../../session-service';
 import { IMessageService, MessageServiceFactory } from '../../message-service';
 import { ConversationWorkerFactory } from '../../workers/conversation-worker';
 import { SummarizerFactory } from '../sub-agents/summarizer';
@@ -110,13 +110,10 @@ class Agent implements IAgent {
 }
 
 class AgentFactory {
-  static create(logger: ILogger, channel: string): Agent {
-    const database = DatabaseServiceFactory.create();
-    
-    const sessionService = SessionServiceFactory.create(database, channel);
-    const sessionId = sessionService.getSession().id;
-    const messageService = MessageServiceFactory.create(database, sessionService);
-    const memoryService = MemoryServiceFactory.create(database, sessionId);
+  static create(logger: ILogger, channel: string, db: IDatabaseService, session: ISessionService): Agent {
+    const sessionId = session.getSession().id;
+    const messageService = MessageServiceFactory.create(db, session);
+    const memoryService = MemoryServiceFactory.create(db, sessionId);
     const conversationWorker = ConversationWorkerFactory.create(logger, messageService);
     const summarizerWorker = SummarizerFactory.create(logger);
     const manager = ManagerFactory.create(logger);

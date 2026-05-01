@@ -13,8 +13,13 @@ import { HeartbeatController, startHeartbeat } from './heartbeat';
 import { ChannelsSingleton, IChannelsManager } from './channels';
 import { SHUTDOWN_SIGNALS } from './constants/tui';
 import { hasFlag, logError } from './utils/runtime';
+import { DatabaseServiceFactory } from './infrastructure/db-sqlite';
+import { SessionServiceFactory } from './services/session-service';
 
 const logger = LoggerFactory.create();
+const CHANNELS = ['tui', 'telegram', 'web'] as const;
+
+type CliChannel = typeof CHANNELS[number];
 
 interface ICliRuntime {
   agent: IAgent;
@@ -31,7 +36,10 @@ class CliApplication implements ICliApplication {
   private runtime: ICliRuntime | null = null;
   private isShuttingDown = false;
 
-  constructor(private readonly logger: ILogger) {}
+  constructor(
+    private readonly logger: ILogger,
+    private readonly channel: CliChannel = resolveChannelFromArgs(),
+  ) {}
 
   async start(): Promise<void> {
     this.runtime = await this.createCliRuntime();
@@ -40,7 +48,9 @@ class CliApplication implements ICliApplication {
   }
 
   private async createCliRuntime(): Promise<ICliRuntime> {
-    const agent = AgentFactory.create(this.logger, 'tui');
+    const db = DatabaseServiceFactory.create();
+    const session = SessionServiceFactory.create(db, this.channel);
+    const agent = AgentFactory.create(this.logger, this.channel, db, session);
     const channels = ChannelsSingleton.getInstance(this.logger, agent);
 
     channels.startAll();
@@ -97,6 +107,16 @@ class CliApplication implements ICliApplication {
       process.exit(exitCode);
     }
   }
+}
+
+function resolveChannelFromArgs(argv: string[] = process.argv): CliChannel {
+  for (const channel of CHANNELS) {
+    if (hasFlag(channel, argv)) {
+      return channel;
+    }
+  }
+
+  return 'web';
 }
 
 const app = new CliApplication(logger);
