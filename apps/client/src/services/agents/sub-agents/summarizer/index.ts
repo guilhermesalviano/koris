@@ -1,10 +1,10 @@
-import { IMemoryService } from "../../memory-service";
-import type { ILogger } from "../../../infrastructure/logger";
-import { getAIProvider } from "../../providers";
-import { MemoryType } from "../../../types/memory";
-import { SUMMARIZATION_PROMPT } from "../../../constants";
-import { replacePlaceholders } from "../../../utils/prompt";
-import { ISubAgent } from "../../../types/agents";
+import { IMemoryService } from "../../../memory-service";
+import type { ILogger } from "../../../../infrastructure/logger";
+import { getAIProvider } from "../../../providers";
+import { MemoryType } from "../../../../types/memory";
+import { SUMMARIZATION_PROMPT } from "../../../../constants";
+import { replacePlaceholders } from "../../../../utils/prompt";
+import { ISubAgent } from "../../../../types/agents";
 
 interface SummarizerWorkerProps {
   sessionId: string,

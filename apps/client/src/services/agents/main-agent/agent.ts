@@ -1,18 +1,18 @@
-import { handleCommand, isCommand } from '../commands';
+import { handleCommand, isCommand } from '../../commands';
 import { previewMessage, toSafeMessage } from './helpers';
-import { ILogger } from '../../infrastructure/logger';
-import { DatabaseServiceFactory } from '../../infrastructure/db-sqlite';
-import { ProcessedMessage, ProcessOptions } from '../../types/agents';
-import { SessionServiceFactory } from '../session-service';
-import { IMessageService, MessageServiceFactory } from '../message-service';
-import { ConversationWorkerFactory } from '../workers/conversation-worker';
+import { ILogger } from '../../../infrastructure/logger';
+import { DatabaseServiceFactory } from '../../../infrastructure/db-sqlite';
+import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
+import { SessionServiceFactory } from '../../session-service';
+import { IMessageService, MessageServiceFactory } from '../../message-service';
+import { ConversationWorkerFactory } from '../../workers/conversation-worker';
 import { SummarizerFactory } from '../sub-agents/summarizer';
-import { IMemoryService, MemoryServiceFactory } from '../memory-service';
-import { MemoryType } from '../../types/memory';
-import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../constants/thinking';
-import { IWorker } from '../../types/workers';
-import { IManager, ManagerFactory } from '../workers/manager';
-import { ISubAgent } from '../../types/agents';
+import { IMemoryService, MemoryServiceFactory } from '../../memory-service';
+import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../../constants/thinking';
+import { IManager, ManagerFactory } from '../../workers/manager';
+import { MemoryType } from '../../../types/memory';
+import { IWorker } from '../../../types/workers';
+import { ISubAgent } from '../../../types/agents';
 
 interface IAgent {
   handle(message: unknown, options?: ProcessOptions): Promise<ProcessedMessage>;

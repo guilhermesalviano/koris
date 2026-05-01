@@ -1,21 +1,21 @@
-import { config } from "../../../config";
-import { DatabaseServiceFactory } from "../../../infrastructure/db-sqlite";
-import { HeartbeatRepositoryFactory, IHeartbeatRepository } from "../../../repositories/heartbeat";
-import { isCronDue } from "../../../utils/heartbeat";
-import { IPromptRepository, PromptRepositoryFactory } from "../../../repositories/prompt";
-import { getAIProvider } from "../../providers";
-import { ISkillsRepository, SkillsRepositoryFactory } from "../../../repositories/skills";
-import { replacePlaceholders } from "../../../utils/prompt";
-import { HEARTBEAT_PROMPT } from "../../../constants";
-import type { ILogger } from "../../../infrastructure/logger";
-import { extractToolCalls, normalizeResponse } from "../../../utils/tool-calls";
-import { IMessageService, MessageServiceFactory } from "../../message-service";
-import { SessionServiceFactory } from "../../session-service";
-import { IToolsQueue, ToolsQueue } from "../../tools-queue";
-import { ExecutorWorkerFactory } from "../../workers/executor-worker";
+import { config } from "../../../../config";
+import { DatabaseServiceFactory } from "../../../../infrastructure/db-sqlite";
+import { HeartbeatRepositoryFactory, IHeartbeatRepository } from "../../../../repositories/heartbeat";
+import { isCronDue } from "../../../../utils/heartbeat";
+import { IPromptRepository, PromptRepositoryFactory } from "../../../../repositories/prompt";
+import { getAIProvider } from "../../../providers";
+import { ISkillsRepository, SkillsRepositoryFactory } from "../../../../repositories/skills";
+import { replacePlaceholders } from "../../../../utils/prompt";
+import { HEARTBEAT_PROMPT } from "../../../../constants";
+import type { ILogger } from "../../../../infrastructure/logger";
+import { extractToolCalls, normalizeResponse } from "../../../../utils/tool-calls";
+import { IMessageService, MessageServiceFactory } from "../../../message-service";
+import { SessionServiceFactory } from "../../../session-service";
+import { IToolsQueue, ToolsQueue } from "../../../tools-queue";
+import { ExecutorWorkerFactory } from "../../../workers/executor-worker";
+import { ISubAgent } from "../../../../types/agents";
 import { mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
-import { ISubAgent } from "../../../types/agents";
 
 class Heartbeat implements ISubAgent {
   constructor(

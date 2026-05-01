@@ -3,7 +3,7 @@ import { healthCheck } from '../services/provider-health-service';
 import { ILogger } from '../infrastructure/logger';
 import { config } from '../config';
 import path from 'node:path';
-import { IAgent } from '../services/main-agent/agent';
+import { IAgent } from '../services/agents/main-agent/agent';
 
 interface WebServerOptions {
   logger: ILogger;

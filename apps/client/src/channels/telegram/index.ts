@@ -1,6 +1,6 @@
 import { TelegramMessage, InlineKeyboardMarkup } from 'assistant-telegram-bot';
 import { getBot } from 'assistant-telegram-bot';
-import { IAgent } from '../../services/main-agent/agent';
+import { IAgent } from '../../services/agents/main-agent/agent';
 import { ILogger } from '../../infrastructure/logger';
 
 const TYPING_INTERVAL_MS = 5_000;

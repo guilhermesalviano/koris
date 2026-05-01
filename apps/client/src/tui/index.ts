@@ -2,7 +2,7 @@ import { startTui } from 'assistant-tui';
 import { handleCommand, isCommand, getAvailableCommands } from '../services/commands';
 import { config } from '../config';
 import { ILogger } from '../infrastructure/logger';
-import { IAgent } from '../services/main-agent/agent';
+import { IAgent } from '../services/agents/main-agent/agent';
 import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../constants/thinking';
 
 const COMMAND_DESCRIPTIONS: Record<string, string> = {

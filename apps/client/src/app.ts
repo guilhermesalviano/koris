@@ -11,8 +11,8 @@ import { startWebServer } from './dashboard';
 import { LoggerFactory } from './infrastructure/logger';
 import { handleMessage } from './channels/telegram';
 import { config } from './config';
-import { AgentFactory } from './services/main-agent/agent';
-import { HeartbeatFactory } from './services/sub-agents/heartbeat';
+import { AgentFactory } from './services/agents/main-agent/agent';
+import { HeartbeatFactory } from './services/agents/sub-agents/heartbeat';
 
 
 const logger = LoggerFactory.create();
