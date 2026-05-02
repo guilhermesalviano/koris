@@ -1,4 +1,4 @@
-import { getBot, InlineKeyboardMarkup, TelegramMessage } from 'assistant-telegram-bot';
+import { getBot, initBot, InlineKeyboardMarkup, TelegramMessage } from 'assistant-telegram-bot';
 import { ILogger } from '../../infrastructure/logger';
 import { IAgent } from '../../services/agents/main-agent/agent';
 import { stripInternalStreamMarkers } from '../../utils/stream-markers';
@@ -14,6 +14,12 @@ interface ITelegramChannel {
   handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void>;
   sendCode(chatId: number, code: string, language?: string): Promise<void>;
   sendWithApproval(logger: ILogger, chatId: number, message: string, callbackData: string): Promise<void>;
+}
+
+interface TelegramChannelStartOptions {
+  token: string;
+  agent: IAgent;
+  logger: ILogger;
 }
 
 class TelegramChannel implements ITelegramChannel {
@@ -149,6 +155,48 @@ class TelegramChannelFactory {
   static create(): ITelegramChannel {
     return new TelegramChannel();
   }
+
+  static start(options: TelegramChannelStartOptions): { channel: ITelegramChannel; stop: () => void } {
+    const channel = new TelegramChannel();
+    const bot = initBot({
+      token: options.token,
+      polling: true,
+      onMessage: (msg) => channel.handleMessage(options.agent, msg),
+    });
+
+    options.logger.info('Telegram is ready!');
+
+    return {
+      channel,
+      stop: () => bot.stopPolling(),
+    };
+  }
 }
 
-export { ITelegramChannel, TelegramChannel, TelegramChannelFactory };
+const telegramChannel = TelegramChannelFactory.create();
+
+async function handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void> {
+  await telegramChannel.handleMessage(agent, msg);
+}
+
+async function sendCode(chatId: number, code: string, language?: string): Promise<void> {
+  await telegramChannel.sendCode(chatId, code, language);
+}
+
+async function sendWithApproval(
+  logger: ILogger,
+  chatId: number,
+  message: string,
+  callbackData: string,
+): Promise<void> {
+  await telegramChannel.sendWithApproval(logger, chatId, message, callbackData);
+}
+
+export {
+  handleMessage,
+  ITelegramChannel,
+  sendCode,
+  sendWithApproval,
+  TelegramChannel,
+  TelegramChannelFactory,
+};

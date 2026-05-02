@@ -1,4 +1,3 @@
-import { initBot } from "assistant-telegram-bot";
 import { config } from "../config";
 import { IAgent } from "../services/agents/main-agent/agent";
 import { TelegramChannelFactory } from "./telegram";
@@ -53,19 +52,17 @@ class ChannelsSingleton {
 
   static getInstance(logger: ILogger, agent: IAgent): ChannelsManager {
     if (!ChannelsSingleton.instance) {
-      const telegramChannel = TelegramChannelFactory.create();
       const channels = [
         {
           name: 'telegram',
           enabled: () => !!config.TELEGRAM.BOT_TOKEN,
           start: (logger: ILogger, agent: IAgent) => {
-            const bot = initBot({
+            const { stop } = TelegramChannelFactory.start({
               token: config.TELEGRAM.BOT_TOKEN,
-              polling: true,
-              onMessage: (msg) => telegramChannel.handleMessage(agent, msg),
+              agent,
+              logger,
             });
-            logger.info("Telegram is ready!");
-            return () => bot.stopPolling();
+            return stop;
           },
         },
       ];

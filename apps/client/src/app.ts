@@ -18,10 +18,10 @@ import { config } from './config';
 import { DashboardServerFactory, WebServerHandle } from './dashboard';
 
 const logger = LoggerFactory.create();
-const CHANNELS = ['tui', 'telegram', 'web'] as const;
+const MODES = ['tui', 'web'] as const;
 
-type Channel = typeof CHANNELS[number];
-type RuntimeModes = Record<Channel, boolean>;
+type Mode = typeof MODES[number];
+type RuntimeModes = Record<Mode, boolean>;
 
 interface IRuntime {
   agent: IAgent;
@@ -40,7 +40,7 @@ class Application implements IApplication {
 
   constructor(
     private readonly logger: ILogger,
-    private readonly source: Channel = resolveSessionSourceFromArgs(),
+    private readonly source: Mode = resolveSessionSourceFromArgs(),
     private readonly modes: RuntimeModes = resolveRuntimeModes(),
   ) {}
 
@@ -58,7 +58,7 @@ class Application implements IApplication {
     const channels = ChannelsSingleton.getInstance(this.logger, agent);
     const heartbeat = HeartbeatSingleton.getInstance(this.logger, config.HEARTBEAT.INTERVAL_MS);
 
-    if (this.modes.telegram) {
+    if (config.TELEGRAM.BOT_TOKEN) {
       channels.startAll();
     }
 
@@ -121,10 +121,10 @@ class Application implements IApplication {
 }
 
 function resolveRuntimeModes(argv: string[] = process.argv): RuntimeModes {
-  const explicitModes = CHANNELS.reduce<RuntimeModes>((modes, channel) => {
-    modes[channel] = hasFlag(channel, argv);
+  const explicitModes = MODES.reduce<RuntimeModes>((modes, mode) => {
+    modes[mode] = hasFlag(mode, argv);
     return modes;
-  }, { tui: false, telegram: false, web: false });
+  }, { tui: false, web: false });
 
   if (Object.values(explicitModes).some(Boolean)) {
     return explicitModes;
@@ -132,17 +132,16 @@ function resolveRuntimeModes(argv: string[] = process.argv): RuntimeModes {
 
   return {
     tui: false,
-    telegram: true,
     web: true,
   };
 }
 
-function resolveSessionSourceFromArgs(argv: string[] = process.argv): Channel {
-  const modes = resolveRuntimeModes(argv);
+function resolveSessionSourceFromArgs(argv: string[] = process.argv): Mode {
+  const modesArg = resolveRuntimeModes(argv);
 
-  for (const channel of CHANNELS) {
-    if (modes[channel]) {
-      return channel;
+  for (const mode of MODES) {
+    if (modesArg[mode]) {
+      return mode;
     }
   }
 
