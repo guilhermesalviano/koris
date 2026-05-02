@@ -28,7 +28,6 @@ class HeartbeatRunner implements IHeartbeatRunner {
       return;
     }
 
-    void this.runOnce();
     this.timer = setInterval(() => {
       void this.runOnce();
     }, this.intervalMs);
