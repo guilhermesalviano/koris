@@ -1,34 +1,14 @@
 import 'dotenv/config';
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { getConfigValue, loadConfigFile } from './helpers';
 
 const isTest = process.env.NODE_ENV === 'test';
 
-function loadConfigFile(): Record<string, unknown> {
-  const configPath = join(process.cwd(), 'settings.json');
-  if (!existsSync(configPath)) return {};
-  try {
-    const raw = readFileSync(configPath, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    console.warn('Warning: Failed to parse settings.json, ignoring file.');
-    return {};
-  }
-}
+const fileConfig = loadConfigFile({
+  onParseError: (message) => console.warn(message),
+});
 
-const fileConfig = loadConfigFile();
-
-function deepGet(obj: Record<string, unknown>, path: string): unknown {
-  return path.split('.').reduce<unknown>((acc, key) => {
-    if (acc && typeof acc === 'object') return (acc as Record<string, unknown>)[key];
-    return undefined;
-  }, obj);
-}
-
-function get(attr: string, fallback: string): string {
-  const val = deepGet(fileConfig, attr);
-  if (val === undefined || val === null) return fallback;
-  return String(val);
+function get(path: string, fallback: string): string {
+  return getConfigValue(path, fallback, fileConfig);
 }
 
 export const config = {
