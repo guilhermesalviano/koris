@@ -1,8 +1,8 @@
 import { initBot } from "assistant-telegram-bot";
 import { config } from "../config";
 import { IAgent } from "../services/agents/main-agent/agent";
-import { handleMessage } from "./telegram";
-import { ILogger } from "../infrastructure/logger";
+import { TelegramChannelFactory } from "./telegram";
+import type { ILogger } from "../infrastructure/logger";
 
 export type StopFn = () => void;
 
@@ -12,34 +12,29 @@ interface ChannelDefinition {
   start: (logger: ILogger, agent: IAgent) => StopFn | void;
 }
 
-export const channels: ChannelDefinition[] = [
-  {
-    name: 'telegram',
-    enabled: () => !!config.TELEGRAM.BOT_TOKEN,
-    start: (logger: ILogger, agent: IAgent) => {
-      const bot = initBot({
-        token: config.TELEGRAM.BOT_TOKEN,
-        polling: true,
-        onMessage: (msg) => handleMessage(agent, msg),
-      });
-      logger.info("Telegram is ready!");
-      return () => bot.stopPolling();
-    },
-  },
-];
-
 interface IChannelsManager {
   startAll(): void;
   stopAll(): void;
 }
 
 class ChannelsManager implements IChannelsManager {
+  private logger: ILogger;
+  private agent: IAgent;
   private stopFns: StopFn[] = [];
+  private channels: ChannelDefinition[];
 
-  constructor(private logger: ILogger, private agent: IAgent) {}
+  constructor(
+    logger: ILogger,
+    agent: IAgent,
+    channels: ChannelDefinition[] = [],
+  ) {
+    this.logger = logger;
+    this.agent = agent;
+    this.channels = channels;
+  }
 
   startAll() {
-    for (const channel of channels) {
+    for (const channel of this.channels) {
       if (!channel.enabled()) continue;
       this.logger.info(`Starting channel: ${channel.name}`);
       const stop = channel.start(this.logger, this.agent);
@@ -58,7 +53,24 @@ class ChannelsSingleton {
 
   static getInstance(logger: ILogger, agent: IAgent): ChannelsManager {
     if (!ChannelsSingleton.instance) {
-      ChannelsSingleton.instance = new ChannelsManager(logger, agent);
+      const telegramChannel = TelegramChannelFactory.create();
+      const channels = [
+        {
+          name: 'telegram',
+          enabled: () => !!config.TELEGRAM.BOT_TOKEN,
+          start: (logger: ILogger, agent: IAgent) => {
+            const bot = initBot({
+              token: config.TELEGRAM.BOT_TOKEN,
+              polling: true,
+              onMessage: (msg) => telegramChannel.handleMessage(agent, msg),
+            });
+            logger.info("Telegram is ready!");
+            return () => bot.stopPolling();
+          },
+        },
+      ];
+
+      ChannelsSingleton.instance = new ChannelsManager(logger, agent, channels);
     }
     return ChannelsSingleton.instance;
   }

@@ -21,12 +21,13 @@ const logger = LoggerFactory.create();
 const CHANNELS = ['tui', 'telegram', 'web'] as const;
 
 type CliChannel = typeof CHANNELS[number];
+type RuntimeModes = Record<CliChannel, boolean>;
 
 interface ICliRuntime {
   agent: IAgent;
   channels: IChannelsManager;
   heartbeat: IHeartbeatRunner;
-  webServer: WebServerHandle;
+  webServer: WebServerHandle | null;
 };
 
 interface ICliApplication {
@@ -39,7 +40,8 @@ class CliApplication implements ICliApplication {
 
   constructor(
     private readonly logger: ILogger,
-    private readonly channel: CliChannel = resolveChannelFromArgs(),
+    private readonly source: CliChannel = resolveSessionSourceFromArgs(),
+    private readonly modes: RuntimeModes = resolveRuntimeModes(),
   ) {}
 
   async start(): Promise<void> {
@@ -50,18 +52,23 @@ class CliApplication implements ICliApplication {
 
   private async createCliRuntime(): Promise<ICliRuntime> {
     const db = DatabaseServiceFactory.create();
-    const session = SessionServiceFactory.create(db, this.channel);
-    const agent = AgentFactory.create(this.logger, this.channel, db, session);
+    const session = SessionServiceFactory.create(db, this.source);
+    const agent = AgentFactory.create(this.logger, this.source, db, session);
 
     const channels = ChannelsSingleton.getInstance(this.logger, agent);
     const heartbeat = HeartbeatSingleton.getInstance(this.logger, config.HEARTBEAT.INTERVAL_MS);
 
-    channels.startAll();
+    if (this.modes.telegram) {
+      channels.startAll();
+    }
+
     heartbeat.start();
 
     try {
-      const dashboardServer = DashboardServerFactory.create(this.logger, agent);
-      const webServer = await dashboardServer.start();
+      const webServer = this.modes.web
+        ? await DashboardServerFactory.create(this.logger, agent).start()
+        : null;
+
       return { agent, channels, heartbeat, webServer };
     } catch (error) {
       channels.stopAll();
@@ -71,7 +78,7 @@ class CliApplication implements ICliApplication {
   }
 
   private startTuiIfEnabled(): void {
-    if (!this.runtime || !hasFlag('tui')) {
+    if (!this.runtime || !this.modes.tui) {
       return;
     }
 
@@ -102,7 +109,7 @@ class CliApplication implements ICliApplication {
     this.runtime.heartbeat.stop();
 
     try {
-      await this.runtime.webServer.stop();
+      await this.runtime.webServer?.stop();
     } catch (error) {
       logError(this.logger, `Failed to stop web server during ${reason}.`, error);
     }
@@ -113,9 +120,28 @@ class CliApplication implements ICliApplication {
   }
 }
 
-function resolveChannelFromArgs(argv: string[] = process.argv): CliChannel {
+function resolveRuntimeModes(argv: string[] = process.argv): RuntimeModes {
+  const explicitModes = CHANNELS.reduce<RuntimeModes>((modes, channel) => {
+    modes[channel] = hasFlag(channel, argv);
+    return modes;
+  }, { tui: false, telegram: false, web: false });
+
+  if (Object.values(explicitModes).some(Boolean)) {
+    return explicitModes;
+  }
+
+  return {
+    tui: false,
+    telegram: true,
+    web: true,
+  };
+}
+
+function resolveSessionSourceFromArgs(argv: string[] = process.argv): CliChannel {
+  const modes = resolveRuntimeModes(argv);
+
   for (const channel of CHANNELS) {
-    if (hasFlag(channel, argv)) {
+    if (modes[channel]) {
       return channel;
     }
   }

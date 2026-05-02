@@ -252,7 +252,7 @@ class DashboardServer implements WebServerHandle {
     });
   }
 
-  private createApp(): Application {
+  createApp(): Application {
     const app = express();
     const publicDir = path.resolve(config.BASE_DIR, './public');
     const indexHandler = new IndexRouteHandler(publicDir);
@@ -275,4 +275,32 @@ class DashboardServerFactory {
   }
 }
 
-export { WebServerHandle, DashboardServerFactory };
+function createApp(options: { logger: ILogger; agent: IAgent }): Application {
+  return new DashboardServer(options.logger, options.agent).createApp();
+}
+
+function serveIndexHandler(publicDir: string) {
+  return new IndexRouteHandler(publicDir).handle;
+}
+
+function createHealthHandler(logger: ILogger) {
+  return new HealthRouteHandler(logger).handle;
+}
+
+function createChatHandler(agent: IAgent) {
+  return new ChatRouteHandler(agent).handle;
+}
+
+async function startWebServer(logger: ILogger, agent: IAgent): Promise<WebServerHandle> {
+  return new DashboardServer(logger, agent).start();
+}
+
+export {
+  WebServerHandle,
+  DashboardServerFactory,
+  createApp,
+  serveIndexHandler,
+  createHealthHandler,
+  createChatHandler,
+  startWebServer,
+};
