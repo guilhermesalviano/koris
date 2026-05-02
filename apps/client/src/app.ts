@@ -6,7 +6,6 @@ if (process.argv.includes('tui') || process.argv.includes('--tui')) {
 }
 
 import { startTUI } from './tui';
-import { startWebServer } from './dashboard';
 import { LoggerFactory, ILogger } from './infrastructure/logger';
 import { AgentFactory, IAgent } from './services/agents/main-agent/agent';
 import { IHeartbeatRunner, HeartbeatSingleton } from './heartbeat';
@@ -16,6 +15,7 @@ import { hasFlag, logError } from './utils/runtime';
 import { DatabaseServiceFactory } from './infrastructure/db-sqlite';
 import { SessionServiceFactory } from './services/session-service';
 import { config } from './config';
+import { DashboardServerFactory, WebServerHandle } from './dashboard';
 
 const logger = LoggerFactory.create();
 const CHANNELS = ['tui', 'telegram', 'web'] as const;
@@ -26,7 +26,7 @@ interface ICliRuntime {
   agent: IAgent;
   channels: IChannelsManager;
   heartbeat: IHeartbeatRunner;
-  webServer: Awaited<ReturnType<typeof startWebServer>>;
+  webServer: WebServerHandle;
 };
 
 interface ICliApplication {
@@ -60,7 +60,8 @@ class CliApplication implements ICliApplication {
     heartbeat.start();
 
     try {
-      const webServer = await startWebServer(this.logger, agent);
+      const dashboardServer = DashboardServerFactory.create(this.logger, agent);
+      const webServer = await dashboardServer.start();
       return { agent, channels, heartbeat, webServer };
     } catch (error) {
       channels.stopAll();
