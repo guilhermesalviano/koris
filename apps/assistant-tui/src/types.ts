@@ -20,6 +20,8 @@ export interface TuiContext {
   session: SessionState;
   colors: TuiColors;
   clear(): void;
+  /** Clears buffered content and re-renders the current screen/welcome view. */
+  redraw(): void;
   println(text?: string): void;
   contentBuffer: string[];
   terminalWidth: number;

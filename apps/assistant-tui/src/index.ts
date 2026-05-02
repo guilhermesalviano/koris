@@ -91,12 +91,14 @@ export function startTui(options: StartTuiOptions): void {
 
   // ── ctx (println deferred via let + closure) ────────────────────────────────
   let println: (text?: string) => void = () => {};
+  let redraw: () => void = () => {};
 
   const ctx: TuiContext = {
     rl,
     session,
     colors,
     clear: clearScreen,
+    redraw: () => redraw(),
     println: (text?: string) => println(text),
     contentBuffer: state.contentBuffer,
     terminalWidth: state.terminalWidth,
@@ -131,6 +133,7 @@ export function startTui(options: StartTuiOptions): void {
 
   // ── rawBuffer: stores original println text for re-wrapping on resize ────────
   const rawBuffer: string[] = [];
+  let welcomeRawCount = 0;
 
   // ── println (real implementation, uses renderer) ────────────────────────────
   println = (text = '') => {
@@ -157,6 +160,22 @@ export function startTui(options: StartTuiOptions): void {
   const renderWelcome =
     options.renderWelcome ??
     ((c: TuiContext) => defaultWelcome(c, options.title, options.aiModel, options.showHints));
+
+  redraw = () => {
+    clearScreen();
+    rawBuffer.length = 0;
+    state.contentBuffer.length = 0;
+    state.scrollOffset = 0;
+    renderWelcome(ctx);
+    welcomeRawCount = rawBuffer.length;
+
+    if (fixedInput) {
+      renderer.requestRender();
+      return;
+    }
+
+    rl.prompt();
+  };
 
   // ── Autocomplete ────────────────────────────────────────────────────────────
   const ac = createAutocomplete({
@@ -205,7 +224,6 @@ export function startTui(options: StartTuiOptions): void {
   }
 
   // ── Resize handler ──────────────────────────────────────────────────────────
-  let welcomeRawCount = 0;
   const handleResize = () => {
     state.terminalWidth  = process.stdout.columns || 80;
     state.terminalHeight = process.stdout.rows    || 24;

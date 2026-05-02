@@ -138,6 +138,7 @@ interface TuiContext {
   session: SessionState;       // Session info (messageCount, startTime)
   colors: typeof defaultColors;// Color codes
   clear(): void;               // Clear screen
+  redraw(): void;              // Reset buffered output and re-render the current screen
   println(text?: string): void;// Print line (respects layout mode)
   contentBuffer: string[];     // History of all output
   terminalWidth: number;       // Current terminal width
@@ -236,4 +237,3 @@ startTUI({
 ## License
 
 ISC
-
