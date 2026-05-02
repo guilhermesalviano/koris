@@ -15,6 +15,7 @@ import { ISubAgent } from "../../../../types/agents";
 import { mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { AgnosticExecutionToolFactory } from "../../../tools";
+import { IChannelsManager } from "../../../../channels";
 
 class Heartbeat implements ISubAgent {
   constructor(
@@ -23,6 +24,7 @@ class Heartbeat implements ISubAgent {
     private heartbeatRepository: IHeartbeatRepository,
     private skillsRepository: ISkillsRepository,
     private toolsQueue: IToolsQueue, 
+    private channelsManager: IChannelsManager,
   ) { }
 
   async handler(date: Date): Promise<void> {
@@ -69,11 +71,11 @@ class Heartbeat implements ISubAgent {
 
         // this.logger.debug(`heartbeat prompt value ${JSON.stringify(payload)}`);
       
-        const result = await provider.chat(payload);
+        const providerResult = await provider.chat(payload);
 
         let executorResult = '';
-        if (!this.isAsyncGen(result)) {
-          const responseText = normalizeResponse(result);
+        if (!this.isAsyncGen(providerResult)) {
+          const responseText = normalizeResponse(providerResult);
           const toExecute = extractToolCalls(responseText);
 
           if (toExecute.length === 0) {
@@ -95,11 +97,14 @@ class Heartbeat implements ISubAgent {
             executorResult = await this.toText(executed);
           }
         }
+        const result = executorResult || providerResult;
+        this.saveTaskResult({ taskId: task.id, date, result });
 
-        this.saveTaskResult({ taskId: task.id, date, result: executorResult || result });
+        this.logger.info(`Heartbeat: Task "${task.id}" executed. Result: ${result}`);
 
-        // response can be a reminder in Telegram, summarization of my Emails, a document of estudy from something(create a file to keep it in temp) 
-        this.logger.info(`Heartbeat results: ${executorResult || result}`);
+        this.channelsManager.sendMessage('telegram', '6671499586', result).catch(err => {
+          this.logger.error(`Failed to send heartbeat result to Telegram for task "${task.id}".`, { err });
+        });
 
         this.heartbeatRepository.updateLastRun(task.id, date);
         this.logger.info(`Heartbeat: Task "${task.id}" completed successfully.`);
@@ -160,7 +165,7 @@ class Heartbeat implements ISubAgent {
 }
 
 class HeartbeatFactory {
-  static create(logger: ILogger): Heartbeat {
+  static create(logger: ILogger, channelsManager: IChannelsManager): Heartbeat {
     const db = DatabaseServiceFactory.create();
     const promptRepository = PromptRepositoryFactory.create(db);
     const heartbeatRepository = HeartbeatRepositoryFactory.create(db);
@@ -168,7 +173,7 @@ class HeartbeatFactory {
     const agnosticExecutionTool = AgnosticExecutionToolFactory.create();
     const toolsQueue = new ToolsQueue(logger, agnosticExecutionTool);
 
-    return new Heartbeat(logger, promptRepository, heartbeatRepository, skillsRepository, toolsQueue);
+    return new Heartbeat(logger, promptRepository, heartbeatRepository, skillsRepository, toolsQueue, channelsManager);
   }
 }
 

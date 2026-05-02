@@ -1,6 +1,7 @@
 import { config } from '../config';
 import { HeartbeatFactory } from '../services/agents/sub-agents/heartbeat';
 import type { ILogger } from '../infrastructure/logger';
+import { IChannelsManager } from '../channels';
 
 interface IHeartbeatRunner {
   start(): void;
@@ -12,8 +13,9 @@ class HeartbeatRunner implements IHeartbeatRunner {
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
-    private readonly logger: ILogger,
-    private readonly intervalMs: number,
+    private logger: ILogger,
+    private intervalMs: number,
+    private channelsManager: IChannelsManager,
   ) {}
 
   start(): void {
@@ -52,7 +54,7 @@ class HeartbeatRunner implements IHeartbeatRunner {
     this.logger.info(`[${date.toISOString()}] Agent waking up...`);
 
     try {
-      const agent = HeartbeatFactory.create(this.logger);
+      const agent = HeartbeatFactory.create(this.logger, this.channelsManager);
       await agent.handler(date);
     } catch (error) {
       this.logger.error('Heartbeat failed.', {
@@ -67,9 +69,9 @@ class HeartbeatRunner implements IHeartbeatRunner {
 class HeartbeatSingleton {
   private static instance: IHeartbeatRunner;
 
-  static getInstance(logger: ILogger, intervalMs: number): IHeartbeatRunner {
+  static getInstance(logger: ILogger, intervalMs: number, channelsManager: IChannelsManager): IHeartbeatRunner {
     if (!HeartbeatSingleton.instance) {
-      HeartbeatSingleton.instance = new HeartbeatRunner(logger, intervalMs);
+      HeartbeatSingleton.instance = new HeartbeatRunner(logger, intervalMs, channelsManager);
     }
     return HeartbeatSingleton.instance;
   }

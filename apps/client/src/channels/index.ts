@@ -9,11 +9,13 @@ interface ChannelDefinition {
   name: string;
   enabled: () => boolean;
   start: (logger: ILogger, agent: IAgent) => StopFn | void;
+  sendMessage?: (logger: ILogger, target: string, message: string) => Promise<void>;
 }
 
 interface IChannelsManager {
   startAll(): void;
   stopAll(): void;
+  sendMessage(channel: string, target: string, message: string): Promise<void>;
 }
 
 class ChannelsManager implements IChannelsManager {
@@ -45,6 +47,24 @@ class ChannelsManager implements IChannelsManager {
     this.logger.info("\n👋 Shutting down gracefully...");
     this.stopFns.forEach((stop) => stop());
   }
+
+  async sendMessage(channel: string, target: string, message: string): Promise<void> {
+    const definition = this.channels.find((current) => current.name === channel);
+
+    if (!definition) {
+      throw new Error(`Unknown channel: ${channel}`);
+    }
+
+    if (!definition.enabled()) {
+      throw new Error(`Channel "${channel}" is not enabled.`);
+    }
+
+    if (!definition.sendMessage) {
+      throw new Error(`Channel "${channel}" does not support outgoing messages.`);
+    }
+
+    await definition.sendMessage(this.logger, target, message);
+  }
 }
 
 class ChannelsSingleton {
@@ -63,6 +83,15 @@ class ChannelsSingleton {
               logger,
             });
             return stop;
+          },
+          sendMessage: async (_logger: ILogger, target: string, message: string) => {
+            const chatId = Number(target);
+
+            if (!Number.isFinite(chatId)) {
+              throw new Error(`Invalid Telegram chat ID: ${target}`);
+            }
+
+            await TelegramChannelFactory.sendText(chatId, message);
           },
         },
       ];

@@ -56,7 +56,7 @@ class Application implements IApplication {
     const agent = AgentFactory.create(this.logger, this.source, db, session);
 
     const channels = ChannelsSingleton.getInstance(this.logger, agent);
-    const heartbeat = HeartbeatSingleton.getInstance(this.logger, config.HEARTBEAT.INTERVAL_MS);
+    const heartbeat = HeartbeatSingleton.getInstance(this.logger, config.HEARTBEAT.INTERVAL_MS, channels);
 
     if (config.TELEGRAM.BOT_TOKEN) {
       channels.startAll();

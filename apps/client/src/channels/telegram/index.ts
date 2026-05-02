@@ -4,6 +4,7 @@ import { IAgent } from '../../services/agents/main-agent/agent';
 import { stripInternalStreamMarkers } from '../../utils/stream-markers';
 
 const TYPING_INTERVAL_MS = 5_000;
+const TELEGRAM_MESSAGE_LIMIT = 4_000;
 
 interface TelegramBotClient {
   sendChatAction(chatId: number, action: 'typing'): Promise<unknown>;
@@ -12,6 +13,7 @@ interface TelegramBotClient {
 
 interface ITelegramChannel {
   handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void>;
+  sendText(chatId: number, text: string): Promise<void>;
   sendCode(chatId: number, code: string, language?: string): Promise<void>;
   sendWithApproval(logger: ILogger, chatId: number, message: string, callbackData: string): Promise<void>;
 }
@@ -34,6 +36,12 @@ class TelegramChannel implements ITelegramChannel {
     }
 
     await this.processAndReply(agent, chatId, text);
+  }
+
+  async sendText(chatId: number, text: string): Promise<void> {
+    for (const chunk of splitMessage(text, TELEGRAM_MESSAGE_LIMIT)) {
+      await this.sendMessageWithMarkdownFallback(chatId, chunk);
+    }
   }
 
   async sendCode(chatId: number, code: string, language: string = ''): Promise<void> {
@@ -68,7 +76,7 @@ class TelegramChannel implements ITelegramChannel {
       await this.withTypingIndicator(chatId, async () => {
         const response = await agent.handle(text);
         const resolved = await this.resolveResponse(response);
-        await this.sendMessageWithMarkdownFallback(chatId, resolved);
+        await this.sendText(chatId, resolved);
       });
     } catch (error) {
       console.error('Error processing message:', error);
@@ -171,6 +179,11 @@ class TelegramChannelFactory {
       stop: () => bot.stopPolling(),
     };
   }
+
+  static async sendText(chatId: number, text: string): Promise<void> {
+    const channel = new TelegramChannel();
+    await channel.sendText(chatId, text);
+  }
 }
 
 const telegramChannel = TelegramChannelFactory.create();
@@ -181,6 +194,10 @@ async function handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void>
 
 async function sendCode(chatId: number, code: string, language?: string): Promise<void> {
   await telegramChannel.sendCode(chatId, code, language);
+}
+
+async function sendText(chatId: number, text: string): Promise<void> {
+  await telegramChannel.sendText(chatId, text);
 }
 
 async function sendWithApproval(
@@ -195,8 +212,33 @@ async function sendWithApproval(
 export {
   handleMessage,
   ITelegramChannel,
+  sendText,
   sendCode,
   sendWithApproval,
   TelegramChannel,
   TelegramChannelFactory,
 };
+
+function splitMessage(text: string, maxLength: number): string[] {
+  if (!text) {
+    return [];
+  }
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > maxLength) {
+    const candidate = remaining.slice(0, maxLength);
+    const splitIndex = Math.max(candidate.lastIndexOf('\n'), candidate.lastIndexOf(' '));
+    const end = splitIndex > 0 ? splitIndex : maxLength;
+
+    chunks.push(remaining.slice(0, end).trimEnd());
+    remaining = remaining.slice(end).trimStart();
+  }
+
+  if (remaining.length > 0) {
+    chunks.push(remaining);
+  }
+
+  return chunks;
+}
