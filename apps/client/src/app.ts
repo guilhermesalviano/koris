@@ -20,27 +20,27 @@ import { DashboardServerFactory, WebServerHandle } from './dashboard';
 const logger = LoggerFactory.create();
 const CHANNELS = ['tui', 'telegram', 'web'] as const;
 
-type CliChannel = typeof CHANNELS[number];
-type RuntimeModes = Record<CliChannel, boolean>;
+type Channel = typeof CHANNELS[number];
+type RuntimeModes = Record<Channel, boolean>;
 
-interface ICliRuntime {
+interface IRuntime {
   agent: IAgent;
   channels: IChannelsManager;
   heartbeat: IHeartbeatRunner;
   webServer: WebServerHandle | null;
 };
 
-interface ICliApplication {
+interface IApplication {
   start(): Promise<void>;
 }
 
-class CliApplication implements ICliApplication {
-  private runtime: ICliRuntime | null = null;
+class Application implements IApplication {
+  private runtime: IRuntime | null = null;
   private isShuttingDown = false;
 
   constructor(
     private readonly logger: ILogger,
-    private readonly source: CliChannel = resolveSessionSourceFromArgs(),
+    private readonly source: Channel = resolveSessionSourceFromArgs(),
     private readonly modes: RuntimeModes = resolveRuntimeModes(),
   ) {}
 
@@ -50,7 +50,7 @@ class CliApplication implements ICliApplication {
     this.startTuiIfEnabled();
   }
 
-  private async createCliRuntime(): Promise<ICliRuntime> {
+  private async createCliRuntime(): Promise<IRuntime> {
     const db = DatabaseServiceFactory.create();
     const session = SessionServiceFactory.create(db, this.source);
     const agent = AgentFactory.create(this.logger, this.source, db, session);
@@ -137,7 +137,7 @@ function resolveRuntimeModes(argv: string[] = process.argv): RuntimeModes {
   };
 }
 
-function resolveSessionSourceFromArgs(argv: string[] = process.argv): CliChannel {
+function resolveSessionSourceFromArgs(argv: string[] = process.argv): Channel {
   const modes = resolveRuntimeModes(argv);
 
   for (const channel of CHANNELS) {
@@ -149,7 +149,7 @@ function resolveSessionSourceFromArgs(argv: string[] = process.argv): CliChannel
   return 'web';
 }
 
-const app = new CliApplication(logger);
+const app = new Application(logger);
 
 if (require.main === module) {
   app.start().catch((error) => {
