@@ -42,6 +42,7 @@ export const config = {
     BOT_TOKEN:   get('telegram.BOT_TOKEN',   ''),
     WEBHOOK_URL: get('telegram.WEBHOOK_URL', ''),
     USE_POLLING: get('telegram.USE_POLLING', 'true') === 'true',
+    CHAT_ID:    get('telegram.CHAT_ID',    ''),
   },
 } as const;
 

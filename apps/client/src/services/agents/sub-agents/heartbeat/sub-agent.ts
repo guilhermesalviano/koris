@@ -86,7 +86,6 @@ class Heartbeat implements ISubAgent {
               userMessage: task.task,
               messageHistory: [],
               ctx: {
-                logger: this.logger,
                 channel: 'tui',
                 toolsQueue: this.toolsQueue,
                 signal: new AbortController().signal,
@@ -102,7 +101,8 @@ class Heartbeat implements ISubAgent {
 
         this.logger.info(`Heartbeat: Task "${task.id}" executed. Result: ${result}`);
 
-        this.channelsManager.sendMessage('telegram', '6671499586', result).catch(err => {
+        // Hardcoded for tests
+        this.channelsManager.sendMessage('telegram', config.TELEGRAM.CHAT_ID, result).catch(err => {
           this.logger.error(`Failed to send heartbeat result to Telegram for task "${task.id}".`, { err });
         });
 
