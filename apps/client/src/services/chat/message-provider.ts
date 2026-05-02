@@ -8,7 +8,7 @@ import type { Message } from "../../entities/message";
 import { ProcessedMessage, ProcessOptions } from "../../types/agents";
 import { DatabaseServiceFactory } from "../../infrastructure/db-sqlite";
 
-class messageProvider implements IMessageProvider {
+class MessageProvider implements IMessageProvider {
   constructor(
     private logger: ILogger,
   ) { }
@@ -62,7 +62,7 @@ class messageProvider implements IMessageProvider {
 
 class MessageProviderFactory {
   static create(logger: ILogger): IMessageProvider {
-    return new messageProvider(logger);
+    return new MessageProvider(logger);
   }
 }
 

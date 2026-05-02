@@ -8,7 +8,7 @@ import { ProcessedMessage, ProcessOptions } from "../../types/agents";
 import type { AIChatRequest, IMessageProvider } from "../../types/provider";
 import type { Message } from "../../entities/message";
 
-class messageProviderStream implements IMessageProvider {
+class MessageProviderStream implements IMessageProvider {
   constructor(
     private logger: ILogger,
   ) { }
@@ -73,7 +73,7 @@ class messageProviderStream implements IMessageProvider {
 
 class MessageProviderFactory {
   static create(logger: ILogger): IMessageProvider {
-    return new messageProviderStream(logger);
+    return new MessageProviderStream(logger);
   }
 }
 
