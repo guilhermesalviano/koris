@@ -54,7 +54,7 @@ class ExecutorWorker implements IWorker {
           : `Tool: ${r.toolName}, Success: ${r.success}, Error: ${r.error}`
       )
       .join('\n');
-    this.logger.info(`Tool results: ${JSON.stringify(toolCalls)}`);
+    this.logger.info(`Tool results: ${JSON.stringify(toolResults)}`);
 
     const synthesisPrompt = replacePlaceholders(TOOLS_RESULT_PROMPT, { v1: userMessage, v2: toolResults });
     const response = await this.messageProvider.handler(
