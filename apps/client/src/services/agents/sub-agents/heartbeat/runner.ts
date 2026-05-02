@@ -1,7 +1,7 @@
-import { config } from '../config';
-import { HeartbeatFactory } from '../services/agents/sub-agents/heartbeat';
-import type { ILogger } from '../infrastructure/logger';
-import { IChannelsManager } from '../channels';
+import { config } from '../../../../config';
+import { IChannelsManager } from '../../../../channels';
+import type { ILogger } from '../../../../infrastructure/logger';
+import { HeartbeatFactory } from './sub-agent';
 
 interface IHeartbeatRunner {
   start(): void;

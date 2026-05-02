@@ -5,7 +5,7 @@ import { IDatabaseService } from '../../../infrastructure/db-sqlite';
 import { ISessionService } from '../../session-service';
 import { IMessageService, MessageServiceFactory } from '../../message-service';
 import { ConversationWorkerFactory } from '../../workers/conversation-worker';
-import { SummarizerFactory } from '../sub-agents/summarizer';
+import { SummarizerFactory } from '../sub-agents/summarizer/sub-agent';
 import { IMemoryService, MemoryServiceFactory } from '../../memory-service';
 import { IManager, ManagerFactory } from './manager';
 import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
