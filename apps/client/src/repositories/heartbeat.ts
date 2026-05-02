@@ -12,6 +12,7 @@ interface IHeartbeatRepository {
   getById(id: string): Heartbeat | null;
   getAll(): Heartbeat[];
   update(id: string, input: UpdateHeartbeatInput): Heartbeat | null;
+  updateLastRun(id: string, lastRun: Date): void;
   deleteById(id: string): boolean;
   deleteAll(): number;
 }
@@ -114,4 +115,4 @@ class HeartbeatRepositoryFactory {
   }
 }
 
-export { IHeartbeatRepository, HeartbeatRepositoryFactory, UpdateHeartbeatInput };
+export { IHeartbeatRepository, HeartbeatRepository, HeartbeatRepositoryFactory };

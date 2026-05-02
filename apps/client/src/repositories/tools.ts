@@ -1,8 +1,12 @@
 import type { AIToolDefinition } from '../types/provider';
 import { Skill } from '../types/skills';
 
+interface GetAllOptions {
+  includeTaskTools?: boolean;
+}
+
 interface IToolsRepository {
-  getAll(skills?: Skill[]): AIToolDefinition[];
+  getAll(skills?: Skill[], options?: GetAllOptions): AIToolDefinition[];
 }
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'] as const;
@@ -36,6 +40,7 @@ Available skills:\n${buildSkillList(skills)}`,
           },
           skill_path: {
             type: 'string',
+            enum: skills.map(s => s.path),
             description: 'Path to the skill directory containing SKILL.md.',
           },
         },
@@ -196,15 +201,19 @@ function deleteTaskTool(): AIToolDefinition {
 }
 
 class ToolsRepository implements IToolsRepository {
-  getAll(skills?: Skill[]): AIToolDefinition[] {
+  getAll(skills?: Skill[], options?: GetAllOptions): AIToolDefinition[] {
     const tools: AIToolDefinition[] = [];
+    const includeTaskTools = options?.includeTaskTools ?? true;
 
     if (skills?.length) tools.push(skillsTool(skills));
     tools.push(curlTool());
-    tools.push(createTaskTool());
-    tools.push(listTasksTool());
-    tools.push(updateTaskTool());
-    tools.push(deleteTaskTool());
+
+    if (includeTaskTools) {
+      tools.push(createTaskTool());
+      tools.push(listTasksTool());
+      tools.push(updateTaskTool());
+      tools.push(deleteTaskTool());
+    }
 
     return cloneTools(tools);
   }

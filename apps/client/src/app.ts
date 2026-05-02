@@ -5,98 +5,154 @@ if (process.argv.includes('tui') || process.argv.includes('--tui')) {
   process.env.LOG_SILENCE_CONSOLE = 'true';
 }
 
-import { initBot } from 'assistant-telegram-bot';
 import { startTUI } from './tui';
-import { startWebServer } from './web';
-import { LoggerFactory } from './infrastructure/logger';
-import { handleMessage } from './channels/telegram';
+import { LoggerFactory, ILogger } from './infrastructure/logger';
+import { AgentFactory, IAgent } from './services/agents/main-agent/agent';
+import { IHeartbeatRunner, HeartbeatSingleton } from './services/agents/sub-agents/heartbeat/runner';
+import { ChannelsSingleton, IChannelsManager } from './channels';
+import { SHUTDOWN_SIGNALS } from './constants/tui';
+import { hasFlag, logError } from './utils/runtime';
+import { DatabaseServiceFactory } from './infrastructure/db-sqlite';
+import { SessionServiceFactory } from './services/session-service';
 import { config } from './config';
-import { AgentHandlerFactory } from './services/agents/handler';
-import { heartbeat } from './services/sub-agents/heartbeat';
+import { DashboardServerFactory, WebServerHandle } from './dashboard';
 
 const logger = LoggerFactory.create();
+const MODES = ['tui', 'web'] as const;
 
-let heartbeatRunning = false;
+type Mode = typeof MODES[number];
+type RuntimeModes = Record<Mode, boolean>;
 
-async function heartbeatHandle() {
-  if (!config.HEARTBEAT.ENABLED || heartbeatRunning) return;
+interface IRuntime {
+  agent: IAgent;
+  channels: IChannelsManager;
+  heartbeat: IHeartbeatRunner;
+  webServer: WebServerHandle | null;
+};
 
-  heartbeatRunning = true;
-  const date = new Date();
-  logger.info(`[${date.toISOString()}] Agent waking up...`);
+interface IApplication {
+  start(): Promise<void>;
+}
 
-  try {
-    await heartbeat({ logger, date });
-  } catch (error: any) {
-    logger.error('Heartbeat failed:', error);
-  } finally {
-    heartbeatRunning = false;
+class Application implements IApplication {
+  private runtime: IRuntime | null = null;
+  private isShuttingDown = false;
+
+  constructor(
+    private readonly logger: ILogger,
+    private readonly source: Mode = resolveSessionSourceFromArgs(),
+    private readonly modes: RuntimeModes = resolveRuntimeModes(),
+  ) {}
+
+  async start(): Promise<void> {
+    this.runtime = await this.createCliRuntime();
+    this.registerShutdownHandlers();
+    this.startTuiIfEnabled();
   }
-}
 
-heartbeatHandle();
-setInterval(heartbeatHandle, config.HEARTBEAT.INTERVAL_MS);
+  private async createCliRuntime(): Promise<IRuntime> {
+    const db = DatabaseServiceFactory.create();
+    const session = SessionServiceFactory.create(db, this.source);
+    const agent = AgentFactory.create(this.logger, this.source, db, session);
 
-type StopFn = () => void;
+    const channels = ChannelsSingleton.getInstance(this.logger, agent);
+    const heartbeat = HeartbeatSingleton.getInstance(this.logger, config.HEARTBEAT.INTERVAL_MS, channels);
 
-interface ChannelDefinition {
-  name: string;
-  enabled: () => boolean;
-  start: () => StopFn | void;
-}
+    if (config.TELEGRAM.BOT_TOKEN) {
+      channels.startAll();
+    }
 
-function hasFlag(flag: string): boolean {
-  return process.argv.includes(flag) || process.argv.includes(`--${flag}`);
-}
+    heartbeat.start();
 
-const channels: ChannelDefinition[] = [
-  {
-    name: 'telegram',
-    enabled: () => !!config.TELEGRAM.BOT_TOKEN,
-    start: () => {
-      const handler = AgentHandlerFactory.create(logger, 'telegram');
-      const bot = initBot({
-        token: config.TELEGRAM.BOT_TOKEN,
-        polling: true,
-        onMessage: (msg) => handleMessage(handler, msg),
+    try {
+      const webServer = this.modes.web
+        ? await DashboardServerFactory.create(this.logger, agent).start()
+        : null;
+
+      return { agent, channels, heartbeat, webServer };
+    } catch (error) {
+      channels.stopAll();
+      heartbeat.stop();
+      throw error;
+    }
+  }
+
+  private startTuiIfEnabled(): void {
+    if (!this.runtime || !this.modes.tui) {
+      return;
+    }
+
+    startTUI({ logger: this.logger, agent: this.runtime.agent });
+  }
+
+  private registerShutdownHandlers(): void {
+    for (const signal of SHUTDOWN_SIGNALS) {
+      process.once(signal, () => {
+        void this.shutdown(signal, 0);
       });
-      logger.info("Telegram is ready!");
-      return () => bot.stopPolling();
-    },
-  },
-];
+    }
 
-function startCliMode(): void {
-  const stopFns: StopFn[] = [];
-
-  for (const channel of channels) {
-    if (!channel.enabled()) continue;
-    logger.info(`Starting channel: ${channel.name}`);
-    const stop = channel.start();
-    if (typeof stop === 'function') stopFns.push(stop);
+    process.once('beforeExit', () => {
+      void this.shutdown('beforeExit');
+    });
   }
 
-  const shutdown = () => {
-    logger.info("\n👋 Shutting down gracefully...");
-    stopFns.forEach((stop) => stop());
-    process.exit(0);
-  };
+  private async shutdown(reason: string, exitCode?: number): Promise<void> {
+    if (this.isShuttingDown || !this.runtime) {
+      return;
+    }
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+    this.isShuttingDown = true;
+    this.logger.info(`Shutting down application (${reason})...`);
 
-  const handler = AgentHandlerFactory.create(logger, 'web');
-  startWebServer(logger, handler).catch((error) => {
-    logger.error("Failed to start web server:", error);
-    process.exit(1);
-  });
+    this.runtime.channels.stopAll();
+    this.runtime.heartbeat.stop();
 
-  if (hasFlag('tui')) {
-    const handler = AgentHandlerFactory.create(logger, 'tui');
-    startTUI({ logger, handler });
+    try {
+      await this.runtime.webServer?.stop();
+    } catch (error) {
+      logError(this.logger, `Failed to stop web server during ${reason}.`, error);
+    }
+
+    if (exitCode !== undefined) {
+      process.exit(exitCode);
+    }
   }
 }
+
+function resolveRuntimeModes(argv: string[] = process.argv): RuntimeModes {
+  const explicitModes = MODES.reduce<RuntimeModes>((modes, mode) => {
+    modes[mode] = hasFlag(mode, argv);
+    return modes;
+  }, { tui: false, web: false });
+
+  if (Object.values(explicitModes).some(Boolean)) {
+    return explicitModes;
+  }
+
+  return {
+    tui: false,
+    web: true,
+  };
+}
+
+function resolveSessionSourceFromArgs(argv: string[] = process.argv): Mode {
+  const modesArg = resolveRuntimeModes(argv);
+
+  for (const mode of MODES) {
+    if (modesArg[mode]) {
+      return mode;
+    }
+  }
+
+  return 'web';
+}
+
+const app = new Application(logger);
 
 if (require.main === module) {
-  startCliMode();
+  app.start().catch((error) => {
+    logError(logger, 'Failed to start application.', error);
+    process.exit(1);
+  });
 }

@@ -52,4 +52,4 @@ class MessageRepositoryFactory {
   }
 }
 
-export { IMessageRepository, MessageRepositoryFactory };
+export { IMessageRepository, MessageRepository, MessageRepositoryFactory };

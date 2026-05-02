@@ -5,7 +5,12 @@ import matter from 'gray-matter';
 import { config } from '../config';
 import { Skill } from '../types/skills';
 
-export class SkillsRepository {
+interface ISkillsRepository {
+  get(): Skill[];
+  findByName(params: { name: string }): Skill | null;
+}
+
+class SkillsRepository {
   private readonly logger: ILogger;
 
   constructor(logger: ILogger) {
@@ -31,6 +36,7 @@ export class SkillsRepository {
           description: data.description ?? '',
           read_when: data.read_when ?? null,
           metadata: data.metadata ?? null,
+          path: join(skillsPath, entry.name),
         };
 
         return skill;
@@ -60,6 +66,7 @@ export class SkillsRepository {
       description: data.description ?? '',
       read_when: data.read_when ?? null,
       metadata: data.metadata ?? null,
+      path: entry.name,
       content,
     };
   }
@@ -70,3 +77,10 @@ export class SkillsRepository {
   }
 }
 
+class SkillsRepositoryFactory {
+  static create(logger: ILogger): ISkillsRepository {
+    return new SkillsRepository(logger);
+  }
+}
+
+export { ISkillsRepository, SkillsRepository, SkillsRepositoryFactory };

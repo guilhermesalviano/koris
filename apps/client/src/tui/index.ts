@@ -1,8 +1,8 @@
 import { startTui } from 'assistant-tui';
-import { handleCommand, isCommand, getAvailableCommands } from '../services/agents/commands';
+import { handleCommand, isCommand, getAvailableCommands } from '../services/commands';
 import { config } from '../config';
 import { ILogger } from '../infrastructure/logger';
-import { IAgentHandler } from '../services/agents/handler';
+import { IAgent } from '../services/agents/main-agent/agent';
 import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../constants/thinking';
 
 const COMMAND_DESCRIPTIONS: Record<string, string> = {
@@ -35,8 +35,8 @@ function applyInlineMarkdown(text: string, colors: {
   return formatted;
 }
 
-export function startTUI(params: { logger: ILogger, handler: IAgentHandler }): void {
-  const { handler } = params;
+export function startTUI(params: { logger: ILogger, agent: IAgent }): void {
+  const { agent } = params;
 
   const progressDotColors = [
     defaultColor('cyan'),
@@ -159,7 +159,7 @@ export function startTUI(params: { logger: ILogger, handler: IAgentHandler }): v
     
     // Main message handler with progress updates
     onInput: async (message, ctx) => {
-      return await handler.handle(message, {
+      return await agent.handle(message, {
         toolsEnabled: true,
         signal: ctx.requestSignal,
         onProgress: (summary: string) => {

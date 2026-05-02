@@ -70,4 +70,4 @@ class SessionRepositoryFactory {
   }
 }
 
-export { ISessionRepository, SessionRepositoryFactory };
+export { ISessionRepository, SessionRepository, SessionRepositoryFactory };

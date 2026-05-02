@@ -11,7 +11,7 @@ describe('Message entity', () => {
 
   it('generates uuid when id is omitted', () => {
     const msg = new Message(baseProps);
-    expect(msg.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(msg.id).toMatch(/^[0-9a-f]{13}$/);
   });
 
   it('stores sessionId', () => {

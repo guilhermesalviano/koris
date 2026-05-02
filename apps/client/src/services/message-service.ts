@@ -42,4 +42,4 @@ class MessageServiceFactory {
   }
 }
 
-export { MessageServiceFactory, IMessageService }
+export { IMessageService, MessageService, MessageServiceFactory }

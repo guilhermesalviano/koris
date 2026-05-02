@@ -1,4 +1,5 @@
 import { Message } from "../repositories/prompt";
+import { ProcessedMessage, ProcessOptions } from "./agents";
 
 export type AIRole = 'system' | 'user' | 'assistant';
 
@@ -29,4 +30,13 @@ export interface AIProvider {
   chat(request: AIChatRequest, options?: AIChatOptions): Promise<string>;
   chatStream(request: AIChatRequest, options?: AIChatOptions): AsyncGenerator<string>;
   healthCheck(): Promise<{ ok: boolean; detail?: string }>;
+}
+
+export interface IMessageProvider {
+  handler(
+    message: string,
+    channel: string,
+    options?: ProcessOptions,
+    messageHistory?: Message[]
+  ): Promise<ProcessedMessage>;
 }

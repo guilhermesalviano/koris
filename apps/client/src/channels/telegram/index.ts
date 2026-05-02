@@ -1,115 +1,244 @@
-import { TelegramMessage, InlineKeyboardMarkup } from 'assistant-telegram-bot';
-import { getBot } from 'assistant-telegram-bot';
-import { IAgentHandler } from '../../services/agents/handler';
+import { getBot, initBot, InlineKeyboardMarkup, TelegramMessage } from 'assistant-telegram-bot';
 import { ILogger } from '../../infrastructure/logger';
+import { IAgent } from '../../services/agents/main-agent/agent';
+import { stripInternalStreamMarkers } from '../../utils/stream-markers';
 
 const TYPING_INTERVAL_MS = 5_000;
+const TELEGRAM_MESSAGE_LIMIT = 4_000;
 
-function isAsyncIterable(value: unknown): value is AsyncIterable<string> {
-  if (!value || typeof value !== 'object') return false;
-  const maybe = value as { [Symbol.asyncIterator]?: unknown };
-  return typeof maybe[Symbol.asyncIterator] === 'function';
+interface TelegramBotClient {
+  sendChatAction(chatId: number, action: 'typing'): Promise<unknown>;
+  sendMessage(chatId: number, text: string, options?: Record<string, unknown>): Promise<unknown>;
 }
 
-function isEntityParseError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  return /can't parse entities/i.test(error.message);
+interface ITelegramChannel {
+  handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void>;
+  sendText(chatId: number, text: string): Promise<void>;
+  sendCode(chatId: number, code: string, language?: string): Promise<void>;
+  sendWithApproval(logger: ILogger, chatId: number, message: string, callbackData: string): Promise<void>;
 }
 
-async function sendMessageWithMarkdownFallback(chatId: number, text: string): Promise<void> {
-  const bot = getBot();
-  try {
-    await bot.sendMessage(chatId, text, { parse_mode: 'MarkdownV2' });
-  } catch (error) {
-    if (!isEntityParseError(error)) throw error;
-    await bot.sendMessage(chatId, text);
-  }
+interface TelegramChannelStartOptions {
+  token: string;
+  agent: IAgent;
+  logger: ILogger;
 }
 
-async function resolveResponse(response: unknown): Promise<string> {
-  if (typeof response === 'string') return response;
-  if (isAsyncIterable(response)) {
-    let out = '';
-    for await (const chunk of response) out += chunk;
-    return out;
-  }
-  return String(response);
-}
+class TelegramChannel implements ITelegramChannel {
+  constructor(private readonly bot?: TelegramBotClient) {}
 
-async function withTypingIndicator<T>(chatId: number, work: () => Promise<T>): Promise<T> {
-  const bot = getBot();
-  
-  try {
-    await bot.sendChatAction(chatId, 'typing');
-  } catch {
-    // Silently ignore initial typing action failures - don't block the work
+  async handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void> {
+    const { id: chatId } = msg.chat;
+    const { text } = msg;
+
+    if (!text) {
+      return;
+    }
+
+    await this.processAndReply(agent, chatId, text);
   }
 
-  const timer = setInterval(() => {
-    void bot.sendChatAction(chatId, 'typing').catch(() => {
-      // Silently ignore typing action refresh failures - they're not critical
-      // Network issues or rate limiting shouldn't interrupt user experience
+  async sendText(chatId: number, text: string): Promise<void> {
+    for (const chunk of splitMessage(text, TELEGRAM_MESSAGE_LIMIT)) {
+      await this.sendMessageWithMarkdownFallback(chatId, chunk);
+    }
+  }
+
+  async sendCode(chatId: number, code: string, language: string = ''): Promise<void> {
+    await this.getBotClient().sendMessage(chatId, `\`\`\`${language}\n${code}\n\`\`\``, { parse_mode: 'Markdown' });
+  }
+
+  async sendWithApproval(
+    logger: ILogger,
+    chatId: number,
+    message: string,
+    callbackData: string,
+  ): Promise<void> {
+    logger.info(`Sending message with approval to chat ${chatId}: ${message}`);
+
+    const keyboard: InlineKeyboardMarkup = {
+      inline_keyboard: [
+        [
+          { text: '✅ Approve', callback_data: `approve:${callbackData}` },
+          { text: '❌ Reject', callback_data: `reject:${callbackData}` },
+        ],
+      ],
+    };
+
+    await this.getBotClient().sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard,
     });
-  }, TYPING_INTERVAL_MS);
+  }
 
-  try {
-    return await work();
-  } finally {
-    clearInterval(timer);
+  private async processAndReply(agent: IAgent, chatId: number, text: string): Promise<void> {
+    try {
+      await this.withTypingIndicator(chatId, async () => {
+        const response = await agent.handle(text);
+        const resolved = await this.resolveResponse(response);
+        await this.sendText(chatId, resolved);
+      });
+    } catch (error) {
+      console.error('Error processing message:', error);
+      await this.getBotClient().sendMessage(
+        chatId,
+        '❌ Sorry, I encountered an error processing your message. Please try again.',
+      );
+    }
+  }
+
+  private async sendMessageWithMarkdownFallback(chatId: number, text: string): Promise<void> {
+    try {
+      await this.getBotClient().sendMessage(chatId, text, { parse_mode: 'MarkdownV2' });
+    } catch (error) {
+      if (!this.isEntityParseError(error)) {
+        throw error;
+      }
+
+      await this.getBotClient().sendMessage(chatId, text);
+    }
+  }
+
+  private async resolveResponse(response: unknown): Promise<string> {
+    if (typeof response === 'string') {
+      return stripInternalStreamMarkers(response);
+    }
+
+    if (this.isAsyncIterable(response)) {
+      let out = '';
+      for await (const chunk of response) {
+        out += chunk;
+      }
+
+      return stripInternalStreamMarkers(out);
+    }
+
+    return String(response);
+  }
+
+  private async withTypingIndicator<T>(chatId: number, work: () => Promise<T>): Promise<T> {
+    try {
+      await this.getBotClient().sendChatAction(chatId, 'typing');
+    } catch {
+      // Silently ignore initial typing action failures - don't block the work
+    }
+
+    const timer = setInterval(() => {
+      void this.getBotClient().sendChatAction(chatId, 'typing').catch(() => {
+        // Silently ignore typing action refresh failures - they're not critical
+        // Network issues or rate limiting shouldn't interrupt user experience
+      });
+    }, TYPING_INTERVAL_MS);
+
+    try {
+      return await work();
+    } finally {
+      clearInterval(timer);
+    }
+  }
+
+  private isAsyncIterable(value: unknown): value is AsyncIterable<string> {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const maybe = value as { [Symbol.asyncIterator]?: unknown };
+    return typeof maybe[Symbol.asyncIterator] === 'function';
+  }
+
+  private isEntityParseError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    return /can't parse entities/i.test(error.message);
+  }
+
+  private getBotClient(): TelegramBotClient {
+    return this.bot ?? getBot();
   }
 }
 
-async function processAndReply(handler: IAgentHandler, chatId: number, text: string): Promise<void> {
-  const bot = getBot();
-  try {
-    await withTypingIndicator(chatId, async () => {
-      const response = await handler.handle(text);
-      const resolved = await resolveResponse(response);
-      await sendMessageWithMarkdownFallback(chatId, resolved);
+class TelegramChannelFactory {
+  static create(): ITelegramChannel {
+    return new TelegramChannel();
+  }
+
+  static start(options: TelegramChannelStartOptions): { channel: ITelegramChannel; stop: () => void } {
+    const channel = new TelegramChannel();
+    const bot = initBot({
+      token: options.token,
+      polling: true,
+      onMessage: (msg) => channel.handleMessage(options.agent, msg),
     });
-  } catch (error) {
-    console.error('Error processing message:', error);
-    await bot.sendMessage(
-      chatId,
-      '❌ Sorry, I encountered an error processing your message. Please try again.'
-    );
+
+    options.logger.info('Telegram is ready!');
+
+    return {
+      channel,
+      stop: () => bot.stopPolling(),
+    };
+  }
+
+  static async sendText(chatId: number, text: string): Promise<void> {
+    const channel = new TelegramChannel();
+    await channel.sendText(chatId, text);
   }
 }
 
-export async function handleMessage(handler: IAgentHandler, msg: TelegramMessage): Promise<void> {
-  const { id: chatId } = msg.chat;
-  const { text } = msg;
+const telegramChannel = TelegramChannelFactory.create();
 
-  if (text) {
-    await processAndReply(handler, chatId, text);
-  }
+async function handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void> {
+  await telegramChannel.handleMessage(agent, msg);
 }
 
-export async function sendCode(
-  chatId: number,
-  code: string,
-  language: string = ''
-): Promise<void> {
-  const bot = getBot();
-  await bot.sendMessage(chatId, `\`\`\`${language}\n${code}\n\`\`\``, { parse_mode: 'Markdown' });
+async function sendCode(chatId: number, code: string, language?: string): Promise<void> {
+  await telegramChannel.sendCode(chatId, code, language);
 }
 
-export async function sendWithApproval(
+async function sendText(chatId: number, text: string): Promise<void> {
+  await telegramChannel.sendText(chatId, text);
+}
+
+async function sendWithApproval(
   logger: ILogger,
   chatId: number,
   message: string,
-  callbackData: string
+  callbackData: string,
 ): Promise<void> {
-  logger.info(`Sending message with approval to chat ${chatId}: ${message}`);
-  const bot = getBot();
-  const keyboard: InlineKeyboardMarkup = {
-    inline_keyboard: [
-      [
-        { text: '✅ Approve', callback_data: `approve:${callbackData}` },
-        { text: '❌ Reject', callback_data: `reject:${callbackData}` },
-      ],
-    ],
-  };
+  await telegramChannel.sendWithApproval(logger, chatId, message, callbackData);
+}
 
-  await bot.sendMessage(chatId, message, { parse_mode: 'Markdown', reply_markup: keyboard });
+export {
+  handleMessage,
+  ITelegramChannel,
+  sendText,
+  sendCode,
+  sendWithApproval,
+  TelegramChannel,
+  TelegramChannelFactory,
+};
+
+function splitMessage(text: string, maxLength: number): string[] {
+  if (!text) {
+    return [];
+  }
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > maxLength) {
+    const candidate = remaining.slice(0, maxLength);
+    const splitIndex = Math.max(candidate.lastIndexOf('\n'), candidate.lastIndexOf(' '));
+    const end = splitIndex > 0 ? splitIndex : maxLength;
+
+    chunks.push(remaining.slice(0, end).trimEnd());
+    remaining = remaining.slice(end).trimStart();
+  }
+
+  if (remaining.length > 0) {
+    chunks.push(remaining);
+  }
+
+  return chunks;
 }

@@ -4,3 +4,7 @@ export type ProcessOptions = {
   toolsEnabled?: boolean;
   onProgress?: (summary: string) => void;
 };
+
+export interface ISubAgent {
+  handler(props: any): Promise<void>;
+}

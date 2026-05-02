@@ -72,11 +72,16 @@ interface TelegramApiResponse<T> {
   error_code?: number;
 }
 
+const POLL_INTERVAL_MS = 100;
+const RETRY_BASE_MS = 1_000;
+const RETRY_MAX_MS = 30_000;
+
 export class TelegramBot {
   private readonly baseUrl: string;
   private polling = false;
   private offset = 0;
   private pollingTimeout: NodeJS.Timeout | null = null;
+  private retryDelay = RETRY_BASE_MS;
 
   private messageHandlers: Array<(msg: TelegramMessage) => void | Promise<void>> = [];
   private pollingErrorHandlers: Array<(error: Error) => void> = [];
@@ -117,20 +122,13 @@ export class TelegramBot {
   }
 
   private async getUpdates(): Promise<TelegramUpdate[]> {
-    try {
-      const updates = await this.apiRequest<TelegramUpdate[]>('getUpdates', {
-        offset: this.offset,
-        timeout: 30,
-        allowed_updates: ['message', 'edited_message', 'callback_query'],
-      });
+    const updates = await this.apiRequest<TelegramUpdate[]>('getUpdates', {
+      offset: this.offset,
+      timeout: 30,
+      allowed_updates: ['message', 'edited_message', 'callback_query'],
+    });
 
-      return updates || [];
-    } catch (error) {
-      this.pollingErrorHandlers.forEach((handler) => {
-        handler(error instanceof Error ? error : new Error(String(error)));
-      });
-      return [];
-    }
+    return updates || [];
   }
 
   private startPolling(): void {
@@ -168,15 +166,22 @@ export class TelegramBot {
           }
         }
       }
+      this.retryDelay = RETRY_BASE_MS;
     } catch (error) {
       console.error('Polling error:', error);
       this.pollingErrorHandlers.forEach((handler) => {
         handler(error instanceof Error ? error : new Error(String(error)));
       });
+
+      if (this.polling) {
+        this.pollingTimeout = setTimeout(() => this.poll(), this.retryDelay);
+        this.retryDelay = Math.min(this.retryDelay * 2, RETRY_MAX_MS);
+      }
+      return;
     }
 
     if (this.polling) {
-      this.pollingTimeout = setTimeout(() => this.poll(), 100);
+      this.pollingTimeout = setTimeout(() => this.poll(), POLL_INTERVAL_MS);
     }
   }
 

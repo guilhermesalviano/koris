@@ -89,4 +89,4 @@ class MemoryRepositoryFactory {
   }
 }
 
-export { IMemoryRepository, MemoryRepositoryFactory };
+export { IMemoryRepository, MemoryRepository, MemoryRepositoryFactory };

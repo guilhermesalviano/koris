@@ -9,7 +9,7 @@ describe('Session entity', () => {
 
   it('generates uuid when id is omitted', () => {
     const session = new Session({ source: 'tui' });
-    expect(session.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(session.id).toMatch(/^[0-9a-f]{13}$/);
   });
 
   it('stores source', () => {

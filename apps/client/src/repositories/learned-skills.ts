@@ -198,4 +198,4 @@ class LearnedSkillsRepositoryFactory {
   }
 }
 
-export { LearnedSkillsRepositoryFactory, ILearnedSkillsRepository }
+export { ILearnedSkillsRepository, LearnedSkillsRepository, LearnedSkillsRepositoryFactory }
