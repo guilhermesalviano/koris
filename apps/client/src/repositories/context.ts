@@ -12,7 +12,6 @@ export interface PersonalInformation {
 export interface SystemInfo {
   source: string;
   platform: string;
-  workingDirectory: string;
   datetime: string;
 }
 
@@ -38,7 +37,6 @@ class ContextRepository implements IContextRepository {
     return {
       source: params.channel,
       platform: os.platform(),
-      workingDirectory: process.cwd(),
       datetime: new Date().toISOString(),
     };
   }
@@ -62,7 +60,6 @@ class ContextRepository implements IContextRepository {
       '[Session Context]',
       system.source ? `- Channel Source: ${system.source}` : null,
       system.datetime ? `- Datetime: ${system.datetime}` : null,
-      system.workingDirectory ? `- cwd: ${system.workingDirectory}` : null,
       personal.name ? `- User name: ${personal.name}` : null,
       personal.gender ? `- User gender: ${personal.gender}` : null,
       personal.birthday ? `- User birthday: ${personal.birthday}` : null,
