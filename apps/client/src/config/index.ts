@@ -44,6 +44,13 @@ export const config = {
     USE_POLLING: get('telegram.USE_POLLING', 'true') === 'true',
     CHAT_ID:    get('telegram.CHAT_ID',    ''),
   },
+  PERSONAL_INFORMATION: {
+    HUMAN_NAME: get('personal_information.HUMAN_NAME', ''),
+    HUMAN_GENDER: get('personal_information.HUMAN_GENDER', ''),
+    HUMAN_BIRTHDAY: get('personal_information.HUMAN_BIRTHDAY', ''),
+    HUMAN_LOCATION: get('personal_information.HUMAN_LOCATION', ''),
+    HUMAN_OCCUPATION: get('personal_information.HUMAN_OCCUPATION', ''),
+  },
 } as const;
 
 const isTelegramMode = process.argv.includes('telegram') || process.argv.includes('--telegram');

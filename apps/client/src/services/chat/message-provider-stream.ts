@@ -34,6 +34,8 @@ class MessageProviderStream implements IMessageProvider {
       messageHistory: messagesHistory,
     });
 
+    this.logger.debug(`paylod prompt value ${JSON.stringify(payload)}`);
+
     const chatRequest = payload as AIChatRequest;
 
     // Stream directly in TUI for the active AI provider

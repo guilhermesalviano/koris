@@ -28,5 +28,12 @@
     "API_TOKEN": "",
     "MODEL": "gemma4:e4b",
     "THINK_MODEL": "gemma4:26b-a4b-it-q4_K_M"
+  },
+  "personal_information": {
+    "HUMAN_NAME": "John Doe",
+    "HUMAN_GENDER": "male",
+    "HUMAN_BIRTHDAY": "1990-01-01",
+    "HUMAN_LOCATION": "New York, USA",
+    "HUMAN_OCCUPATION": "Software Engineer"
   }
 }
