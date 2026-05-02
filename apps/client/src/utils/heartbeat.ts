@@ -38,8 +38,7 @@ function matchesCronField(field: string, value: number): boolean {
 }
 
 /**
- * Returns true for patterns that fire every minute — minute field is '*' or '* /1'.
- * These are never allowed as scheduled tasks.
+ * Returns true for patterns whose minute field schedules execution every minute.
  */
 export function isEveryMinute(expr: string): boolean {
   const [minuteF] = expr.trim().split(/\s+/);
@@ -47,15 +46,13 @@ export function isEveryMinute(expr: string): boolean {
 }
 
 /**
- * Returns true when the expression has a specific hour (hour field != '*'),
- * OR when it is an explicit repeat-by-minutes schedule (e.g. '* /30 * * * *').
- * A plain wildcard hour without a minute-step means "no hour provided" -> false.
+ * Returns true for any schedule that does not use an every-minute minute field,
+ * or when such a minute field is constrained to a specific hour.
  */
 export function hasSpecificHour(expr: string): boolean {
   const [minuteF, hourF] = expr.trim().split(/\s+/);
-  if (hourF !== '*') return true;
-  // Allow */N (N >= 2) in the minute field — it is a deliberate repeat specification.
-  return /^\*\/([2-9]|[1-9]\d+)$/.test(minuteF);
+  if (minuteF !== '*' && minuteF !== '*/1') return true;
+  return hourF !== '*';
 }
 
 

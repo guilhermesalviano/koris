@@ -170,6 +170,7 @@ class TelegramChannelFactory {
       token: options.token,
       polling: true,
       onMessage: (msg) => channel.handleMessage(options.agent, msg),
+      onPollingError: (error) => options.logger.warn(`Telegram polling error: ${error.message}`),
     });
 
     options.logger.info('Telegram is ready!');

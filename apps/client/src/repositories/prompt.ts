@@ -1,17 +1,12 @@
 import { Skill } from '../types/skills';
-import { ISystemInfoRepository, SystemInfoRepositoryFactory } from './system-info';
+import { IContextRepository, ContextRepositoryFactory } from './context';
 import type { AIChatRequest, AIToolDefinition } from '../types/provider';
 import { IToolsRepository, ToolsRepositoryFactory } from './tools';
-import { MessageRole } from '../types/messages';
+import { Message, MessageRole } from '../types/messages';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
 import { IMemoryRepository, MemoryRepositoryFactory } from './memory';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { SYSTEM_PROMPT } from '../constants';
-
-interface Message {
-  role: MessageRole;
-  content: string;
-}
 
 interface BuildPromptParams {
   userMessage: string;
@@ -23,7 +18,6 @@ interface BuildPromptParams {
 
 interface PromptConfig {
   systemPrompt?: string;
-  includeSystemInfo?: boolean;
   includeTools?: boolean;
   includeTaskTools?: boolean;
   learnedSkillsLimit?: number;
@@ -46,7 +40,7 @@ interface IPromptRepository {
  */
 class PromptRepository implements IPromptRepository {
   constructor(
-    private systemInfoRepository: ISystemInfoRepository,
+    private contextRepository: IContextRepository,
     private toolsRepository: IToolsRepository,
     private learnedSkillsRepository: ILearnedSkillsRepository,
     private memoryRepository: IMemoryRepository,
@@ -54,7 +48,9 @@ class PromptRepository implements IPromptRepository {
   ) {}
 
   /**
-   * Build complete prompt payload for AI provider
+   * Used to build the prompt. But can also be used to rebuild prompts with updated config, context and history.
+   * @param params BuildPromptParams
+   * @returns AIChatRequest
    */
   build(params: BuildPromptParams): AIChatRequest {
     const messages = this.buildHistory(params);
@@ -85,15 +81,13 @@ class PromptRepository implements IPromptRepository {
 
     // TODO: get only old and relevant memories instead of all. Exclude actual session.
     const memory = this.buildMemoryContext();
-    const systemInstructions = memory ? `${baseHistory}\n Persistent context from other sessions: ${memory}` : baseHistory;
+    let systemInstructions = memory ? `
+      ${baseHistory}\n Persistent context from other sessions: ${memory}` : baseHistory;
+
+    const context = this.contextRepository.get({ channel });
+    if (context) systemInstructions += `\n Additional system info: \n${context}`;
 
     messages.push({ role: 'system', content: systemInstructions });
-
-    // System info context
-    if (this.config.includeSystemInfo !== false) {
-      const systemInfo = this.systemInfoRepository.loadSystemInfoPrompt({ channel });
-      if (systemInfo) messages.push({ role: 'system', content: systemInfo });
-    }
 
     return messages;
   }
@@ -201,7 +195,7 @@ class PromptRepository implements IPromptRepository {
    */
   withConfig(config: Partial<PromptConfig>): PromptRepository {
     return new PromptRepository(
-      this.systemInfoRepository,
+      this.contextRepository,
       this.toolsRepository,
       this.learnedSkillsRepository,
       this.memoryRepository,
@@ -212,19 +206,12 @@ class PromptRepository implements IPromptRepository {
 
 class PromptRepositoryFactory {
   static create(db: IDatabaseService, config?: PromptConfig): PromptRepository {
-    const systemInfoRepository = SystemInfoRepositoryFactory.create();
+    const contextRepository = ContextRepositoryFactory.create();
     const toolsRepository = ToolsRepositoryFactory.create();
     const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
     const memoryRepository = MemoryRepositoryFactory.create(db);
-    return new PromptRepository(systemInfoRepository, toolsRepository, learnedSkillsRepository, memoryRepository, config);
+    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, memoryRepository, config);
   }
 }
 
-export {
-  Message,
-  MessageRole,
-  BuildPromptParams,
-  PromptConfig,
-  IPromptRepository,
-  PromptRepositoryFactory,
-};
+export { IPromptRepository, PromptRepository, PromptRepositoryFactory };

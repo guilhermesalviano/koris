@@ -1,5 +1,5 @@
-import { Message } from "../repositories/prompt";
-import { ProcessedMessage, ProcessOptions } from "./agents";
+import type { Message } from "./messages";
+import type { ProcessedMessage, ProcessOptions } from "./agents";
 
 export type AIRole = 'system' | 'user' | 'assistant';
 

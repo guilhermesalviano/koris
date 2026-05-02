@@ -4,7 +4,7 @@ import { Heartbeat } from '../../../entities/heartbeat';
 import type { ILogger } from '../../../infrastructure/logger';
 import type { ToolResult } from '../../../types/tools';
 import { getRequiredStringArg, getOptionalStringArg, isAllowedValue } from '../shared/runtime';
-import { isValidCronExpression, isEveryMinute, hasSpecificHour } from '../../../utils/heartbeat';
+import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../../../utils/heartbeat';
 import { TASK_TYPES, TaskType } from '../../../types/task';
 
 export async function setTask(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
@@ -48,7 +48,7 @@ export async function setTask(logger: ILogger, args: Record<string, unknown>): P
     return {
       toolName: 'set_task',
       success: false,
-      error: 'No specific hour was provided. Ask the user what hour they want this task to run (e.g. "0 9 * * *" for 9am daily).',
+      error: 'No specific hour was provided for an every-minute schedule. Ask the user what hour they want this task to run (e.g. "* 9 * * *" for every minute during 9am).',
     };
   }
 
