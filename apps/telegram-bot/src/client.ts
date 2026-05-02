@@ -75,9 +75,20 @@ interface TelegramApiResponse<T> {
 const POLL_INTERVAL_MS = 100;
 const RETRY_BASE_MS = 1_000;
 const RETRY_MAX_MS = 30_000;
+const REQUEST_TIMEOUT_MS = 40_000;
+const REQUEST_RETRIES = 2;
+
+interface TelegramBotOptions {
+  polling?: boolean;
+  baseUrl?: string;
+  requestTimeoutMs?: number;
+  requestRetries?: number;
+}
 
 export class TelegramBot {
   private readonly baseUrl: string;
+  private readonly requestTimeoutMs: number;
+  private readonly requestRetries: number;
   private polling = false;
   private offset = 0;
   private pollingTimeout: NodeJS.Timeout | null = null;
@@ -86,8 +97,11 @@ export class TelegramBot {
   private messageHandlers: Array<(msg: TelegramMessage) => void | Promise<void>> = [];
   private pollingErrorHandlers: Array<(error: Error) => void> = [];
 
-  constructor(token: string, options?: { polling?: boolean }) {
-    this.baseUrl = `https://api.telegram.org/bot${token}`;
+  constructor(token: string, options?: TelegramBotOptions) {
+    const baseUrl = options?.baseUrl?.trim() || `https://api.telegram.org/bot${token}`;
+    this.baseUrl = baseUrl;
+    this.requestTimeoutMs = options?.requestTimeoutMs ?? REQUEST_TIMEOUT_MS;
+    this.requestRetries = options?.requestRetries ?? REQUEST_RETRIES;
 
     if (options?.polling) {
       this.startPolling();
@@ -97,28 +111,52 @@ export class TelegramBot {
   private async apiRequest<T = any>(method: string, params?: any): Promise<T> {
     const url = `${this.baseUrl}/${method}`;
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: params ? JSON.stringify(params) : undefined,
-      });
+    let lastError: unknown;
 
-      const data = (await response.json()) as TelegramApiResponse<T>;
+    for (let attempt = 0; attempt <= this.requestRetries; attempt += 1) {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: params ? JSON.stringify(params) : undefined,
+          signal: AbortSignal.timeout(this.requestTimeoutMs),
+        });
 
-      if (!data.ok) {
-        throw new Error(`Telegram API error: ${data.description || 'Unknown error'}`);
+        const data = (await response.json()) as TelegramApiResponse<T>;
+
+        if (!data.ok) {
+          const apiError = new Error(`Telegram API error: ${data.description || 'Unknown error'}`);
+
+          if (!this.isRetryableTelegramError(data.error_code) || attempt >= this.requestRetries) {
+            throw apiError;
+          }
+
+          lastError = apiError;
+          await this.waitBeforeRetry(attempt);
+          continue;
+        }
+
+        return data.result as T;
+      } catch (error) {
+        if (attempt >= this.requestRetries || !this.isRetryableNetworkError(error)) {
+          if (error instanceof Error) {
+            throw new Error(`Failed to call ${method}: ${error.message}`);
+          }
+          throw error;
+        }
+
+        lastError = error;
+        await this.waitBeforeRetry(attempt);
       }
-
-      return data.result as T;
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new Error(`Failed to call ${method}: ${error.message}`);
-      }
-      throw error;
     }
+
+    if (lastError instanceof Error) {
+      throw new Error(`Failed to call ${method}: ${lastError.message}`);
+    }
+
+    throw new Error(`Failed to call ${method}: unknown error`);
   }
 
   private async getUpdates(): Promise<TelegramUpdate[]> {
@@ -263,5 +301,36 @@ export class TelegramBot {
       text,
       ...options,
     });
+  }
+
+  private async waitBeforeRetry(attempt: number): Promise<void> {
+    const delay = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+
+  private isRetryableTelegramError(errorCode?: number): boolean {
+    if (!errorCode) {
+      return false;
+    }
+
+    return errorCode === 429 || errorCode >= 500;
+  }
+
+  private isRetryableNetworkError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    const msg = error.message.toLowerCase();
+
+    return (
+      msg.includes('fetch failed') ||
+      msg.includes('aborted') ||
+      msg.includes('timeout') ||
+      msg.includes('etimedout') ||
+      msg.includes('econnreset') ||
+      msg.includes('eai_again') ||
+      msg.includes('enotfound')
+    );
   }
 }
