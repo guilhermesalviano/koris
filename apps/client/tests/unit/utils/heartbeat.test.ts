@@ -76,8 +76,8 @@ describe('hasSpecificHour', () => {
     expect(hasSpecificHour('0 9-17 * * *')).toBe(true);
   });
 
-  it('returns false when hour is wildcard with no minute step', () => {
-    expect(hasSpecificHour('0 * * * *')).toBe(false);
+  it('returns true when minute is fixed and hour is wildcard', () => {
+    expect(hasSpecificHour('0 * * * *')).toBe(true);
   });
 
   it('returns true for */30 in minute field (valid repeat)', () => {
@@ -88,8 +88,20 @@ describe('hasSpecificHour', () => {
     expect(hasSpecificHour('*/15 * * * *')).toBe(true);
   });
 
+  it('returns false for wildcard minute with wildcard hour', () => {
+    expect(hasSpecificHour('* * * * *')).toBe(false);
+  });
+
+  it('returns true for wildcard minute with specific hour', () => {
+    expect(hasSpecificHour('* 9 * * *')).toBe(true);
+  });
+
   it('returns false for */1 in minute with wildcard hour', () => {
     expect(hasSpecificHour('*/1 * * * *')).toBe(false);
+  });
+
+  it('returns true for */1 in minute with specific hour', () => {
+    expect(hasSpecificHour('*/1 9 * * *')).toBe(true);
   });
 });
 

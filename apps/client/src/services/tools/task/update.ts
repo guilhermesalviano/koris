@@ -3,7 +3,7 @@ import { HeartbeatRepositoryFactory } from '../../../repositories/heartbeat';
 import type { ILogger } from '../../../infrastructure/logger';
 import type { ToolResult } from '../../../types/tools';
 import { getOptionalStringArg, getRequiredStringArg, isAllowedValue } from '../shared/runtime';
-import { isValidCronExpression, isEveryMinute, hasSpecificHour } from '../../../utils/heartbeat';
+import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../../../utils/heartbeat';
 import { TASK_TYPES } from '../../../types/task';
 
 export async function updateTask(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
@@ -43,7 +43,7 @@ export async function updateTask(logger: ILogger, args: Record<string, unknown>)
 
   if (cronExpression && isEveryMinute(cronExpression)) {
     return {
-      toolName: 'update_task',
+      toolName: 'set_task',
       success: false,
       error: 'Tasks that run every minute are not allowed. Please provide a less frequent schedule.',
     };
@@ -53,7 +53,7 @@ export async function updateTask(logger: ILogger, args: Record<string, unknown>)
     return {
       toolName: 'update_task',
       success: false,
-      error: 'No specific hour was provided. Ask the user what hour they want this task to run (e.g. "0 9 * * *" for 9am daily).',
+      error: 'No specific hour was provided for an every-minute schedule. Ask the user what hour they want this task to run (e.g. "* 9 * * *" for every minute during 9am).',
     };
   }
 

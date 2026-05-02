@@ -53,16 +53,20 @@ describe('updateTask', () => {
     expect(result.error).toContain('Invalid cron expression');
   });
 
-  it('returns error for every-minute cron', async () => {
+  it('returns error when wildcard minutes are used without a specific hour', async () => {
     const result = await updateTask(logger, { id: 'hb-1', cron_expression: '* * * * *' });
     expect(result.success).toBe(false);
-    expect(result.error).toContain('every minute');
+    expect(result.error).toContain('not allowed');
   });
 
-  it('returns error when no specific hour given', async () => {
+  it('allows hourly schedules without a specific hour', async () => {
     const result = await updateTask(logger, { id: 'hb-1', cron_expression: '0 * * * *' });
+    expect(result.success).toBe(true);
+  });
+
+  it('do not allows every-minute schedules', async () => {
+    const result = await updateTask(logger, { id: 'hb-1', cron_expression: '* 9 * * *' });
     expect(result.success).toBe(false);
-    expect(result.error).toContain('hour');
   });
 
   it('returns error when task not found', async () => {
