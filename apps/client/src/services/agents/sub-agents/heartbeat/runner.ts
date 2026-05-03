@@ -2,6 +2,7 @@ import { config } from '../../../../config';
 import { IChannelsManager } from '../../../../channels';
 import type { ILogger } from '../../../../infrastructure/logger';
 import { HeartbeatFactory } from './sub-agent';
+import { beginFooterActivity } from '../../../../utils/footer-activity';
 
 interface IHeartbeatRunner {
   start(): void;
@@ -49,6 +50,7 @@ class HeartbeatRunner implements IHeartbeatRunner {
     }
 
     this.isRunning = true;
+    const endFooterActivity = beginFooterActivity('heartbeat');
     const date = new Date();
     this.logger.info(`[${date.toISOString()}] Agent waking up...`);
 
@@ -60,6 +62,7 @@ class HeartbeatRunner implements IHeartbeatRunner {
         error: error instanceof Error ? error.message : String(error),
       });
     } finally {
+      endFooterActivity();
       this.isRunning = false;
     }
   }

@@ -4,6 +4,7 @@ import { config } from '../config';
 import { ILogger } from '../infrastructure/logger';
 import { IAgent } from '../services/agents/main-agent/agent';
 import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../constants/thinking';
+import { subscribeToFooterActivity } from '../utils/footer-activity';
 
 const COMMAND_DESCRIPTIONS: Record<string, string> = {
   '/help':   'show available commands',
@@ -46,7 +47,7 @@ export function startTUI(params: { logger: ILogger, agent: IAgent }): void {
     defaultColor('blue'),
   ];
 
-  startTui({
+  const tui = startTui({
     // Modern fixed-input layout with scrollable history
     fixedInput: true,
     
@@ -181,6 +182,12 @@ export function startTUI(params: { logger: ILogger, agent: IAgent }): void {
       });
     },
   });
+
+  const unsubscribe = subscribeToFooterActivity((note) => {
+    tui.setFooterNote(note);
+  });
+
+  process.once('exit', unsubscribe);
 }
 
 function splitProgressSummary(summary: string): { headline: string; details?: string } {

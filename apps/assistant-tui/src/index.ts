@@ -21,7 +21,7 @@ export type {
   TuiContext,
 } from './types';
 
-export function startTui(options: StartTuiOptions): void {
+export function startTui(options: StartTuiOptions): TuiContext {
   const session: SessionState = { messageCount: 0, startTime: new Date() };
   const colors = defaultColors;
   const fixedInput = options.fixedInput !== false;
@@ -40,6 +40,7 @@ export function startTui(options: StartTuiOptions): void {
     activeAbortController: undefined,
     isBusy: false,
     iterationBadge: '',
+    footerNote: '',
     inputLineCount: 1,
     userTyping: false,
   };
@@ -122,6 +123,10 @@ export function startTui(options: StartTuiOptions): void {
     },
     setIterationBadge: (text: string) => {
       state.iterationBadge = text;
+      if (fixedInput) rendererRef.current?.renderFooterLine();
+    },
+    setFooterNote: (text: string) => {
+      state.footerNote = text;
       if (fixedInput) rendererRef.current?.renderFooterLine();
     },
   };
@@ -313,9 +318,11 @@ export function startTui(options: StartTuiOptions): void {
     handleResize,
     recordRaw: (text: string) => rawBuffer.push(text),
   });
+
+  return ctx;
 }
 
 /** Backwards-compatible alias. */
-export function startTUI(options: StartTuiOptions): void {
-  startTui(options);
+export function startTUI(options: StartTuiOptions): TuiContext {
+  return startTui(options);
 }

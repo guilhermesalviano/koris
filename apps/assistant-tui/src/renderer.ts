@@ -18,6 +18,7 @@ export interface TuiInternalState {
   activeAbortController: AbortController | undefined;
   isBusy: boolean;
   iterationBadge: string;
+  footerNote: string;
   /** True while the user is typing during a busy AI response; keeps cursor visible. */
   userTyping: boolean;
 }
@@ -162,6 +163,9 @@ export function createRenderer(deps: RendererDeps) {
       typeof deps.footerText === 'function'
         ? deps.footerText(ctx)
         : (deps.footerText ?? '/ for commands');
+    const footerLabel = state.footerNote
+      ? `${footerText}  |  ${state.footerNote}`
+      : footerText;
     const badge = state.iterationBadge;
     const separatorRow = state.terminalHeight - footerGapRows - 1;
     const footerRow = state.terminalHeight - footerGapRows;
@@ -172,7 +176,7 @@ export function createRenderer(deps: RendererDeps) {
       || renderedFooter.separatorRow !== separatorRow
       || renderedFooter.footerRow !== footerRow
       || renderedFooter.blankRow !== blankRow
-      || renderedFooter.footerText !== footerText
+      || renderedFooter.footerText !== footerLabel
       || renderedFooter.badge !== badge;
 
     if (!footerChanged) {
@@ -193,7 +197,7 @@ export function createRenderer(deps: RendererDeps) {
     }
 
     writeLine(separatorRow, buildSeparatorLine(''));
-    writeLine(footerRow, `${colors.bright}${colors.gray}${footerText.slice(0, state.terminalWidth)}${colors.reset}`);
+    writeLine(footerRow, `${colors.bright}${colors.gray}${footerLabel.slice(0, state.terminalWidth)}${colors.reset}`);
     writeLine(blankRow, '');
 
     if (badge) {
@@ -203,7 +207,7 @@ export function createRenderer(deps: RendererDeps) {
       process.stdout.write(`${colors.dim}${colors.cyan}${badgeText}${colors.reset}`);
     }
 
-    renderedFooter = { separatorRow, footerRow, blankRow, footerText, badge };
+    renderedFooter = { separatorRow, footerRow, blankRow, footerText: footerLabel, badge };
     placeCursorInInput();
   };
 
