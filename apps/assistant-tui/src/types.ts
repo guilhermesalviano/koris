@@ -22,6 +22,8 @@ export interface TuiContext {
   clear(): void;
   /** Clears buffered content and re-renders the current screen/welcome view. */
   redraw(): void;
+  getInputValue(): string;
+  setInputValue(value: string): void;
   println(text?: string): void;
   contentBuffer: string[];
   terminalWidth: number;
@@ -44,9 +46,19 @@ export interface CommandSuggestion {
   description?: string;
 }
 
+export interface TuiKeypress {
+  name?: string;
+  ctrl?: boolean;
+  meta?: boolean;
+  shift?: boolean;
+  sequence?: string;
+}
+
 export interface StartTuiOptions {
   onInput(input: string, ctx: TuiContext): Promise<string | AsyncIterable<string> | void>;
   onCommand?: (command: string, ctx: TuiContext) => Promise<TuiCommandResult | string | void>;
+  onKeypress?: (ch: string, key: TuiKeypress | undefined, ctx: TuiContext) => boolean | void;
+  inputMode?: 'fixed' | 'screen';
   isCommand?: (line: string) => boolean;
   prompt?: string;
   footerText?: string | ((ctx: TuiContext) => string);

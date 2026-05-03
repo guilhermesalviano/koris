@@ -27,6 +27,7 @@ export interface RendererDeps {
   ansi: Ansi;
   colors: TuiColors;
   fixedInput: boolean;
+  inputMode?: StartTuiOptions['inputMode'];
   rl: readline.Interface;
   anyRl: any;
   footerText?: StartTuiOptions['footerText'];
@@ -36,6 +37,7 @@ export interface RendererDeps {
 
 export function createRenderer(deps: RendererDeps) {
   const { state, ansi, colors, fixedInput, rl, anyRl } = deps;
+  const screenInputMode = fixedInput && deps.inputMode === 'screen';
 
   const getDisplayPos = (text: string) => {
     const width = Math.max(1, state.terminalWidth);
@@ -46,7 +48,9 @@ export function createRenderer(deps: RendererDeps) {
     };
   };
 
-  const maxContentLines = () => Math.max(1, state.terminalHeight - state.inputLineCount - 4);
+  const maxContentLines = () => screenInputMode
+    ? Math.max(1, state.terminalHeight)
+    : Math.max(1, state.terminalHeight - state.inputLineCount - 4);
 
   const ensureScrollOffsetInRange = () => {
     const maxOffset = Math.max(0, state.contentBuffer.length - maxContentLines());
@@ -69,7 +73,7 @@ export function createRenderer(deps: RendererDeps) {
   };
 
   const renderFooterLine = () => {
-    if (!fixedInput) return;
+    if (!fixedInput || screenInputMode) return;
     const ctx = deps.getCtx();
     const footerText =
       typeof deps.footerText === 'function'
@@ -97,6 +101,14 @@ export function createRenderer(deps: RendererDeps) {
 
   const renderSpinnerRow = () => {
     if (!fixedInput || state.isRendering) return;
+    if (screenInputMode) {
+      process.stdout.write('\x1b7');
+      process.stdout.write(ansi.cursorPos(state.terminalHeight, 1));
+      process.stdout.write(ansi.clearLine);
+      process.stdout.write(buildSpinnerLine(state.spinnerStatus));
+      process.stdout.write('\x1b8');
+      return;
+    }
     process.stdout.write('\x1b7');
     process.stdout.write(ansi.cursorPos(state.terminalHeight - state.inputLineCount - 3, 1));
     process.stdout.write(ansi.clearLine);
@@ -143,26 +155,37 @@ export function createRenderer(deps: RendererDeps) {
     }
 
     // Spinner / scroll-hint row (exclusively chrome).
-    process.stdout.write(ansi.cursorPos(state.terminalHeight - state.inputLineCount - 3, 1));
-    process.stdout.write(ansi.clearLine);
-    process.stdout.write(buildSpinnerLine(state.spinnerStatus));
+    if (screenInputMode) {
+      process.stdout.write(ansi.cursorPos(state.terminalHeight, 1));
+      process.stdout.write(ansi.clearLine);
+      process.stdout.write(buildSpinnerLine(state.spinnerStatus));
+    } else {
+      process.stdout.write(ansi.cursorPos(state.terminalHeight - state.inputLineCount - 3, 1));
+      process.stdout.write(ansi.clearLine);
+      process.stdout.write(buildSpinnerLine(state.spinnerStatus));
+    }
 
-    // Separator above input.
-    process.stdout.write(ansi.cursorPos(state.terminalHeight - state.inputLineCount - 2, 1));
-    process.stdout.write(ansi.clearLine);
-    process.stdout.write(buildSeparatorLine(''));
+    if (!screenInputMode) {
+      // Separator above input.
+      process.stdout.write(ansi.cursorPos(state.terminalHeight - state.inputLineCount - 2, 1));
+      process.stdout.write(ansi.clearLine);
+      process.stdout.write(buildSeparatorLine(''));
+    }
 
-    // Input rows are positioned and rendered by patchRefreshLine/_refreshLine.
     rl.resume();
     const inputLineCountBeforeRefresh = state.inputLineCount;
-    if (typeof anyRl._refreshLine === 'function') {
+    if (!screenInputMode && typeof anyRl._refreshLine === 'function') {
       anyRl._refreshLine();
-    } else {
+    } else if (!screenInputMode) {
       rl.prompt(true);
       renderFooterLine();
     }
 
-    process.stdout.write((state.isBusy && !state.userTyping) ? ansi.cursorHide : ansi.cursorShow);
+    process.stdout.write(
+      screenInputMode || (state.isBusy && !state.userTyping)
+        ? ansi.cursorHide
+        : ansi.cursorShow,
+    );
 
     state.isRendering = false;
 
@@ -181,6 +204,17 @@ export function createRenderer(deps: RendererDeps) {
   /** Patch readline's internal `_refreshLine` to keep the footer painted. */
   const patchRefreshLine = () => {
     if (!fixedInput || typeof anyRl._refreshLine !== 'function') return;
+    if (screenInputMode) {
+      anyRl._refreshLine = () => {
+        state.inputLineCount = 1;
+        anyRl._prevRows = 0;
+        if (!state.isRendering) {
+          state.userTyping = true;
+          requestRender();
+        }
+      };
+      return;
+    }
     anyRl._refreshLine = () => {
       const prompt: string = rl.getPrompt();
       const inputText: string = (anyRl.line as string | undefined) ?? '';
@@ -254,7 +288,7 @@ export function createRenderer(deps: RendererDeps) {
       // Placeholder shown when input is empty.
       if (deps.placeholder && !state.isBusy && inputText === '') {
         process.stdout.write('\x1b7');
-        process.stdout.write(`${colors.dim}${deps.placeholder}${colors.reset}`);
+        process.stdout.write(`${colors.yellow}${deps.placeholder}${colors.reset}`);
         process.stdout.write('\x1b8');
       }
 

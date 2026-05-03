@@ -15,6 +15,7 @@ export type {
   SessionState,
   SpinnerOptions,
   StartTuiOptions,
+  TuiKeypress,
   TuiAction,
   TuiCommandResult,
   TuiContext,
@@ -24,6 +25,7 @@ export function startTui(options: StartTuiOptions): void {
   const session: SessionState = { messageCount: 0, startTime: new Date() };
   const colors = defaultColors;
   const fixedInput = options.fixedInput !== false;
+  const screenInputMode = fixedInput && options.inputMode === 'screen';
 
   // ── Shared mutable state (passed by reference to all sub-modules) ───────────
   const state: TuiInternalState = {
@@ -62,7 +64,7 @@ export function startTui(options: StartTuiOptions): void {
   const rendererRef: { current: ReturnType<typeof createRenderer> | null } = { current: null };
 
   // ── Input filter for scroll events ─────────────────────────────────────────
-  const inputFilter = fixedInput
+  const inputFilter = fixedInput && !screenInputMode
     ? createInputFilter({
         line: (dir) => {
           const maxLines = rendererRef.current?.maxContentLines() ?? Math.max(1, state.terminalHeight - 5);
@@ -99,6 +101,14 @@ export function startTui(options: StartTuiOptions): void {
     colors,
     clear: clearScreen,
     redraw: () => redraw(),
+    getInputValue: () => String(anyRl.line ?? ''),
+    setInputValue: (value: string) => {
+      anyRl.line = value;
+      anyRl.cursor = value.length;
+      if (typeof anyRl._refreshLine === 'function') {
+        anyRl._refreshLine();
+      }
+    },
     println: (text?: string) => println(text),
     contentBuffer: state.contentBuffer,
     terminalWidth: state.terminalWidth,
@@ -121,6 +131,7 @@ export function startTui(options: StartTuiOptions): void {
     ansi,
     colors,
     fixedInput,
+    inputMode: options.inputMode,
     rl,
     anyRl,
     footerText:  options.footerText,

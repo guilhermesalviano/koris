@@ -4,7 +4,7 @@ import { isAbortError, emitTerminalBell, normalizeCommandResult } from './utils'
 import { wrapSingleLineForWidth } from './ansi';
 import type { Ansi } from './ansi';
 import type { TuiColors } from './colors';
-import type { TuiContext, SessionState, StartTuiOptions } from './types';
+import type { TuiContext, SessionState, StartTuiOptions, TuiKeypress } from './types';
 import type { TuiInternalState } from './renderer';
 import { splitThinking, defaultFormatThinking } from './formatting';
 
@@ -260,6 +260,30 @@ export function setupLineHandlers(deps: LineHandlerDeps): void {
   } = deps;
 
   const confirmExit = options.confirmExit ?? true;
+  const screenInputMode = options.inputMode === 'screen';
+  const originalTtyWrite = anyRl._ttyWrite?.bind(rl);
+
+  if (typeof originalTtyWrite === 'function' && typeof options.onKeypress === 'function') {
+    anyRl._ttyWrite = (s: string, key?: TuiKeypress) => {
+      if (!state.isBusy && options.onKeypress?.(s, key, ctx)) {
+        return;
+      }
+
+      const result = originalTtyWrite(s, key);
+
+      if (
+        screenInputMode
+        && !state.isBusy
+        && key?.name !== 'return'
+        && key?.name !== 'enter'
+        && key?.name !== 'escape'
+      ) {
+        setTimeout(() => ctx.redraw(), 0);
+      }
+
+      return result;
+    };
+  }
 
   rl.on('line', async (input: string) => {
     acDismiss();
@@ -268,9 +292,11 @@ export function setupLineHandlers(deps: LineHandlerDeps): void {
     const trimmed = input.trim();
     if (!trimmed) { rl.prompt(); return; }
 
-    println(`${colors.bgGray}${colors.white} ${trimmed} ${colors.reset}`);
-    println();
-    if (fixedInput) requestRender();
+    if (!screenInputMode) {
+      println(`${colors.bgGray}${colors.white} ${trimmed} ${colors.reset}`);
+      println();
+      if (fixedInput) requestRender();
+    }
 
     const shouldRouteToCommand = Boolean(options.onCommand) && isCommand(trimmed);
 
@@ -326,6 +352,9 @@ export function setupLineHandlers(deps: LineHandlerDeps): void {
   rl.on('close', () => {
     process.stdout.removeListener('resize', handleResize);
     acInput?.removeListener('keypress', onAcKeypress);
+    if (typeof originalTtyWrite === 'function') {
+      anyRl._ttyWrite = originalTtyWrite;
+    }
     println(`\n${colors.dim}Session ended. Messages: ${session.messageCount}${colors.reset}`);
 
     if (inputFilter) {
