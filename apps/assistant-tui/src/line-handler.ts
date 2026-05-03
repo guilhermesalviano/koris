@@ -392,11 +392,13 @@ export function setupLineHandlers(deps: LineHandlerDeps): void {
               ? options.footerText(ctx)
               : (options.footerText ?? '/ for commands');
           process.stdout.write('\x1b7');
-          process.stdout.write(ansi.cursorPos(state.terminalHeight, 1));
+          process.stdout.write(ansi.cursorPos(state.terminalHeight - 1, 1));
           process.stdout.write(ansi.clearLine);
           process.stdout.write(
             `${colors.bright}${colors.cyan}${footerText.slice(0, state.terminalWidth)}${colors.reset}`,
           );
+          process.stdout.write(ansi.cursorPos(state.terminalHeight, 1));
+          process.stdout.write(ansi.clearLine);
           process.stdout.write('\x1b8');
           rl.prompt();
         }

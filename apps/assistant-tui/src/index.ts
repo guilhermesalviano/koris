@@ -68,14 +68,14 @@ export function startTui(options: StartTuiOptions): void {
   const inputFilter = fixedInput && !screenInputMode
     ? createInputFilter({
         line: (dir) => {
-          const maxLines = rendererRef.current?.maxContentLines() ?? Math.max(1, state.terminalHeight - 5);
+          const maxLines = rendererRef.current?.maxContentLines() ?? Math.max(1, state.terminalHeight - 6);
           const delta = Math.max(1, Math.min(5, Math.floor(maxLines / 12) + 1));
           state.scrollOffset += dir === 'up' ? delta : -delta;
           rendererRef.current?.ensureScrollOffsetInRange();
           rendererRef.current?.requestRender();
         },
         page: (dir) => {
-          const maxLines = rendererRef.current?.maxContentLines() ?? Math.max(1, state.terminalHeight - 5);
+          const maxLines = rendererRef.current?.maxContentLines() ?? Math.max(1, state.terminalHeight - 6);
           state.scrollOffset += dir === 'up' ? maxLines : -maxLines;
           rendererRef.current?.ensureScrollOffsetInRange();
           rendererRef.current?.requestRender();
