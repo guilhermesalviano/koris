@@ -52,6 +52,7 @@ export function startTui(options: StartTuiOptions): void {
 
   // ── clearScreen (needs no other module) ────────────────────────────────────
   const clearScreen = () => {
+    rendererRef.current?.invalidateCache();
     if (fixedInput) {
       process.stdout.write(ansi.clearScreen);
       process.stdout.write(ansi.cursorHome);
@@ -236,10 +237,20 @@ export function startTui(options: StartTuiOptions): void {
 
   // ── Resize handler ──────────────────────────────────────────────────────────
   const handleResize = () => {
+    if (fixedInput) {
+      process.stdout.write(ansi.cursorHide);
+    }
+    if (state.renderScheduled) {
+      clearTimeout(state.renderScheduled);
+      state.renderScheduled = undefined;
+    }
+    state.renderQueued = false;
     state.terminalWidth  = process.stdout.columns || 80;
     state.terminalHeight = process.stdout.rows    || 24;
     ctx.terminalWidth    = state.terminalWidth;
     ctx.terminalHeight   = state.terminalHeight;
+    state.inputLineCount = 1;
+    anyRl._prevRows = 0;
     clearScreen();
     // Save raw conversation entries (after welcome), wipe both buffers
     const savedRaw = rawBuffer.splice(welcomeRawCount);
@@ -257,7 +268,14 @@ export function startTui(options: StartTuiOptions): void {
         .flatMap((line) => (fixedInput ? wrapSingleLineForWidth(line, state.terminalWidth) : [line]));
       state.contentBuffer.push(...rewrapped);
     }
-    if (fixedInput) renderer.requestRender();
+    if (fixedInput) {
+      if (state.renderScheduled) {
+        clearTimeout(state.renderScheduled);
+        state.renderScheduled = undefined;
+      }
+      state.renderQueued = false;
+      renderer.renderScreen();
+    }
     else rl.prompt();
   };
   process.stdout.on('resize', handleResize);
