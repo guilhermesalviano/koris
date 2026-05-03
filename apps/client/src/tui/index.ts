@@ -63,7 +63,7 @@ export function startTUI(params: { logger: ILogger, agent: IAgent }): void {
     // Thinking indicator for responses
     assistantPrefix: '●',
 
-    footerText: ` koris-agent — / for commands  |  Model: ${config.AI.MODEL}`,
+    footerText: ` **koris-agent** — / for commands  |  Model: ${config.AI.MODEL}`,
     
     // Placeholder shown in empty input
     placeholder: "let's make amazing things",
