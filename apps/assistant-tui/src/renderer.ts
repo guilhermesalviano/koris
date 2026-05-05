@@ -1,6 +1,6 @@
 import type * as readline from 'readline';
 import type { Ansi } from './ansi';
-import { visibleWidth } from './ansi';
+import { visibleWidth, wrapSingleLineForWidth } from './ansi';
 import type { TuiColors } from './colors';
 import type { TuiContext, StartTuiOptions } from './types';
 
@@ -191,6 +191,7 @@ export function createRenderer(deps: RendererDeps) {
     const separatorRow = state.terminalHeight - footerGapRows - 1;
     const footerRow = state.terminalHeight - footerGapRows;
     const blankRow = state.terminalHeight;
+    const renderedFooterLabel = wrapSingleLineForWidth(footerLabel, state.terminalWidth)[0] ?? '';
     const footerChanged =
       cacheInvalidated
       || !renderedFooter
@@ -218,7 +219,7 @@ export function createRenderer(deps: RendererDeps) {
     }
 
     writeLine(separatorRow, buildSeparatorLine(''));
-    writeLine(footerRow, `${colors.bright}${colors.gray}${footerLabel.slice(0, state.terminalWidth)}${colors.reset}`);
+    writeLine(footerRow, `${colors.gray}${renderedFooterLabel}${colors.reset}`);
     writeLine(blankRow, '');
 
     if (badge) {
@@ -441,7 +442,7 @@ export function createRenderer(deps: RendererDeps) {
       // Placeholder shown when input is empty.
       if (deps.placeholder && !state.isBusy && inputText === '') {
         process.stdout.write('\x1b7');
-        process.stdout.write(`${colors.yellow}${deps.placeholder}${colors.reset}`);
+        process.stdout.write(`${colors.dim}${deps.placeholder}${colors.reset}`);
         process.stdout.write('\x1b8');
       }
 
