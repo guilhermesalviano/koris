@@ -100,6 +100,27 @@ export function createRenderer(deps: RendererDeps) {
     process.stdout.write(ansi.cursorHide);
   };
 
+  const paintVisibleContent = () => {
+    const availableHeight = maxContentLines();
+    const startIdx = Math.max(
+      0,
+      state.contentBuffer.length - availableHeight - state.scrollOffset,
+    );
+    const endIdx = Math.min(state.contentBuffer.length, startIdx + availableHeight);
+    const visibleContent = state.contentBuffer.slice(startIdx, endIdx);
+
+    const rowCount = Math.max(renderedContentRows.length, availableHeight);
+    for (let row = 0; row < rowCount; row++) {
+      const nextLine = row < availableHeight ? (visibleContent[row] ?? '') : '';
+      const prevLine = renderedContentRows[row] ?? '';
+      if (cacheInvalidated || nextLine !== prevLine) {
+        writeLine(row + 1, nextLine);
+      }
+    }
+
+    renderedContentRows = Array.from({ length: availableHeight }, (_, index) => visibleContent[index] ?? '');
+  };
+
   const invalidateCache = () => {
     cacheInvalidated = true;
     renderedContentRows = [];
@@ -265,23 +286,7 @@ export function createRenderer(deps: RendererDeps) {
     rl.pause();
     beginNonInputPaint();
 
-    const availableHeight = maxContentLines();
-    const startIdx = Math.max(
-      0,
-      state.contentBuffer.length - availableHeight - state.scrollOffset,
-    );
-    const endIdx = Math.min(state.contentBuffer.length, startIdx + availableHeight);
-    const visibleContent = state.contentBuffer.slice(startIdx, endIdx);
-
-    const rowCount = Math.max(renderedContentRows.length, availableHeight);
-    for (let row = 0; row < rowCount; row++) {
-      const nextLine = row < availableHeight ? (visibleContent[row] ?? '') : '';
-      const prevLine = renderedContentRows[row] ?? '';
-      if (cacheInvalidated || nextLine !== prevLine) {
-        writeLine(row + 1, nextLine);
-      }
-    }
-    renderedContentRows = Array.from({ length: availableHeight }, (_, index) => visibleContent[index] ?? '');
+    paintVisibleContent();
 
     // Spinner / scroll-hint row (exclusively chrome).
     if (screenInputMode) {
@@ -398,17 +403,24 @@ export function createRenderer(deps: RendererDeps) {
           process.stdout.write(ansi.clearLine);
         }
 
+        ensureScrollOffsetInRange();
+        paintVisibleContent();
+
         const spinnerRow = state.terminalHeight - newCount - footerBlockRows - 1;
         const separatorRow = state.terminalHeight - newCount - footerBlockRows;
+        const spinnerValue = buildSpinnerLine(state.spinnerStatus);
+        const separatorValue = buildSeparatorLine('');
         if (spinnerRow >= 1) {
           process.stdout.write(ansi.cursorPos(spinnerRow, 1));
           process.stdout.write(ansi.clearLine);
-          process.stdout.write(buildSpinnerLine(state.spinnerStatus));
+          process.stdout.write(spinnerValue);
+          renderedSpinnerRow = { row: spinnerRow, value: spinnerValue };
         }
         if (separatorRow >= 1) {
           process.stdout.write(ansi.cursorPos(separatorRow, 1));
           process.stdout.write(ansi.clearLine);
-          process.stdout.write(buildSeparatorLine(''));
+          process.stdout.write(separatorValue);
+          renderedSeparatorRow = { row: separatorRow, value: separatorValue };
         }
       }
 
