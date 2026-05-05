@@ -28,6 +28,7 @@ export type OnboardingChannel = typeof SUPPORTED_CHANNELS[number];
 export type OnboardingProvider = typeof SUPPORTED_PROVIDERS[number];
 export type OnboardingStep =
   | 'channels'
+  | 'telegramToken'
   | 'provider'
   | 'providerUrl'
   | 'providerApiToken'
@@ -98,6 +99,16 @@ const STEP_DEFINITIONS: readonly StepDefinition[] = [
     options: SUPPORTED_CHANNELS,
     getValue: (answers, skippedSteps) =>
       skippedSteps.has('channels') ? 'skipped' : answers.channels?.join(', '),
+  },
+  {
+    key: 'telegramToken',
+    label: 'Telegram bot token',
+    description: 'Set TELEGRAM_BOT_TOKEN for the Telegram channel.',
+    placeholder: '123456:telegram-bot-token',
+    getValue: (answers, skippedSteps) => {
+      if (skippedSteps.has('telegramToken')) return 'skipped';
+      return answers.telegramToken ? 'configured' : undefined;
+    },
   },
   {
     key: 'provider',
@@ -224,6 +235,7 @@ export function buildOnboardingSummary(answers: OnboardingAnswers): string {
     'Onboarding complete.',
     '',
     `Channels: ${answers.channels.join(', ')}`,
+    ...(usesTelegramChannel(answers) ? ['Telegram token: configured'] : []),
     `Provider: ${answers.provider}`,
     `Provider URL: ${answers.providerUrl || 'default'}`,
     `Provider API token: configured`,
@@ -441,8 +453,17 @@ export class Onboard {
       case 'channels':
         this.answers.channels = parseChannels(normalized);
         this.selectedChannels = new Set(this.answers.channels);
+        if (!usesTelegramChannel(this.answers)) {
+          delete this.answers.telegramToken;
+        }
         this.notice = `Captured channels: ${this.answers.channels.join(', ')}.`;
         this.pickerStep = undefined;
+        break;
+
+      case 'telegramToken':
+        this.answers.telegramToken = normalized;
+        this.notice = 'Captured Telegram bot token.';
+        this.skippedSteps.delete(step);
         break;
 
       case 'provider':
@@ -568,6 +589,9 @@ export class Onboard {
         break;
       case 'providerApiToken':
         delete this.answers.providerApiToken;
+        break;
+      case 'telegramToken':
+        delete this.answers.telegramToken;
         break;
       case 'personalInformation':
         delete this.answers.personalInfo;
@@ -804,6 +828,9 @@ export class Onboard {
           : [selectedOption as OnboardingChannel];
         this.answers.channels = parseChannels(selectedChannels.join(', '));
         this.selectedChannels = new Set(this.answers.channels);
+        if (!usesTelegramChannel(this.answers)) {
+          delete this.answers.telegramToken;
+        }
         this.notice = `Captured channels: ${this.answers.channels.join(', ')}.`;
         this.pickerStep = undefined;
         return;
@@ -823,6 +850,7 @@ export class Onboard {
 
       case 'providerUrl':
       case 'providerApiToken':
+      case 'telegramToken':
       case 'personalName':
       case 'personalGender':
       case 'personalBirthday':
@@ -980,12 +1008,20 @@ function formatOptionsLabel(options: readonly string[]): string {
 
 function getEnabledStepDefinitions(answers: Partial<OnboardingAnswers>): StepDefinition[] {
   return STEP_DEFINITIONS.filter((definition) => {
+    if (definition.key === 'telegramToken') {
+      return usesTelegramChannel(answers);
+    }
+
     if (!PERSONAL_DETAIL_STEP_KEYS.has(definition.key)) {
       return true;
     }
 
     return answers.personalInfo?.enabled === true;
   });
+}
+
+function usesTelegramChannel(answers: Partial<OnboardingAnswers>): boolean {
+  return answers.channels?.includes('telegram') ?? false;
 }
 
 function formatInlineInput(
