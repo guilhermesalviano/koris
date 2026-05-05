@@ -1,7 +1,7 @@
 import type * as readline from 'readline';
 import { startSpinner } from './spinner';
 import { isAbortError, emitTerminalBell, normalizeCommandResult } from './utils';
-import { wrapSingleLineForWidth } from './ansi';
+import { visibleWidth, wrapSingleLineForWidth } from './ansi';
 import type { Ansi } from './ansi';
 import type { TuiColors } from './colors';
 import type { TuiContext, SessionState, StartTuiOptions, TuiKeypress } from './types';
@@ -291,15 +291,19 @@ export function setupLineHandlers(deps: LineHandlerDeps): void {
       ? `${footerText}  |  ${state.footerNote}`
       : footerText;
     const renderedFooterLabel = wrapSingleLineForWidth(footerLabel, state.terminalWidth)[0] ?? '';
+    const footerPadding = ' '.repeat(Math.max(0, state.terminalWidth - visibleWidth(renderedFooterLabel)));
+    const footerContent = screenInputMode
+      ? `${footerPadding}${colors.gray}${renderedFooterLabel}${colors.reset}`
+      : `${colors.gray}${renderedFooterLabel}${colors.reset}`;
 
     process.stdout.write('\x1b7');
-    process.stdout.write(ansi.cursorPos(state.terminalHeight - 1, 1));
+    process.stdout.write(ansi.cursorPos(screenInputMode ? state.terminalHeight : state.terminalHeight - 1, 1));
     process.stdout.write(ansi.clearLine);
-    process.stdout.write(
-      `${colors.gray}${renderedFooterLabel}${colors.reset}`,
-    );
-    process.stdout.write(ansi.cursorPos(state.terminalHeight, 1));
-    process.stdout.write(ansi.clearLine);
+    process.stdout.write(footerContent);
+    if (!screenInputMode) {
+      process.stdout.write(ansi.cursorPos(state.terminalHeight, 1));
+      process.stdout.write(ansi.clearLine);
+    }
     process.stdout.write('\x1b8');
   };
 

@@ -65,8 +65,49 @@ export function createRenderer(deps: RendererDeps) {
   };
 
   const maxContentLines = () => screenInputMode
-    ? Math.max(1, state.terminalHeight)
+    ? Math.max(1, state.terminalHeight - 1)
     : Math.max(1, state.terminalHeight - state.inputLineCount - nonScreenReservedRows);
+
+  const getFooterLabel = () => {
+    const ctx = deps.getCtx();
+    const footerText =
+      typeof deps.footerText === 'function'
+        ? deps.footerText(ctx)
+        : (deps.footerText ?? '/ for commands');
+    return state.footerNote
+      ? `${footerText}  |  ${state.footerNote}`
+      : footerText;
+  };
+
+  const buildRightAlignedFooter = (footerLabel: string) => {
+    const renderedFooterLabel = wrapSingleLineForWidth(footerLabel, state.terminalWidth)[0] ?? '';
+    const padding = ' '.repeat(Math.max(0, state.terminalWidth - visibleWidth(renderedFooterLabel)));
+    return `${padding}${colors.gray}${renderedFooterLabel}${colors.reset}`;
+  };
+
+  const buildScreenChromeLine = () => {
+    const footerLabel = getFooterLabel();
+    if (!footerLabel) return buildSpinnerLine(state.spinnerStatus);
+
+    const renderedFooterLabel = wrapSingleLineForWidth(footerLabel, state.terminalWidth)[0] ?? '';
+    const footerWidth = visibleWidth(renderedFooterLabel);
+    if (footerWidth >= state.terminalWidth) {
+      return `${colors.gray}${renderedFooterLabel}${colors.reset}`;
+    }
+
+    const status = buildSpinnerLine(state.spinnerStatus);
+    if (!status) {
+      return buildRightAlignedFooter(footerLabel);
+    }
+
+    const maxStatusWidth = Math.max(0, state.terminalWidth - footerWidth - 1);
+    const renderedStatus = maxStatusWidth > 0
+      ? (wrapSingleLineForWidth(status, maxStatusWidth)[0] ?? '')
+      : '';
+    const gap = ' '.repeat(Math.max(0, state.terminalWidth - visibleWidth(renderedStatus) - footerWidth));
+
+    return `${renderedStatus}${gap}${colors.gray}${renderedFooterLabel}${colors.reset}`;
+  };
 
   const ensureScrollOffsetInRange = () => {
     const maxOffset = Math.max(0, state.contentBuffer.length - maxContentLines());
@@ -178,20 +219,35 @@ export function createRenderer(deps: RendererDeps) {
   };
 
   const renderFooterLine = () => {
-    if (!fixedInput || screenInputMode) return;
-    const ctx = deps.getCtx();
-    const footerText =
-      typeof deps.footerText === 'function'
-        ? deps.footerText(ctx)
-        : (deps.footerText ?? '/ for commands');
-    const footerLabel = state.footerNote
-      ? `${footerText}  |  ${state.footerNote}`
-      : footerText;
+    if (!fixedInput) return;
+    const footerLabel = getFooterLabel();
     const badge = state.iterationBadge;
+
+    if (screenInputMode) {
+      const footerChanged =
+        cacheInvalidated
+        || !renderedFooter
+        || renderedFooter.footerRow !== state.terminalHeight
+        || renderedFooter.footerText !== footerLabel
+        || renderedFooter.badge !== badge;
+
+      if (!footerChanged) return;
+
+      beginNonInputPaint();
+      writeLine(state.terminalHeight, buildScreenChromeLine());
+      renderedFooter = {
+        separatorRow: state.terminalHeight,
+        footerRow: state.terminalHeight,
+        blankRow: state.terminalHeight,
+        footerText: footerLabel,
+        badge,
+      };
+      return;
+    }
+
     const separatorRow = state.terminalHeight - footerGapRows - 1;
     const footerRow = state.terminalHeight - footerGapRows;
     const blankRow = state.terminalHeight;
-    const renderedFooterLabel = wrapSingleLineForWidth(footerLabel, state.terminalWidth)[0] ?? '';
     const footerChanged =
       cacheInvalidated
       || !renderedFooter
@@ -218,6 +274,7 @@ export function createRenderer(deps: RendererDeps) {
       writeLine(renderedFooter.blankRow, '');
     }
 
+    const renderedFooterLabel = wrapSingleLineForWidth(footerLabel, state.terminalWidth)[0] ?? '';
     writeLine(separatorRow, buildSeparatorLine(''));
     writeLine(footerRow, `${colors.gray}${renderedFooterLabel}${colors.reset}`);
     writeLine(blankRow, '');
@@ -291,7 +348,7 @@ export function createRenderer(deps: RendererDeps) {
 
     // Spinner / scroll-hint row (exclusively chrome).
     if (screenInputMode) {
-      writeLine(state.terminalHeight, buildSpinnerLine(state.spinnerStatus));
+      renderFooterLine();
     } else {
       const spinnerRow = state.terminalHeight - state.inputLineCount - footerBlockRows - 1;
       const spinnerValue = buildSpinnerLine(state.spinnerStatus);

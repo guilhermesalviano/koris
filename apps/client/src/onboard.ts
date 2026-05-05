@@ -80,6 +80,7 @@ interface StepDefinition {
 interface TimelineEntry extends StepDefinition {
   state: TimelineState;
   value?: string;
+  displayNumber: string;
 }
 
 const ANSI = {
@@ -121,7 +122,7 @@ const STEP_DEFINITIONS: readonly StepDefinition[] = [
   {
     key: 'providerApiToken',
     label: 'API token',
-    description: 'Set an API token, press Enter, or type skip to leave it empty.',
+    description: `Set an API token (or press 'Enter' to leave empty for local providers)`,
     placeholder: '',
     optional: true,
     getValue: (answers, skippedSteps) => {
@@ -279,9 +280,9 @@ export function buildOnboardingScreen(
   ];
   const entries = getTimelineEntries(snapshot.answers, skippedSteps).filter((entry) => entry.state !== 'pending');
 
-  for (const [index, entry] of entries.entries()) {
+  for (const entry of entries) {
     lines.push('│');
-    lines.push(formatTimelineHeader(entry, index, mode));
+    lines.push(formatTimelineHeader(entry, mode));
 
     if (entry.state === 'active') {
       // pushWrapped(lines, '│    prompt: ', entry.prompt, width);
@@ -565,14 +566,12 @@ export class Onboard {
   }
 
   private getFooterText(): string {
-    const totalSteps = getEnabledStepDefinitions(this.answers).length;
-    const completedSteps = getCompletedStepCount(this.answers, this.skippedSteps);
-
-    if (completedSteps >= totalSteps) {
-      return 'onboarding complete  |  /status /reset /exit';
+    const footerProgress = getFooterProgress(this.answers, this.skippedSteps);
+    if (!footerProgress) {
+      return 'onboarding complete';
     }
 
-    return `step ${completedSteps + 1}/${totalSteps}  |  /status /reset /exit`;
+    return `step ${footerProgress.current}/${footerProgress.total}`;
   }
 
   private getMaxContentWidth(ctx: TuiContext): number {
@@ -867,9 +866,11 @@ function getTimelineEntries(
 ): TimelineEntry[] {
   const currentStep = getCurrentStepFromState(answers, skippedSteps);
   const definitions = getEnabledStepDefinitions(answers);
+  const displayNumbers = getTimelineDisplayNumbers(definitions);
 
   return definitions.map((definition) => ({
     ...definition,
+    displayNumber: displayNumbers.get(definition.key) ?? '',
     value: definition.getValue(answers, skippedSteps),
     state: getTimelineState(
       definition.key,
@@ -877,6 +878,61 @@ function getTimelineEntries(
       definitions.map((entry) => entry.key),
     ),
   }));
+}
+
+function getTimelineDisplayNumbers(definitions: readonly StepDefinition[]): Map<StepKey, string> {
+  const displayNumbers = new Map<StepKey, string>();
+  let topLevelIndex = 0;
+  let personalParentIndex: number | undefined;
+  let personalDetailIndex = 0;
+
+  for (const definition of definitions) {
+    if (definition.key === 'personalInformation') {
+      topLevelIndex += 1;
+      personalParentIndex = topLevelIndex;
+      personalDetailIndex = 0;
+      displayNumbers.set(definition.key, String(topLevelIndex));
+      continue;
+    }
+
+    if (PERSONAL_DETAIL_STEP_KEYS.has(definition.key) && personalParentIndex !== undefined) {
+      personalDetailIndex += 1;
+      displayNumbers.set(definition.key, `${personalParentIndex}.${personalDetailIndex}`);
+      continue;
+    }
+
+    topLevelIndex += 1;
+    displayNumbers.set(definition.key, String(topLevelIndex));
+  }
+
+  return displayNumbers;
+}
+
+function getTopLevelStepDefinitions(answers: Partial<OnboardingAnswers>): StepDefinition[] {
+  return getEnabledStepDefinitions(answers).filter((definition) => !PERSONAL_DETAIL_STEP_KEYS.has(definition.key));
+}
+
+function getTopLevelStepKey(step: StepKey): StepKey {
+  return PERSONAL_DETAIL_STEP_KEYS.has(step) ? 'personalInformation' : step;
+}
+
+function getFooterProgress(
+  answers: Partial<OnboardingAnswers>,
+  skippedSteps: ReadonlySet<StepKey>,
+): { current: number; total: number } | undefined {
+  const currentStep = getCurrentStepFromState(answers, skippedSteps);
+  if (currentStep === 'complete') {
+    return undefined;
+  }
+
+  const topLevelDefinitions = getTopLevelStepDefinitions(answers);
+  const currentTopLevelKey = getTopLevelStepKey(currentStep);
+  const currentIndex = topLevelDefinitions.findIndex((definition) => definition.key === currentTopLevelKey);
+
+  return {
+    current: currentIndex >= 0 ? currentIndex + 1 : topLevelDefinitions.length,
+    total: topLevelDefinitions.length,
+  };
 }
 
 function getTimelineState(
@@ -913,21 +969,6 @@ function getCurrentStepFromState(
   }
 
   return 'complete';
-}
-
-function getCompletedStepCount(
-  answers: Partial<OnboardingAnswers>,
-  skippedSteps: ReadonlySet<StepKey>,
-): number {
-  let completed = 0;
-
-  for (const definition of getEnabledStepDefinitions(answers)) {
-    if (definition.getValue(answers, skippedSteps)) {
-      completed += 1;
-    }
-  }
-
-  return completed;
 }
 
 function isComplete(
@@ -1081,10 +1122,9 @@ function timelineTag(state: TimelineState, label?: string): string {
 
 function formatTimelineHeader(
   entry: TimelineEntry,
-  index: number,
   mode: OnboardingScreenMode,
 ): string {
-  const content = `${timelineIcon(entry.state)} ${index + 1}. ${entry.label}${timelineTag(entry.state, entry.value ?? entry.description)}`;
+  const content = `${timelineIcon(entry.state)} ${entry.displayNumber}. ${entry.label}${timelineTag(entry.state, entry.value ?? entry.description)}`;
   if (mode !== 'tui') {
     return `├─ ${content}`;
   }

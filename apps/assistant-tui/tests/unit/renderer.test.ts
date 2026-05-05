@@ -143,6 +143,22 @@ describe('createRenderer', () => {
     expect(output).toContain(' 2/3 ');
   });
 
+  it('renders screen-mode footer text on the bottom-right row', () => {
+    const { renderer, writes } = createHarness({
+      state: {
+        terminalWidth: 20,
+        terminalHeight: 6,
+        contentBuffer: ['welcome'],
+      },
+      inputMode: 'screen',
+      footerText: () => 'onboarding',
+    });
+
+    renderer.renderScreen();
+
+    expect(stripAnsi(writes.join(''))).toContain(`${' '.repeat(10)}onboarding`);
+  });
+
   it('coalesces repeated requestRender calls into a single render pass', () => {
     vi.useFakeTimers();
     const { renderer, rl, anyRl, state } = createHarness({
