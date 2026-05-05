@@ -108,6 +108,18 @@ const STEP_DEFINITIONS: readonly StepDefinition[] = [
       skippedSteps.has('provider') ? 'skipped' : answers.provider,
   },
   {
+    key: 'providerApiToken',
+    label: 'API token',
+    description: 'Set an API token, press Enter, or type skip to leave it empty.',
+    placeholder: '',
+    optional: true,
+    getValue: (answers, skippedSteps) => {
+      if (skippedSteps.has('providerApiToken')) return 'empty';
+      if (!hasAnswer(answers, 'providerApiToken')) return undefined;
+      return 'configured';
+    },
+  },
+  {
     key: 'providerUrl',
     label: 'Provider URL',
     description: 'Set the provider base URL or type skip to keep the default.',
@@ -116,18 +128,6 @@ const STEP_DEFINITIONS: readonly StepDefinition[] = [
     getValue: (answers, skippedSteps) => {
       if (skippedSteps.has('providerUrl')) return 'default';
       return answers.providerUrl;
-    },
-  },
-  {
-    key: 'providerApiToken',
-    label: 'API token',
-    description: 'Set an API token or type skip to leave it empty.',
-    placeholder: 'sk-123456',
-    optional: true,
-    getValue: (answers, skippedSteps) => {
-      if (skippedSteps.has('providerApiToken')) return 'empty';
-      if (!answers.providerApiToken) return undefined;
-      return 'configured';
     },
   },
   {
@@ -226,7 +226,7 @@ export function buildOnboardingSummary(answers: OnboardingAnswers): string {
     `Channels: ${answers.channels.join(', ')}`,
     `Provider: ${answers.provider}`,
     `Provider URL: ${answers.providerUrl || 'default'}`,
-    `Provider API token: ${answers.providerApiToken ? 'configured' : 'empty'}`,
+    `Provider API token: configured`,
   ];
 
   const personalLines = [
@@ -347,6 +347,7 @@ export class Onboard {
       title: 'koris-agent onboarding',
       fixedInput: true,
       inputMode: 'screen',
+      allowEmptyInput: true,
       spinner: false,
       answerDoneSound: false,
       assistantPrefix: '◆',
@@ -458,7 +459,7 @@ export class Onboard {
 
       case 'providerApiToken':
         this.answers.providerApiToken = normalized;
-        this.notice = 'Captured provider API token.';
+        this.notice = normalized ? 'Captured provider API token.' : 'Provider API token left empty.';
         this.skippedSteps.delete(step);
         break;
 
@@ -1153,6 +1154,10 @@ function wrapPlainText(text: string, maxWidth: number): string[] {
 
 function normalizeText(input: string): string {
   return input.trim().replace(/\s+/g, ' ');
+}
+
+function hasAnswer<T extends object>(answers: T, key: keyof T): boolean {
+  return Object.prototype.hasOwnProperty.call(answers, key);
 }
 
 const onboard = new Onboard();

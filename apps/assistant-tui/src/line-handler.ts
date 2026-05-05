@@ -37,6 +37,15 @@ export interface LineHandlerDeps {
   recordRaw: (text: string) => void;
 }
 
+export function resolveSubmittedInput(input: string, allowEmptyInput = false): string | undefined {
+  const trimmed = input.trim();
+  if (trimmed.length > 0) {
+    return trimmed;
+  }
+
+  return allowEmptyInput ? '' : undefined;
+}
+
 // ── Stream rendering ──────────────────────────────────────────────────────────
 
 async function renderStreamedResponse(
@@ -297,23 +306,23 @@ export function setupLineHandlers(deps: LineHandlerDeps): void {
     acDismiss();
     state.scrollOffset = 0;
 
-    const trimmed = input.trim();
-    if (!trimmed) { rl.prompt(); return; }
+    const submittedInput = resolveSubmittedInput(input, options.allowEmptyInput);
+    if (submittedInput === undefined) { rl.prompt(); return; }
 
     if (!screenInputMode) {
-      println(`${colors.bgGray}${colors.white} ${trimmed} ${colors.reset}`);
+      println(`${colors.bgGray}${colors.white} ${submittedInput} ${colors.reset}`);
       println();
       if (fixedInput) requestRender();
     }
 
-    const shouldRouteToCommand = Boolean(options.onCommand) && isCommand(trimmed);
+    const shouldRouteToCommand = Boolean(options.onCommand) && isCommand(submittedInput);
 
     if (shouldRouteToCommand && options.onCommand) {
-      const result = await options.onCommand(trimmed, ctx);
+      const result = await options.onCommand(submittedInput, ctx);
       const commandResult = normalizeCommandResult(result);
 
       if (commandResult && commandResult.handled === false) {
-        await handleNormalInput(trimmed, deps);
+        await handleNormalInput(submittedInput, deps);
         return;
       }
 
@@ -354,7 +363,7 @@ export function setupLineHandlers(deps: LineHandlerDeps): void {
       return;
     }
 
-    await handleNormalInput(trimmed, deps);
+    await handleNormalInput(submittedInput, deps);
   });
 
   rl.on('close', () => {

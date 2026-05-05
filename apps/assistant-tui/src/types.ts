@@ -58,6 +58,8 @@ export interface TuiKeypress {
 
 export interface StartTuiOptions {
   onInput(input: string, ctx: TuiContext): Promise<string | AsyncIterable<string> | void>;
+  /** When true, pressing Enter on a blank line still calls onInput with an empty string. */
+  allowEmptyInput?: boolean;
   onCommand?: (command: string, ctx: TuiContext) => Promise<TuiCommandResult | string | void>;
   onKeypress?: (ch: string, key: TuiKeypress | undefined, ctx: TuiContext) => boolean | void;
   inputMode?: 'fixed' | 'screen';
