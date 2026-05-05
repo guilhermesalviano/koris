@@ -340,7 +340,6 @@ export class Onboard {
   private selectedChannels = new Set<OnboardingChannel>();
   private pickerStep?: StepKey;
   private pickerIndex = 0;
-  private defaultInputStep?: StepKey;
   private notice = 'Follow the active step and press Enter after each answer. Type skip for optional fields.';
 
   async run(): Promise<void> {
@@ -402,7 +401,6 @@ export class Onboard {
         this.selectedChannels.clear();
         this.pickerStep = undefined;
         this.pickerIndex = 0;
-        this.defaultInputStep = undefined;
         this.notice = 'Draft cleared. Back to step 1.';
         return { handled: true, action: 'clear' };
 
@@ -433,7 +431,6 @@ export class Onboard {
 
     if (definition.optional && isSkipInput(normalized)) {
       this.applySkip(step);
-      this.defaultInputStep = undefined;
       this.notice = `${definition.label} skipped.`;
       ctx.redraw();
       return;
@@ -445,28 +442,24 @@ export class Onboard {
         this.selectedChannels = new Set(this.answers.channels);
         this.notice = `Captured channels: ${this.answers.channels.join(', ')}.`;
         this.pickerStep = undefined;
-        this.defaultInputStep = undefined;
         break;
 
       case 'provider':
         this.answers.provider = parseProvider(normalized);
         this.notice = `Captured provider: ${this.answers.provider}.`;
         this.pickerStep = undefined;
-        this.defaultInputStep = undefined;
         break;
 
       case 'providerUrl':
         this.answers.providerUrl = normalized;
         this.notice = 'Captured provider URL.';
         this.skippedSteps.delete(step);
-        this.defaultInputStep = undefined;
         break;
 
       case 'providerApiToken':
         this.answers.providerApiToken = normalized;
         this.notice = 'Captured provider API token.';
         this.skippedSteps.delete(step);
-        this.defaultInputStep = undefined;
         break;
 
       case 'personalInformation':
@@ -474,42 +467,36 @@ export class Onboard {
         this.notice = `Personal information ${this.answers.personalInfo?.enabled ? 'enabled' : 'disabled'}.`;
         this.skippedSteps.delete(step);
         this.pickerStep = undefined;
-        this.defaultInputStep = undefined;
         break;
 
       case 'personalName':
         this.setPersonalInfo('name', normalized);
         this.notice = 'Captured personal name.';
         this.skippedSteps.delete(step);
-        this.defaultInputStep = undefined;
         break;
 
       case 'personalGender':
         this.setPersonalInfo('gender', normalized);
         this.notice = 'Captured gender.';
         this.skippedSteps.delete(step);
-        this.defaultInputStep = undefined;
         break;
 
       case 'personalBirthday':
         this.setPersonalInfo('birthday', normalized);
         this.notice = 'Captured birthday.';
         this.skippedSteps.delete(step);
-        this.defaultInputStep = undefined;
         break;
 
       case 'personalLocation':
         this.setPersonalInfo('location', normalized);
         this.notice = 'Captured location.';
         this.skippedSteps.delete(step);
-        this.defaultInputStep = undefined;
         break;
 
       case 'personalOccupation':
         this.setPersonalInfo('occupation', normalized);
         this.notice = 'Captured occupation.';
         this.skippedSteps.delete(step);
-        this.defaultInputStep = undefined;
         break;
     }
 
@@ -551,13 +538,7 @@ export class Onboard {
     // println();
 
     if (this.getPickableOptions(currentStep)) {
-      this.defaultInputStep = undefined;
       ctx.setInputValue('');
-      return;
-    }
-
-    if (currentStep !== 'complete') {
-      this.syncDefaultInput(ctx, currentStep);
     }
   }
 
@@ -579,7 +560,6 @@ export class Onboard {
   private applySkip(step: StepKey): void {
     this.skippedSteps.add(step);
     this.pickerStep = undefined;
-    this.defaultInputStep = undefined;
 
     switch (step) {
       case 'providerUrl':
@@ -657,16 +637,12 @@ export class Onboard {
     }
 
     if (!options || options.length === 0 || currentStep === 'complete') {
-      if (currentStep !== 'complete' && this.shouldClearDefaultInput(ch, keyName, currentStep)) {
-        ctx.setInputValue('');
-        this.defaultInputStep = undefined;
-
-        if (keyName === 'backspace' || keyName === 'delete') {
-          ctx.redraw();
-          return true;
-        }
+      const defaultValue = currentStep === 'complete'
+        ? undefined
+        : this.getTextInputDefault(currentStep);
+      if ((keyName === 'return' || keyName === 'enter') && !inputValue.trim() && defaultValue) {
+        ctx.setInputValue(defaultValue);
       }
-
       return false;
     }
 
@@ -763,6 +739,10 @@ export class Onboard {
     return getStepDefinition(step).options;
   }
 
+  private getTextInputDefault(step: Exclude<OnboardingStep, 'complete'>): string | undefined {
+    return getStepDefinition(step).placeholder;
+  }
+
   private getSelectedOption(step: OnboardingStep): string | undefined {
     const options = this.getPickableOptions(step);
     if (!options || options.length === 0 || step === 'complete') {
@@ -799,37 +779,6 @@ export class Onboard {
     if (this.pickerIndex >= options.length) {
       this.pickerIndex = 0;
     }
-  }
-
-  private syncDefaultInput(ctx: TuiContext, step: Exclude<OnboardingStep, 'complete'>): void {
-    const inputValue = ctx.getInputValue();
-    if (inputValue) {
-      return;
-    }
-
-    const placeholder = getStepDefinition(step).placeholder;
-    if (!placeholder) {
-      return;
-    }
-
-    this.defaultInputStep = step;
-    ctx.setInputValue(placeholder);
-  }
-
-  private shouldClearDefaultInput(
-    ch: string,
-    keyName: string | undefined,
-    step: Exclude<OnboardingStep, 'complete'>,
-  ): boolean {
-    if (this.defaultInputStep !== step) {
-      return false;
-    }
-
-    if (keyName === 'backspace' || keyName === 'delete') {
-      return true;
-    }
-
-    return typeof ch === 'string' && ch.length > 0 && ch.charCodeAt(0) >= 32;
   }
 
   private toggleChannelSelection(channel: OnboardingChannel): void {
@@ -1043,13 +992,19 @@ function formatInlineInput(
   placeholder: string | undefined,
   mode: OnboardingScreenMode,
 ): string {
+  const cursor = mode === 'tui' ? `${ANSI.bgWhite}${ANSI.black} ${ANSI.reset}` : '';
   const trimmed = value ?? '';
   if (!trimmed) {
     const fallback = placeholder ? placeholder : '[type here]';
-    return mode === 'tui' ? `${ANSI.yellow}${fallback}${ANSI.reset}` : fallback;
+    if (mode !== 'tui') {
+      return fallback;
+    }
+
+    const [head = ' ', ...tail] = fallback;
+    return `${ANSI.bgWhite}${ANSI.black}${head}${ANSI.reset}${ANSI.yellow}${tail.join('')}${ANSI.reset}`;
   }
 
-  return trimmed;
+  return `${trimmed}${cursor}`;
 }
 
 function isSkipInput(input: string): boolean {

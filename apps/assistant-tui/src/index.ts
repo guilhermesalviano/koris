@@ -178,13 +178,19 @@ export function startTui(options: StartTuiOptions): TuiContext {
     options.renderWelcome ??
     ((c: TuiContext) => defaultWelcome(c, options.title, options.aiModel, options.showHints));
 
-  redraw = () => {
-    clearScreen();
+  const rebuildWelcome = (clearViewport: boolean) => {
+    if (clearViewport) {
+      clearScreen();
+    }
     rawBuffer.length = 0;
     state.contentBuffer.length = 0;
     state.scrollOffset = 0;
     renderWelcome(ctx);
     welcomeRawCount = rawBuffer.length;
+  };
+
+  redraw = () => {
+    rebuildWelcome(!screenInputMode);
 
     if (fixedInput) {
       renderer.requestRender();
@@ -256,7 +262,9 @@ export function startTui(options: StartTuiOptions): TuiContext {
     ctx.terminalHeight   = state.terminalHeight;
     state.inputLineCount = 1;
     anyRl._prevRows = 0;
-    clearScreen();
+    if (!screenInputMode) {
+      clearScreen();
+    }
     // Save raw conversation entries (after welcome), wipe both buffers
     const savedRaw = rawBuffer.splice(welcomeRawCount);
     rawBuffer.length = 0;

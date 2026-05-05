@@ -262,6 +262,14 @@ export function setupLineHandlers(deps: LineHandlerDeps): void {
   const confirmExit = options.confirmExit ?? true;
   const screenInputMode = options.inputMode === 'screen';
   const originalTtyWrite = anyRl._ttyWrite?.bind(rl);
+  const originalWriteToOutput = anyRl._writeToOutput?.bind(rl);
+
+  if (screenInputMode && typeof originalWriteToOutput === 'function') {
+    anyRl._writeToOutput = (_stringToWrite: string) => {
+      // Screen mode owns the entire viewport, so readline should update only
+      // its internal buffer; rendering happens via ctx.redraw()/requestRender().
+    };
+  }
 
   if (typeof originalTtyWrite === 'function' && typeof options.onKeypress === 'function') {
     anyRl._ttyWrite = (s: string, key?: TuiKeypress) => {
@@ -278,7 +286,7 @@ export function setupLineHandlers(deps: LineHandlerDeps): void {
         && key?.name !== 'enter'
         && key?.name !== 'escape'
       ) {
-        setTimeout(() => ctx.redraw(), 0);
+        ctx.redraw();
       }
 
       return result;
@@ -354,6 +362,9 @@ export function setupLineHandlers(deps: LineHandlerDeps): void {
     acInput?.removeListener('keypress', onAcKeypress);
     if (typeof originalTtyWrite === 'function') {
       anyRl._ttyWrite = originalTtyWrite;
+    }
+    if (typeof originalWriteToOutput === 'function') {
+      anyRl._writeToOutput = originalWriteToOutput;
     }
     println(`\n${colors.dim}Session ended. Messages: ${session.messageCount}${colors.reset}`);
 
