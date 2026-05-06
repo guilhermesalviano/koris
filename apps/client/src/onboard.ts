@@ -1,4 +1,7 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname as pathDirname, join, normalize } from 'path';
 import { startTui, type TuiCommandResult, type TuiContext, type TuiKeypress } from 'assistant-tui';
+import { resolveConfigPaths } from './config/helpers';
 
 const ONBOARDING_COMMANDS = [
   { name: '/start', description: 'redraw the onboarding screen' },
@@ -12,6 +15,8 @@ const ONBOARDING_COMMANDS = [
 const SUPPORTED_CHANNELS = ['telegram', 'discord'] as const;
 const SUPPORTED_PROVIDERS = ['ollama', 'openai', 'anthropic', 'deepseek'] as const;
 const BOOLEAN_OPTIONS = ['true', 'false'] as const;
+const EXAMPLE_SETTINGS_FILENAME = 'settings.example.json';
+export const SETTINGS_FILENAME = 'settings.json';
 const PERSONAL_DETAIL_STEP_KEYS = new Set<StepKey>([
   'personalName',
   'personalGender',
@@ -240,6 +245,7 @@ export function buildOnboardingSummary(answers: OnboardingAnswers): string {
     `Provider: ${answers.provider}`,
     `Provider URL: ${answers.providerUrl || 'default'}`,
     `Provider API token: configured`,
+    `Settings draft: ${SETTINGS_FILENAME}`,
   ];
 
   const personalLines = [
@@ -446,7 +452,7 @@ export class Onboard {
     if (definition.optional && isSkipInput(normalized)) {
       this.applySkip(step);
       this.notice = `${definition.label} skipped.`;
-      ctx.redraw();
+      this.afterStepChange(ctx);
       return;
     }
 
@@ -521,6 +527,15 @@ export class Onboard {
         this.notice = 'Captured occupation.';
         this.skippedSteps.delete(step);
         break;
+    }
+
+    this.afterStepChange(ctx);
+  }
+
+  private afterStepChange(ctx: TuiContext): void {
+    if (isComplete(this.answers, this.skippedSteps)) {
+      const savedPath = saveOnboardingSettings(this.answers);
+      this.notice = `${this.notice} Saved settings draft to ${savedPath}.`;
     }
 
     const nextStep = getCurrentStepFromState(this.answers, this.skippedSteps);
@@ -694,7 +709,7 @@ export class Onboard {
     if (keyName === 'return' || keyName === 'enter') {
       this.commitPickableStep(currentStep);
       ctx.setInputValue('');
-      ctx.redraw();
+      this.afterStepChange(ctx);
       return true;
     }
 
@@ -1234,6 +1249,156 @@ function normalizeText(input: string): string {
 
 function hasAnswer<T extends object>(answers: T, key: keyof T): boolean {
   return Object.prototype.hasOwnProperty.call(answers, key);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getOrCreateRecord(parent: Record<string, unknown>, key: string): Record<string, unknown> {
+  const current = parent[key];
+  if (isRecord(current)) {
+    return current;
+  }
+
+  const next: Record<string, unknown> = {};
+  parent[key] = next;
+  return next;
+}
+
+function resolveOnboardingAppRoot(options?: {
+  cwd?: string;
+  dirname?: string;
+  exists?: (path: string) => boolean;
+}): string {
+  const cwd = options?.cwd ?? process.cwd();
+  const dirname = options?.dirname ?? __dirname;
+  const exists = options?.exists ?? existsSync;
+
+  const appRoot = [
+    join(cwd, 'apps', 'client'),
+    join(dirname, '..'),
+    join(dirname, '..', '..'),
+    cwd,
+  ].map((candidate) => normalize(candidate)).find((candidate) =>
+    exists(join(candidate, 'src', 'onboard.ts')) || exists(join(candidate, 'dist', 'src', 'onboard.js'))
+  );
+
+  return appRoot ?? cwd;
+}
+
+function resolveOnboardingExampleSettingsPath(options?: {
+  cwd?: string;
+  dirname?: string;
+  exists?: (path: string) => boolean;
+}): string {
+  const cwd = options?.cwd ?? process.cwd();
+  const dirname = options?.dirname ?? __dirname;
+  const exists = options?.exists ?? existsSync;
+  const configPath = resolveConfigPaths(cwd, dirname).find((candidate) => exists(candidate));
+  if (configPath) {
+    return normalize(join(pathDirname(configPath), EXAMPLE_SETTINGS_FILENAME));
+  }
+
+  return normalize(join(resolveOnboardingAppRoot(options), EXAMPLE_SETTINGS_FILENAME));
+}
+
+function loadOnboardingExampleSettings(options?: {
+  cwd?: string;
+  dirname?: string;
+  exists?: (path: string) => boolean;
+  readFile?: (path: string) => string;
+}): Record<string, unknown> {
+  const sourcePath = resolveOnboardingExampleSettingsPath(options);
+  const readFile = options?.readFile ?? ((path: string) => readFileSync(path, 'utf-8'));
+  return JSON.parse(readFile(sourcePath)) as Record<string, unknown>;
+}
+
+export function buildOnboardingSettings(
+  answers: OnboardingAnswers,
+  options?: {
+    cwd?: string;
+    dirname?: string;
+    exists?: (path: string) => boolean;
+    readFile?: (path: string) => string;
+    baseSettings?: Record<string, unknown>;
+  },
+): Record<string, unknown> {
+  const payload = structuredClone(options?.baseSettings ?? loadOnboardingExampleSettings(options));
+  const channels = getOrCreateRecord(payload, 'channels');
+  const telegram = getOrCreateRecord(channels, 'telegram');
+  const usesTelegram = usesTelegramChannel(answers);
+
+  telegram.ENABLED = usesTelegram;
+  telegram.BOT_TOKEN = usesTelegram ? (answers.telegramToken ?? '') : '';
+  telegram.USE_POLLING = true;
+  telegram.CHAT_ID = '';
+
+  if (answers.channels.includes('discord')) {
+    const discord = getOrCreateRecord(channels, 'discord');
+    discord.ENABLED = true;
+  } else if (Object.prototype.hasOwnProperty.call(channels, 'discord')) {
+    delete channels.discord;
+  }
+
+  const ai = getOrCreateRecord(payload, 'ai');
+  ai.PROVIDER = answers.provider;
+  ai.API_TOKEN = answers.providerApiToken ?? '';
+  if (answers.providerUrl) {
+    ai.BASE_URL = answers.providerUrl;
+  }
+
+  payload.personal_information = answers.personalInfo?.enabled
+    ? {
+      ...(answers.personalInfo.name ? { HUMAN_NAME: answers.personalInfo.name } : {}),
+      ...(answers.personalInfo.gender ? { HUMAN_GENDER: answers.personalInfo.gender } : {}),
+      ...(answers.personalInfo.birthday ? { HUMAN_BIRTHDAY: answers.personalInfo.birthday } : {}),
+      ...(answers.personalInfo.location ? { HUMAN_LOCATION: answers.personalInfo.location } : {}),
+      ...(answers.personalInfo.occupation ? { HUMAN_OCCUPATION: answers.personalInfo.occupation } : {}),
+    }
+    : {};
+
+  return payload;
+}
+
+export function resolveOnboardingSettingsPath(options?: {
+  cwd?: string;
+  dirname?: string;
+  exists?: (path: string) => boolean;
+}): string {
+  const cwd = options?.cwd ?? process.cwd();
+  const dirname = options?.dirname ?? __dirname;
+  const exists = options?.exists ?? existsSync;
+  const configPath = resolveConfigPaths(cwd, dirname).find((candidate) => exists(candidate));
+  if (configPath) {
+    return normalize(join(pathDirname(configPath), SETTINGS_FILENAME));
+  }
+
+  return normalize(join(resolveOnboardingAppRoot({ cwd, dirname, exists }), SETTINGS_FILENAME));
+}
+
+export function saveOnboardingSettings(
+  answers: OnboardingAnswers,
+  options?: {
+    cwd?: string;
+    dirname?: string;
+    exists?: (path: string) => boolean;
+    readFile?: (path: string) => string;
+    writeFile?: (path: string, content: string) => void;
+    baseSettings?: Record<string, unknown>;
+  },
+): string {
+  const destination = resolveOnboardingSettingsPath(options);
+  const content = `${JSON.stringify(buildOnboardingSettings(answers, options), null, 2)}\n`;
+
+  mkdirSync(pathDirname(destination), { recursive: true });
+  if (options?.writeFile) {
+    options.writeFile(destination, content);
+  } else {
+    writeFileSync(destination, content, 'utf-8');
+  }
+
+  return destination;
 }
 
 const onboard = new Onboard();
