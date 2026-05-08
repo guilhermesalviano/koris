@@ -16,7 +16,7 @@ import { DatabaseServiceFactory } from './infrastructure/db-sqlite';
 import { SessionServiceFactory } from './services/session-service';
 import { config } from './config';
 import { DashboardServerFactory, WebServerHandle } from './dashboard';
-import { createPlugins, buildRegistry } from './plugins';
+import { createPlugins, buildRegistry } from '../plugins';
 
 const logger = LoggerFactory.create();
 const MODES = ['tui', 'web'] as const;

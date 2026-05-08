@@ -1,4 +1,4 @@
-import { ExtensionPoint } from '../plugins/registry';
+import { ExtensionPoint } from '../../plugins/registry';
 import type { ILogger } from '../infrastructure/logger';
 import type { IAgent } from '../services/agents/main-agent/agent';
 

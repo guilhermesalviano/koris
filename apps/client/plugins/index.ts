@@ -1,5 +1,5 @@
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'node:fs';
+import path from 'node:path';
 import { PluginRegistry, type Plugin } from './registry';
 
 interface PluginModule {

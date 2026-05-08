@@ -1,11 +1,11 @@
 import { getBot, initBot, type InlineKeyboardMarkup, type TelegramMessage } from 'assistant-telegram-bot';
-import type { ChannelDefinition } from '../../channels';
-import { ADAPTERS } from '../../channels';
-import type { ILogger } from '../../infrastructure/logger';
+import type { ChannelDefinition } from '../../src/channels';
+import { ADAPTERS } from '../../src/channels';
+import type { ILogger } from '../../src/infrastructure/logger';
 import type { Plugin, PluginRegistry } from '../registry';
-import type { IAgent } from '../../services/agents/main-agent/agent';
-import { stripInternalStreamMarkers } from '../../utils/stream-markers';
-import { config } from '../../config';
+import type { IAgent } from '../../src/services/agents/main-agent/agent';
+import { stripInternalStreamMarkers } from '../../src/utils/stream-markers';
+import { config } from '../../src/config';
 
 const TYPING_INTERVAL_MS = 5_000;
 const TELEGRAM_MESSAGE_LIMIT = 4_000;
