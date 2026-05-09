@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChannelDefinition } from '../../../src/channels';
 import { ADAPTERS } from '../../../src/channels';
-import { buildRegistry, type Plugin } from '../../../src/plugins';
+import { buildRegistry, type Plugin } from '../../../plugins';
 
 describe('plugins', () => {
   it('merges contributions across plugins', () => {
