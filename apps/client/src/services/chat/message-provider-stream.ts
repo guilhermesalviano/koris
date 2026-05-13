@@ -1,6 +1,5 @@
 import { ILogger } from "../../infrastructure/logger";
 import { escapeTelegramMarkdown, isAbortError } from "../../utils/telegram";
-import { SkillsRepositoryFactory } from "../../repositories/skills";
 import { PromptRepositoryFactory } from "../../repositories/prompt";
 import { getAIProvider } from "../providers";
 import { DatabaseServiceFactory } from "../../infrastructure/db-sqlite";
@@ -22,16 +21,13 @@ class MessageProviderStream implements IMessageProvider {
     messageHistory?: Message[]
   ): Promise<ProcessedMessage> {
     const provider = getAIProvider(this.logger);
-    const skillsRepository = SkillsRepositoryFactory.create(this.logger);
-    const skills = skillsRepository.get();
 
     const db = DatabaseServiceFactory.create();
-    const promptRepository = PromptRepositoryFactory.create(db);
+    const promptRepository = PromptRepositoryFactory.create(db, this.logger);
     const messagesHistory = messageHistory?.map(m => ({ role: m.role, content: m.content }));
     const promptPayload = promptRepository.build({
       userMessage: message,
       channel,
-      skills,
       toolsEnabled: options?.toolsEnabled,
       messageHistory: messagesHistory,
     });
