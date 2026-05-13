@@ -85,6 +85,7 @@ class OllamaAIProvider implements AIProvider {
       let jsonBuffer = '';
       let producedAnswer = false;
 
+      bumpIdle();
       for await (const chunk of this.readNDJSON(body, bumpIdle)) {
         totalChunksReceived++;
         if (chunk.error) throw new Error(chunk.error);
@@ -293,6 +294,7 @@ class OllamaAIProvider implements AIProvider {
 
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         model: request.model ?? this.defaultModel,
         messages: request.messages,

@@ -4,7 +4,7 @@ import { IDatabaseService } from '../infrastructure/db-sqlite';
 interface IMessageRepository {
   save(message: Message): void;
   deleteById(id: string): void;
-  getBySessionId(sessionId: string): Message[];
+  getBySessionId(sessionId: string, limit?: number): Message[];
 }
 
 class MessageRepository implements IMessageRepository {
@@ -30,10 +30,13 @@ class MessageRepository implements IMessageRepository {
 
   getBySessionId(sessionId: string, limit = 15): Message[] {
     const rows = this.db.query<any>(
-      `SELECT id, session_id, role, content, created_at FROM messages 
-       WHERE session_id = ? 
-       ORDER BY created_at ASC
-       LIMIT ?`,
+      `SELECT id, session_id, role, content, created_at FROM (
+         SELECT id, session_id, role, content, created_at FROM messages
+         WHERE session_id = ?
+         ORDER BY created_at DESC
+         LIMIT ?
+       ) recent_messages
+       ORDER BY created_at ASC`,
       [sessionId, limit]
     );
     

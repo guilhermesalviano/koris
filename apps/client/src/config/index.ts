@@ -26,7 +26,7 @@ export const config = {
     INTERVAL_MS: Number(get('heartbeat.interval_ms', (30 * 60 * 1000).toString())),
     ACTIVE_HOURS: {
       START: get('heartbeat.active_hours.start', '08:00'),
-      END: get('heartbeat.active_hours.ende', '22:00'),
+      END: get('heartbeat.active_hours.end', '22:00'),
     },
   },
   AI: {
@@ -60,7 +60,7 @@ export const config = {
 
 const isTelegramMode = process.argv.includes('telegram') || process.argv.includes('--telegram');
 if (!isTest && isTelegramMode && !config.CHANNELS.TELEGRAM.BOT_TOKEN) {
-  console.error('ERROR: TELEGRAM.BOT_TOKEN is required');
-  console.error('Please set TELEGRAM.BOT_TOKEN in settings.json or as an environment variable');
+  console.error('ERROR: channels.telegram.bot_token is required');
+  console.error('Please set channels.telegram.bot_token in settings.json or CHANNELS_TELEGRAM_BOT_TOKEN as an environment variable');
   process.exit(1);
 }
