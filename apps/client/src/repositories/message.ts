@@ -28,12 +28,13 @@ class MessageRepository implements IMessageRepository {
     this.db.run('DELETE FROM messages WHERE id = ?', [id]);
   }
 
-  getBySessionId(sessionId: string): Message[] {
+  getBySessionId(sessionId: string, limit = 15): Message[] {
     const rows = this.db.query<any>(
       `SELECT id, session_id, role, content, created_at FROM messages 
        WHERE session_id = ? 
-       ORDER BY created_at ASC`,
-      [sessionId]
+       ORDER BY created_at ASC
+       LIMIT ?`,
+      [sessionId, limit]
     );
     
     return rows.map((row: any) => new Message({
