@@ -5,8 +5,10 @@ import { PromptRepositoryFactory } from "../../repositories/prompt";
 import { getAIProvider } from "../providers";
 import { DatabaseServiceFactory } from "../../infrastructure/db-sqlite";
 import { ProcessedMessage, ProcessOptions } from "../../types/agents";
-import type { AIChatRequest, IMessageProvider } from "../../types/provider";
+import type { IMessageProvider } from "../../types/provider";
 import type { Message } from "../../entities/message";
+
+const SUPPORTED_STREAM = ['tui', 'web'];
 
 class MessageProviderStream implements IMessageProvider {
   constructor(
@@ -26,7 +28,7 @@ class MessageProviderStream implements IMessageProvider {
     const db = DatabaseServiceFactory.create();
     const promptRepository = PromptRepositoryFactory.create(db);
     const messagesHistory = messageHistory?.map(m => ({ role: m.role, content: m.content }));
-    const payload = promptRepository.build({
+    const promptPayload = promptRepository.build({
       userMessage: message,
       channel,
       skills,
@@ -39,12 +41,8 @@ class MessageProviderStream implements IMessageProvider {
       currentPrompt: message,
     });
 
-    const chatRequest = payload as AIChatRequest;
-
-    // Stream directly in TUI for the active AI provider
-    if (channel === 'tui') {
-      const thinkRequest: AIChatRequest = { ...chatRequest, think: true };
-      const stream = provider.chatStream(thinkRequest, { signal: options?.signal });
+    if (SUPPORTED_STREAM.includes(channel)) {
+      const stream = provider.chatStream(promptPayload, { signal: options?.signal });
 
       async function* safeStream(): AsyncGenerator<string> {
         try {
@@ -63,7 +61,7 @@ class MessageProviderStream implements IMessageProvider {
     }
 
     try {
-      return await provider.chat(chatRequest, { signal: options?.signal });
+      return await provider.chat(promptPayload, { signal: options?.signal });
     } catch (err) {
       if (options?.signal?.aborted || isAbortError(err)) {
         throw err;

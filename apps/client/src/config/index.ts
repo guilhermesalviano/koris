@@ -38,8 +38,8 @@ export const config = {
     API_TOKEN: get('ai.API_TOKEN', ''),
     MODEL:     get('ai.MODEL',     'gemma4:e2b'),
     TIMEOUTS: {
-      IDLE_MS:   Number(get('ai.timeouts.IDLE_MS',   String(50_000))),   // ms between chunks before abort
-      HARD_MS:   Number(get('ai.timeouts.HARD_MS',   String(5 * 60_000))), // total request deadline
+      IDLE_MS:   Number(get('ai.timeouts.IDLE_MS',   String(3 * 60_000))),   // ms between chunks before abort
+      HARD_MS:   Number(get('ai.timeouts.HARD_MS',   String(20 * 60_000))), // total request deadline
       HEALTH_MS: Number(get('ai.timeouts.HEALTH_MS', String(5_000))),    // health-check deadline
     },
   },
