@@ -9,27 +9,18 @@ interface IToolsRepository {
   getAll(skills?: Skill[], options?: GetAllOptions): AIToolDefinition[];
 }
 
-const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'] as const;
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH'] as const;
 
-function cloneTools(tools: AIToolDefinition[]): AIToolDefinition[] {
-  return tools.map(({ type, function: fn }) => ({
-    type,
-    function: { ...fn, parameters: structuredClone(fn.parameters) },
-  }));
-}
-
-function buildSkillList(skills: Skill[]): string {
-  return skills.map(s => `- ${s.name}: ${s.description}`).join('\n');
-}
-
-function skillsTool(skills: Skill[]): AIToolDefinition {
+function getSkillTool(skills: Skill[]): AIToolDefinition {
   return {
     type: 'function',
     function: {
       name: 'get_skill',
       description: `Read the complete SKILL.md documentation for a skill before executing any task that skill covers.
 Call this whenever you need implementation details, constraints, or required patterns for a task.
-Available skills:\n${buildSkillList(skills)}`,
+<available_skills>
+${skills.map(s => `<skill><skill_name>${s.name}</skill_name><skill_description>${s.description}</skill_description></skill>`).join('')}
+</available_skills>`,
       parameters: {
         type: 'object',
         properties: {
@@ -205,7 +196,7 @@ class ToolsRepository implements IToolsRepository {
     const tools: AIToolDefinition[] = [];
     const includeTaskTools = options?.includeTaskTools ?? true;
 
-    if (skills?.length) tools.push(skillsTool(skills));
+    if (skills?.length) tools.push(getSkillTool(skills));
     tools.push(curlTool());
 
     if (includeTaskTools) {
@@ -215,7 +206,7 @@ class ToolsRepository implements IToolsRepository {
       tools.push(deleteTaskTool());
     }
 
-    return cloneTools(tools);
+    return tools;
   }
 }
 

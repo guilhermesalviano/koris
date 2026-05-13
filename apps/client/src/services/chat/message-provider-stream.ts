@@ -36,9 +36,8 @@ class MessageProviderStream implements IMessageProvider {
       messageHistory: messagesHistory,
     });
 
-    this.logger.debug('AI request context', {
-      messageHistory: messagesHistory ?? [],
-      currentPrompt: message,
+    this.logger.debug('THE PROMPT PAYLOAD', {
+      promptPayload,
     });
 
     if (SUPPORTED_STREAM.includes(channel)) {

@@ -1,6 +1,6 @@
 
 import { extractToolCalls, normalizeResponse } from '../../../utils/tool-calls';
-import { ToolsQueueFactory } from '../../tools-queue';
+import { IToolsQueue, ToolsQueueFactory } from '../../tools-queue';
 import { ExecutorWorkerFactory } from '../../workers/executor-worker';
 import { LearnerWorkerFactory } from '../../workers/learner-worker';
 import { FIRST_PROMPT_HELPER, SKILL_READY_PROMPT } from '../../../constants';
@@ -13,7 +13,7 @@ import type { ILogger } from '../../../infrastructure/logger';
 import type { Message } from '../../../entities/message';
 import type { IMessageProvider } from '../../../types/provider';
 import type { LoopContext } from '../../../types/context';
-import type { IToolsQueue, ToolCall } from '../../../types/tools';
+import type { ToolCall } from '../../../types/tools';
 import type { IWorker } from '../../../types/workers';
 
 interface ManagerArgs {
@@ -28,7 +28,7 @@ interface IManager {
   run(args: ManagerArgs): Promise<ProcessedMessage>;
 }
 
-class Manager {
+class Manager implements IManager {
   constructor(
     private logger: ILogger,
     public name: string,
@@ -198,4 +198,4 @@ class ManagerFactory {
   }
 }
 
-export { IManager, Manager, ManagerFactory };
+export { IManager, Manager, ManagerFactory, IMessageProvider };

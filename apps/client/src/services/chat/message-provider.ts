@@ -2,11 +2,11 @@ import { getAIProvider } from "../providers";
 import { escapeTelegramMarkdown, isAbortError } from "../../utils/telegram";
 import { ILogger } from "../../infrastructure/logger";
 import { SkillsRepositoryFactory } from "../../repositories/skills";
-import type { AIChatRequest, IMessageProvider } from "../../types/provider";
 import { PromptRepositoryFactory } from "../../repositories/prompt";
-import type { Message } from "../../entities/message";
 import { ProcessedMessage, ProcessOptions } from "../../types/agents";
 import { DatabaseServiceFactory } from "../../infrastructure/db-sqlite";
+import type { IMessageProvider } from "../../types/provider";
+import type { Message } from "../../entities/message";
 
 class MessageProvider implements IMessageProvider {
   constructor(
@@ -33,7 +33,7 @@ class MessageProvider implements IMessageProvider {
     const messagesHistory = messageHistory?.map(m => ({ role: m.role, content: m.content }));
 
     // to fix: probaly, assistant messages is not saving im this prompt build... Its not good.
-    const payload = promptRepository.build({ 
+    const promptPayload = promptRepository.build({ 
       userMessage: message, 
       channel, 
       skills, 
@@ -41,15 +41,12 @@ class MessageProvider implements IMessageProvider {
       messageHistory: messagesHistory
     });
     
-    this.logger.debug('AI request context', {
-      messageHistory: messagesHistory ?? [],
-      currentPrompt: message,
+    this.logger.debug('THE PROMPT PAYLOAD', {
+      promptPayload,
     });
 
-    const chatRequest = payload as AIChatRequest;
-
     try {
-      return await provider.chat(chatRequest, { signal: options?.signal });
+      return await provider.chat(promptPayload, { signal: options?.signal });
     } catch (err) {
       if (options?.signal?.aborted || isAbortError(err)) {
         throw err;
