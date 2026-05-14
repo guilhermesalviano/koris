@@ -18,9 +18,7 @@ export const config = {
   TEMP_FOLDER: get('temp_folder', './temp'),
   WEB_PORT:    Number(get('web_port', '3000')),
   BASE_DIR:    process.cwd(),
-  GMAIL: {
-    GATEWAY_HOST: get('gmail.gateway_host', 'http://localhost:3000'),
-  },
+  GATEWAY_HOST: get('gateway_host', 'http://localhost:3000'),
   HEARTBEAT: {
     ENABLED: get('heartbeat.enabled', 'true') === 'true',
     INTERVAL_MS: Number(get('heartbeat.interval_ms', (30 * 60 * 1000).toString())),
