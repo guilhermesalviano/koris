@@ -266,8 +266,28 @@ describe('NvidiaAIProvider', () => {
     ).rejects.toThrow('namespace prefix');
   });
 
-  it('uses default NVIDIA base URL and model from config', () => {
+  it('uses default NVIDIA base URL and model from config', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    ) as unknown as typeof fetch;
+
+    globalThis.fetch = fetchMock;
+
     const provider = new NvidiaAIProvider(logger);
     expect(provider.name).toBe('nvidia');
+
+    await provider.chat({ messages: [{ role: 'user', content: 'hi' }] });
+
+    const calledUrl = (fetchMock as any).mock.calls[0]?.[0];
+    const fetchArgs = (fetchMock as any).mock.calls[0]?.[1];
+    const body = JSON.parse(fetchArgs.body);
+
+    expect(calledUrl).toBe(`${config.AI.BASE_URL.replace(/\/+$/, '')}/chat/completions`);
+    expect(body.model).toBe(config.AI.MODEL);
   });
 });
