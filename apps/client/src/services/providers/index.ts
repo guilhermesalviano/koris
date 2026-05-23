@@ -3,6 +3,7 @@ import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
 import { OllamaAIProviderFactory } from './ollama';
 import { MockAIProviderFactory } from './mock';
+import { NvidiaAIProviderFactory } from './nvidia';
 
 /**
  * Registry of available AI provider factories
@@ -10,6 +11,7 @@ import { MockAIProviderFactory } from './mock';
 const PROVIDER_FACTORIES = {
   ollama: OllamaAIProviderFactory,
   mock: MockAIProviderFactory,
+  nvidia: NvidiaAIProviderFactory,
 } as const;
 
 type ProviderType = keyof typeof PROVIDER_FACTORIES;
