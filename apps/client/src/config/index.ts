@@ -30,7 +30,7 @@ export const config = {
     },
   },
   AI: {
-    PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.provider', 'ollama'),
+    PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.provider', 'mock'),
     ALLOW_REMOTE_BASE_URL: get('ai.allow_remote_url', 'false') === 'true',
     BASE_URL:  get('ai.base_url', 'http://localhost:11434'),
     API_TOKEN: get('ai.api_token', ''),
