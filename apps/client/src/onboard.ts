@@ -1329,32 +1329,32 @@ export function buildOnboardingSettings(
   const telegram = getOrCreateRecord(channels, 'telegram');
   const usesTelegram = usesTelegramChannel(answers);
 
-  telegram.ENABLED = usesTelegram;
-  telegram.BOT_TOKEN = usesTelegram ? (answers.telegramToken ?? '') : '';
-  telegram.USE_POLLING = true;
-  telegram.CHAT_ID = '';
+  telegram.enabled = usesTelegram;
+  telegram.bot_token = usesTelegram ? (answers.telegramToken ?? '') : '';
+  telegram.use_polling = true;
+  telegram.chat_id = '';
 
   if (answers.channels.includes('discord')) {
     const discord = getOrCreateRecord(channels, 'discord');
-    discord.ENABLED = true;
+    discord.enabled = true;
   } else if (Object.prototype.hasOwnProperty.call(channels, 'discord')) {
     delete channels.discord;
   }
 
   const ai = getOrCreateRecord(payload, 'ai');
-  ai.PROVIDER = answers.provider;
-  ai.API_TOKEN = answers.providerApiToken ?? '';
+  ai.provider = answers.provider;
+  ai.api_token = answers.providerApiToken ?? '';
   if (answers.providerUrl) {
-    ai.BASE_URL = answers.providerUrl;
+    ai.base_url = answers.providerUrl;
   }
 
   payload.personal_information = answers.personalInfo?.enabled
     ? {
-      ...(answers.personalInfo.name ? { HUMAN_NAME: answers.personalInfo.name } : {}),
-      ...(answers.personalInfo.gender ? { HUMAN_GENDER: answers.personalInfo.gender } : {}),
-      ...(answers.personalInfo.birthday ? { HUMAN_BIRTHDAY: answers.personalInfo.birthday } : {}),
-      ...(answers.personalInfo.location ? { HUMAN_LOCATION: answers.personalInfo.location } : {}),
-      ...(answers.personalInfo.occupation ? { HUMAN_OCCUPATION: answers.personalInfo.occupation } : {}),
+      ...(answers.personalInfo.name ? { name: answers.personalInfo.name } : {}),
+      ...(answers.personalInfo.gender ? { gender: answers.personalInfo.gender } : {}),
+      ...(answers.personalInfo.birthday ? { birthday: answers.personalInfo.birthday } : {}),
+      ...(answers.personalInfo.location ? { location: answers.personalInfo.location } : {}),
+      ...(answers.personalInfo.occupation ? { occupation: answers.personalInfo.occupation } : {}),
     }
     : {};
 
