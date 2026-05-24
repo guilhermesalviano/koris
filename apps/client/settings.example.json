@@ -5,9 +5,7 @@
   "log": {
     "level": "debug"
   },
-  "gmail": {
-    "gateway_host": "http://localhost:3000"
-  },
+  "gateway_host": "http://localhost:3000",
   "heartbeat": {
     "enabled": true,
     "active_hours": {
