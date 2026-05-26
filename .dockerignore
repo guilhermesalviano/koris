@@ -1,0 +1,31 @@
+# Dependencies and build outputs
+node_modules
+**/node_modules
+**/dist
+
+# Logs and runtime data
+logs
+**/logs
+*.log
+
+# Database files
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+# Secrets and local config
+.env
+**/.env
+**/settings.json
+
+# Dev / CI artifacts
+.git
+.github
+.turbo
+coverage
+**/.stryker-tmp
+**/stryker.config.json
+
+# Temp
+temp
+**/temp
