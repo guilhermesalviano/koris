@@ -1,0 +1,4 @@
+
+> koris-agent@1.0.0 lint /home/guibs/projects/koris-agent/apps/client
+> tsc --noEmit -p tsconfig.json
+
