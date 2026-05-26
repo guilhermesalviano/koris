@@ -1,4 +1,4 @@
-import { getBot, initBot, type InlineKeyboardMarkup, type TelegramMessage } from 'assistant-telegram-bot';
+import type { InlineKeyboardMarkup, TelegramMessage } from 'assistant-telegram-bot';
 import type { ChannelDefinition } from '../../src/channels';
 import { ADAPTERS } from '../../src/channels';
 import type { ILogger } from '../../src/infrastructure/logger';
@@ -53,7 +53,7 @@ class TelegramChannel implements ITelegramChannel {
   }
 
   async sendCode(chatId: number, code: string, language: string = ''): Promise<void> {
-    await this.getBotClient().sendMessage(chatId, `\`\`\`${language}\n${code}\n\`\`\``, { parse_mode: 'Markdown' });
+    await (await this.getBotClient()).sendMessage(chatId, `\`\`\`${language}\n${code}\n\`\`\``, { parse_mode: 'Markdown' });
   }
 
   async sendWithApproval(
@@ -73,7 +73,7 @@ class TelegramChannel implements ITelegramChannel {
       ],
     };
 
-    await this.getBotClient().sendMessage(chatId, message, {
+    await (await this.getBotClient()).sendMessage(chatId, message, {
       parse_mode: 'Markdown',
       reply_markup: keyboard,
     });
@@ -88,7 +88,7 @@ class TelegramChannel implements ITelegramChannel {
       });
     } catch (error) {
       console.error('Error processing message:', error);
-      await this.getBotClient().sendMessage(
+      await (await this.getBotClient()).sendMessage(
         chatId,
         '❌ Sorry, I encountered an error processing your message. Please try again.',
       );
@@ -96,14 +96,15 @@ class TelegramChannel implements ITelegramChannel {
   }
 
   private async sendMessageWithMarkdownFallback(chatId: number, text: string): Promise<void> {
+    const bot = await this.getBotClient();
     try {
-      await this.getBotClient().sendMessage(chatId, text, { parse_mode: 'MarkdownV2' });
+      await bot.sendMessage(chatId, text, { parse_mode: 'MarkdownV2' });
     } catch (error) {
       if (!this.isEntityParseError(error)) {
         throw error;
       }
 
-      await this.getBotClient().sendMessage(chatId, text);
+      await bot.sendMessage(chatId, text);
     }
   }
 
@@ -126,11 +127,11 @@ class TelegramChannel implements ITelegramChannel {
 
   private async withTypingIndicator<T>(chatId: number, work: () => Promise<T>): Promise<T> {
     try {
-      await this.getBotClient().sendChatAction(chatId, 'typing');
+      await (await this.getBotClient()).sendChatAction(chatId, 'typing');
     } catch {}
 
     const timer = setInterval(() => {
-      void this.getBotClient().sendChatAction(chatId, 'typing').catch(() => {});
+      void this.getBotClient().then((bot) => bot.sendChatAction(chatId, 'typing')).catch(() => {});
     }, TYPING_INTERVAL_MS);
 
     try {
@@ -157,8 +158,13 @@ class TelegramChannel implements ITelegramChannel {
     return /can't parse entities/i.test(error.message);
   }
 
-  private getBotClient(): TelegramBotClient {
-    return this.bot ?? getBot();
+  private async getBotClient(): Promise<TelegramBotClient> {
+    if (this.bot) {
+      return this.bot;
+    }
+
+    const { getBot } = await import('assistant-telegram-bot');
+    return getBot() as TelegramBotClient;
   }
 }
 
@@ -167,8 +173,10 @@ class TelegramChannelFactory {
     return new TelegramChannel();
   }
 
-  static start(options: TelegramChannelStartOptions): { channel: ITelegramChannel; stop: () => void } {
+  static async start(options: TelegramChannelStartOptions): Promise<{ channel: ITelegramChannel; stop: () => void }> {
     const channel = new TelegramChannel();
+    const { initBot } = await import('assistant-telegram-bot');
+
     const bot = initBot({
       token: options.token,
       polling: true,
@@ -218,13 +226,13 @@ function createTelegramAdapter(options: TelegramPluginOptions): ChannelDefinitio
     name: 'telegram',
     enabled: () => options.token.length > 0,
     start: (logger: ILogger, agent: IAgent) => {
-      const { stop } = TelegramChannelFactory.start({
-        token: options.token,
-        agent,
-        logger,
-      });
+      let stopFn: (() => void) | null = null;
 
-      return stop;
+      TelegramChannelFactory.start({ token: options.token, agent, logger })
+        .then(({ stop }) => { stopFn = stop; })
+        .catch((err: Error) => logger.warn(`Failed to start Telegram bot: ${err.message}`));
+
+      return () => { stopFn?.(); };
     },
     sendMessage: async (_logger: ILogger, target: string, message: string) => {
       const chatId = Number(target);

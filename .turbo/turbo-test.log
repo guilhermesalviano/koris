@@ -1,0 +1,218 @@
+
+
+> koris-agent@1.0.0 test /home/guibs/projects/koris-agent/apps/client
+> vitest run
+
+[?25l
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.5 [39m[90m/home/guibs/projects/koris-agent/apps/client[39m
+
+[?2026h
+[1m[33m ❯ [39m[22mtests/unit/entities/memory.test.ts[2m [queued][22m
+
+[2m Test Files [22m[1m[32m0 passed[39m[22m[90m (49)[39m
+[2m      Tests [22m[1m[32m0 passed[39m[22m[90m (0)[39m
+[2m   Start at [22m17:50:59
+[2m   Duration [22m101ms
+[?2026l[?2026h[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/welcome.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/dashboard/index.test.ts[2m 0/8[22m
+[1m[33m ❯ [39m[22mtests/unit/entities/memory.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/providers/nvidia/index.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/providers/ollama/index.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/session-service.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools-queue/index.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/curl-request/index.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/get-skill/index.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/shared/runtime.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/utils/heartbeat.test.ts[2m [queued][22m
+
+[2m Test Files [22m[1m[32m0 passed[39m[22m[90m (49)[39m
+[2m      Tests [22m[1m[32m0 passed[39m[22m[90m (8)[39m
+[2m   Start at [22m17:50:59
+[2m   Duration [22m200ms
+[?2026l[?2026h[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K [32m✓[39m tests/unit/entities/memory.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/utils/heartbeat.test.ts [2m([22m[2m38 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/services/tools/shared/runtime.test.ts [2m([22m[2m37 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m tests/unit/services/tools/curl-request/index.test.ts [2m([22m[2m49 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m node_modules/assistant-tui/tests/unit/welcome.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m tests/unit/services/session-service.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/services/tools/get-skill/index.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/welcome.test.ts[2m 3/3[22m
+[1m[33m ❯ [39m[22mtests/unit/dashboard/index.test.ts[2m 0/8[22m
+[1m[33m ❯ [39m[22mtests/unit/entities/memory.test.ts[2m 15/15[22m
+[1m[33m ❯ [39m[22mtests/unit/services/providers/nvidia/index.test.ts[2m 0/11[22m
+[1m[33m ❯ [39m[22mtests/unit/services/providers/ollama/index.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/session-service.test.ts[2m 7/7[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools-queue/index.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/curl-request/index.test.ts[2m 49/49[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/get-skill/index.test.ts[2m 5/5[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/shared/runtime.test.ts[2m 37/37[22m
+[1m[33m ❯ [39m[22mtests/unit/utils/heartbeat.test.ts[2m 38/38[22m
+
+[2m Test Files [22m[1m[32m7 passed[39m[22m[90m (49)[39m
+[2m      Tests [22m[1m[32m154 passed[39m[22m[90m (173)[39m
+[2m   Start at [22m17:50:59
+[2m   Duration [22m301ms
+[?2026l[?2026h[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K [32m✓[39m tests/unit/dashboard/index.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 159[2mms[22m[39m
+ [32m✓[39m tests/unit/services/providers/ollama/index.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 47[2mms[22m[39m
+ [32m✓[39m tests/unit/services/providers/nvidia/index.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/autocomplete.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/input-filter.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/line-handler.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/renderer.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/dashboard/index.test.ts[2m 8/8[22m
+[1m[33m ❯ [39m[22mtests/unit/plugins/index.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/memory-service.test.ts[2m 0/15[22m
+[1m[33m ❯ [39m[22mtests/unit/services/providers/nvidia/index.test.ts[2m 11/11[22m
+[1m[33m ❯ [39m[22mtests/unit/services/providers/ollama/index.test.ts[2m 4/4[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools-queue/index.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/execute-command/index.test.ts[2m [queued][22m
+
+[2m Test Files [22m[1m[32m10 passed[39m[22m[90m (49)[39m
+[2m      Tests [22m[1m[32m177 passed[39m[22m[90m (192)[39m
+[2m   Start at [22m17:50:59
+[2m   Duration [22m402ms
+[?2026l[?2026h[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K [32m✓[39m tests/unit/services/memory-service.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m node_modules/assistant-tui/tests/unit/input-filter.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/plugins/index.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m node_modules/assistant-tui/tests/unit/autocomplete.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m node_modules/assistant-tui/tests/unit/renderer.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/unit/services/tools/execute-command/index.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/autocomplete.test.ts[2m 3/3[22m
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/input-filter.test.ts[2m 4/4[22m
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/line-handler.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/renderer.test.ts[2m 6/6[22m
+[1m[33m ❯ [39m[22mtests/unit/plugins/index.test.ts[2m 6/6[22m
+[1m[33m ❯ [39m[22mtests/unit/plugins/telegram/index.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/memory-service.test.ts[2m 15/15[22m
+[1m[33m ❯ [39m[22mtests/unit/services/message-service.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/providers/mock/index.test.ts[2m 0/10[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools-queue/index.test.ts[2m 0/14[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/execute-command/index.test.ts[2m 10/10[22m
+
+[2m Test Files [22m[1m[32m16 passed[39m[22m[90m (49)[39m
+[2m      Tests [22m[1m[32m221 passed[39m[22m[90m (245)[39m
+[2m   Start at [22m17:50:59
+[2m   Duration [22m602ms
+[?2026l[?2026h[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K [32m✓[39m tests/unit/services/providers/mock/index.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m node_modules/assistant-tui/tests/unit/line-handler.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/unit/services/tools-queue/index.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 54[2mms[22m[39m
+ [32m✓[39m tests/unit/services/message-service.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/unit/plugins/telegram/index.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/utils/tool-calls.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/line-handler.test.ts[2m 6/6[22m
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/spinner.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/config/helpers.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/onboard.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/plugins/telegram/index.test.ts[2m 1/1[22m
+[1m[33m ❯ [39m[22mtests/unit/services/commands/index.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/message-service.test.ts[2m 6/6[22m
+[1m[33m ❯ [39m[22mtests/unit/services/providers/mock/index.test.ts[2m 10/10[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools-queue/index.test.ts[2m 14/14[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/task/create.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/utils/tool-calls.test.ts[2m 22/22[22m
+
+[2m Test Files [22m[1m[32m22 passed[39m[22m[90m (49)[39m
+[2m      Tests [22m[1m[32m280 passed[39m[22m[90m (280)[39m
+[2m   Start at [22m17:50:59
+[2m   Duration [22m702ms
+[?2026l[?2026h[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K [32m✓[39m node_modules/assistant-tui/tests/unit/spinner.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/services/tools/task/create.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/unit/services/commands/index.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/config/helpers.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/spinner.test.ts[2m 2/2[22m
+[1m[33m ❯ [39m[22mtests/unit/config/helpers.test.ts[2m 4/4[22m
+[1m[33m ❯ [39m[22mtests/unit/entities/heartbeat.test.ts[2m 1/11[22m
+[1m[33m ❯ [39m[22mtests/unit/onboard.test.ts[2m 0/10[22m
+[1m[33m ❯ [39m[22mtests/unit/plugins/telegram/index.test.ts[2m 1/1[22m
+[1m[33m ❯ [39m[22mtests/unit/services/agents/main-agent/helpers/index.test.ts[2m 0/12[22m
+[1m[33m ❯ [39m[22mtests/unit/services/commands/index.test.ts[2m 17/17[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/task/create.test.ts[2m 11/11[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/task/delete.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/utils/sanitize-log-text.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/utils/tool-calls.test.ts[2m 22/22[22m
+
+[2m Test Files [22m[1m[32m26 passed[39m[22m[90m (49)[39m
+[2m      Tests [22m[1m[32m315 passed[39m[22m[90m (347)[39m
+[2m   Start at [22m17:50:59
+[2m   Duration [22m802ms
+[?2026l[?2026h[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K [32m✓[39m tests/unit/entities/heartbeat.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/services/agents/main-agent/helpers/index.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/unit/onboard.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/unit/services/tools/task/delete.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/utils/sanitize-log-text.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/entities/message.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/services/tools/task/update.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+
+[1m[33m ❯ [39m[22mtests/unit/channels/index.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/entities/heartbeat.test.ts[2m 11/11[22m
+[1m[33m ❯ [39m[22mtests/unit/entities/message.test.ts[2m 10/10[22m
+[1m[33m ❯ [39m[22mtests/unit/entities/session.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/onboard.test.ts[2m 10/10[22m
+[1m[33m ❯ [39m[22mtests/unit/services/agents/main-agent/helpers/index.test.ts[2m 12/12[22m
+[1m[33m ❯ [39m[22mtests/unit/services/provider-health-service.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/task/delete.test.ts[2m 6/6[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/task/update.test.ts[2m 12/12[22m
+[1m[33m ❯ [39m[22mtests/unit/services/workers/conversation-worker.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/utils/sanitize-log-text.test.ts[2m 8/8[22m
+
+[2m Test Files [22m[1m[32m33 passed[39m[22m[90m (49)[39m
+[2m      Tests [22m[1m[32m383 passed[39m[22m[90m (383)[39m
+[2m   Start at [22m17:50:59
+[2m   Duration [22m906ms
+[?2026l[?2026h[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K [32m✓[39m tests/unit/entities/session.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/unit/services/provider-health-service.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/channels/index.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/unit/services/workers/conversation-worker.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m node_modules/assistant-tui/tests/unit/formatting.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+
+[1m[33m ❯ [39m[22mnode_modules/assistant-tui/tests/unit/utils.test.ts[2m [queued][22m
+[1m[33m ❯ [39m[22mtests/unit/channels/index.test.ts[2m 1/1[22m
+[1m[33m ❯ [39m[22mtests/unit/entities/session.test.ts[2m 12/12[22m
+[1m[33m ❯ [39m[22mtests/unit/services/provider-health-service.test.ts[2m 6/6[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/task/list.test.ts[2m 0/4[22m
+[1m[33m ❯ [39m[22mtests/unit/services/tools/task/update.test.ts[2m 12/12[22m
+[1m[33m ❯ [39m[22mtests/unit/services/workers/conversation-worker.test.ts[2m 6/6[22m
+[1m[33m ❯ [39m[22mtests/unit/utils/footer-activity.test.ts[2m 0/5[22m
+[1m[33m ❯ [39m[22mtests/unit/utils/provider.test.ts[2m 0/9[22m
+[1m[33m ❯ [39m[22mtests/unit/utils/telegram.test.ts[2m [queued][22m
+
+[2m Test Files [22m[1m[32m38 passed[39m[22m[90m (49)[39m
+[2m      Tests [22m[1m[32m414 passed[39m[22m[90m (432)[39m
+[2m   Start at [22m17:50:59
+[2m   Duration [22m1.01s
+[?2026l[?2026h[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K [32m✓[39m tests/unit/utils/footer-activity.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/utils/provider.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/services/tools/task/list.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m node_modules/assistant-tui/tests/unit/utils.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/unit/utils/telegram.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m node_modules/assistant-tui/tests/unit/ansi.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/utils/history.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m tests/unit/utils/fields.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m tests/unit/utils/generate-id.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+
+
+
+
+
+
+[1m[33m ❯ [39m[22mtests/unit/repositories/message.test.ts[2m 1/2[22m
+
+[2m Test Files [22m[1m[32m47 passed[39m[22m[90m (49)[39m
+[2m      Tests [22m[1m[32m469 passed[39m[22m[90m (470)[39m
+[2m   Start at [22m17:50:59
+[2m   Duration [22m1.11s
+[?2026l[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K[1A[K [32m✓[39m tests/unit/repositories/message.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m tests/unit/utils/prompt.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m49 passed[39m[22m[90m (49)[39m
+[2m      Tests [22m [1m[32m476 passed[39m[22m[90m (476)[39m
+[2m   Start at [22m 17:50:59
+[2m   Duration [22m 1.17s[2m (transform 2.43s, setup 0ms, import 4.11s, tests 699ms, environment 5ms)[22m
+
+[?25h

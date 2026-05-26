@@ -80,7 +80,12 @@ class Application implements IApplication {
       return;
     }
 
-    startTUI({ logger: this.logger, agent: this.runtime.agent });
+    const { agent } = this.runtime;
+
+    startTUI({
+      title: 'koris-agent',
+      onInput: async (input: string) => agent.handle(input),
+    });
   }
 
   private registerShutdownHandlers(): void {

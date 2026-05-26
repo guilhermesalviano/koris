@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname as pathDirname, join, normalize } from 'path';
-import { startTui, type TuiCommandResult, type TuiContext, type TuiKeypress } from 'assistant-tui';
+import { startTui, type TuiCommandResult, type TuiContext, type TuiKeypress } from './tui';
 import { resolveConfigPaths } from './config/helpers';
 
 const ONBOARDING_COMMANDS = [
