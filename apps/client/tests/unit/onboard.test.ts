@@ -61,8 +61,8 @@ describe('buildOnboardingScreen', () => {
       {
         answers: {
           channels: ['telegram'],
-          telegramToken: '123456:token',
-          provider: 'openai',
+          telegramToken: 'YOUR_BOT_TOKEN',
+          provider: 'ollama',
         },
       },
       72,
@@ -78,9 +78,9 @@ describe('buildOnboardingScreen', () => {
       {
         answers: {
           channels: ['telegram'],
-          telegramToken: '123456:token',
-          provider: 'openai',
-          providerApiToken: '',
+          telegramToken: 'YOUR_BOT_TOKEN',
+          provider: 'ollama',
+          providerApiToken: 'YOUR_CHAT_ID',
         },
       },
       72,
@@ -88,7 +88,7 @@ describe('buildOnboardingScreen', () => {
     );
 
     expect(screen).toContain('4. API token ─ configured');
-    expect(screen).toContain('5. Provider URL');
+    expect(screen).toContain('5. Model');
   });
 
   it('renders personal detail steps as substeps of personal information', () => {
@@ -96,10 +96,11 @@ describe('buildOnboardingScreen', () => {
       {
         answers: {
           channels: ['telegram'],
-          telegramToken: '123456:token',
-          provider: 'openai',
-          providerApiToken: '',
-          providerUrl: 'https://api.openai.com/v1',
+          telegramToken: 'YOUR_BOT_TOKEN',
+          provider: 'ollama',
+          providerApiToken: 'YOUR_CHAT_ID',
+          providerModel: 'z-ai/glm-5.1',
+          providerUrl: 'http://localhost:11434',
           personalInfo: { enabled: true, name: 'Joe Doe' },
         },
       },
@@ -107,10 +108,10 @@ describe('buildOnboardingScreen', () => {
       'plain',
     );
 
-    expect(screen).toContain('6. Your Information ─ true');
-    expect(screen).toContain('6.1. Your name ─ Joe Doe');
-    expect(screen).toContain('6.2. Gender');
-    expect(screen).not.toContain('7. Your name');
+    expect(screen).toContain('7. Your Information ─ true');
+    expect(screen).toContain('7.1. Your name ─ Joe Doe');
+    expect(screen).toContain('7.2. Gender');
+    expect(screen).not.toContain('8. Your name');
   });
 });
 
@@ -119,15 +120,16 @@ describe('Onboard footer progress', () => {
     const onboard = new Onboard() as any;
     onboard.answers = {
       channels: ['telegram'],
-      telegramToken: '123456:token',
-      provider: 'openai',
-      providerApiToken: '',
-      providerUrl: 'https://api.openai.com/v1',
+      telegramToken: 'YOUR_BOT_TOKEN',
+      provider: 'ollama',
+      providerApiToken: 'YOUR_CHAT_ID',
+      providerModel: 'z-ai/glm-5.1',
+      providerUrl: 'http://localhost:11434',
       personalInfo: { enabled: true, name: 'Joe Doe' },
     };
     onboard.skippedSteps = new Set();
 
-    expect(onboard.getFooterText()).toBe('step 6/6');
+    expect(onboard.getFooterText()).toBe('step 7/7');
   });
 
   it('creates the temp settings draft when onboarding completes from a false picker selection', () => {
@@ -162,9 +164,10 @@ describe('Onboard footer progress', () => {
       const onboard = new Onboard() as any;
       onboard.answers = {
         channels: ['telegram'],
-        telegramToken: '123456:token',
+        telegramToken: 'YOUR_BOT_TOKEN',
         provider: 'ollama',
-        providerApiToken: '',
+        providerApiToken: 'YOUR_CHAT_ID',
+        providerModel: 'z-ai/glm-5.1',
         providerUrl: 'http://localhost:11434',
       };
       onboard.skippedSteps = new Set();
@@ -197,10 +200,10 @@ describe('onboarding settings draft', () => {
   it('builds a temp settings payload by overlaying onboarding answers on the example settings', () => {
     expect(buildOnboardingSettings({
       channels: ['telegram', 'discord'],
-      telegramToken: '123456:token',
-      provider: 'openai',
-      providerUrl: 'https://api.openai.com/v1',
-      providerApiToken: 'secret-token',
+      telegramToken: 'YOUR_BOT_TOKEN',
+      provider: 'ollama',
+      providerUrl: 'http://localhost:11434',
+      providerApiToken: 'YOUR_CHAT_ID',
       personalInfo: {
         enabled: true,
         name: 'Joe Doe',
@@ -208,51 +211,51 @@ describe('onboarding settings draft', () => {
       },
     }, {
       baseSettings: {
-        TEMP_FOLDER: './temp',
+        temp_folder: './temp',
         channels: {
           telegram: {
-            ENABLED: true,
-            BOT_TOKEN: 'YOUR_BOT_TOKEN',
-            USE_POLLING: true,
-            CHAT_ID: 'YOUR_CHAT_ID',
+            enabled: true,
+            bot_token: 'YOUR_BOT_TOKEN',
+            use_polling: true,
+            chat_id: 'YOUR_CHAT_ID',
           },
         },
         ai: {
-          PROVIDER: 'ollama',
-          BASE_URL: 'http://localhost:11434',
-          API_TOKEN: '',
-          MODEL: 'gemma4:e4b',
+          provider: 'ollama',
+          base_url: 'http://localhost:11434',
+          api_token: '',
+          model: 'gemma4:e4b',
         },
         personal_information: {
-          HUMAN_NAME: 'John Doe',
-          HUMAN_GENDER: 'male',
-          HUMAN_BIRTHDAY: '1990-01-01',
-          HUMAN_LOCATION: 'New York, USA',
-          HUMAN_OCCUPATION: 'Software Engineer',
+          name: 'John Doe',
+          gender: 'male',
+          birthday: '1990-01-01',
+          location: 'New York, USA',
+          occupation: 'Software Engineer',
         },
       },
     })).toEqual({
-      TEMP_FOLDER: './temp',
+      temp_folder: './temp',
       channels: {
         telegram: {
-          ENABLED: true,
-          CHAT_ID: '',
-          USE_POLLING: true,
-          BOT_TOKEN: '123456:token',
+          enabled: true,
+          chat_id: 'YOUR_CHAT_ID',
+          use_polling: true,
+          bot_token: 'YOUR_BOT_TOKEN',
         },
         discord: {
-          ENABLED: true,
+          enabled: true,
         },
       },
       ai: {
-        PROVIDER: 'openai',
-        BASE_URL: 'https://api.openai.com/v1',
-        API_TOKEN: 'secret-token',
-        MODEL: 'gemma4:e4b',
+        provider: 'ollama',
+        base_url: 'http://localhost:11434',
+        api_token: '',
+        model: 'gemma4:e4b',
       },
       personal_information: {
-        HUMAN_NAME: 'Joe Doe',
-        HUMAN_GENDER: 'male',
+        name: 'Joe Doe',
+        gender: 'male',
       },
     });
   });
@@ -279,36 +282,36 @@ describe('onboarding settings draft', () => {
     mkdirSync(appRoot, { recursive: true });
     writeFileSync(join(appRoot, 'settings.json'), '{}');
     writeFileSync(join(appRoot, 'settings.example.json'), JSON.stringify({
-      TEMP_FOLDER: './temp',
+      temp_folder: './temp',
       heartbeat: {
-        ENABLED: true,
+        enabled: true,
       },
       channels: {
         telegram: {
-          ENABLED: true,
-          BOT_TOKEN: 'YOUR_BOT_TOKEN',
-          USE_POLLING: true,
-          CHAT_ID: 'YOUR_CHAT_ID',
+          enabled: true,
+          bot_token: 'YOUR_BOT_TOKEN',
+          use_polling: true,
+          chat_id: 'YOUR_CHAT_ID',
         },
       },
       ai: {
-        PROVIDER: 'ollama',
-        BASE_URL: 'http://localhost:11434',
-        API_TOKEN: '',
-        MODEL: 'gemma4:e4b',
+        provider: 'ollama',
+        base_url: 'http://localhost:11434',
+        api_token: '',
+        model: 'gemma4:e4b',
       },
       personal_information: {
-        HUMAN_NAME: 'John Doe',
-        HUMAN_GENDER: 'male',
-        HUMAN_BIRTHDAY: '1990-01-01',
-        HUMAN_LOCATION: 'New York, USA',
-        HUMAN_OCCUPATION: 'Software Engineer',
+        name: 'John Doe',
+        gender: 'male',
+        birthday: '1990-01-01',
+        location: 'New York, USA',
+        occupation: 'Software Engineer',
       },
     }));
 
     const destination = saveOnboardingSettings({
       channels: ['telegram'],
-      telegramToken: '123456:token',
+      telegramToken: 'YOUR_BOT_TOKEN',
       provider: 'ollama',
       providerApiToken: '',
     }, {
@@ -318,23 +321,23 @@ describe('onboarding settings draft', () => {
 
     expect(destination).toBe(join(appRoot, SETTINGS_FILENAME));
     expect(JSON.parse(readFileSync(destination, 'utf-8'))).toEqual({
-      TEMP_FOLDER: './temp',
+      temp_folder: './temp',
       heartbeat: {
-        ENABLED: true,
+        enabled: true,
       },
       channels: {
         telegram: {
-          ENABLED: true,
-          CHAT_ID: '',
-          USE_POLLING: true,
-          BOT_TOKEN: '123456:token',
+          enabled: true,
+          chat_id: 'YOUR_CHAT_ID',
+          use_polling: true,
+          bot_token: 'YOUR_BOT_TOKEN',
         },
       },
       ai: {
-        PROVIDER: 'ollama',
-        BASE_URL: 'http://localhost:11434',
-        API_TOKEN: '',
-        MODEL: 'gemma4:e4b',
+        provider: 'ollama',
+        base_url: 'http://localhost:11434',
+        api_token: '',
+        model: 'gemma4:e4b',
       },
       personal_information: {
       },

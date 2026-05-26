@@ -13,7 +13,8 @@ const ONBOARDING_COMMANDS = [
 ];
 
 const SUPPORTED_CHANNELS = ['telegram', 'discord'] as const;
-const SUPPORTED_PROVIDERS = ['ollama', 'openai', 'anthropic', 'deepseek'] as const;
+const SUPPORTED_PROVIDERS = ['ollama', 'nvidia', 'anthropic', 'deepseek'] as const;
+const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 const BOOLEAN_OPTIONS = ['true', 'false'] as const;
 const EXAMPLE_SETTINGS_FILENAME = 'settings.example.json';
 export const SETTINGS_FILENAME = 'settings.json';
@@ -35,6 +36,7 @@ export type OnboardingStep =
   | 'channels'
   | 'telegramToken'
   | 'provider'
+  | 'providerModel'
   | 'providerUrl'
   | 'providerApiToken'
   | 'personalInformation'
@@ -51,6 +53,7 @@ export interface OnboardingAnswers {
   channels: OnboardingChannel[];
   telegramToken?: string;
   provider: OnboardingProvider;
+  providerModel?: string;
   providerUrl?: string;
   providerApiToken?: string;
   personalInfo?: {
@@ -134,6 +137,17 @@ const STEP_DEFINITIONS: readonly StepDefinition[] = [
       if (skippedSteps.has('providerApiToken')) return 'empty';
       if (!hasAnswer(answers, 'providerApiToken')) return undefined;
       return 'configured';
+    },
+  },
+  {
+    key: 'providerModel',
+    label: 'Model',
+    description: 'Set the model name to use (or press Enter/skip to keep the default).',
+    placeholder: 'z-ai/glm-5.1',
+    optional: true,
+    getValue: (answers, skippedSteps) => {
+      if (skippedSteps.has('providerModel')) return 'default';
+      return answers.providerModel;
     },
   },
   {
@@ -475,6 +489,9 @@ export class Onboard {
 
       case 'provider':
         this.answers.provider = parseProvider(normalized);
+        if (this.answers.provider === 'nvidia' && !this.answers.providerUrl) {
+          this.answers.providerUrl = NVIDIA_BASE_URL;
+        }
         this.notice = `Captured provider: ${this.answers.provider}.`;
         this.pickerStep = undefined;
         break;
@@ -488,6 +505,12 @@ export class Onboard {
       case 'providerApiToken':
         this.answers.providerApiToken = normalized;
         this.notice = normalized ? 'Captured provider API token.' : 'Provider API token left empty.';
+        this.skippedSteps.delete(step);
+        break;
+
+      case 'providerModel':
+        this.answers.providerModel = normalized;
+        this.notice = `Captured model: ${normalized}.`;
         this.skippedSteps.delete(step);
         break;
 
@@ -536,6 +559,18 @@ export class Onboard {
     if (isComplete(this.answers, this.skippedSteps)) {
       const savedPath = saveOnboardingSettings(this.answers);
       this.notice = `${this.notice} Saved settings draft to ${savedPath}.`;
+      ctx.redraw();
+      setTimeout(() => {
+        ctx.println('');
+        ctx.println('✅ Onboarding complete! Your settings have been saved.');
+        ctx.println(`   → ${savedPath}`);
+        ctx.println('');
+        ctx.println('Run the agent with:  pnpm start');
+        ctx.println('');
+        ctx.rl.close();
+        process.exit(0);
+      }, 80);
+      return;
     }
 
     const nextStep = getCurrentStepFromState(this.answers, this.skippedSteps);
@@ -603,6 +638,9 @@ export class Onboard {
         break;
       case 'providerApiToken':
         delete this.answers.providerApiToken;
+        break;
+      case 'providerModel':
+        delete this.answers.providerModel;
         break;
       case 'telegramToken':
         delete this.answers.telegramToken;
@@ -852,6 +890,9 @@ export class Onboard {
 
       case 'provider':
         this.answers.provider = parseProvider(selectedOption);
+        if (this.answers.provider === 'nvidia' && !this.answers.providerUrl) {
+          this.answers.providerUrl = NVIDIA_BASE_URL;
+        }
         this.notice = `Captured provider: ${this.answers.provider}.`;
         this.pickerStep = undefined;
         return;
@@ -864,6 +905,7 @@ export class Onboard {
 
       case 'providerUrl':
       case 'providerApiToken':
+      case 'providerModel':
       case 'telegramToken':
       case 'personalName':
       case 'personalGender':
@@ -1332,7 +1374,6 @@ export function buildOnboardingSettings(
   telegram.enabled = usesTelegram;
   telegram.bot_token = usesTelegram ? (answers.telegramToken ?? '') : '';
   telegram.use_polling = true;
-  telegram.chat_id = '';
 
   if (answers.channels.includes('discord')) {
     const discord = getOrCreateRecord(channels, 'discord');
@@ -1343,7 +1384,9 @@ export function buildOnboardingSettings(
 
   const ai = getOrCreateRecord(payload, 'ai');
   ai.provider = answers.provider;
-  ai.api_token = answers.providerApiToken ?? '';
+  if (answers.providerModel) {
+    ai.model = answers.providerModel;
+  }
   if (answers.providerUrl) {
     ai.base_url = answers.providerUrl;
   }
