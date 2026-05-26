@@ -21,3 +21,5 @@ temp/*
 !temp/.gitkeep
 reports/
 .stryker-tmp/
+
+coverage/
