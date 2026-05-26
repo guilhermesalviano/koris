@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { defaultColors } from '../../../../assistant-tui/src/colors';
-import { startSpinner } from '../../../../assistant-tui/src/spinner';
+import { defaultColors } from '../../../src/tui/colors';
+import { startSpinner } from '../../../src/tui/spinner';
 
 describe('startSpinner', () => {
   afterEach(() => {

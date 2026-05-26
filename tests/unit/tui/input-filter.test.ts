@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createInputFilter } from '../../src/input-filter';
+import { createInputFilter } from '../../../src/tui/input-filter';
 
 async function collectFilterOutput(chunks: string[]) {
   const line = vi.fn<(dir: 'up' | 'down') => void>();

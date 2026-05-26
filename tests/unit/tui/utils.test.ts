@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { emitTerminalBell, isAbortError, normalizeCommandResult } from '../../src/utils';
+import { emitTerminalBell, isAbortError, normalizeCommandResult } from '../../../src/tui/utils';
 
 describe('utils', () => {
   afterEach(() => {
