@@ -83,7 +83,8 @@ class NvidiaAIProvider implements AIProvider {
       if (!choice) throw new Error('NVIDIA response missing choices');
 
       const msg = choice.message;
-      if (msg?.tool_calls?.length && !msg?.content?.trim()) {
+      // Use finish_reason to detect tool calls — model may return both content and tool_calls.
+      if (choice.finish_reason === 'tool_calls' && msg?.tool_calls?.length) {
         this.logger.debug('Tool calls in NVIDIA non-stream response', { count: msg.tool_calls.length });
         return JSON.stringify({ tool_calls: msg.tool_calls });
       }
@@ -135,6 +136,7 @@ class NvidiaAIProvider implements AIProvider {
       const toolCallAccumulator = new Map<number, ToolCallAccumulator>();
       let streamInThinking = false;
       let producedAnswer = false;
+      const textBuffer: string[] = [];
 
       bumpIdle();
       for await (const chunk of this.readSSE(body, bumpIdle)) {
@@ -181,19 +183,14 @@ class NvidiaAIProvider implements AIProvider {
           }
         }
 
-        // Regular content
+        // Buffer text content — we must wait for finish_reason to know if tools follow.
         if (delta.content) {
-          producedAnswer = true;
-          totalCharsYielded += delta.content.length;
-          yield delta.content;
+          textBuffer.push(delta.content);
         }
 
-        // Flush tool calls on finish
-        if (choice.finish_reason === 'tool_calls' || choice.finish_reason === 'stop') {
-          if (streamInThinking) {
-            yield THINK_END;
-            streamInThinking = false;
-          }
+        if (choice.finish_reason === 'tool_calls') {
+          // Tool call response: discard any buffered text, yield only tool call JSON.
+          if (streamInThinking) { yield THINK_END; streamInThinking = false; }
 
           if (toolCallAccumulator.size > 0) {
             const toolCalls = Array.from(toolCallAccumulator.values());
@@ -201,6 +198,18 @@ class NvidiaAIProvider implements AIProvider {
             producedAnswer = true;
             totalCharsYielded += json.length;
             yield json;
+          }
+          break;
+        }
+
+        if (choice.finish_reason === 'stop' || choice.finish_reason === 'length' || choice.finish_reason === 'content_filter') {
+          // Text response: flush buffered content.
+          if (streamInThinking) { yield THINK_END; streamInThinking = false; }
+
+          for (const t of textBuffer) {
+            producedAnswer = true;
+            totalCharsYielded += t.length;
+            yield t;
           }
           break;
         }
@@ -267,7 +276,7 @@ class NvidiaAIProvider implements AIProvider {
     if (!choice) throw new Error('NVIDIA response missing choices');
 
     const msg = choice.message;
-    if (msg?.tool_calls?.length && !msg?.content?.trim()) {
+    if (choice.finish_reason === 'tool_calls' && msg?.tool_calls?.length) {
       return JSON.stringify({ tool_calls: msg.tool_calls });
     }
 
