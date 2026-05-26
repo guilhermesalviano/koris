@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { defaultColors } from '../../src/colors';
+import { defaultColors } from '../../../src/tui/colors';
 import {
   applyInlineMarkdown,
   buildBeautifulPrompt,
@@ -8,8 +8,8 @@ import {
   defaultFormatThinking,
   isAsyncIterable,
   splitThinking,
-} from '../../src/formatting';
-import type { TuiContext } from '../../src/types';
+} from '../../../src/tui/formatting';
+import type { TuiContext } from '../../../src/tui/types';
 
 const ctx = { colors: defaultColors } as TuiContext;
 

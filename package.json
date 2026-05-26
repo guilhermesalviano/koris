@@ -1,19 +1,62 @@
 {
-  "name": "koris-agent-monorepo",
-  "private": true,
-  "packageManager": "pnpm@8.5.1",
+  "name": "koris-agent",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/src/app.js",
+  "bin": {
+    "koris-agent": "dist/src/app.js"
+  },
+  "files": [
+    "dist",
+    "public",
+    "skills"
+  ],
+  "packageManager": "pnpm@10.18.3",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
-    "build": "turbo run build",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
-    "test:coverage": "turbo run test:coverage --",
-    "test:mutation": "turbo run test:mutation --",
-    "dev": "turbo run dev --filter=koris-agent",
-    "dev:tui": "turbo run dev:tui --filter=koris-agent",
-    "start": "turbo run start --filter=koris-agent",
-    "start:tui": "turbo run start:tui --filter=koris-agent"
+    "validate": "tsx src/validate-settings.ts",
+    "onboard": "node dist/src/onboard.js",
+    "app": "node dist/src/app.js",
+    "clean": "rm -rf dist",
+    "build": "pnpm run clean && tsc --project tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:mutation": "stryker run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guilhermesalviano/koris-agent.git"
+  },
+  "keywords": [],
+  "author": "guilhermesalviano",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/guilhermesalviano/koris-agent/issues"
+  },
+  "homepage": "https://github.com/guilhermesalviano/koris-agent#readme",
+  "dependencies": {
+    "better-sqlite3": "^12.9.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "gray-matter": "^4.0.3",
+    "p-limit": "^7.3.0",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
-    "turbo": "^2.9.12"
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.6.2",
+    "@vitest/coverage-v8": "4.1.5",
+    "@vitest/ui": "^4.1.5",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
   }
 }
