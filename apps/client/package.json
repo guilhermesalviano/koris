@@ -3,6 +3,14 @@
   "version": "1.0.0",
   "description": "",
   "main": "dist/src/app.js",
+  "bin": {
+    "koris-agent": "dist/src/app.js"
+  },
+  "files": [
+    "dist",
+    "public",
+    "skills"
+  ],
   "packageManager": "pnpm@10.18.3",
   "engines": {
     "node": ">=24.0.0"
