@@ -40,6 +40,7 @@
   },
   "homepage": "https://github.com/guilhermesalviano/koris-agent#readme",
   "dependencies": {
+    "@guilhermesalviano/telegram-bot": "^0.1.2",
     "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

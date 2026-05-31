@@ -1,4 +1,4 @@
-import type { InlineKeyboardMarkup, TelegramMessage } from 'assistant-telegram-bot';
+import type { InlineKeyboardMarkup, TelegramBot, TelegramMessage } from '@guilhermesalviano/telegram-bot';
 import type { ChannelDefinition } from '../../src/channels';
 import { ADAPTERS } from '../../src/channels';
 import type { ILogger } from '../../src/infrastructure/logger';
@@ -9,11 +9,6 @@ import { config } from '../../src/config';
 
 const TYPING_INTERVAL_MS = 5_000;
 const TELEGRAM_MESSAGE_LIMIT = 4_000;
-
-interface TelegramBotClient {
-  sendChatAction(chatId: number, action: 'typing'): Promise<unknown>;
-  sendMessage(chatId: number, text: string, options?: Record<string, unknown>): Promise<unknown>;
-}
 
 interface ITelegramChannel {
   handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void>;
@@ -30,10 +25,11 @@ interface TelegramChannelStartOptions {
 
 interface TelegramPluginOptions {
   token: string;
+  enabled: boolean;
 }
 
 class TelegramChannel implements ITelegramChannel {
-  constructor(private readonly bot?: TelegramBotClient) {}
+  constructor(private readonly bot?: TelegramBot) {}
 
   async handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void> {
     const { id: chatId } = msg.chat;
@@ -158,13 +154,13 @@ class TelegramChannel implements ITelegramChannel {
     return /can't parse entities/i.test(error.message);
   }
 
-  private async getBotClient(): Promise<TelegramBotClient> {
+  private async getBotClient(): Promise<TelegramBot> {
     if (this.bot) {
       return this.bot;
     }
 
-    const { getBot } = await import('assistant-telegram-bot');
-    return getBot() as TelegramBotClient;
+    const { getBot } = await import('@guilhermesalviano/telegram-bot');
+    return getBot();
   }
 }
 
@@ -175,7 +171,7 @@ class TelegramChannelFactory {
 
   static async start(options: TelegramChannelStartOptions): Promise<{ channel: ITelegramChannel; stop: () => void }> {
     const channel = new TelegramChannel();
-    const { initBot } = await import('assistant-telegram-bot');
+    const { initBot } = await import('@guilhermesalviano/telegram-bot');
 
     const bot = initBot({
       token: options.token,
@@ -224,7 +220,7 @@ async function sendWithApproval(
 function createTelegramAdapter(options: TelegramPluginOptions): ChannelDefinition {
   return {
     name: 'telegram',
-    enabled: () => options.token.length > 0,
+    enabled: () => options.enabled && options.token.length > 0,
     start: (logger: ILogger, agent: IAgent) => {
       let stopFn: (() => void) | null = null;
 
@@ -269,6 +265,7 @@ export {
 export function create(): Plugin {
   return createTelegramPlugin({
     token: config.CHANNELS.TELEGRAM.BOT_TOKEN,
+    enabled: config.CHANNELS.TELEGRAM.ENABLED,
   });
 }
 
