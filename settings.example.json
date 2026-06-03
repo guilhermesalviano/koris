@@ -7,7 +7,7 @@
   },
   "gateway_host": "http://localhost:3000",
   "heartbeat": {
-    "enabled": true,
+    "enabled": false,
     "active_hours": {
       "start": "08:00",
       "end": "22:00"

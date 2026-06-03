@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TelegramMessage } from 'assistant-telegram-bot';
+import type { TelegramMessage } from '@guilhermesalviano/telegram-bot';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../../src/constants/thinking';
 import { handleMessage } from '../../../../plugins/telegram';
 
@@ -8,7 +8,7 @@ const bot = vi.hoisted(() => ({
   sendMessage: vi.fn(),
 }));
 
-vi.mock('assistant-telegram-bot', () => ({
+vi.mock('@guilhermesalviano/telegram-bot', () => ({
   getBot: () => bot,
   initBot: vi.fn(),
 }));
