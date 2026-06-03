@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@guilhermesalviano/telegram-bot':
+        specifier: ^0.1.2
+        version: 0.1.2
       better-sqlite3:
         specifier: ^12.9.0
         version: 12.10.0
@@ -388,6 +391,10 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@guilhermesalviano/telegram-bot@0.1.2':
+    resolution: {integrity: sha512-yuJjiRBDMoXK9XowpkbhJrk7cEUOjWFgutXIW3uOR70blWXNvgVi4PXiHME6I22O79pAO9dGAXr0nCxaETnecg==}
+    engines: {node: '>=20.0.0'}
 
   '@inquirer/ansi@2.0.6':
     resolution: {integrity: sha512-I/INw4sHGlVZ/afZOckpLiDP9SmbMl1g/GCqeHjLw1Afw/0PlRs2tRFgTGWmdI0hoNuWZn3y2iHNmG1vyECyQQ==}
@@ -2198,6 +2205,8 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.0':
     optional: true
+
+  '@guilhermesalviano/telegram-bot@0.1.2': {}
 
   '@inquirer/ansi@2.0.6': {}
 
