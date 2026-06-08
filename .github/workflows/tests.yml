@@ -133,7 +133,7 @@ jobs:
 
       - name: Upload coverage reports
         if: steps.check-coverage.outputs.found == 'true'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: ./apps/client/coverage/coverage-final.json
           flags: unittests
