@@ -81,7 +81,6 @@ class Agent implements IAgent {
       ask,
       answer,
       type,
-      logger: this.logger,
       channel: this.channel,
       memoryService: this.memoryService,
     };

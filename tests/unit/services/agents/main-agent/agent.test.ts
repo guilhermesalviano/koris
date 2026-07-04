@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Agent } from '../../../../../src/services/agents/main-agent/agent';
-import { config } from '../../../../../src/config';
+import { applyTestConfigDefaults } from '../../../../helpers/test-config';
 import type { ILogger } from '../../../../../src/infrastructure/logger';
 
 function makeLogger(): ILogger {
@@ -36,7 +36,6 @@ function makeAgent(channel = 'tui', sessionId = 'session-1') {
 describe('Agent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    Object.defineProperty(config.AI.SUMMARIZER, 'ENABLED', { value: true, configurable: true });
   });
 
   it('handles slash commands without calling the manager', async () => {
@@ -110,17 +109,25 @@ describe('Agent', () => {
   });
 
   it('does not trigger the summarizer when disabled in config', async () => {
-    const originalEnabled = config.AI.SUMMARIZER.ENABLED;
-    Object.defineProperty(config.AI.SUMMARIZER, 'ENABLED', { value: false, configurable: true });
+    applyTestConfigDefaults({ summarizerEnabled: false });
 
-    try {
-      const { agent, deps } = makeAgent();
-      await agent.handle('question');
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(deps.summarizerWorker.handler).not.toHaveBeenCalled();
-    } finally {
-      Object.defineProperty(config.AI.SUMMARIZER, 'ENABLED', { value: originalEnabled, configurable: true });
-    }
+    const { agent, deps } = makeAgent();
+    await agent.handle('question');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(deps.summarizerWorker.handler).not.toHaveBeenCalled();
+  });
+
+  it('logs when background summarizer processing fails', async () => {
+    const { agent, logger, deps } = makeAgent();
+    deps.summarizerWorker.handler.mockRejectedValue(new Error('summarizer down'));
+
+    await agent.handle('question');
+    await vi.waitFor(() => {
+      expect(logger.error).toHaveBeenCalledWith(
+        'Background summarizer failed',
+        expect.objectContaining({ err: expect.any(Error) }),
+      );
+    });
   });
 
   it('coerces non-string input before processing', async () => {

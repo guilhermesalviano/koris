@@ -33,7 +33,7 @@ class Heartbeat implements ISubAgent<Date> {
 
     const [ start, end ] = this.activeHoursHelper();
 
-    if (date < start || date > end) {
+    if (!this.isWithinActiveHours(date, start, end)) {
       this.logger.info(`Heartbeat skipped: Current time (${date.toLocaleTimeString()}) is outside of active hours (${start.toLocaleTimeString()} - ${end.toLocaleTimeString()}).`);
       return;
     }
@@ -116,6 +116,20 @@ class Heartbeat implements ISubAgent<Date> {
     end.setHours(endHour, endMinute, 0, 0);
 
     return [start, end];
+  }
+
+  /** Supports same-day windows (08:00–22:00) and overnight windows (22:00–06:00). */
+  isWithinActiveHours(date: Date, start: Date, end: Date): boolean {
+    const toMinutes = (value: Date) => value.getHours() * 60 + value.getMinutes();
+    const current = toMinutes(date);
+    const startMinutes = toMinutes(start);
+    const endMinutes = toMinutes(end);
+
+    if (startMinutes <= endMinutes) {
+      return current >= startMinutes && current <= endMinutes;
+    }
+
+    return current >= startMinutes || current <= endMinutes;
   }
 
   formatDateStamp(date: Date): string {

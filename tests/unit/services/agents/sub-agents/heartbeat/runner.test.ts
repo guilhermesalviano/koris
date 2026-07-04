@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { config } from '../../../../../../src/config';
+import { applyTestConfigDefaults } from '../../../../../helpers/test-config';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
 
 const heartbeatHandler = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
@@ -26,7 +26,6 @@ describe('HeartbeatSingleton', () => {
     vi.clearAllMocks();
     resetSingleton();
     vi.useFakeTimers();
-    Object.defineProperty(config.HEARTBEAT, 'ENABLED', { value: true, configurable: true });
     heartbeatHandler.mockResolvedValue(undefined);
   });
 
@@ -36,20 +35,15 @@ describe('HeartbeatSingleton', () => {
   });
 
   it('does not schedule ticks when heartbeat is disabled', () => {
-    const originalEnabled = config.HEARTBEAT.ENABLED;
-    Object.defineProperty(config.HEARTBEAT, 'ENABLED', { value: false, configurable: true });
+    applyTestConfigDefaults({ heartbeatEnabled: false });
 
-    try {
-      const logger = makeLogger();
-      const runner = HeartbeatSingleton.getInstance(logger, 1000, { sendMessage: vi.fn() } as never);
-      runner.start();
+    const logger = makeLogger();
+    const runner = HeartbeatSingleton.getInstance(logger, 1000, { sendMessage: vi.fn() } as never);
+    runner.start();
 
-      vi.advanceTimersByTime(5000);
-      expect(HeartbeatFactory.create).not.toHaveBeenCalled();
-      expect(logger.info).toHaveBeenCalledWith('Heartbeat disabled by configuration.');
-    } finally {
-      Object.defineProperty(config.HEARTBEAT, 'ENABLED', { value: originalEnabled, configurable: true });
-    }
+    vi.advanceTimersByTime(5000);
+    expect(HeartbeatFactory.create).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith('Heartbeat disabled by configuration.');
   });
 
   it('runs the heartbeat agent on each interval tick', async () => {
