@@ -20,6 +20,7 @@
     "onboard": "node dist/src/onboard.js",
     "app": "node dist/src/app.js",
     "clean": "rm -rf dist",
+    "clear:memory": "rm memory/database.*",
     "build": "pnpm run clean && tsc --project tsconfig.json",
     "lint": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
