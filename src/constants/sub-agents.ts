@@ -28,7 +28,7 @@ Distill this interaction into 1 sentence (max 3). Raw text only — no quotes, n
 - Preserve all IDs, names, codes, dates, and entities exactly as written.
 - Compress complex data into single descriptors (e.g. "rainy", "sunny").
 - Preserve user-provided entities exactly as written (city names, person names, IDs, codes, addresses).
-- Include information about who(identifier) and which channel was used in the conversation to facilitate understanding.
+- Include information about who(which human) and where(which channel) was used in the conversation to facilitate understanding.
 
 Example: User requested technical support for ID-992 and Assistant provided the firmware update link.
 
