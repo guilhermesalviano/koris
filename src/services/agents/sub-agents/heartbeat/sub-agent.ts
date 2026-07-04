@@ -153,4 +153,4 @@ class HeartbeatFactory {
   }
 }
 
-export { HeartbeatFactory };
+export { Heartbeat, HeartbeatFactory };
