@@ -1,5 +1,5 @@
 import { IContextRepository, ContextRepositoryFactory } from './context';
-import type { AIChatRequest, AIToolDefinition } from '../types/provider';
+import type { AIChatRequest, AIToolDefinition } from '../types/chat';
 import { IToolsRepository, ToolsRepositoryFactory } from './tools';
 import { Message, MessageRole } from '../types/messages';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';

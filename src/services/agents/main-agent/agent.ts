@@ -7,12 +7,11 @@ import { IMessageService, MessageServiceFactory } from '../../message-service';
 import { ConversationWorkerFactory } from '../../workers/conversation-worker';
 import { SummarizerFactory } from '../sub-agents/summarizer/sub-agent';
 import { IMemoryService, MemoryServiceFactory } from '../../memory-service';
-import { IManager, ManagerFactory } from './manager';
+import { IManager, ManagerFactory } from '../sub-agents/manager';
 import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import { MemoryType } from '../../../types/memory';
 import { IWorker } from '../../../types/workers';
 import { ISubAgent } from '../../../types/agents';
-import { stripInternalStreamMarkers } from '../../../utils/stream-markers';
 import { config } from '../../../config';
 
 interface IAgent {
@@ -52,32 +51,14 @@ class Agent implements IAgent {
       options: { ...options },
     });
 
-    if (typeof response !== 'string') {
-      return this.persistAssistantStream(response, safeMessage);
-    }
+    // if (typeof response !== 'string') {
+    //   return this.persistAssistantStream(response, safeMessage);
+    // }
 
     this.historyHelper(safeMessage, response);
     this.summarizerHelper(safeMessage, response);
 
     return response;
-  }
-
-  private async *persistAssistantStream(
-    stream: AsyncGenerator<string>,
-    ask: string,
-  ): AsyncGenerator<string> {
-    let fullResponse = '';
-
-    for await (const chunk of stream) {
-      fullResponse += chunk;
-      yield chunk;
-    }
-
-    const cleanResponse = stripInternalStreamMarkers(fullResponse);
-    if (cleanResponse.length > 0) {
-      this.historyHelper(ask, cleanResponse);
-      this.summarizerHelper(ask, cleanResponse);
-    }
   }
 
   private historyHelper(ask: string, answer: string) {

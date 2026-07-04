@@ -1,5 +1,5 @@
 import { ILogger } from '../../../infrastructure/logger';
-import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/provider';
+import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/chat';
 
 class MockAIProvider implements AIProvider {
   readonly name: string;

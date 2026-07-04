@@ -6,15 +6,15 @@ import { LearnerWorkerFactory } from '../../workers/learner-worker';
 import { FIRST_PROMPT_HELPER, SKILL_READY_PROMPT } from '../../../constants';
 import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../../constants/thinking';
 import { replacePlaceholders } from '../../../utils/prompt';
-import { MessageProviderStreamFactory } from '../../chat/message-provider-stream';
 import type { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import type { IMessageService } from '../../message-service';
 import type { ILogger } from '../../../infrastructure/logger';
 import type { Message } from '../../../entities/message';
-import type { IMessageProvider } from '../../../types/provider';
+import type { IChatService } from '../../../types/chat';
 import type { LoopContext } from '../../../types/context';
 import type { ToolCall } from '../../../types/tools';
 import type { IWorker } from '../../../types/workers';
+import { ChatServiceFactory } from '../../chat/chat-service';
 
 interface ManagerArgs {
   userMessage: string;
@@ -33,7 +33,7 @@ class Manager implements IManager {
     private logger: ILogger,
     public name: string,
     private toolsQueue: IToolsQueue,
-    private messageProvider: IMessageProvider
+    private ChatService: IChatService
   ) { }
 
   async run(args: ManagerArgs): Promise<ProcessedMessage> {
@@ -50,18 +50,18 @@ class Manager implements IManager {
     };
 
     const prompt = replacePlaceholders(FIRST_PROMPT_HELPER, { v1: userMessage });
-    const streamResult = await this.messageProvider.handler(prompt, channel, options, messageHistory);
+    const streamResult = await this.ChatService.handler(prompt, channel, options, messageHistory);
 
     // Non-streaming path (Telegram, Web, non-Ollama).
-    if (!this.isAsyncGen(streamResult)) {
+    // if (!this.isAsyncGen(streamResult)) {
       const responseText = normalizeResponse(streamResult);
       const callbacks = extractToolCalls(responseText);
       if (callbacks.length === 0) return responseText;
       return this.dispatchToolCalls(callbacks, userMessage, messageHistory, ctx);
-    }
+    // }
 
-    // Streaming path (TUI+Ollama): stream thinking, detect and dispatch.
-    return this.streamingDispatch(streamResult, userMessage, messageHistory, ctx);
+    // // Streaming path (TUI+Ollama): stream thinking, detect and dispatch.
+    // return this.streamingDispatch(streamResult, userMessage, messageHistory, ctx);
   }
 
   /**
@@ -85,7 +85,7 @@ class Manager implements IManager {
       await learner.run({ toolCalls: toLearn, userMessage, messageHistory, ctx });
 
       const skillPrompt = replacePlaceholders(SKILL_READY_PROMPT, { v1: userMessage });
-      const aiResponse = await this.messageProvider.handler(skillPrompt, ctx.channel, ctx.options, ctx.message.getHistory());
+      const aiResponse = await this.ChatService.handler(skillPrompt, ctx.channel, ctx.options, ctx.message.getHistory());
       const responseText = await this.resolveToString(aiResponse);
       const allToolCalls = extractToolCalls(responseText);
 
@@ -106,67 +106,6 @@ class Manager implements IManager {
     ctx.onProgress(`Execution phase: ${toExecute.length} tool(s) - ${toExecute.map(c => c.name).join(' - ')}`);
     const executor = ExecutorWorkerFactory.create(this.logger);
     return executor.run({ toolCalls: toExecute, userMessage, messageHistory, ctx });
-  }
-
-  /**
-   * Streaming dispatch: streams thinking in real-time while buffering content
-   * to decide whether the model is answering directly (text) or using tools.
-   */
-  private async *streamingDispatch(
-    gen: AsyncGenerator<string>,
-    userMessage: string,
-    messageHistory: Message[],
-    ctx: LoopContext,
-  ): AsyncGenerator<string> {
-    let inThinking = false;
-    let pastThinking = false;
-    const contentBuffer: string[] = [];
-    let streamingText = false;
-
-    for await (const chunk of gen) {
-      // Thinking phase: always yield immediately for real-time display.
-      if (chunk === THINK_START) { inThinking = true; yield chunk; continue; }
-      if (chunk === THINK_END)   { inThinking = false; pastThinking = true; yield chunk; continue; }
-      if (inThinking) { yield chunk; continue; }
-
-      // First content chunk without a prior thinking block.
-      if (!pastThinking) pastThinking = true;
-
-      // Text already decided: stream directly.
-      if (streamingText) { yield chunk; continue; }
-
-      contentBuffer.push(chunk);
-
-      // Peek at accumulated content to decide text vs tool calls.
-      const accumulated = contentBuffer.join('').trimStart();
-      if (accumulated.length > 0 && !accumulated.startsWith('{')) {
-        // Looks like prose - flush buffer and continue streaming.
-        streamingText = true;
-        for (const b of contentBuffer) yield b;
-        contentBuffer.length = 0;
-      }
-    }
-
-    // Stream finished.
-    if (streamingText) return;
-
-    // Buffered content might be tool calls.
-    const fullContent = contentBuffer.join('');
-    if (!fullContent.trim()) return;
-
-    const callbacks = extractToolCalls(fullContent);
-    if (callbacks.length === 0) {
-      // Wasn't a tool call after all (e.g. text starting with '{') - yield as-is.
-      yield* contentBuffer;
-      return;
-    }
-
-    const result = await this.dispatchToolCalls(callbacks, userMessage, messageHistory, ctx);
-    if (typeof result === 'string') {
-      if (result.trim()) { yield RESPONSE_ANCHOR; yield result; }
-      return;
-    }
-    if (this.isAsyncGen(result)) { yield RESPONSE_ANCHOR; yield* result; return; }
   }
 
   private isAsyncGen(val: unknown): val is AsyncGenerator<string> {
@@ -192,9 +131,9 @@ class Manager implements IManager {
 
 class ManagerFactory {
   static create(logger: ILogger): IWorker {
-    const messageProvider = MessageProviderStreamFactory.create(logger);
+    const ChatService = ChatServiceFactory.create(logger);
     const toolsQueue = ToolsQueueFactory.create(logger);
-    return new Manager(logger, 'Manager', toolsQueue, messageProvider);
+    return new Manager(logger, 'Manager', toolsQueue, ChatService);
   }
 }
 

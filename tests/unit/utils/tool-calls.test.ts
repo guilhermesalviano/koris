@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { extractToolCalls, normalizeResponse, shouldSkipToolCall } from '../../../src/utils/tool-calls';
+import { extractToolCalls, extractJson, looksLikeToolCallJson, normalizeResponse, shouldSkipToolCall } from '../../../src/utils/tool-calls';
 import { Message } from '../../../src/entities/message';
 import { ILogger } from '../../../src/infrastructure/logger';
 
@@ -33,6 +33,53 @@ describe('normalizeResponse', () => {
 
   it('serializes null', () => {
     expect(normalizeResponse(null)).toBe('null');
+  });
+});
+
+describe('extractJson', () => {
+  it('returns pure JSON as-is', () => {
+    expect(extractJson('{"tool_calls":[]}')).toBe('{"tool_calls":[]}');
+  });
+
+  it('strips markdown json code block', () => {
+    const input = '```json\n{"tool_calls":[]}\n```';
+    expect(extractJson(input)).toBe('{"tool_calls":[]}');
+  });
+
+  it('strips plain markdown code block', () => {
+    const input = '```\n{"tool_calls":[]}\n```';
+    expect(extractJson(input)).toBe('{"tool_calls":[]}');
+  });
+
+  it('extracts JSON embedded in surrounding text', () => {
+    const input = 'Sure, I will run this: {"tool_calls":[]} done.';
+    expect(extractJson(input)).toBe('{"tool_calls":[]}');
+  });
+
+  it('returns null for plain text with no JSON', () => {
+    expect(extractJson('just some text')).toBeNull();
+  });
+
+  it('returns null for empty string', () => {
+    expect(extractJson('')).toBeNull();
+  });
+});
+
+describe('looksLikeToolCallJson', () => {
+  it('returns true for text starting with {', () => {
+    expect(looksLikeToolCallJson('{"tool_calls":[]}')).toBe(true);
+  });
+
+  it('returns true for text starting with ```', () => {
+    expect(looksLikeToolCallJson('```json\n{}\n```')).toBe(true);
+  });
+
+  it('returns true even with leading whitespace', () => {
+    expect(looksLikeToolCallJson('  {"tool_calls":[]}')).toBe(true);
+  });
+
+  it('returns false for plain prose', () => {
+    expect(looksLikeToolCallJson('The answer is 42')).toBe(false);
   });
 });
 
@@ -119,6 +166,22 @@ describe('extractToolCalls', () => {
     const result = extractToolCalls(JSON.stringify(payload));
     expect(result).toHaveLength(2);
     expect(result.map(r => r.name)).toEqual(['tool_a', 'tool_b']);
+  });
+
+  it('extracts tool calls from markdown-wrapped JSON', () => {
+    const payload = { tool_calls: [{ function: { name: 'tool_a', arguments: { a: 1 } } }] };
+    const input = '```json\n' + JSON.stringify(payload) + '\n```';
+    const result = extractToolCalls(input);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('tool_a');
+  });
+
+  it('extracts tool calls from JSON embedded in surrounding text', () => {
+    const payload = { tool_calls: [{ function: { name: 'tool_b', arguments: {} } }] };
+    const input = 'I will do this now: ' + JSON.stringify(payload) + ' let me know if you need more.';
+    const result = extractToolCalls(input);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('tool_b');
   });
 });
 
