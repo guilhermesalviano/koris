@@ -41,11 +41,13 @@
   "homepage": "https://github.com/guilhermesalviano/koris-agent#readme",
   "dependencies": {
     "@guilhermesalviano/telegram-bot": "^0.1.2",
+    "@whiskeysockets/baileys": "7.0.0-rc13",
     "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "gray-matter": "^4.0.3",
     "p-limit": "^7.3.0",
+    "qrcode-terminal": "^0.12.0",
     "winston": "^3.19.0"
   },
   "devDependencies": {
@@ -54,6 +56,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
     "@types/node": "^25.6.2",
+    "@types/qrcode-terminal": "^0.12.2",
     "@vitest/coverage-v8": "4.1.5",
     "@vitest/ui": "^4.1.5",
     "tsx": "^4.21.0",
