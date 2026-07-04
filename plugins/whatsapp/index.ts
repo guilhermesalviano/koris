@@ -22,7 +22,7 @@ interface WhatsAppPluginOptions {
 }
 
 interface IWhatsAppChannel {
-  handleMessage(agent: IAgent, jid: string, text: string): Promise<void>;
+  handleMessage(agent: IAgent, jid: string, name: string, text: string): Promise<void>;
   sendText(jid: string, text: string): Promise<void>;
 }
 
@@ -101,8 +101,11 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
       const text = extractText(msg);
       if (!text) continue;
 
+      const name = msg.pushName;
+      if (!name) continue;
+
       const channel = new WhatsAppChannel(sock, options.mentionId, options.logger);
-      void channel.handleMessage(options.agent, jid, text).catch((err: Error) => {
+      void channel.handleMessage(options.agent, jid, name, text).catch((err: Error) => {
         options.logger.warn(`WhatsApp message handling error: ${err.message}`);
       });
     }
@@ -148,7 +151,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
     private readonly logger?: ILogger,
   ) {}
 
-  async handleMessage(agent: IAgent, jid: string, text: string): Promise<void> {
+  async handleMessage(agent: IAgent, jid: string, name: string, text: string): Promise<void> {
     try {
       if (jid.endsWith('@g.us')) {
         const mention = `@${this.mentionId}`;
@@ -161,7 +164,9 @@ class WhatsAppChannel implements IWhatsAppChannel {
         if (!isMentioned) return;
       }
 
-      const response = await agent.handle(text);
+      const prompt = `Message from ${name} on WhatsApp: ${text}`;
+
+      const response = await agent.handle(prompt);
       const resolved = await this.resolveResponse(response);
       await this.sendText(jid, resolved);
     } catch (error) {
@@ -237,8 +242,8 @@ class WhatsAppChannelFactory {
 
 const whatsappChannel = WhatsAppChannelFactory.create();
 
-async function handleMessage(agent: IAgent, jid: string, text: string): Promise<void> {
-  await whatsappChannel.handleMessage(agent, jid, text);
+async function handleMessage(agent: IAgent, jid: string, name: string, text: string): Promise<void> {
+  await whatsappChannel.handleMessage(agent, jid, name, text);
 }
 
 async function sendText(jid: string, text: string): Promise<void> {
