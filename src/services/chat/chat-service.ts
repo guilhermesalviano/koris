@@ -1,36 +1,27 @@
-import { getAIProvider } from "../providers";
+import { createAIProvider } from "../providers";
 import { escapeTelegramMarkdown, isAbortError } from "../../utils/telegram";
 import { ILogger } from "../../infrastructure/logger";
-import { PromptRepositoryFactory } from "../../repositories/prompt";
+import { IPromptRepository, PromptRepositoryFactory } from "../../repositories/prompt";
 import { ProcessedMessage, ProcessOptions } from "../../types/agents";
 import { DatabaseServiceFactory } from "../../infrastructure/db-sqlite";
-import type { IChatService } from "../../types/chat";
+import { AICompletionService, IAICompletionService } from "../ai-completion-service";
+import type { AIResponse, IChatService } from "../../types/chat";
 import type { Message } from "../../entities/message";
 
 class ChatService implements IChatService {
   constructor(
-    private logger: ILogger,
+    private readonly completionService: IAICompletionService,
+    private readonly promptRepository: IPromptRepository,
   ) { }
 
-  async handler(
+  async complete(
     message: string,
     channel: string,
     options?: ProcessOptions,
     messageHistory?: Message[]
-  ): Promise<ProcessedMessage> {
-    const provider = getAIProvider(this.logger);
-
-    /**
-     * Todo:
-     * passa prompt repository as dependency
-     */
-    const db = DatabaseServiceFactory.create();
-    const promptRepository = PromptRepositoryFactory.create(db, this.logger);
-    
+  ): Promise<AIResponse> {
     const messagesHistory = messageHistory?.map(m => ({ role: m.role, content: m.content }));
-
-    // to fix: probaly, assistant messages is not saving im this prompt build... Its not good.
-    const promptPayload = promptRepository.build({ 
+    const promptPayload = this.promptRepository.build({
       userMessage: message,
       channel,
       toolsEnabled: options?.toolsEnabled,
@@ -38,23 +29,42 @@ class ChatService implements IChatService {
     });
 
     try {
-      return await provider.chat(promptPayload, { signal: options?.signal });
+      return await this.completionService.complete(promptPayload, { signal: options?.signal });
     } catch (err) {
       if (options?.signal?.aborted || isAbortError(err)) {
         throw err;
       }
       const detail = err instanceof Error ? err.message : String(err);
-      return channel === 'telegram'
+      const text = channel === 'telegram'
         ? `I received your message: "${escapeTelegramMarkdown(message)}"\n\n(AI provider error: ${escapeTelegramMarkdown(detail)})`
         : `I received your message: "${message}"\n\n(AI provider error: ${detail})`;
+      return { kind: 'message', text, finishReason: 'unknown' };
     }
+  }
+
+  async handler(
+    message: string,
+    channel: string,
+    options?: ProcessOptions,
+    messageHistory?: Message[]
+  ): Promise<ProcessedMessage> {
+    const response = await this.complete(message, channel, options, messageHistory);
+    if (response.kind === 'message') return response.text;
+    return JSON.stringify({
+      tool_calls: response.calls.map(call => ({
+        function: { name: call.name, arguments: call.arguments },
+      })),
+    });
   }
 }
 
 class ChatServiceFactory {
   static create(logger: ILogger): IChatService {
-    return new ChatService(logger);
+    const db = DatabaseServiceFactory.create();
+    const promptRepository = PromptRepositoryFactory.create(db, logger);
+    const completionService = new AICompletionService(createAIProvider(logger), logger);
+    return new ChatService(completionService, promptRepository);
   }
 }
 
-export { ChatServiceFactory };
+export { ChatService, ChatServiceFactory };

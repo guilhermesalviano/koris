@@ -3,11 +3,11 @@ import { DatabaseServiceFactory } from "../../../../infrastructure/db-sqlite";
 import { HeartbeatRepositoryFactory, IHeartbeatRepository } from "../../../../repositories/heartbeat";
 import { isCronDue } from "../../../../utils/heartbeat";
 import { IPromptRepository, PromptRepositoryFactory } from "../../../../repositories/prompt";
-import { getAIProvider } from "../../../providers";
+import { createAIProvider } from "../../../providers";
 import { replacePlaceholders } from "../../../../utils/prompt";
+import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
 import { HEARTBEAT_PROMPT } from "../../../../constants";
 import type { ILogger } from "../../../../infrastructure/logger";
-import { extractToolCalls, normalizeResponse } from "../../../../utils/tool-calls";
 import { IToolsQueue, ToolsQueue } from "../../../tools-queue";
 import { ExecutorWorkerFactory } from "../../../workers/executor-worker";
 import { ISubAgent } from "../../../../types/agents";
@@ -15,19 +15,20 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { AgnosticExecutionToolFactory } from "../../../tools";
 import { IChannelsManager } from "../../../../channels";
+import type { IWorker } from "../../../../types/workers";
 
-class Heartbeat implements ISubAgent {
+class Heartbeat implements ISubAgent<Date> {
   constructor(
     private logger: ILogger,
     private promptRepository: IPromptRepository,
     private heartbeatRepository: IHeartbeatRepository,
     private toolsQueue: IToolsQueue, 
     private channelsManager: IChannelsManager,
+    private completionService: IAICompletionService,
+    private executorWorker: IWorker,
   ) { }
 
   async handler(date: Date): Promise<void> {
-    const provider = getAIProvider(this.logger);
-    const executorWorker = ExecutorWorkerFactory.create(this.logger);
     const tasks = this.heartbeatRepository.getAll();
 
     const [ start, end ] = this.activeHoursHelper();
@@ -69,32 +70,24 @@ class Heartbeat implements ISubAgent {
 
         // this.logger.debug(`heartbeat prompt value ${JSON.stringify(payload)}`);
       
-        const providerResult = await provider.chat(payload);
-
-        let executorResult = '';
-        if (!this.isAsyncGen(providerResult)) {
-          const responseText = normalizeResponse(providerResult);
-          const toExecute = extractToolCalls(responseText);
-
-          if (toExecute.length === 0) {
-            executorResult = responseText;
-          } else {
-            const executed = await executorWorker.run({
-              toolCalls: toExecute,
-              userMessage: task.task,
-              messageHistory: [],
-              ctx: {
-                channel: 'tui',
-                toolsQueue: this.toolsQueue,
-                signal: new AbortController().signal,
-                onProgress: (progress: string) => this.logger.info(progress),
-                options: { toolsEnabled: true },
-              },
-            });
-            executorResult = await this.toText(executed);
-          }
+        const response = await this.completionService.complete(payload);
+        let result: string;
+        if (response.kind === 'message') {
+          result = response.text;
+        } else {
+          result = await this.executorWorker.run({
+            toolCalls: response.calls,
+            userMessage: task.task,
+            messageHistory: [],
+            ctx: {
+              channel: 'tui',
+              toolsQueue: this.toolsQueue,
+              signal: new AbortController().signal,
+              onProgress: (progress: string) => this.logger.info(progress),
+              options: { toolsEnabled: true },
+            },
+          });
         }
-        const result = executorResult || providerResult;
         this.saveTaskResult({ taskId: task.id, date, result });
 
         this.logger.info(`Heartbeat: Task "${task.id}" executed. Result: ${result}`);
@@ -112,22 +105,6 @@ class Heartbeat implements ISubAgent {
     }
   }
 
-  isAsyncGen(val: unknown): val is AsyncGenerator<string> {
-    return typeof val === 'object' && val !== null && Symbol.asyncIterator in val;
-  }
-
-  async toText(value: string | AsyncGenerator<string>): Promise<string> {
-    if (typeof value === 'string') {
-      return value;
-    }
-
-    let fullText = '';
-    for await (const chunk of value) {
-      fullText += chunk;
-    }
-
-    return fullText;
-  }
 
   activeHoursHelper(): Date[] {
     const start = new Date();
@@ -170,7 +147,9 @@ class HeartbeatFactory {
     const agnosticExecutionTool = AgnosticExecutionToolFactory.create();
     const toolsQueue = new ToolsQueue(logger, agnosticExecutionTool);
 
-    return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, channelsManager);
+    const completionService = new AICompletionService(createAIProvider(logger), logger);
+    const executorWorker = ExecutorWorkerFactory.create(logger);
+    return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, channelsManager, completionService, executorWorker);
   }
 }
 

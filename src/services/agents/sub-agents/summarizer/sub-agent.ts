@@ -1,13 +1,14 @@
 import { IMemoryService } from "../../../memory-service";
 import type { ILogger } from "../../../../infrastructure/logger";
-import { getAIProvider } from "../../../providers";
+import { createAIProvider } from "../../../providers";
 import { MemoryType } from "../../../../types/memory";
+import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
 import { SUMMARIZATION_PROMPT } from "../../../../constants";
 import { replacePlaceholders } from "../../../../utils/prompt";
 import { beginFooterActivity } from "../../../../utils/footer-activity";
 import { ISubAgent } from "../../../../types/agents";
 
-interface SummarizerWorkerProps {
+export interface SummarizerWorkerProps {
   sessionId: string,
   ask: string,
   answer: string,
@@ -16,9 +17,10 @@ interface SummarizerWorkerProps {
   memoryService: IMemoryService,
 }
 
-class Summarizer implements ISubAgent {
+class Summarizer implements ISubAgent<SummarizerWorkerProps> {
   constructor(
-    private logger: ILogger,
+    private readonly logger: ILogger,
+    private readonly completionService: IAICompletionService,
   ) { }
 
   async handler(
@@ -26,17 +28,17 @@ class Summarizer implements ISubAgent {
   ): Promise<void> {
     const endFooterActivity = beginFooterActivity('summarizer');
     this.logger.info(`Summarizer worker started for session ${props.sessionId} in ${props.channel}`);
-    const provider = getAIProvider(this.logger);
-
     const prompt = replacePlaceholders(SUMMARIZATION_PROMPT, { v1: props.ask, v2: props.answer });
 
     try {
-      const content = await provider
-        .chat({ messages: [{ role: "user", content: prompt }] });
+      const response = await this.completionService.complete({ messages: [{ role: "user", content: prompt }] });
+      if (response.kind !== 'message') {
+        throw new Error('Summarizer received an unexpected tool-call response');
+      }
 
       const memory = {
         type: props.type,
-        content,
+        content: response.text,
       };
 
       props.memoryService.upsert(memory);
@@ -50,8 +52,9 @@ class Summarizer implements ISubAgent {
 }
 
 class SummarizerFactory {
-  static create(logger: ILogger) {
-    return new Summarizer(logger);
+  static create(logger: ILogger): Summarizer {
+    const completionService = new AICompletionService(createAIProvider(logger), logger);
+    return new Summarizer(logger, completionService);
   }
 }
 
