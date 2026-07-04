@@ -32,7 +32,7 @@ export interface AIProvider {
   healthCheck(): Promise<{ ok: boolean; detail?: string }>;
 }
 
-export interface IMessageProvider {
+export interface IChatService {
   handler(
     message: string,
     channel: string,

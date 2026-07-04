@@ -1,4 +1,4 @@
-import type { AIToolDefinition } from '../types/provider';
+import type { AIToolDefinition } from '../types/chat';
 import { Skill } from '../types/skills';
 
 interface GetAllOptions {

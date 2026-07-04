@@ -2,7 +2,7 @@ import type { CommandResult } from "../../types/commands";
 import { PLAN_PROMPT } from "../../constants";
 import { replacePlaceholders } from "../../utils/prompt";
 import { getAIProvider } from "../providers";
-import { AIChatRequest } from "../../types/provider";
+import { AIChatRequest } from "../../types/chat";
 import { ProcessOptions } from "../../types/agents";
 import { ILogger } from "../../infrastructure/logger";
 
