@@ -53,6 +53,7 @@ export const config = {
       ENABLED:     get('channels.whatsapp.enabled', 'false') === 'true',
       AUTH_FOLDER: get('channels.whatsapp.auth_folder', './.whatsapp_auth'),
       MENTION_ID:  get('channels.whatsapp.mention_id', ''),
+      WHITELIST:   get('channels.whatsapp.whitelist', ''),
     },
   },
   PERSONAL_INFORMATION: {
