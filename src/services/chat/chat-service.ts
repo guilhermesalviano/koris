@@ -4,10 +4,10 @@ import { ILogger } from "../../infrastructure/logger";
 import { PromptRepositoryFactory } from "../../repositories/prompt";
 import { ProcessedMessage, ProcessOptions } from "../../types/agents";
 import { DatabaseServiceFactory } from "../../infrastructure/db-sqlite";
-import type { IMessageProvider } from "../../types/provider";
+import type { IChatService } from "../../types/chat";
 import type { Message } from "../../entities/message";
 
-class MessageProvider implements IMessageProvider {
+class ChatService implements IChatService {
   constructor(
     private logger: ILogger,
   ) { }
@@ -36,10 +36,6 @@ class MessageProvider implements IMessageProvider {
       toolsEnabled: options?.toolsEnabled,
       messageHistory: messagesHistory
     });
-    
-    this.logger.debug('THE PROMPT PAYLOAD', {
-      promptPayload,
-    });
 
     try {
       return await provider.chat(promptPayload, { signal: options?.signal });
@@ -55,10 +51,10 @@ class MessageProvider implements IMessageProvider {
   }
 }
 
-class MessageProviderFactory {
-  static create(logger: ILogger): IMessageProvider {
-    return new MessageProvider(logger);
+class ChatServiceFactory {
+  static create(logger: ILogger): IChatService {
+    return new ChatService(logger);
   }
 }
 
-export { MessageProviderFactory };
+export { ChatServiceFactory };

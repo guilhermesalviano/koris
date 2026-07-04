@@ -1,4 +1,4 @@
-import type { AIProvider } from '../../types/provider';
+import type { AIProvider } from '../../types/chat';
 import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
 import { OllamaAIProviderFactory } from './ollama';

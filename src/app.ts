@@ -84,6 +84,8 @@ class Application implements IApplication {
 
     startTUI({
       title: 'koris-agent',
+      showHints: false,
+      placeholder: 'Type /help for commands.',
       onInput: async (input: string) => agent.handle(input),
     });
   }

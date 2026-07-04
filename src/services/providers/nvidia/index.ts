@@ -1,4 +1,4 @@
-import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/provider';
+import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/chat';
 import { config } from '../../../config';
 import { ILogger } from '../../../infrastructure/logger';
 import { THINK_START, THINK_END } from '../../../constants/thinking';

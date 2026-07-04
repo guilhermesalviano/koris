@@ -8,17 +8,15 @@ function normalizeResponse(response: unknown): string {
 }
 
 function shouldSkipToolCall(toolCall: ToolCall, messageHistory: Message[], logger?: ILogger): boolean {
-  // Skip apenas se for o tool "get_skill"
   if (toolCall.name !== 'get_skill') {
     return false;
   }
 
   const args = toolCall.arguments;
-  
   const skillName = args.name ?? args.skill_name;
 
   logger?.info(`Skill name: ${skillName}`);
-  
+
   if (!skillName || typeof skillName !== 'string') {
     return false;
   }
@@ -27,12 +25,61 @@ function shouldSkipToolCall(toolCall: ToolCall, messageHistory: Message[], logge
 }
 
 /**
+ * Extracts a JSON string from raw provider output.
+ * Handles: pure JSON, markdown code blocks (```json...```) and JSON embedded in surrounding text.
+ */
+function extractJson(text: string): string | null {
+  const trimmed = text.trim();
+
+  // 1. Markdown code block: ```json ... ``` or ``` ... ```
+  const markdownMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (markdownMatch) return markdownMatch[1].trim();
+
+  // 2. Pure JSON starting at beginning
+  if (trimmed.startsWith('{')) return trimmed;
+
+  // 3. JSON embedded somewhere in the text — find first { and match braces
+  const start = trimmed.indexOf('{');
+  if (start === -1) return null;
+
+  let depth = 0;
+  for (let i = start; i < trimmed.length; i++) {
+    if (trimmed[i] === '{') depth++;
+    else if (trimmed[i] === '}') {
+      depth--;
+      if (depth === 0) return trimmed.slice(start, i + 1);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Returns true if the accumulated streaming content looks like it could
+ * contain a tool call (pure JSON object or markdown-wrapped JSON).
+ */
+function looksLikeToolCallJson(text: string): boolean {
+  const t = text.trimStart();
+  return t.startsWith('{') || t.startsWith('```');
+}
+
+/**
  * Extract and parse tool calls from AI provider response.
- * Handles both string and object argument formats from different providers.
+ * Handles both string and object argument formats from different providers,
+ * as well as markdown-wrapped or text-embedded JSON.
  */
 function extractToolCalls(response: string, logger?: ILogger): ToolCall[] {
+  const json = extractJson(response);
+
+  if (!json) {
+    if (response.trim()) {
+      logger?.debug('No JSON found in provider response, treating as plain text');
+    }
+    return [];
+  }
+
   try {
-    const parsed = JSON.parse(response);
+    const parsed = JSON.parse(json);
 
     if (!parsed.tool_calls || !Array.isArray(parsed.tool_calls)) {
       return [];
@@ -67,7 +114,6 @@ function parseToolCall(tc: any, index: number, logger?: ILogger): ToolCall {
   const name = tc.function?.name || 'unknown';
   const rawArgs = tc.function?.arguments;
 
-  // Parse arguments if they're a JSON string (Ollama format)
   let parsedArgs: Record<string, unknown>;
 
   if (typeof rawArgs === 'string') {
@@ -80,14 +126,11 @@ function parseToolCall(tc: any, index: number, logger?: ILogger): ToolCall {
         index,
         arguments: rawArgs,
       });
-      // Fallback: wrap unparseable string in object
       parsedArgs = { raw: rawArgs };
     }
   } else if (typeof rawArgs === 'object' && rawArgs !== null) {
-    // Already an object (OpenAI/Anthropic format)
     parsedArgs = rawArgs as Record<string, unknown>;
   } else {
-    // Handle null, undefined, or other types
     logger?.warn('Unexpected arguments type', {
       toolName: name,
       index,
@@ -102,4 +145,4 @@ function parseToolCall(tc: any, index: number, logger?: ILogger): ToolCall {
   };
 }
 
-export { extractToolCalls, normalizeResponse, shouldSkipToolCall };
+export { extractToolCalls, extractJson, looksLikeToolCallJson, normalizeResponse, shouldSkipToolCall };
