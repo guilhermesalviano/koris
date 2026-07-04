@@ -23,3 +23,5 @@ reports/
 .stryker-tmp/
 
 coverage/
+
+.whatsapp_auth

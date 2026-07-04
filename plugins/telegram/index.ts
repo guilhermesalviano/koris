@@ -10,6 +10,8 @@ import { config } from '../../src/config';
 const TYPING_INTERVAL_MS = 5_000;
 const TELEGRAM_MESSAGE_LIMIT = 4_000;
 
+let botUsername: string | null = null;
+
 interface ITelegramChannel {
   handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void>;
   sendText(chatId: number, text: string): Promise<void>;
@@ -32,10 +34,15 @@ class TelegramChannel implements ITelegramChannel {
   constructor(private readonly bot?: TelegramBot) {}
 
   async handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void> {
-    const { id: chatId } = msg.chat;
-    const { text } = msg;
+    const { id: chatId, type: chatType } = msg.chat;
+    const { text, entities } = msg;
 
     if (!text) {
+      return;
+    }
+
+    const isGroup = chatType === 'group' || chatType === 'supergroup';
+    if (isGroup && !isBotMentioned(text, entities ?? [], botUsername)) {
       return;
     }
 
@@ -176,11 +183,19 @@ class TelegramChannelFactory {
     const bot = initBot({
       token: options.token,
       polling: true,
-      onMessage: (msg) => channel.handleMessage(options.agent, msg),
+      onMessage: (msg) => {
+        options.logger.debug(`[telegram] raw message received: ${JSON.stringify(msg)}`);
+        return channel.handleMessage(options.agent, msg);
+      },
       onPollingError: (error) => options.logger.warn(`Telegram polling error: ${error.message}`),
     });
 
-    options.logger.info('Telegram is ready!');
+    bot.getMe()
+      .then((me) => {
+        botUsername = me.username ?? null;
+        options.logger.info(`Telegram is ready! Bot username: @${botUsername ?? '(unknown)'}`);
+      })
+      .catch((err: Error) => options.logger.warn(`Failed to fetch bot info: ${err.message}`));
 
     return {
       channel,
@@ -215,6 +230,18 @@ async function sendWithApproval(
   callbackData: string,
 ): Promise<void> {
   await telegramChannel.sendWithApproval(logger, chatId, message, callbackData);
+}
+
+function isBotMentioned(
+  text: string,
+  entities: Array<{ type: string; offset: number; length: number }>,
+  username: string | null,
+): boolean {
+  if (!username) return false;
+  const target = `@${username.toLowerCase()}`;
+  return entities.some(
+    (e) => e.type === 'mention' && text.substring(e.offset, e.offset + e.length).toLowerCase() === target,
+  );
 }
 
 function createTelegramAdapter(options: TelegramPluginOptions): ChannelDefinition {
@@ -261,6 +288,11 @@ export {
   TelegramChannel,
   TelegramChannelFactory,
 };
+
+/** @internal — only for use in tests */
+export function _setBotUsernameForTesting(username: string | null): void {
+  botUsername = username;
+}
 
 export function create(): Plugin {
   return createTelegramPlugin({
