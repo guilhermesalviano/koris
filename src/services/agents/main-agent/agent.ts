@@ -13,6 +13,7 @@ import { MemoryType } from '../../../types/memory';
 import { IWorker } from '../../../types/workers';
 import { ISubAgent } from '../../../types/agents';
 import { stripInternalStreamMarkers } from '../../../utils/stream-markers';
+import { config } from '../../../config';
 
 interface IAgent {
   handle(message: unknown, options?: ProcessOptions): Promise<ProcessedMessage>;
@@ -92,6 +93,8 @@ class Agent implements IAgent {
   }
 
   private summarizerHelper(ask: string, answer: string, type: MemoryType = "summary") {
+    if (!config.AI.SUMMARIZER.ENABLED) return;
+
     const conversation = {
       sessionId: this.sessionId,
       ask,

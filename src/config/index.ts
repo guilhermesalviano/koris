@@ -38,6 +38,9 @@ export const config = {
       HARD_MS:   Number(get('ai.timeouts.hard_ms', String(20 * 60_000))),
       HEALTH_MS: Number(get('ai.timeouts.health_ms', String(5_000))),
     },
+    SUMMARIZER: {
+      ENABLED: get('ai.summarizer.enabled', 'true') === 'true',
+    },
   },
   CHANNELS: {
     TELEGRAM: {
@@ -45,6 +48,10 @@ export const config = {
       USE_POLLING: get('channels.telegram.use_polling', 'true') === 'true',
       BOT_TOKEN:   get('channels.telegram.bot_token', ''),
       CHAT_ID:     get('channels.telegram.chat_id', ''),
+    },
+    WHATSAPP: {
+      ENABLED:     get('channels.whatsapp.enabled', 'false') === 'true',
+      AUTH_FOLDER: get('channels.whatsapp.auth_folder', './.whatsapp_auth'),
     },
   },
   PERSONAL_INFORMATION: {
