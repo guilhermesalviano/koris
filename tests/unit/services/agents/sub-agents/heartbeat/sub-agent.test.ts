@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { Heartbeat } from '../../../../../../src/services/agents/sub-agents/heartbeat/sub-agent';
 import { config } from '../../../../../../src/config';
+import { applyTestConfigDefaults } from '../../../../../helpers/test-config';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
 
 function makeLogger(): ILogger {
@@ -78,6 +79,26 @@ describe('Heartbeat', () => {
     });
   });
 
+  describe('isWithinActiveHours', () => {
+    it('accepts times inside a same-day window', () => {
+      const { heartbeat } = makeHeartbeat();
+      const [start, end] = heartbeat.activeHoursHelper();
+
+      expect(heartbeat.isWithinActiveHours(localDate(12), start, end)).toBe(true);
+      expect(heartbeat.isWithinActiveHours(localDate(7), start, end)).toBe(false);
+    });
+
+    it('accepts times inside an overnight window', () => {
+      applyTestConfigDefaults({ heartbeatActiveHours: { start: '22:00', end: '06:00' } });
+      const { heartbeat } = makeHeartbeat();
+      const [start, end] = heartbeat.activeHoursHelper();
+
+      expect(heartbeat.isWithinActiveHours(localDate(23, 30), start, end)).toBe(true);
+      expect(heartbeat.isWithinActiveHours(localDate(3), start, end)).toBe(true);
+      expect(heartbeat.isWithinActiveHours(localDate(12), start, end)).toBe(false);
+    });
+  });
+
   describe('formatDateStamp', () => {
     it('formats dates as YYYY_MM_DD_HH_mm', () => {
       const { heartbeat } = makeHeartbeat();
@@ -99,20 +120,15 @@ describe('Heartbeat', () => {
     });
 
     it('writes the task result to a timestamped markdown file', () => {
+      applyTestConfigDefaults({ tempFolder: join('temp', 'heartbeat-tests') });
       const { heartbeat, logger } = makeHeartbeat();
       const date = new Date(2024, 0, 15, 10, 30, 0);
-      const originalTempFolder = config.TEMP_FOLDER;
-      Object.defineProperty(config, 'TEMP_FOLDER', { value: join('temp', 'heartbeat-tests'), configurable: true });
 
-      try {
-        heartbeat.saveTaskResult({ taskId: 'daily-check', date, result: '# report\nall good' });
+      heartbeat.saveTaskResult({ taskId: 'daily-check', date, result: '# report\nall good' });
 
-        const filePath = join(config.BASE_DIR, config.TEMP_FOLDER, 'daily-check_2024_01_15_10_30.md');
-        expect(readFileSync(filePath, 'utf-8')).toBe('# report\nall good');
-        expect(logger.info).toHaveBeenCalledWith(`Heartbeat: Task result saved to ${filePath}`);
-      } finally {
-        Object.defineProperty(config, 'TEMP_FOLDER', { value: originalTempFolder, configurable: true });
-      }
+      const filePath = join(config.BASE_DIR, config.TEMP_FOLDER, 'daily-check_2024_01_15_10_30.md');
+      expect(readFileSync(filePath, 'utf-8')).toBe('# report\nall good');
+      expect(logger.info).toHaveBeenCalledWith(`Heartbeat: Task result saved to ${filePath}`);
     });
   });
 
@@ -127,6 +143,25 @@ describe('Heartbeat', () => {
       expect(heartbeatRepository.getAll).toHaveBeenCalled();
       expect(completionService.complete).not.toHaveBeenCalled();
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('outside of active hours'));
+    });
+
+    it('runs tasks during overnight active hours', async () => {
+      applyTestConfigDefaults({ heartbeatActiveHours: { start: '22:00', end: '06:00' } });
+      const now = localDate(23, 30);
+      const { heartbeat, completionService, heartbeatRepository } = makeHeartbeat({
+        tasks: [{
+          id: 'night-check',
+          task: 'nightly job',
+          cronExpression: '30 23 * * *',
+          type: 'maintenance',
+        }],
+        completionResponse: { kind: 'message', text: 'night ok' },
+      });
+
+      await heartbeat.handler(now);
+
+      expect(completionService.complete).toHaveBeenCalled();
+      expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('night-check', now);
     });
 
     it('logs when there are no scheduled tasks', async () => {
@@ -208,6 +243,44 @@ describe('Heartbeat', () => {
         config.CHANNELS.TELEGRAM.CHAT_ID,
         'hi',
       );
+    });
+
+    it('continues executing remaining tasks when one task fails', async () => {
+      const now = localDate(9, 0);
+      const { heartbeat, logger, completionService, heartbeatRepository, channelsManager } = makeHeartbeat({
+        tasks: [
+          {
+            id: 'failing',
+            task: 'broken task',
+            cronExpression: '0 9 * * *',
+            type: 'report',
+          },
+          {
+            id: 'success',
+            task: 'healthy task',
+            cronExpression: '0 9 * * *',
+            type: 'report',
+          },
+        ],
+      });
+      completionService.complete
+        .mockRejectedValueOnce(new Error('model failed'))
+        .mockResolvedValueOnce({ kind: 'message', text: 'all good' });
+
+      await heartbeat.handler(now);
+
+      expect(completionService.complete).toHaveBeenCalledTimes(2);
+      expect(logger.error).toHaveBeenCalledWith(
+        'Heartbeat: Task "failing" failed.',
+        expect.objectContaining({ err: expect.any(Error) }),
+      );
+      expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('success', now);
+      expect(channelsManager.sendMessage).toHaveBeenCalledWith(
+        'telegram',
+        config.CHANNELS.TELEGRAM.CHAT_ID,
+        'all good',
+      );
+      expect(logger.info).toHaveBeenCalledWith('Heartbeat: Task "success" completed successfully.');
     });
 
     it('logs task failures without stopping other tasks', async () => {
