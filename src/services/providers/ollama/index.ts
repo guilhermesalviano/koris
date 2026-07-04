@@ -1,8 +1,9 @@
-import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/chat';
+import type { AIChatOptions, AIChatRequest, AIProvider, AIResponse } from '../../../types/chat';
 import { config } from '../../../config';
 import { ILogger } from '../../../infrastructure/logger';
 import { validateBaseUrl } from '../../../utils/provider';
 import { THINK_START, THINK_END } from '../../../constants/thinking';
+import { extractToolCalls } from '../../../utils/tool-calls';
 
 type OllamaChatChunk = {
   message?: {
@@ -28,6 +29,14 @@ class OllamaAIProvider implements AIProvider {
     const resolvedBaseUrl = (opts?.baseUrl ?? config.AI.BASE_URL).replace(/\/+$/, '');
     this.baseUrl = validateBaseUrl(resolvedBaseUrl, config.AI.ALLOW_REMOTE_BASE_URL);
     this.defaultModel = opts?.model ?? config.AI.MODEL;
+  }
+
+  async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
+    const text = await this.chat(request, options);
+    const calls = extractToolCalls(text, this.logger);
+    return calls.length > 0
+      ? { kind: 'tool_calls', calls, finishReason: 'tool_calls' }
+      : { kind: 'message', text, finishReason: 'stop' };
   }
 
   async chat(request: AIChatRequest, options?: AIChatOptions): Promise<string> {

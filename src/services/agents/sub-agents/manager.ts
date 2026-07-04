@@ -1,10 +1,8 @@
 
-import { extractToolCalls, normalizeResponse } from '../../../utils/tool-calls';
 import { IToolsQueue, ToolsQueueFactory } from '../../tools-queue';
 import { ExecutorWorkerFactory } from '../../workers/executor-worker';
 import { LearnerWorkerFactory } from '../../workers/learner-worker';
 import { FIRST_PROMPT_HELPER, SKILL_READY_PROMPT } from '../../../constants';
-import { THINK_START, THINK_END, RESPONSE_ANCHOR } from '../../../constants/thinking';
 import { replacePlaceholders } from '../../../utils/prompt';
 import type { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import type { IMessageService } from '../../message-service';
@@ -33,7 +31,9 @@ class Manager implements IManager {
     private logger: ILogger,
     public name: string,
     private toolsQueue: IToolsQueue,
-    private ChatService: IChatService
+    private ChatService: IChatService,
+    private learner: IWorker,
+    private executor: IWorker,
   ) { }
 
   async run(args: ManagerArgs): Promise<ProcessedMessage> {
@@ -50,18 +50,9 @@ class Manager implements IManager {
     };
 
     const prompt = replacePlaceholders(FIRST_PROMPT_HELPER, { v1: userMessage });
-    const streamResult = await this.ChatService.handler(prompt, channel, options, messageHistory);
-
-    // Non-streaming path (Telegram, Web, non-Ollama).
-    // if (!this.isAsyncGen(streamResult)) {
-      const responseText = normalizeResponse(streamResult);
-      const callbacks = extractToolCalls(responseText);
-      if (callbacks.length === 0) return responseText;
-      return this.dispatchToolCalls(callbacks, userMessage, messageHistory, ctx);
-    // }
-
-    // // Streaming path (TUI+Ollama): stream thinking, detect and dispatch.
-    // return this.streamingDispatch(streamResult, userMessage, messageHistory, ctx);
+    const response = await this.ChatService.complete(prompt, channel, options, messageHistory);
+    if (response.kind === 'message') return response.text;
+    return this.dispatchToolCalls(response.calls, userMessage, messageHistory, ctx);
   }
 
   /**
@@ -81,21 +72,14 @@ class Manager implements IManager {
     if (toLearn.length > 0) {
       const skillNames = toLearn.map(c => c.arguments.skill_name ?? c.arguments.name ?? c.name).join(', ');
       ctx.onProgress(`Learning phase: ${toLearn.length} skill(s) - ${skillNames}`);
-      const learner = LearnerWorkerFactory.create(this.logger);
-      await learner.run({ toolCalls: toLearn, userMessage, messageHistory, ctx });
+      await this.learner.run({ toolCalls: toLearn, userMessage, messageHistory, ctx });
 
       const skillPrompt = replacePlaceholders(SKILL_READY_PROMPT, { v1: userMessage });
-      const aiResponse = await this.ChatService.handler(skillPrompt, ctx.channel, ctx.options, ctx.message.getHistory());
-      const responseText = await this.resolveToString(aiResponse);
-      const allToolCalls = extractToolCalls(responseText);
+      const response = await this.ChatService.complete(skillPrompt, ctx.channel, ctx.options, ctx.message.getHistory());
+      if (response.kind === 'message') return response.text;
+      toExecute = response.calls.filter(cb => cb.name !== 'get_skill');
 
-      // Model answered directly from skill knowledge - no tool calls needed.
-      if (allToolCalls.length === 0) return responseText;
-
-      // Filter out any get_skill calls the model may have re-emitted after learning.
-      toExecute = allToolCalls.filter(cb => cb.name !== 'get_skill');
-
-      if (toExecute.length === 0) return responseText;
+      if (toExecute.length === 0) return '';
     }
 
     if (toExecute.length === 0) {
@@ -104,36 +88,18 @@ class Manager implements IManager {
     }
 
     ctx.onProgress(`Execution phase: ${toExecute.length} tool(s) - ${toExecute.map(c => c.name).join(' - ')}`);
-    const executor = ExecutorWorkerFactory.create(this.logger);
-    return executor.run({ toolCalls: toExecute, userMessage, messageHistory, ctx });
+    return this.executor.run({ toolCalls: toExecute, userMessage, messageHistory, ctx });
   }
 
-  private isAsyncGen(val: unknown): val is AsyncGenerator<string> {
-    return typeof val === 'object' && val !== null && Symbol.asyncIterator in val;
-  }
-
-  private async resolveToString(response: ProcessedMessage): Promise<string> {
-    if (this.isAsyncGen(response)) {
-      const chunks: string[] = [];
-      let inThinking = false;
-      for await (const chunk of response) {
-        if (chunk === THINK_START) { inThinking = true; continue; }
-        if (chunk === THINK_END)   { inThinking = false; continue; }
-        if (inThinking) continue;
-        if (chunk === RESPONSE_ANCHOR) continue;
-        chunks.push(chunk);
-      }
-      return chunks.join('');
-    }
-    return normalizeResponse(response);
-  }
 }
 
 class ManagerFactory {
-  static create(logger: ILogger): IWorker {
+  static create(logger: ILogger): IManager {
     const ChatService = ChatServiceFactory.create(logger);
     const toolsQueue = ToolsQueueFactory.create(logger);
-    return new Manager(logger, 'Manager', toolsQueue, ChatService);
+    const learner = LearnerWorkerFactory.create(logger);
+    const executor = ExecutorWorkerFactory.create(logger);
+    return new Manager(logger, 'Manager', toolsQueue, ChatService, learner, executor);
   }
 }
 
