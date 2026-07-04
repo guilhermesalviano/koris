@@ -20,6 +20,12 @@
       "use_polling": true,
       "bot_token": "YOUR_BOT_TOKEN",
       "chat_id": "YOUR_CHAT_ID"
+    },
+    "whatsapp": {
+      "enabled": false,
+      "whitelist": "mocknumber",
+      "auth_folder": "./.whatsapp_auth",
+      "mention_id": "1mocknumber"
     }
   },
   "ai": {
@@ -29,6 +35,9 @@
     "api_token": "",
     "model": "gemma4:e4b",
     "think_model": "gemma4:26b-a4b-it-q4_K_M",
+    "summarizer": {
+      "enabled": true
+    },
     "timeouts": {
       "idle_ms": 360000,
       "hard_ms": 1200000,

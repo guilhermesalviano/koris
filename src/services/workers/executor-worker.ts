@@ -1,9 +1,9 @@
 import { extractToolCalls, normalizeResponse } from "../../utils/tool-calls";
 import { TOOLS_RESULT_PROMPT } from "../../constants";
 import { replacePlaceholders } from "../../utils/prompt";
-import { MessageProviderFactory } from "../chat/message-provider";
+import { ChatServiceFactory } from "../chat/chat-service";
 import { IWorker } from "../../types/workers";
-import { IMessageProvider } from "../../types/provider";
+import { IChatService } from "../../types/chat";
 import { ILogger } from "../../infrastructure/logger";
 import type { ToolCall } from "../../types/tools";
 import type { LoopContext } from "../../types/context";
@@ -23,7 +23,7 @@ class ExecutorWorker implements IWorker {
   constructor(
     private logger: ILogger,
     public name: string,
-    private messageProvider: IMessageProvider
+    private ChatService: IChatService
   ) { }
 
   async run(args: ExecutorWorkerArgs): Promise<ProcessedMessage> {
@@ -56,7 +56,7 @@ class ExecutorWorker implements IWorker {
     this.logger.info(`Tool results: ${JSON.stringify(toolResults)}`);
 
     const synthesisPrompt = replacePlaceholders(TOOLS_RESULT_PROMPT, { v1: userMessage, v2: toolResults });
-    const response = await this.messageProvider.handler(
+    const response = await this.ChatService.handler(
       synthesisPrompt,
       ctx.channel,
       ctx.options,
@@ -84,8 +84,8 @@ class ExecutorWorker implements IWorker {
 
 class ExecutorWorkerFactory {
   static create(logger: ILogger): IWorker {
-    const messageProvider = MessageProviderFactory.create(logger);
-    return new ExecutorWorker(logger, 'executorWorker', messageProvider);
+    const ChatService = ChatServiceFactory.create(logger);
+    return new ExecutorWorker(logger, 'executorWorker', ChatService);
   }
 }
 
