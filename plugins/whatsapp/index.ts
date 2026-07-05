@@ -88,7 +88,9 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
         .split(",")
         .map(number => number.trim())
         .filter(Boolean)
-        .some(number => msg.key.participantAlt?.includes(number));
+        .some(number =>
+          msg.key.participantAlt?.includes(number) ||
+          msg.key.remoteJidAlt?.includes(number));
 
       if (!isWhitelisted) {
         options.logger.debug(`[whatsapp] message ignored: not from whitelisted number`);
