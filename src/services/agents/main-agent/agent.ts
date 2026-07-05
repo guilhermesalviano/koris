@@ -27,7 +27,7 @@ class Agent implements IAgent {
     private summarizerWorker: ISubAgent,
     private manager: IManager,
     private channel: string,
-    private sessionId: string,
+    private sessionService: ISessionService,
   ) { }
 
   async handle(message: string, options?: ProcessOptions): Promise<ProcessedMessage> {
@@ -63,7 +63,7 @@ class Agent implements IAgent {
 
   private historyHelper(ask: string, answer: string) {
     this.conversationWorker.run({
-      sessionId: this.sessionId,
+      sessionId: this.sessionService.getSession().id,
       ask,
       answer,
       channel: this.channel,
@@ -77,7 +77,7 @@ class Agent implements IAgent {
     if (!config.AI.SUMMARIZER.ENABLED) return;
 
     const conversation = {
-      sessionId: this.sessionId,
+      sessionId: this.sessionService.getSession().id,
       ask,
       answer,
       type,
@@ -94,9 +94,8 @@ class Agent implements IAgent {
 
 class AgentFactory {
   static create(logger: ILogger, channel: string, db: IDatabaseService, session: ISessionService): Agent {
-    const sessionId = session.getSession().id;
     const messageService = MessageServiceFactory.create(db, session);
-    const memoryService = MemoryServiceFactory.create(db, sessionId);
+    const memoryService = MemoryServiceFactory.create(db, session);
     const conversationWorker = ConversationWorkerFactory.create(logger, messageService);
     const summarizerWorker = SummarizerFactory.create(logger);
     const manager = ManagerFactory.create(logger);
@@ -109,7 +108,7 @@ class AgentFactory {
       summarizerWorker,
       manager,
       channel,
-      sessionId,
+      session,
     );
   }
 }

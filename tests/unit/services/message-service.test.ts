@@ -11,6 +11,7 @@ function makeRepo(messages: any[] = []) {
 function makeSessionSvc(id = 'sess-1') {
   return {
     getSession: vi.fn().mockReturnValue({ id }),
+    ensureActiveSession: vi.fn().mockReturnValue({ id }),
     updateCount: vi.fn(),
   };
 }
@@ -59,9 +60,28 @@ describe('MessageService', () => {
 
       expect(repo.save.mock.calls[0][0].role).toBe('assistant');
     });
+    it('calls session.ensureActiveSession before saving', () => {
+      const repo = makeRepo();
+      const session = makeSessionSvc();
+      const svc = new MessageService(repo as any, session as any);
+
+      svc.save({ role: 'user', content: 'msg' });
+
+      expect(session.ensureActiveSession).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('getHistory', () => {
+    it('calls session.ensureActiveSession before loading history', () => {
+      const repo = makeRepo([]);
+      const session = makeSessionSvc('sess-abc');
+      const svc = new MessageService(repo as any, session as any);
+
+      svc.getHistory();
+
+      expect(session.ensureActiveSession).toHaveBeenCalledTimes(1);
+    });
+
     it('returns messages from the repository for the session', () => {
       const fakeMessages = [{ id: 'm1' }, { id: 'm2' }];
       const repo = makeRepo(fakeMessages);

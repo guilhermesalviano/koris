@@ -20,6 +20,11 @@ function makeDeps() {
 function makeAgent(channel = 'tui', sessionId = 'session-1') {
   const logger = makeLogger();
   const deps = makeDeps();
+  const sessionService = {
+    getSession: vi.fn().mockReturnValue({ id: sessionId }),
+    ensureActiveSession: vi.fn().mockReturnValue({ id: sessionId }),
+    updateCount: vi.fn(),
+  };
   const agent = new Agent(
     logger,
     deps.messageService as never,
@@ -28,9 +33,9 @@ function makeAgent(channel = 'tui', sessionId = 'session-1') {
     deps.summarizerWorker as never,
     deps.manager as never,
     channel,
-    sessionId,
+    sessionService as never,
   );
-  return { agent, logger, deps };
+  return { agent, logger, deps, sessionService };
 }
 
 describe('Agent', () => {
@@ -73,6 +78,18 @@ describe('Agent', () => {
       channel: 'tui',
       message: deps.messageService,
       options: { onProgress, signal: controller.signal, toolsEnabled: true },
+    });
+  });
+
+  it('uses the current session id when session rotates', async () => {
+    const { agent, deps, sessionService } = makeAgent('tui', 'session-1');
+    sessionService.getSession.mockReturnValue({ id: 'session-2' });
+
+    await agent.handle('question');
+    await vi.waitFor(() => {
+      expect(deps.conversationWorker.run).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'session-2' }),
+      );
     });
   });
 

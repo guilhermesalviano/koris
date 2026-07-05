@@ -2,6 +2,7 @@ import { IDatabaseService } from "../infrastructure/db-sqlite";
 import { Memory } from "../entities/memory";
 import { MemoryType } from "../types/memory";
 import { IMemoryRepository, MemoryRepositoryFactory } from "../repositories/memory";
+import { ISessionService } from "./session-service";
 
 interface SaveMemoryProps {
   type: MemoryType;
@@ -19,16 +20,17 @@ interface IMemoryService {
 
 class MemoryService implements IMemoryService {
   private memoryRepository: IMemoryRepository;
-  private sessionId: string;
+  private sessionService: ISessionService;
 
-  constructor(memoryRepository: IMemoryRepository, sessionId: string) {
+  constructor(memoryRepository: IMemoryRepository, sessionService: ISessionService) {
     this.memoryRepository = memoryRepository;
-    this.sessionId = sessionId;
+    this.sessionService = sessionService;
   }
 
   save(props: SaveMemoryProps): void {
+    const sessionId = this.sessionService.getSession().id;
     const memory = new Memory({
-      sessionId: this.sessionId,
+      sessionId,
       type: props.type,
       content: props.content,
       embedding: props.embedding,
@@ -39,8 +41,9 @@ class MemoryService implements IMemoryService {
   }
 
   upsert(props: SaveMemoryProps): void {
+    const sessionId = this.sessionService.getSession().id;
     const existing = this.memoryRepository
-      .getBySessionId(this.sessionId)
+      .getBySessionId(sessionId)
       .find((m) => m.type === props.type);
 
     if (existing) {
@@ -62,7 +65,7 @@ class MemoryService implements IMemoryService {
   }
 
   getAll(): Memory[] {
-    return this.memoryRepository.getBySessionId(this.sessionId);
+    return this.memoryRepository.getBySessionId(this.sessionService.getSession().id);
   }
 
   private mergeContent(oldContent: string, newContent: string): string {
@@ -83,10 +86,10 @@ class MemoryService implements IMemoryService {
 }
 
 class MemoryServiceFactory {
-  public static create(db: IDatabaseService, sessionId: string): MemoryService {
+  public static create(db: IDatabaseService, sessionService: ISessionService): MemoryService {
     const memoryRepository = MemoryRepositoryFactory.create(db);
 
-    return new MemoryService(memoryRepository, sessionId);
+    return new MemoryService(memoryRepository, sessionService);
   }
 }
 
