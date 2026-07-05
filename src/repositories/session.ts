@@ -2,12 +2,43 @@ import { Session, SessionProps } from '../entities/session';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { camelToSnakeCase } from '../utils/fields';
 
+interface SessionRow {
+  id: string;
+  source: string;
+  started_at?: string;
+  ended_at?: string;
+  message_count?: number;
+  metadata?: string;
+}
+
 interface ISessionRepository {
   save(session: Session): void;
   update(id: string, updates: Partial<SessionProps>): void;
   findById(id: string): Session | null;
+  findLatestOpenBySource(source: string): Session | null;
   deleteExpired(): void;
   deleteById(id: string): void;
+}
+
+function mapRowToSession(row: SessionRow): Session {
+  let metadata: Record<string, unknown> = {};
+
+  if (row.metadata) {
+    try {
+      metadata = JSON.parse(row.metadata) as Record<string, unknown>;
+    } catch {
+      metadata = {};
+    }
+  }
+
+  return new Session({
+    id: row.id,
+    source: row.source,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    messageCount: row.message_count,
+    metadata,
+  });
 }
 
 class SessionRepository implements ISessionRepository {
@@ -48,15 +79,32 @@ class SessionRepository implements ISessionRepository {
   }
 
   findById(id: string): Session | null {
-    const row = this.db.get('SELECT * FROM sessions WHERE id = ?', [id]) as SessionProps | undefined;
+    const row = this.db.get('SELECT * FROM sessions WHERE id = ?', [id]) as SessionRow | undefined;
 
     if (!row) return null;
 
-    return new Session(row);
+    return mapRowToSession(row);
+  }
+
+  findLatestOpenBySource(source: string): Session | null {
+    const row = this.db.get(
+      `SELECT * FROM sessions
+       WHERE source = ? AND ended_at IS NULL
+       ORDER BY started_at DESC
+       LIMIT 1`,
+      [source],
+    ) as SessionRow | undefined;
+
+    if (!row) return null;
+
+    return mapRowToSession(row);
   }
 
   deleteExpired(): void {
-    this.db.run('DELETE FROM sessions WHERE ended_at IS NOT NULL AND ended_at < ?', [Date.now()]);
+    this.db.run(
+      'DELETE FROM sessions WHERE ended_at IS NOT NULL AND ended_at < ?',
+      [new Date().toISOString()],
+    );
   }
 
   deleteById(id: string): void {

@@ -19,6 +19,9 @@ export const config = {
   WEB_PORT:    Number(get('web_port', '3000')),
   BASE_DIR:    process.cwd(),
   GATEWAY_HOST: get('gateway_host', 'http://localhost:3000'),
+  SESSION: {
+    TTL_MS: Number(get('session.ttl_ms', String(30 * 60 * 1000))),
+  },
   HEARTBEAT: {
     ENABLED: get('heartbeat.enabled', 'true') === 'true',
     INTERVAL_MS: Number(get('heartbeat.interval_ms', (30 * 60 * 1000).toString())),
