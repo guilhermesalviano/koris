@@ -1,3 +1,5 @@
+import { USER_REQUEST_SECTION } from './prompt';
+
 export const HEARTBEAT_PROMPT = `
 <instructions>
   - Execute the '{v1}' defined in <task> below, or generate a reminder if applicable.
@@ -43,8 +45,10 @@ Respond with **only** a valid JSON object. No markdown fences, no explanation.
   "content": "<1 sentence, max 3>"
 }
 
-### DATA TO SUMMARIZE:
-User: {v1}
+### DATA TO SUMMARIZE
+(Human = the user; Assistant = Koris. In the Human line, "I/me" = the human and "you/your" = Koris.)
+
+Human: {v1}
 Assistant: {v2}
 `;
 
@@ -92,6 +96,5 @@ Respond with **only** a valid JSON object. No markdown fences, no explanation, n
 }
 \`\`\`
 
-### User request:
-{v1}
+${USER_REQUEST_SECTION}
 `;
