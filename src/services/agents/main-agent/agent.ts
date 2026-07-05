@@ -9,7 +9,6 @@ import { SummarizerFactory } from '../sub-agents/summarizer/sub-agent';
 import { IMemoryService, MemoryServiceFactory } from '../../memory-service';
 import { IManager, ManagerFactory } from '../sub-agents/manager';
 import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
-import { MemoryType } from '../../../types/memory';
 import { IWorker } from '../../../types/workers';
 import { ISubAgent } from '../../../types/agents';
 import { config } from '../../../config';
@@ -73,14 +72,13 @@ class Agent implements IAgent {
       );
   }
 
-  private summarizerHelper(ask: string, answer: string, type: MemoryType = "summary") {
+  private summarizerHelper(ask: string, answer: string) {
     if (!config.AI.SUMMARIZER.ENABLED) return;
 
     const conversation = {
       sessionId: this.sessionService.getSession().id,
       ask,
       answer,
-      type,
       channel: this.channel,
       memoryService: this.memoryService,
     };

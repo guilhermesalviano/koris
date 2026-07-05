@@ -1,18 +1,17 @@
 import { IMemoryService } from "../../../memory-service";
 import type { ILogger } from "../../../../infrastructure/logger";
 import { createAIProvider } from "../../../providers";
-import { MemoryType } from "../../../../types/memory";
 import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
 import { SUMMARIZATION_PROMPT } from "../../../../constants";
 import { replacePlaceholders } from "../../../../utils/prompt";
 import { beginFooterActivity } from "../../../../utils/footer-activity";
+import { parseSummarizerResponse } from "../../../../utils/summarizer-response";
 import { ISubAgent } from "../../../../types/agents";
 
 export interface SummarizerWorkerProps {
   sessionId: string,
   ask: string,
   answer: string,
-  type: MemoryType,
   channel: string,
   memoryService: IMemoryService,
 }
@@ -36,10 +35,7 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
         throw new Error('Summarizer received an unexpected tool-call response');
       }
 
-      const memory = {
-        type: props.type,
-        content: response.text,
-      };
+      const memory = parseSummarizerResponse(response.text);
 
       props.memoryService.upsert(memory);
       this.logger.info(`Summarizer worker completed for session ${props.sessionId}`);
