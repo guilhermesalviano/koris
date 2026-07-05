@@ -10,14 +10,12 @@ function makeProps(overrides: Partial<{
   sessionId: string;
   ask: string;
   answer: string;
-  type: 'summary' | 'fact';
   channel: string;
 }> = {}) {
   return {
     sessionId: 'session-1',
     ask: 'What is TypeScript?',
     answer: 'TypeScript is a typed superset of JavaScript.',
-    type: 'summary' as const,
     channel: 'tui',
     memoryService: { upsert: vi.fn() },
     ...overrides,
@@ -29,10 +27,13 @@ describe('Summarizer', () => {
     vi.clearAllMocks();
   });
 
-  it('stores the generated summary in memory', async () => {
+  it('stores parsed memory type and content from AI JSON', async () => {
     const logger = makeLogger();
     const completionService = {
-      complete: vi.fn().mockResolvedValue({ kind: 'message', text: 'TS adds static typing.' }),
+      complete: vi.fn().mockResolvedValue({
+        kind: 'message',
+        text: '{"type":"fact","content":"TS adds static typing."}',
+      }),
     };
     const summarizer = new Summarizer(logger, completionService as never);
     const props = makeProps();
@@ -43,10 +44,26 @@ describe('Summarizer', () => {
       messages: [{ role: 'user', content: expect.stringContaining('What is TypeScript?') }],
     });
     expect(props.memoryService.upsert).toHaveBeenCalledWith({
-      type: 'summary',
+      type: 'fact',
       content: 'TS adds static typing.',
     });
     expect(logger.info).toHaveBeenCalledWith('Summarizer worker completed for session session-1');
+  });
+
+  it('defaults to summary when AI returns plain text', async () => {
+    const logger = makeLogger();
+    const completionService = {
+      complete: vi.fn().mockResolvedValue({ kind: 'message', text: 'TS adds static typing.' }),
+    };
+    const summarizer = new Summarizer(logger, completionService as never);
+    const props = makeProps();
+
+    await summarizer.handler(props);
+
+    expect(props.memoryService.upsert).toHaveBeenCalledWith({
+      type: 'summary',
+      content: 'TS adds static typing.',
+    });
   });
 
   it('logs an error when the model returns tool calls', async () => {
@@ -84,21 +101,5 @@ describe('Summarizer', () => {
       'Failed to summarize for session session-1',
       expect.objectContaining({ error: expect.any(Error) }),
     );
-  });
-
-  it('persists the requested memory type', async () => {
-    const logger = makeLogger();
-    const completionService = {
-      complete: vi.fn().mockResolvedValue({ kind: 'message', text: 'remember this' }),
-    };
-    const summarizer = new Summarizer(logger, completionService as never);
-    const props = makeProps({ type: 'fact' });
-
-    await summarizer.handler(props);
-
-    expect(props.memoryService.upsert).toHaveBeenCalledWith({
-      type: 'fact',
-      content: 'remember this',
-    });
   });
 });

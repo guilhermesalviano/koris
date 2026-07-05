@@ -21,16 +21,27 @@ export const HEARTBEAT_PROMPT = `
 export const SUMMARIZATION_PROMPT = `
 ## Summarization
 
-Distill this interaction into 1 sentence (max 3). Raw text only — no quotes, no markdown.
+Analyze this interaction and store the most useful memory from it.
+
+### Memory types (choose one based on context):
+- summary: general distillation of what happened (default when nothing else fits)
+- fact: concrete factual information worth remembering (names, preferences, IDs, settings)
+- lesson: insight, rule, or how-to learned from the interaction
+- reminder: something the user should be reminded about later
 
 ### Rules:
 - Capture the user's intent and the assistant's resolution.
 - Preserve all IDs, names, codes, dates, and entities exactly as written.
 - Compress complex data into single descriptors (e.g. "rainy", "sunny").
-- Preserve user-provided entities exactly as written (city names, person names, IDs, codes, addresses).
-- Include information about who(which human) and where(which channel) was used in the conversation to facilitate understanding.
+- Include who (which human) and where (which channel) when relevant.
 
-Example: User requested technical support for ID-992 and Assistant provided the firmware update link.
+### Output format:
+Respond with **only** a valid JSON object. No markdown fences, no explanation.
+
+{
+  "type": "<summary|fact|lesson|reminder>",
+  "content": "<1 sentence, max 3>"
+}
 
 ### DATA TO SUMMARIZE:
 User: {v1}

@@ -117,7 +117,6 @@ describe('Agent', () => {
           sessionId: 'session-1',
           ask: 'question',
           answer: 'assistant reply',
-          type: 'summary',
           channel: 'tui',
           memoryService: deps.memoryService,
         }),
