@@ -49,6 +49,8 @@ class Agent implements IAgent {
       message: this.messageService,
       options: { ...options },
     });
+    
+    this.logger.info(`Processed message from ${this.channel}: "${previewMessage(safeMessage)}" => "${previewMessage(response)}"`);
 
     // if (typeof response !== 'string') {
     //   return this.persistAssistantStream(response, safeMessage);

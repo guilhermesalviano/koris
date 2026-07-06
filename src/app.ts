@@ -13,8 +13,8 @@ import { ChannelsSingleton, ADAPTERS, type IChannelsManager } from './channels';
 import { SHUTDOWN_SIGNALS } from './constants/tui';
 import { hasFlag, logError } from './utils/runtime';
 import { DatabaseServiceFactory } from './infrastructure/db-sqlite';
+import { HeartbeatRepositoryFactory } from './repositories/heartbeat';
 import { SessionServiceFactory } from './services/session-service';
-import { config } from './config';
 import { DashboardServerFactory, WebServerHandle } from './dashboard';
 import { createPlugins, buildRegistry } from '../plugins';
 
@@ -57,7 +57,7 @@ class Application implements IApplication {
     const agent = AgentFactory.create(this.logger, this.source, db, session);
     const registry = buildRegistry(createPlugins());
     const channels = ChannelsSingleton.getInstance(this.logger, agent, registry.collect(ADAPTERS));
-    const heartbeat = HeartbeatSingleton.getInstance(this.logger, config.HEARTBEAT.INTERVAL_MS, channels);
+    const heartbeat = HeartbeatSingleton.getInstance(this.logger, HeartbeatRepositoryFactory.create(db), channels);
 
     channels.startAll();
     heartbeat.start();

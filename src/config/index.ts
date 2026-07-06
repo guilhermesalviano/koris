@@ -57,6 +57,7 @@ export const config = {
       AUTH_FOLDER: get('channels.whatsapp.auth_folder', './.whatsapp_auth'),
       MENTION_ID:  get('channels.whatsapp.mention_id', ''),
       WHITELIST:   get('channels.whatsapp.whitelist', ''),
+      TARGET_JID:  get('channels.whatsapp.target_jid', ''),
     },
   },
   PERSONAL_INFORMATION: {

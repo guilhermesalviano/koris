@@ -1,5 +1,6 @@
 import { DatabaseServiceFactory } from '../../../infrastructure/db-sqlite';
 import { HeartbeatRepositoryFactory } from '../../../repositories/heartbeat';
+import { HeartbeatSingleton } from '../../../services/agents/sub-agents/heartbeat/runner';
 import type { ILogger } from '../../../infrastructure/logger';
 import type { ToolResult } from '../../../types/tools';
 import { getOptionalStringArg, getRequiredStringArg, isAllowedValue } from '../shared/runtime';
@@ -69,6 +70,7 @@ export async function updateTask(logger: ILogger, args: Record<string, unknown>)
       type: rawType as typeof TASK_TYPES[number] | undefined,
       cronExpression: cronExpression?.trim(),
     });
+    HeartbeatSingleton.getExistingInstance()?.reschedule();
 
     logger.info('Task updated', { id });
 

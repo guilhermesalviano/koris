@@ -84,9 +84,7 @@ class LoggerFactory {
     const options: LoggerOptions = {
       level: config.LOG_LEVEL || 'info',
       format: format.json(),
-      defaultMeta: {
-        environment: config.ENVIRONMENT,
-      },
+      defaultMeta: {},
       transports: activeTransports,
     };
 

@@ -5,6 +5,7 @@ import {
   hasSpecificHour,
   matchesCron,
   isCronDue,
+  nextCronFire,
 } from '../../../src/utils/heartbeat';
 
 describe('isValidCronExpression', () => {
@@ -185,5 +186,66 @@ describe('isCronDue', () => {
     const now = new Date(2024, 0, 15, 11, 0, 0);
     const since = new Date(2024, 0, 15, 8, 0, 0);
     expect(isCronDue('0 9 * * *', now, since)).toBe(true);
+  });
+});
+
+describe('nextCronFire', () => {
+  it('returns the next matching minute after the given date', () => {
+    const from = new Date(2024, 0, 15, 8, 30, 0);
+    const result = nextCronFire('0 9 * * *', from);
+    expect(result).not.toBeNull();
+    expect(result!.getHours()).toBe(9);
+    expect(result!.getMinutes()).toBe(0);
+    expect(result!.getDate()).toBe(15);
+  });
+
+  it('returns null when no match is found within 1 year', () => {
+    const from = new Date(2024, 0, 15, 0, 0, 0);
+    // A cron that will never match (Feb 30)
+    const result = nextCronFire('0 0 30 2 *', from);
+    expect(result).toBeNull();
+  });
+
+  it('returns the same day for a later time today', () => {
+    const from = new Date(2024, 0, 15, 8, 0, 0);
+    const result = nextCronFire('0 9 * * *', from);
+    expect(result).not.toBeNull();
+    expect(result!.getMonth()).toBe(0);
+    expect(result!.getDate()).toBe(15);
+  });
+
+  it('skips minutes before "from" time', () => {
+    const from = new Date(2024, 0, 15, 10, 0, 0);
+    const result = nextCronFire('0 9 * * *', from);
+    // 9:00 already passed, so next is next day at 9:00
+    expect(result).not.toBeNull();
+    expect(result!.getHours()).toBe(9);
+    expect(result!.getMinutes()).toBe(0);
+    expect(result!.getDate()).toBe(16);
+  });
+
+  it('matches step expressions', () => {
+    // */15 at 09:00 -> next match is at 09:15
+    const from = new Date(2024, 0, 15, 9, 0, 0);
+    const result = nextCronFire('*/15 * * * *', from);
+    expect(result).not.toBeNull();
+    expect(result!.getMinutes()).toBe(15);
+  });
+
+  it('matches day-of-week patterns', () => {
+    // 0 9 * * 1 = Mondays at 9am
+    const from = new Date(2024, 0, 14, 0, 0, 0); // Sunday
+    const result = nextCronFire('0 9 * * 1', from);
+    expect(result).not.toBeNull();
+    expect(result!.getDay()).toBe(1); // Monday
+    expect(result!.getHours()).toBe(9);
+    expect(result!.getMinutes()).toBe(0);
+  });
+
+  it('returns null for null-like impossible expression', () => {
+    // Every Feb 30 at 9am - impossible
+    const from = new Date(2024, 0, 1, 0, 0, 0);
+    const result = nextCronFire('0 9 30 2 *', from);
+    expect(result).toBeNull();
   });
 });
