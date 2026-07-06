@@ -1,6 +1,7 @@
 import { DatabaseServiceFactory } from '../../../infrastructure/db-sqlite';
 import { HeartbeatRepositoryFactory } from '../../../repositories/heartbeat';
 import { Heartbeat } from '../../../entities/heartbeat';
+import { HeartbeatSingleton } from '../../../services/agents/sub-agents/heartbeat/runner';
 import type { ILogger } from '../../../infrastructure/logger';
 import type { ToolResult } from '../../../types/tools';
 import { getRequiredStringArg, getOptionalStringArg, isAllowedValue } from '../shared/runtime';
@@ -56,6 +57,7 @@ export async function setTask(logger: ILogger, args: Record<string, unknown>): P
     const repo = HeartbeatRepositoryFactory.create(DatabaseServiceFactory.create());
     const heartbeat = new Heartbeat({ task, type: rawType as TaskType, cronExpression: cronExpression.trim() });
     repo.save(heartbeat);
+    HeartbeatSingleton.getExistingInstance()?.reschedule();
 
     logger.info('Task saved', { id: heartbeat.id, task, type: rawType, cronExpression });
 

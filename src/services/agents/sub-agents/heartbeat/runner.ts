@@ -3,19 +3,22 @@ import { IChannelsManager } from '../../../../channels';
 import type { ILogger } from '../../../../infrastructure/logger';
 import { HeartbeatFactory } from './sub-agent';
 import { beginFooterActivity } from '../../../../utils/footer-activity';
+import { nextCronFire } from '../../../../utils/heartbeat';
+import { IHeartbeatRepository } from '../../../../repositories/heartbeat';
 
 interface IHeartbeatRunner {
   start(): void;
   stop(): void;
+  reschedule(): void;
 }
 
 class HeartbeatRunner implements IHeartbeatRunner {
   private isRunning = false;
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private logger: ILogger,
-    private intervalMs: number,
+    private heartbeatRepository: IHeartbeatRepository,
     private channelsManager: IChannelsManager,
   ) {}
 
@@ -29,18 +32,54 @@ class HeartbeatRunner implements IHeartbeatRunner {
       return;
     }
 
-    this.timer = setInterval(() => {
-      void this.runOnce();
-    }, this.intervalMs);
+    this.scheduleNext();
   }
 
   stop(): void {
-    if (!this.timer) {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+  }
+
+  reschedule(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    if (config.HEARTBEAT.ENABLED) {
+      this.scheduleNext();
+    }
+  }
+
+  private scheduleNext(): void {
+    const tasks = this.heartbeatRepository.getAll();
+
+    if (tasks.length === 0) {
+      this.logger.info('Heartbeat: No scheduled tasks, waiting for new tasks to be added.');
       return;
     }
 
-    clearInterval(this.timer);
-    this.timer = null;
+    const now = new Date();
+    let earliest: Date | null = null;
+
+    for (const task of tasks) {
+      const since = task.lastRun ?? task.createdAt;
+      const from = since > now ? since : now;
+      const next = nextCronFire(task.cronExpression, from);
+      if (next && (!earliest || next.getTime() < earliest.getTime())) {
+        earliest = next;
+      }
+    }
+
+    if (!earliest) {
+      this.logger.info('Heartbeat: No future cron matches found for any task.');
+      return;
+    }
+
+    const delay = Math.max(0, earliest.getTime() - now.getTime());
+    this.timer = setTimeout(() => { void this.runOnce(); }, delay);
+    this.logger.info(`Next heartbeat scheduled at ${earliest.toISOString()} (in ${Math.round(delay / 1000)}s)`);
   }
 
   private async runOnce(): Promise<void> {
@@ -64,17 +103,22 @@ class HeartbeatRunner implements IHeartbeatRunner {
     } finally {
       endFooterActivity();
       this.isRunning = false;
+      this.scheduleNext();
     }
   }
 }
 
 class HeartbeatSingleton {
-  private static instance: IHeartbeatRunner;
+  private static instance: HeartbeatRunner | null = null;
 
-  static getInstance(logger: ILogger, intervalMs: number, channelsManager: IChannelsManager): IHeartbeatRunner {
+  static getInstance(logger: ILogger, heartbeatRepository: IHeartbeatRepository, channelsManager: IChannelsManager): HeartbeatRunner {
     if (!HeartbeatSingleton.instance) {
-      HeartbeatSingleton.instance = new HeartbeatRunner(logger, intervalMs, channelsManager);
+      HeartbeatSingleton.instance = new HeartbeatRunner(logger, heartbeatRepository, channelsManager);
     }
+    return HeartbeatSingleton.instance;
+  }
+
+  static getExistingInstance(): HeartbeatRunner | null {
     return HeartbeatSingleton.instance;
   }
 }
