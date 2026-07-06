@@ -1,5 +1,5 @@
 import { ILogger } from '../../../infrastructure/logger';
-import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/chat';
+import type { AIChatOptions, AIChatRequest, AIProvider, AIResponse } from '../../../types/chat';
 
 class MockAIProvider implements AIProvider {
   readonly name: string;
@@ -8,6 +8,10 @@ class MockAIProvider implements AIProvider {
   constructor(logger: ILogger, name: string = 'mock') {
     this.logger = logger;
     this.name = name;
+  }
+
+  async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
+    return { kind: 'message', text: await this.chat(request, options), finishReason: 'stop' };
   }
 
   async chat(request: AIChatRequest, _options?: AIChatOptions): Promise<string> {

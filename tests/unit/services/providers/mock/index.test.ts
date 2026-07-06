@@ -43,6 +43,19 @@ describe('MockAIProvider', () => {
     });
   });
 
+  it('returns a typed completion response', async () => {
+    const provider = new MockAIProvider(logger);
+    const response = await provider.complete({
+      messages: [{ role: 'user', content: 'typed' }],
+    });
+
+    expect(response).toEqual({
+      kind: 'message',
+      text: expect.stringContaining('typed'),
+      finishReason: 'stop',
+    });
+  });
+
   it('uses latest user message when there are multiple roles', async () => {
     const provider = new MockAIProvider(logger);
     const response = await provider.chat({

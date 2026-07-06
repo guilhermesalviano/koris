@@ -1,3 +1,5 @@
+import { USER_REQUEST_SECTION } from './prompt';
+
 export const HEARTBEAT_PROMPT = `
 <instructions>
   - Execute the '{v1}' defined in <task> below, or generate a reminder if applicable.
@@ -21,18 +23,32 @@ export const HEARTBEAT_PROMPT = `
 export const SUMMARIZATION_PROMPT = `
 ## Summarization
 
-Distill this interaction into 1 sentence (max 3). Raw text only — no quotes, no markdown.
+Analyze this interaction and store the most useful memory from it.
+
+### Memory types (choose one based on context):
+- summary: general distillation of what happened (default when nothing else fits)
+- fact: concrete factual information worth remembering (names, preferences, IDs, settings)
+- lesson: insight, rule, or how-to learned from the interaction
+- reminder: something the user should be reminded about later
 
 ### Rules:
 - Capture the user's intent and the assistant's resolution.
 - Preserve all IDs, names, codes, dates, and entities exactly as written.
 - Compress complex data into single descriptors (e.g. "rainy", "sunny").
-- Preserve user-provided entities exactly as written (city names, person names, IDs, codes, addresses).
+- Include who (which human) and where (which channel) when relevant.
 
-Example: User requested technical support for ID-992 and Assistant provided the firmware update link.
+### Output format:
+Respond with **only** a valid JSON object. No markdown fences, no explanation.
 
-### DATA TO SUMMARIZE:
-User: {v1}
+{
+  "type": "<summary|fact|lesson|reminder>",
+  "content": "<1 sentence, max 3>"
+}
+
+### DATA TO SUMMARIZE
+(Human = the user; Assistant = Koris. In the Human line, "I/me" = the human and "you/your" = Koris.)
+
+Human: {v1}
 Assistant: {v2}
 `;
 
@@ -80,6 +96,5 @@ Respond with **only** a valid JSON object. No markdown fences, no explanation, n
 }
 \`\`\`
 
-### User request:
-{v1}
+${USER_REQUEST_SECTION}
 `;

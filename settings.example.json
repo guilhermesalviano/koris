@@ -23,9 +23,9 @@
     },
     "whatsapp": {
       "enabled": false,
-      "whitelist": "mocknumber",
-      "auth_folder": "./.whatsapp_auth",
-      "mention_id": "1mocknumber"
+      "whitelist": "NUMBER1,NUMBER2",
+      "mention_id": "THE_BOT_MENTION_ID",
+      "auth_folder": "./.whatsapp_auth"
     }
   },
   "ai": {
