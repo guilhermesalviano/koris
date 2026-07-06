@@ -85,3 +85,21 @@ export function isCronDue(expr: string, now: Date, since: Date): boolean {
   }
   return false;
 }
+
+/**
+ * Returns the next Date strictly after `from` that matches the cron expression.
+ * All returned times are aligned to minute boundaries (zero seconds, zero ms)
+ * to prevent scheduling drift with short-interval crons like *&#47;5.
+ * Returns null if no match is found within a reasonable look-ahead window (1 year).
+ */
+export function nextCronFire(expr: string, from: Date): Date | null {
+  const lookAheadMs = 365 * 24 * 60 * 60_000; // 1 year
+  // Round up to the next whole minute so we always start from a clean boundary
+  const fromMs = Math.ceil(from.getTime() / 60_000) * 60_000;
+  const maxMs = fromMs + lookAheadMs;
+
+  for (let t = fromMs + 60_000; t <= maxMs; t += 60_000) {
+    if (matchesCron(expr, new Date(t))) return new Date(t);
+  }
+  return null;
+}
