@@ -1,4 +1,4 @@
-export type MemoryType = 'fact' | 'summary' | 'observation' | 'decision';
+export type MemoryType = 'summary' | 'fact' | 'lesson' | 'reminder';
 
 export type Memory = {
   id: string;

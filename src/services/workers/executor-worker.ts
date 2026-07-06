@@ -1,4 +1,3 @@
-import { extractToolCalls, normalizeResponse } from "../../utils/tool-calls";
 import { TOOLS_RESULT_PROMPT } from "../../constants";
 import { replacePlaceholders } from "../../utils/prompt";
 import { ChatServiceFactory } from "../chat/chat-service";
@@ -56,17 +55,17 @@ class ExecutorWorker implements IWorker {
     this.logger.info(`Tool results: ${JSON.stringify(toolResults)}`);
 
     const synthesisPrompt = replacePlaceholders(TOOLS_RESULT_PROMPT, { v1: userMessage, v2: toolResults });
-    const response = await this.ChatService.handler(
+    const response = await this.ChatService.complete(
       synthesisPrompt,
       ctx.channel,
       ctx.options,
       messageHistory
     );
 
-    const normalizedResponse = normalizeResponse(response);
-    const nextToolCalls = extractToolCalls(normalizedResponse, this.logger);
+    if (response.kind === 'message') return response.text;
 
-    if (nextToolCalls.length === 0) return normalizedResponse;
+    const nextToolCalls = response.calls;
+    if (nextToolCalls.length === 0) return '';
 
     this.logger.info(`Tool call (${nextToolCalls.length}) after execution phase: ${JSON.stringify(nextToolCalls)}`);
 

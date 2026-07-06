@@ -19,6 +19,7 @@ class MessageService implements IMessageService {
   }
 
   save(props: { role: MessageRole; content: string }) {
+    this.session.ensureActiveSession();
     const message = new Message({
       sessionId: this.session.getSession().id,
       role: props.role,
@@ -29,6 +30,7 @@ class MessageService implements IMessageService {
   }
 
   getHistory(): Message[] {
+    this.session.ensureActiveSession();
     const sessionId = this.session.getSession().id;
     return this.messageRepository.getBySessionId(sessionId);
   }

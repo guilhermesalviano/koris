@@ -1,7 +1,8 @@
-import type { AIChatOptions, AIChatRequest, AIProvider } from '../../../types/chat';
+import type { AIChatOptions, AIChatRequest, AIProvider, AIResponse } from '../../../types/chat';
 import { config } from '../../../config';
 import { ILogger } from '../../../infrastructure/logger';
 import { THINK_START, THINK_END } from '../../../constants/thinking';
+import { extractToolCalls } from '../../../utils/tool-calls';
 
 type OpenAIMessage = {
   role: string;
@@ -63,6 +64,14 @@ class NvidiaAIProvider implements AIProvider {
     this.baseUrl = (opts?.baseUrl ?? config.AI.BASE_URL).replace(/\/+$/, '');
     this.defaultModel = opts?.model ?? config.AI.MODEL;
     this.apiToken = opts?.apiToken ?? config.AI.API_TOKEN;
+  }
+
+  async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
+    const text = await this.chat(request, options);
+    const calls = extractToolCalls(text, this.logger);
+    return calls.length > 0
+      ? { kind: 'tool_calls', calls, finishReason: 'tool_calls' }
+      : { kind: 'message', text, finishReason: 'stop' };
   }
 
   async chat(request: AIChatRequest, options?: AIChatOptions): Promise<string> {

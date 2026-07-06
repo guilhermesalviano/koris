@@ -55,7 +55,7 @@ export function getAIProvider(logger: ILogger): AIProvider {
     return cached;
   }
 
-  const provider = createProvider(logger);
+  const provider = createAIProvider(logger);
   cache.set(provider, logger);
 
   return provider;
@@ -64,7 +64,7 @@ export function getAIProvider(logger: ILogger): AIProvider {
 /**
  * Create a new provider instance based on configuration
  */
-function createProvider(logger: ILogger): AIProvider {
+export function createAIProvider(logger: ILogger): AIProvider {
   const providerType = config.AI.PROVIDER as string;
 
   if (!isValidProvider(providerType)) {

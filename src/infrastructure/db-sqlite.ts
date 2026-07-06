@@ -100,7 +100,7 @@ class DatabaseService implements IDatabaseService {
         CREATE TABLE IF NOT EXISTS memories (
           id TEXT PRIMARY KEY,
           session_id TEXT NOT NULL,
-          type TEXT NOT NULL CHECK(type IN ('fact', 'summary', 'observation', 'decision')),
+          type TEXT NOT NULL CHECK(type IN ('summary', 'fact', 'lesson', 'reminder')),
           content TEXT NOT NULL,
           embedding TEXT NULL,
           tags TEXT NULL,
