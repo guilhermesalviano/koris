@@ -64,19 +64,23 @@ describe('channels/whatsapp', () => {
 
     it('responds to group message starting with the mention', async () => {
       const agent = { handle: vi.fn().mockResolvedValue('pong') };
+      const senderName = 'TestUser';
+      const text = `@${MENTION_ID} what time is it?`;
 
       const channel = new WhatsAppChannel(mockSock as never, MENTION_ID);
-      await channel.handleMessage(agent, 'group123@g.us', `@${MENTION_ID} what time is it?`);
+      await channel.handleMessage(agent, 'group123@g.us', senderName, text);
 
-      expect(agent.handle).toHaveBeenCalledWith(`@${MENTION_ID} what time is it?`);
+      expect(agent.handle).toHaveBeenCalledWith(`Message from ${senderName} on WhatsApp: ${text}`);
       expect(mockSock.sendMessage).toHaveBeenCalled();
     });
 
     it('ignores group message that does not start with the mention', async () => {
       const agent = { handle: vi.fn() };
+      const senderName = 'TestUser';
+      const text = 'anyone know the weather today?';
 
       const channel = new WhatsAppChannel(mockSock as never, MENTION_ID);
-      await channel.handleMessage(agent, 'group123@g.us', 'anyone know the weather today?');
+      await channel.handleMessage(agent, 'group123@g.us', senderName, text);
 
       expect(agent.handle).not.toHaveBeenCalled();
       expect(mockSock.sendMessage).not.toHaveBeenCalled();

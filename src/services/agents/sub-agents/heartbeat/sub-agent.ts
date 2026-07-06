@@ -47,7 +47,7 @@ class Heartbeat implements ISubAgent<Date> {
 
     // if dont have task, keep necessity to execute AI 
     for (const task of tasks) {
-      const since = task.lastRun ?? new Date(date.getTime() - config.HEARTBEAT.INTERVAL_MS);
+      const since = task.lastRun ?? task.createdAt ?? new Date(0);
 
       if (!isCronDue(task.cronExpression, date, since)) {
         this.logger.info(`Heartbeat: Task "${task.id}" not due yet (cron: ${task.cronExpression}).`);
@@ -62,7 +62,7 @@ class Heartbeat implements ISubAgent<Date> {
         const payload = this.promptRepository
           .build({
             userMessage: prompt,
-            channel: 'tui',
+            channel: 'background',
             toolsEnabled: true,
             messageHistory: [],
             includeTaskTools: false
@@ -96,6 +96,12 @@ class Heartbeat implements ISubAgent<Date> {
         this.channelsManager.sendMessage('telegram', config.CHANNELS.TELEGRAM.CHAT_ID, result).catch(err => {
           this.logger.error(`Failed to send heartbeat result to Telegram for task "${task.id}".`, { err });
         });
+
+        if (config.CHANNELS.WHATSAPP.ENABLED && config.CHANNELS.WHATSAPP.TARGET_JID) {
+          this.channelsManager.sendMessage('whatsapp', config.CHANNELS.WHATSAPP.TARGET_JID, result).catch(err => {
+            this.logger.error(`Failed to send heartbeat result to WhatsApp for task "${task.id}".`, { err });
+          });
+        }
 
         this.heartbeatRepository.updateLastRun(task.id, date);
         this.logger.info(`Heartbeat: Task "${task.id}" completed successfully.`);

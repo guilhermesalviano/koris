@@ -24,6 +24,7 @@
     "whatsapp": {
       "enabled": false,
       "whitelist": "NUMBER1,NUMBER2",
+      "target_jid": "YOUR_PHONE_NUMBER@s.whatsapp.net",
       "mention_id": "THE_BOT_MENTION_ID",
       "auth_folder": "./.whatsapp_auth"
     }
