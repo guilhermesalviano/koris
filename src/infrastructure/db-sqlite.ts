@@ -54,12 +54,12 @@ class DatabaseService implements IDatabaseService {
 
       if (this.verbose) {
         this.db.pragma('journal_mode = WAL');
-        logger.debug(`SQLite initialized at ${this.filepath}`);
+        logger.debug(`[database] SQLite initialized at ${this.filepath}`);
       }
 
       this.initializeSchema();
     } catch (error) {
-      logger.error('Failed to initialize database', { error, filepath: this.filepath });
+      logger.error('[database] Failed to initialize database', { error, filepath: this.filepath });
       throw error;
     }
   }
@@ -148,9 +148,9 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_learned_skills_learned_at ON learned_skills(learned_at);
       `);
 
-      logger.debug('Database schema initialized successfully');
+      logger.debug('[database] schema initialized successfully');
     } catch (error) {
-      logger.error('Failed to initialize database schema', { error });
+      logger.error('[database] Failed to initialize database schema', { error });
       throw error;
     }
   }
@@ -164,7 +164,7 @@ class DatabaseService implements IDatabaseService {
       const rows = stmt.all(...(params || [])) as T[];
       return rows;
     } catch (error) {
-      logger.error('Query execution failed', { sql, error });
+      logger.error('[database] Query execution failed', { sql, error });
       throw error;
     }
   }
@@ -178,7 +178,7 @@ class DatabaseService implements IDatabaseService {
       const row = stmt.get(...(params || [])) as T | undefined;
       return row;
     } catch (error) {
-      logger.error('Get query failed', { sql, error });
+      logger.error('[database] Get query failed', { sql, error });
       throw error;
     }
   }
@@ -195,7 +195,7 @@ class DatabaseService implements IDatabaseService {
         lastInsertRowid: info.lastInsertRowid,
       };
     } catch (error) {
-      logger.error('Run query failed', { sql, error });
+      logger.error('[database] Run query failed', { sql, error });
       throw error;
     }
   }
@@ -215,7 +215,7 @@ class DatabaseService implements IDatabaseService {
     try {
       this.db.exec(sql);
     } catch (error) {
-      logger.error('Exec failed', { sql, error });
+      logger.error('[database] Exec failed', { sql, error });
       throw error;
     }
   }
@@ -242,7 +242,7 @@ class DatabaseService implements IDatabaseService {
         tables: tableStats.length,
       };
     } catch (error) {
-      logger.error('Failed to get database stats', { error });
+      logger.error('[database] Failed to get database stats', { error });
       return {};
     }
   }
@@ -253,9 +253,9 @@ class DatabaseService implements IDatabaseService {
   close(): void {
     try {
       this.db.close();
-      logger.info('Database connection closed');
+      logger.info('[database] Database connection closed');
     } catch (error) {
-      logger.error('Failed to close database', { error });
+      logger.error('[database] Failed to close database', { error });
     }
   }
 
@@ -265,9 +265,9 @@ class DatabaseService implements IDatabaseService {
   vacuum(): void {
     try {
       this.db.exec('VACUUM;');
-      logger.info('Database vacuumed successfully');
+      logger.info('[database] Database vacuumed successfully');
     } catch (error) {
-      logger.error('Failed to vacuum database', { error });
+      logger.error('[database] Failed to vacuum database', { error });
     }
   }
 
@@ -277,9 +277,9 @@ class DatabaseService implements IDatabaseService {
   backup(targetPath: string): void {
     try {
       this.db.exec(`VACUUM INTO '${targetPath}';`);
-      logger.info('Database backed up', { targetPath });
+      logger.info('[database] Database backed up', { targetPath });
     } catch (error) {
-      logger.error('Failed to backup database', { error, targetPath });
+      logger.error('[database] Failed to backup database', { error, targetPath });
       throw error;
     }
   }
