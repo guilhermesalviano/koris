@@ -15,8 +15,10 @@ logs/
 
 settings.json
 
-memory/*
 temp/*
+memory/*
+inject/*
+!inject/.gitkeep
 !memory/.gitkeep
 !temp/.gitkeep
 reports/

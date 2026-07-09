@@ -1,5 +1,3 @@
-import { USER_REQUEST_SECTION } from './prompt';
-
 export const HEARTBEAT_PROMPT = `
 <instructions>
   - Execute the '{v1}' defined in <task> below, or generate a reminder if applicable.
@@ -96,5 +94,6 @@ Respond with **only** a valid JSON object. No markdown fences, no explanation, n
 }
 \`\`\`
 
-${USER_REQUEST_SECTION}
+### USER REQUEST
+{v1}
 `;

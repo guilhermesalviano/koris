@@ -1,5 +1,3 @@
-import { USER_REQUEST_SECTION } from './prompt';
-
 export const FIRST_PROMPT_HELPER = `
 ## Tool Execution Contract
 
@@ -19,7 +17,8 @@ Before responding to the human, answer internally:
 If **no** → call the missing tools.
 If **yes** → compose the final response using only the tool results.
 
-${USER_REQUEST_SECTION}
+### USER REQUEST
+{v1}
 `;
 // ### DECOMPOSITION
 // Break the human's message into atomic tasks. Each task that can be answered or acted on by a tool MUST trigger one.
@@ -46,7 +45,8 @@ As Koris, execute the tool call required to fulfill the human's request.
 - **FORBIDDEN:** Do not explain why you are calling a tool. Do not summarize the documentation. Do not provide a plan.
 - **OUTPUT:** Provide ONLY the tool call in the required JSON format.
 
-${USER_REQUEST_SECTION}
+## USER REQUEST
+{v1}
 `;
 
 export const TOOLS_RESULT_PROMPT = `
@@ -60,7 +60,8 @@ Answer the human's request as Koris, using ONLY the data in TOOL RESULTS below.
 - Do not mention tools, functions, or internal details in your response.
 - Do not repeat the human's question.
 
-${USER_REQUEST_SECTION}
+## USER REQUEST
+{v1}
 
 ## TOOL RESULTS
 {v2}
