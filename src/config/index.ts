@@ -20,7 +20,7 @@ export const config = {
   BASE_DIR:    process.cwd(),
   GATEWAY_HOST: get('gateway_host', 'http://localhost:3000'),
   LEARNED_SKILLS_LIMIT: Number(get('learned_skills_limit', '10')),
-  USE_DEFAULT_SYSTEM_PROMPT: get('use_default_system_prompt', 'false') === 'true',
+  USE_DEFAULT_PERSONA: get('use_default_persona', 'false') === 'true',
   SESSION: {
     TTL_MS: Number(get('session.ttl_ms', String(30 * 60 * 1000))),
   },
