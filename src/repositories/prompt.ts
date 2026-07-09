@@ -9,8 +9,7 @@ import { SkillsRepositoryFactory } from './skills';
 import { ILogger } from '../infrastructure/logger';
 import { InjectManager } from '../services/inject-manager';
 import { SYSTEM_PROMPT } from '../constants';
-
-const DEFAULT_LEARNED_SKILLS_LIMIT = 10;
+import { config } from '../config';
 
 interface BuildPromptParams {
   userMessage: string;
@@ -49,30 +48,32 @@ class PromptRepository implements IPromptRepository {
   }
 
   private buildHistory({ channel, userMessage, messageHistory }: BuildPromptParams): Message[] {
-    const hasSoul = true;
-    let systemInstructions = (hasSoul ? '' : SYSTEM_PROMPT);
+    const systemBlocks: string[] = [];
+
+    if (config.USE_DEFAULT_SYSTEM_PROMPT) systemBlocks.push(SYSTEM_PROMPT);
 
     const injectedContent = InjectManager.getInjectedContent();
-    if (injectedContent) systemInstructions += injectedContent;
+    if (injectedContent) systemBlocks.push(injectedContent);
 
     const learnedSkills = this.buildLearnedSkills();
-    if (learnedSkills) systemInstructions += `\n\n# Learned Skills Content\n${learnedSkills}`;
+    if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
 
     const memory = this.buildMemoryContext();
-    if (memory) systemInstructions += `\n\n# Cross-session Memory\n${memory}`;
+    if (memory) systemBlocks.push(`# Cross-session Memory\n${memory}`);
 
     const context = this.contextRepository.get({ channel });
-    if (context) systemInstructions += `\n\n# Session Context\n${context}`;
+    if (context) systemBlocks.push(`# Session Context\n${context}`);
 
     return [
-      { role: 'system', content: systemInstructions },
-      ...(messageHistory || []),
+      { role: 'system', content: systemBlocks.join('\n\n') },
+      ...(messageHistory ?? []),
       { role: 'user', content: userMessage },
     ];
   }
 
-  private buildLearnedSkills(): string | undefined {
-    const learnedSkillsLimit = DEFAULT_LEARNED_SKILLS_LIMIT;
+  private buildLearnedSkills(): string {
+    const learnedSkillsLimit = config.LEARNED_SKILLS_LIMIT;
+
     return this.learnedSkillsRepository
       .getRecent(learnedSkillsLimit)
       .map(skill => skill.skill_content?.trim())
@@ -82,7 +83,11 @@ class PromptRepository implements IPromptRepository {
   }
 
   private buildMemoryContext(): string {
-    const memories = this.memoryRepository.getAll().map(m => `${m.type}: ${m.content}`).join('\n');
+    const memories = this.memoryRepository
+      .getAll()
+      .map(m => `${m.type}: ${m.content}`)
+      .join('\n');
+
     return memories.slice(0, 15000);
   }
 
