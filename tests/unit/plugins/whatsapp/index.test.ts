@@ -35,7 +35,7 @@ describe('channels/whatsapp', () => {
       const agent = { handle: vi.fn().mockResolvedValue(createResponseStream()) };
 
       const channel = new WhatsAppChannel(mockSock as never);
-      await channel.handleMessage(agent, 'jid@s.whatsapp.net', 'hello');
+      await channel.handleMessage(agent, 'jid@s.whatsapp.net', 'guilherme', 'hello');
 
       expect(mockSock.sendMessage).toHaveBeenCalledTimes(1);
       expect(mockSock.sendMessage).toHaveBeenCalledWith('jid@s.whatsapp.net', { text: 'Visible reply' });
@@ -45,7 +45,7 @@ describe('channels/whatsapp', () => {
       const agent = { handle: vi.fn().mockResolvedValue('Hello there') };
 
       const channel = new WhatsAppChannel(mockSock as never);
-      await channel.handleMessage(agent, 'jid@s.whatsapp.net', 'hi');
+      await channel.handleMessage(agent, 'jid@s.whatsapp.net', 'guilherme', 'hi');
 
       expect(mockSock.sendMessage).toHaveBeenCalledWith('jid@s.whatsapp.net', { text: 'Hello there' });
     });
@@ -54,7 +54,7 @@ describe('channels/whatsapp', () => {
       const agent = { handle: vi.fn().mockRejectedValue(new Error('agent error')) };
 
       const channel = new WhatsAppChannel(mockSock as never);
-      await channel.handleMessage(agent, 'jid@s.whatsapp.net', 'hi');
+      await channel.handleMessage(agent, 'jid@s.whatsapp.net', 'guilherme', 'hi');
 
       expect(mockSock.sendMessage).toHaveBeenCalledWith(
         'jid@s.whatsapp.net',
@@ -70,7 +70,7 @@ describe('channels/whatsapp', () => {
       const channel = new WhatsAppChannel(mockSock as never, MENTION_ID);
       await channel.handleMessage(agent, 'group123@g.us', senderName, text);
 
-      expect(agent.handle).toHaveBeenCalledWith(`Message from ${senderName} on WhatsApp: ${text}`);
+      expect(agent.handle).toHaveBeenCalledWith(`Message from ${senderName}: ${text}`);
       expect(mockSock.sendMessage).toHaveBeenCalled();
     });
 
@@ -90,7 +90,7 @@ describe('channels/whatsapp', () => {
       const agent = { handle: vi.fn() };
 
       const channel = new WhatsAppChannel(mockSock as never, MENTION_ID);
-      await channel.handleMessage(agent, 'group123@g.us', `hey @${MENTION_ID} help`);
+      await channel.handleMessage(agent, 'group123@g.us', 'guilherme', `hey @${MENTION_ID} help`);
 
       expect(agent.handle).not.toHaveBeenCalled();
     });
@@ -99,7 +99,7 @@ describe('channels/whatsapp', () => {
       const agent = { handle: vi.fn() };
 
       const channel = new WhatsAppChannel(mockSock as never, '');
-      await channel.handleMessage(agent, 'group123@g.us', `@${MENTION_ID} hello`);
+      await channel.handleMessage(agent, 'group123@g.us', 'guilherme', `@${MENTION_ID} hello`);
 
       expect(agent.handle).not.toHaveBeenCalled();
     });

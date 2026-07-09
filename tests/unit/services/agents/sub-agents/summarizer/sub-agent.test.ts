@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Summarizer } from '../../../../../../src/services/agents/sub-agents/summarizer/sub-agent';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
+import * as providerRegistry from '../../../../../../src/services/providers';
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
@@ -28,6 +29,10 @@ describe('Summarizer', () => {
   });
 
   it('stores parsed memory type and content from AI JSON', async () => {
+    vi.spyOn(providerRegistry, 'getAIProvider').mockReturnValue({
+      embed: vi.fn().mockResolvedValue([0.1, 0.2]),
+    } as any);
+
     const logger = makeLogger();
     const completionService = {
       complete: vi.fn().mockResolvedValue({
@@ -46,11 +51,16 @@ describe('Summarizer', () => {
     expect(props.memoryService.upsert).toHaveBeenCalledWith({
       type: 'fact',
       content: 'TS adds static typing.',
+      embedding: [0.1, 0.2],
     });
     expect(logger.info).toHaveBeenCalledWith('Summarizer worker completed for session session-1');
   });
 
   it('defaults to summary when AI returns plain text', async () => {
+    vi.spyOn(providerRegistry, 'getAIProvider').mockReturnValue({
+      embed: vi.fn().mockResolvedValue([0.1, 0.2]),
+    } as any);
+
     const logger = makeLogger();
     const completionService = {
       complete: vi.fn().mockResolvedValue({ kind: 'message', text: 'TS adds static typing.' }),
@@ -63,6 +73,7 @@ describe('Summarizer', () => {
     expect(props.memoryService.upsert).toHaveBeenCalledWith({
       type: 'summary',
       content: 'TS adds static typing.',
+      embedding: [0.1, 0.2],
     });
   });
 
