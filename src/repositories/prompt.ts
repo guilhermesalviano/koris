@@ -1,5 +1,5 @@
 import { IContextRepository, ContextRepositoryFactory } from './context';
-import type { AIChatRequest, AIToolDefinition } from '../types/chat';
+import type { AIChatRequest, AIToolDefinition, AIProvider } from '../types/chat';
 import { IToolsRepository, ToolsRepositoryFactory } from './tools';
 import { Message } from '../types/messages';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
@@ -20,7 +20,7 @@ interface BuildPromptParams {
 }
 
 interface IPromptRepository {
-  build(params: BuildPromptParams): AIChatRequest;
+  build(params: BuildPromptParams): Promise<AIChatRequest>;
 }
 
 /**
@@ -33,6 +33,7 @@ class PromptRepository implements IPromptRepository {
     private toolsRepository: IToolsRepository,
     private learnedSkillsRepository: ILearnedSkillsRepository,
     private memoryRepository: IMemoryRepository,
+    private aiProvider: AIProvider,
   ) {}
 
   /**
@@ -40,14 +41,14 @@ class PromptRepository implements IPromptRepository {
    * @param params BuildPromptParams
    * @returns AIChatRequest
    */
-  build(params: BuildPromptParams): AIChatRequest {
-    const messages = this.buildHistory(params);
+  async build(params: BuildPromptParams): Promise<AIChatRequest> {
+    const messages = await this.buildHistory(params);
     const tools = this.buildTools(params);
 
     return { messages, tools };
   }
 
-  private buildHistory({ channel, userMessage, messageHistory }: BuildPromptParams): Message[] {
+  private async buildHistory({ channel, userMessage, messageHistory }: BuildPromptParams): Promise<Message[]> {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
 
     if (config.USE_DEFAULT_PERSONA) systemBlocks.push(DEFAULT_PERSONA_PROMPT);
@@ -58,7 +59,7 @@ class PromptRepository implements IPromptRepository {
     const learnedSkills = this.buildLearnedSkills();
     if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
 
-    const memory = this.buildMemoryContext();
+    const memory = await this.buildMemoryContext(userMessage);
     if (memory) systemBlocks.push(`# Cross-session Memory\n${memory}`);
 
     const context = this.contextRepository.get({ channel });
@@ -82,9 +83,12 @@ class PromptRepository implements IPromptRepository {
       .slice(0, 15000);
   }
 
-  private buildMemoryContext(): string {
+  private async buildMemoryContext(userMessage: string): Promise<string> {
+    const queryEmbedding = await this.aiProvider.embed(userMessage);
+    console.log('Query embedding generated for memory search lenght:', queryEmbedding.length );
+
     const memories = this.memoryRepository
-      .getAll()
+      .search(queryEmbedding, 10)
       .map(m => `${m.type}: ${m.content}`)
       .join('\n');
 
@@ -105,13 +109,13 @@ class PromptRepository implements IPromptRepository {
 }
 
 class PromptRepositoryFactory {
-  static create(db: IDatabaseService, logger: ILogger): PromptRepository {
+  static create(db: IDatabaseService, logger: ILogger, aiProvider: AIProvider): PromptRepository {
     const contextRepository = ContextRepositoryFactory.create();
     const skillsRepository = SkillsRepositoryFactory.create(logger);
     const toolsRepository = ToolsRepositoryFactory.create(skillsRepository.get());
     const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
     const memoryRepository = MemoryRepositoryFactory.create(db);
-    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, memoryRepository);
+    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, memoryRepository, aiProvider);
   }
 }
 

@@ -7,7 +7,7 @@ import { ISessionService } from "./session-service";
 interface SaveMemoryProps {
   type: MemoryType;
   content: string;
-  embedding?: string;
+  embedding?: number[];
   tags?: string;
   importance?: number;
 }

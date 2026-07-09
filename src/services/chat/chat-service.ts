@@ -21,7 +21,7 @@ class ChatService implements IChatService {
     messageHistory?: Message[]
   ): Promise<AIResponse> {
     const messagesHistory = messageHistory?.map(m => ({ role: m.role, content: m.content }));
-    const promptPayload = this.promptRepository.build({
+    const promptPayload = await this.promptRepository.build({
       userMessage: message,
       channel,
       toolsEnabled: options?.toolsEnabled,
@@ -61,8 +61,9 @@ class ChatService implements IChatService {
 class ChatServiceFactory {
   static create(logger: ILogger): IChatService {
     const db = DatabaseServiceFactory.create();
-    const promptRepository = PromptRepositoryFactory.create(db, logger);
-    const completionService = new AICompletionService(createAIProvider(logger), logger);
+    const aiProvider = createAIProvider(logger);
+    const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
+    const completionService = new AICompletionService(aiProvider, logger);
     return new ChatService(completionService, promptRepository);
   }
 }
