@@ -2,6 +2,8 @@
   "temp_folder": "./temp",
   "web_port": 3000,
   "timezone": "America/Sao_Paulo",
+  "learned_skills_limit": 10,
+  "use_default_system_prompt": false,
   "log": {
     "level": "debug"
   },
