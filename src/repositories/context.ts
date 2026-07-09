@@ -57,7 +57,6 @@ class ContextRepository implements IContextRepository {
    */
   private formatAsPrompt(system: SystemInfo, personal: PersonalInformation): string {
     return [
-      '[Session Context]',
       system.source ? `- Channel Source: ${system.source}` : null,
       system.datetime ? `- Datetime: ${system.datetime}` : null,
       personal.name ? `- User name: ${personal.name}` : null,
