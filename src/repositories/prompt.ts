@@ -5,9 +5,10 @@ import { Message, MessageRole } from '../types/messages';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
 import { IMemoryRepository, MemoryRepositoryFactory } from './memory';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
-import { SYSTEM_PROMPT } from '../constants';
 import { SkillsRepositoryFactory } from './skills';
 import { ILogger } from '../infrastructure/logger';
+import { InjectManager } from '../services/inject-manager';
+// import { SYSTEM_PROMPT } from '../constants';
 
 const DEFAULT_LEARNED_SKILLS_LIMIT = 10;
 
@@ -63,15 +64,18 @@ class PromptRepository implements IPromptRepository {
    */
   private buildSystemPrompt(channel: string): Message[] {
     const messages: Message[] = [];
-    const baseHistory = this.buildBaseHistoryPrompt(SYSTEM_PROMPT);
+    const baseHistory = this.buildBaseHistoryPrompt('');// SYSTEM_PROMPT
+    let systemInstructions = baseHistory;
+
+    const injectedContent = InjectManager.getInjectedContent();
+    if (injectedContent) systemInstructions += `\n<customInstructions>${injectedContent}</customInstructions>`;
 
     // TODO: get only old and relevant memories instead of all. Exclude actual session.
     const memory = this.buildMemoryContext();
-    let systemInstructions = memory ? `
-      ${baseHistory}\n Persistent context from other sessions: ${memory}` : baseHistory;
+    if (memory) systemInstructions += `\n<crossSessionMemory>${memory}</crossSessionMemory>`;
 
     const context = this.contextRepository.get({ channel });
-    if (context) systemInstructions += `\n ${context}`;
+    if (context) systemInstructions += `\n<sessionContext>${context}</sessionContext>`;
 
     messages.push({ role: 'system', content: systemInstructions });
 
@@ -94,7 +98,7 @@ class PromptRepository implements IPromptRepository {
 
     if (!learnedSkillsContent) return basePrompt;
 
-    return `${basePrompt}\n${learnedSkillsContent}`;
+    return `${basePrompt}\n<learnedSkillsContent>${learnedSkillsContent}</learnedSkillsContent>`;
   }
 
   private buildTools({ toolsEnabled, includeTaskTools }: BuildPromptParams): AIToolDefinition[] | undefined {
