@@ -2,6 +2,7 @@
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { Memory } from '../entities/memory';
 import { MemoryType } from '../types/memory';
+import { similarity } from 'ml-distance';
 
 interface IMemoryRepository {
   save(memory: Memory): void;
@@ -9,6 +10,7 @@ interface IMemoryRepository {
   getAll(): Memory[];
   getBySessionId(sessionId: string): Memory[];
   deleteById(id: string): void;
+  search(queryEmbedding: number[], limit: number): Memory[];
 }
 
 class MemoryRepository implements IMemoryRepository {
@@ -23,7 +25,7 @@ class MemoryRepository implements IMemoryRepository {
         memory.sessionId,
         memory.type,
         memory.content,
-        memory.embedding ?? null,
+        memory.embedding ? JSON.stringify(memory.embedding) : null,
         memory.tags ?? null,
         memory.importance ?? null,
         memory.createdAt.toISOString(),
@@ -37,7 +39,7 @@ class MemoryRepository implements IMemoryRepository {
       [
         memory.type,
         memory.content,
-        memory.embedding ?? null,
+        memory.embedding ? JSON.stringify(memory.embedding) : null,
         memory.tags ?? null,
         memory.importance ?? null,
         memory.id,
@@ -65,6 +67,20 @@ class MemoryRepository implements IMemoryRepository {
     return rows.map(this.mapRow);
   }
 
+  search(queryEmbedding: number[], limit: number): Memory[] {
+    const memories = this.getAll();
+    const scoredMemories = memories
+      .filter((m) => m.embedding)
+      .map((m) => ({
+        memory: m,
+        score: similarity.cosine(queryEmbedding, m.embedding as any as number[])
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    return scoredMemories.map((sm) => sm.memory);
+  }
+
   deleteById(id: string): void {
     this.db.run('DELETE FROM memories WHERE id = ?', [id]);
   }
@@ -75,7 +91,7 @@ class MemoryRepository implements IMemoryRepository {
       sessionId: row.session_id,
       type: row.type as MemoryType,
       content: row.content,
-      embedding: row.embedding ?? undefined,
+      embedding: row.embedding ? JSON.parse(row.embedding) : undefined,
       tags: row.tags ?? undefined,
       importance: row.importance ?? undefined,
       createdAt: new Date(row.created_at),

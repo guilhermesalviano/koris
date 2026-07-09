@@ -48,6 +48,7 @@ export interface AIProvider {
   complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse>;
   chat(request: AIChatRequest, options?: AIChatOptions): Promise<string>;
   chatStream(request: AIChatRequest, options?: AIChatOptions): AsyncGenerator<string>;
+  embed(text: string): Promise<number[]>;
   healthCheck(): Promise<ProviderHealth>;
 }
 

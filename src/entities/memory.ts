@@ -6,7 +6,7 @@ export class Memory {
   public sessionId: string;
   public type: MemoryType;
   public content: string;
-  public embedding?: string;
+  public embedding?: number[];
   public tags?: string;
   public importance?: number;
   public createdAt: Date;
@@ -16,7 +16,7 @@ export class Memory {
     sessionId: string;
     type: MemoryType;
     content: string;
-    embedding?: string;
+    embedding?: number[];
     tags?: string;
     importance?: number;
     createdAt?: Date;

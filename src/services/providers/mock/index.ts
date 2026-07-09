@@ -57,6 +57,11 @@ class MockAIProvider implements AIProvider {
     this.logger.debug('Mock provider health check');
     return { ok: true, detail: 'mock provider' };
   }
+
+  async embed(text: string): Promise<number[]> {
+    this.logger.debug('Mock provider embed', { textLength: text.length });
+    return new Array(768).fill(0);
+  }
 }
 
 class MockAIProviderFactory {

@@ -46,6 +46,10 @@ export const config = {
     SUMMARIZER: {
       ENABLED: get('ai.summarizer.enabled', 'true') === 'true',
     },
+    EMBEDDING: {
+      ENABLED: get('ai.embedding.enabled', 'false') === 'true',
+      MODEL:   get('ai.embedding.model', 'nomic-embed-text'),
+    },
   },
   CHANNELS: {
     TELEGRAM: {

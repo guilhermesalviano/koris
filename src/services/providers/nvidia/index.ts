@@ -55,6 +55,7 @@ class NvidiaAIProvider implements AIProvider {
   readonly name = 'nvidia';
   private readonly baseUrl: string;
   private readonly defaultModel: string;
+  private readonly embeddingModel: string;
   private readonly apiToken: string;
 
   constructor(
@@ -63,6 +64,7 @@ class NvidiaAIProvider implements AIProvider {
   ) {
     this.baseUrl = (opts?.baseUrl ?? config.AI.BASE_URL).replace(/\/+$/, '');
     this.defaultModel = opts?.model ?? config.AI.MODEL;
+    this.embeddingModel = config.AI.EMBEDDING.MODEL;
     this.apiToken = opts?.apiToken ?? config.AI.API_TOKEN;
   }
 
@@ -273,6 +275,28 @@ class NvidiaAIProvider implements AIProvider {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  async embed(text: string): Promise<number[]> {
+    if (!config.AI.EMBEDDING.ENABLED) {
+      throw new Error('Embeddings are disabled in configuration');
+    }
+    const res = await fetch(`${this.baseUrl}/embeddings`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({
+        model: this.embeddingModel,
+        input: text,
+        input_type: 'query'
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error(`NVIDIA /embeddings failed (${res.status})`);
+    }
+
+    const data = await res.json() as { data: Array<{ embedding: number[] }> };
+    return data.data[0].embedding;
   }
 
   private async chatFallback(request: AIChatRequest, signal: AbortSignal): Promise<string> {
