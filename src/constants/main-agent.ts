@@ -1,7 +1,7 @@
 export const FIRST_PROMPT_HELPER = `
 ## Tool Execution Contract
 
-As Koris, verify if skill documentation is already in your **SYSTEM** context before invoking get_skill. Ensure the human's request is entirely resolved through tool calls.
+As Agent, verify if skill documentation is already in your **SYSTEM** context before invoking get_skill. Ensure the human's request is entirely resolved through tool calls.
 
 ### EXECUTION RULES
 - **Skills first:** If a task might have a dedicated skill, call 'get_skill' before acting. Never invoke a skill tool without learning it first.
@@ -24,7 +24,7 @@ If **yes** → compose the final response using only the tool results.
 // Break the human's message into atomic tasks. Each task that can be answered or acted on by a tool MUST trigger one.
 
 export const SKILL_LEARNING_PROMPT = `
-## Koris has just learned the "{v1}" skill.
+## Agent has just learned the "{v1}" skill.
 
 ### Documentation:
 {v2}
@@ -39,7 +39,7 @@ export const SKILL_LEARNING_PROMPT = `
 
 export const SKILL_READY_PROMPT = `
 ## TOOL CALL MANDATE
-As Koris, execute the tool call required to fulfill the human's request.
+As Agent, execute the tool call required to fulfill the human's request.
 
 - **STRICT RULE:** You are a function-calling engine.
 - **FORBIDDEN:** Do not explain why you are calling a tool. Do not summarize the documentation. Do not provide a plan.
@@ -50,7 +50,7 @@ As Koris, execute the tool call required to fulfill the human's request.
 `;
 
 export const TOOLS_RESULT_PROMPT = `
-Answer the human's request as Koris, using ONLY the data in TOOL RESULTS below.
+Answer the human's request as Agent, using ONLY the data in TOOL RESULTS below.
 
 ## RULES
 - Use ONLY what is in TOOL RESULTS. Do not infer, estimate, or add anything else.

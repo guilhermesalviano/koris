@@ -44,7 +44,7 @@ Respond with **only** a valid JSON object. No markdown fences, no explanation.
 }
 
 ### DATA TO SUMMARIZE
-(Human = the user; Assistant = Koris. In the Human line, "I/me" = the human and "you/your" = Koris.)
+(Human = the user; Assistant = Agent. In the Human line, "I/me" = the human and "you/your" = Agent.)
 
 Human: {v1}
 Assistant: {v2}
