@@ -1,14 +1,14 @@
 import { IContextRepository, ContextRepositoryFactory } from './context';
 import type { AIChatRequest, AIToolDefinition } from '../types/chat';
 import { IToolsRepository, ToolsRepositoryFactory } from './tools';
-import { Message, MessageRole } from '../types/messages';
+import { Message } from '../types/messages';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
 import { IMemoryRepository, MemoryRepositoryFactory } from './memory';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { SkillsRepositoryFactory } from './skills';
 import { ILogger } from '../infrastructure/logger';
 import { InjectManager } from '../services/inject-manager';
-// import { SYSTEM_PROMPT } from '../constants';
+import { SYSTEM_PROMPT } from '../constants';
 
 const DEFAULT_LEARNED_SKILLS_LIMIT = 10;
 
@@ -48,57 +48,42 @@ class PromptRepository implements IPromptRepository {
     return { messages, tools };
   }
 
-  /**
-   * Build all messages (system + history + user)
-   */
   private buildHistory({ channel, userMessage, messageHistory }: BuildPromptParams): Message[] {
+    const hasSoul = true;
+    let systemInstructions = (hasSoul ? '' : SYSTEM_PROMPT);
+
+    const injectedContent = InjectManager.getInjectedContent();
+    if (injectedContent) systemInstructions += injectedContent;
+
+    const learnedSkills = this.buildLearnedSkills();
+    if (learnedSkills) systemInstructions += `\n\n# Learned Skills Content\n${learnedSkills}`;
+
+    const memory = this.buildMemoryContext();
+    if (memory) systemInstructions += `\n\n# Cross-session Memory\n${memory}`;
+
+    const context = this.contextRepository.get({ channel });
+    if (context) systemInstructions += `\n\n# Session Context\n${context}`;
+
     return [
-      ...this.buildSystemPrompt(channel),
+      { role: 'system', content: systemInstructions },
       ...(messageHistory || []),
-      this.buildMessage("user", userMessage),
+      { role: 'user', content: userMessage },
     ];
   }
 
-  /**
-   * Build system prompt messages
-   */
-  private buildSystemPrompt(channel: string): Message[] {
-    const messages: Message[] = [];
-    const baseHistory = this.buildBaseHistoryPrompt('');// SYSTEM_PROMPT
-    let systemInstructions = baseHistory;
-
-    const injectedContent = InjectManager.getInjectedContent();
-    if (injectedContent) systemInstructions += `\n<customInstructions>${injectedContent}</customInstructions>`;
-
-    // TODO: get only old and relevant memories instead of all. Exclude actual session.
-    const memory = this.buildMemoryContext();
-    if (memory) systemInstructions += `\n<crossSessionMemory>${memory}</crossSessionMemory>`;
-
-    const context = this.contextRepository.get({ channel });
-    if (context) systemInstructions += `\n<sessionContext>${context}</sessionContext>`;
-
-    messages.push({ role: 'system', content: systemInstructions });
-
-    return messages;
-  }
-
-  private buildMemoryContext(): string {
-    const memories = this.memoryRepository.getAll().map(m => `${m.type}: ${m.content}`).join('\n');
-    return memories.slice(0, 15000);
-  }
-
-  private buildBaseHistoryPrompt(basePrompt: string): string {
+  private buildLearnedSkills(): string | undefined {
     const learnedSkillsLimit = DEFAULT_LEARNED_SKILLS_LIMIT;
-    const learnedSkillsContent = this.learnedSkillsRepository
+    return this.learnedSkillsRepository
       .getRecent(learnedSkillsLimit)
       .map(skill => skill.skill_content?.trim())
       .filter((content): content is string => Boolean(content))
       .join('\n')
       .slice(0, 15000);
+  }
 
-    if (!learnedSkillsContent) return basePrompt;
-
-    return `${basePrompt}\n<learnedSkillsContent>${learnedSkillsContent}</learnedSkillsContent>`;
+  private buildMemoryContext(): string {
+    const memories = this.memoryRepository.getAll().map(m => `${m.type}: ${m.content}`).join('\n');
+    return memories.slice(0, 15000);
   }
 
   private buildTools({ toolsEnabled, includeTaskTools }: BuildPromptParams): AIToolDefinition[] | undefined {
@@ -111,10 +96,6 @@ class PromptRepository implements IPromptRepository {
     return this.toolsRepository.getAll({
       includeTaskTools,
     });
-  }
-
-  private buildMessage(role: MessageRole, content: string): Message {
-    return { role, content };
   }
 }
 
