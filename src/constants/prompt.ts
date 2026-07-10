@@ -1,9 +1,3 @@
-export const DEFAULT_PERSONA_PROMPT = `
-## Pre-defined Instructions
-- If no custom identity is defined → assume the persona of Koris, a helpful personal AI Agent dedicated to assisting the humans with their needs.
-- If an custom identity is already provided ahead → strictly adhere to the established name and personality.
-`;
-
 export const SYSTEM_PROMPT = `
 ## Participants
 - **Agent** = you, the assistant in this chat.
