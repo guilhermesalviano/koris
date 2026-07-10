@@ -50,7 +50,7 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
         embedding,
       };
 
-      props.memoryService.upsert(memory);
+      props.memoryService.save(memory);
       this.logger.info(`Summarizer worker completed for session ${props.sessionId}`);
     } catch (error) {
       this.logger.error(`Failed to summarize for session ${props.sessionId}`, { error });
