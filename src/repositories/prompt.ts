@@ -8,7 +8,7 @@ import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { SkillsRepositoryFactory } from './skills';
 import { ILogger } from '../infrastructure/logger';
 import { InjectManager } from '../services/inject-manager';
-import { DEFAULT_PERSONA_PROMPT, SYSTEM_PROMPT } from '../constants';
+import { SYSTEM_PROMPT } from '../constants';
 import { config } from '../config';
 
 interface BuildPromptParams {
@@ -50,8 +50,6 @@ class PromptRepository implements IPromptRepository {
 
   private async buildHistory({ channel, userMessage, messageHistory }: BuildPromptParams): Promise<Message[]> {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
-
-    if (config.USE_DEFAULT_PERSONA) systemBlocks.push(DEFAULT_PERSONA_PROMPT);
 
     const injectedContent = InjectManager.getInjectedContent();
     if (injectedContent) systemBlocks.push(injectedContent);
