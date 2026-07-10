@@ -157,7 +157,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
     try {
       if (jid.endsWith('@g.us')) {
         const mention = `@${this.mentionId}`;
-        const isMentioned = this.mentionId.length > 0 && text.startsWith(mention);
+        const isMentioned = this.mentionId.length > 0 && text.includes(mention);
 
         this.logger?.debug(
           `[whatsapp] group message — expected="${mention}" text_start="${text.slice(0, 30)}" match=${isMentioned}`,

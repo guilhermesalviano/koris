@@ -17,8 +17,6 @@ settings.json
 
 temp/*
 memory/*
-inject/*
-!inject/.gitkeep
 !memory/.gitkeep
 !temp/.gitkeep
 reports/
