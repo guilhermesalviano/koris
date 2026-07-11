@@ -34,6 +34,7 @@ class PromptRepository implements IPromptRepository {
     private learnedSkillsRepository: ILearnedSkillsRepository,
     private memoryRepository: IMemoryRepository,
     private aiProvider: AIProvider,
+    private logger: ILogger,
   ) {}
 
   /**
@@ -82,30 +83,35 @@ class PromptRepository implements IPromptRepository {
   }
 
   private async buildMemoryContext(userMessage: string): Promise<string> {
-    const queryEmbedding = await this.aiProvider.embed(userMessage);
-    const memories = this.memoryRepository.search(queryEmbedding, 20);
+    try {
+      const queryEmbedding = await this.aiProvider.embed(userMessage);
+      const memories = this.memoryRepository.search(queryEmbedding, 20);
 
-    if (memories.length === 0) {
+      if (memories.length === 0) {
+        return '';
+      }
+
+      const groupedMemories = memories.reduce((acc, memory) => {
+        const source = memory.source || 'Unknown';
+        if (!acc[source]) {
+          acc[source] = [];
+        }
+        acc[source].push(memory);
+        return acc;
+      }, {} as Record<string, typeof memories>);
+
+      let contextString = '';
+      for (const [source, sourceMemories] of Object.entries(groupedMemories)) {
+        contextString += `\n### channel: ${source}\n`;
+        contextString += sourceMemories.map(m => `- ${m.content}`).join('\n');
+        contextString += '\n';
+      }
+
+      return contextString.trim().slice(0, 15000);
+    } catch (e) {
+      this.logger.warn('Failed to embed user message for memory retrieval', { error: e instanceof Error ? e.message : String(e) });
       return '';
     }
-
-    const groupedMemories = memories.reduce((acc, memory) => {
-      const source = memory.source || 'Unknown';
-      if (!acc[source]) {
-        acc[source] = [];
-      }
-      acc[source].push(memory);
-      return acc;
-    }, {} as Record<string, typeof memories>);
-
-    let contextString = '';
-    for (const [source, sourceMemories] of Object.entries(groupedMemories)) {
-      contextString += `\n### channel: ${source}\n`;
-      contextString += sourceMemories.map(m => `- ${m.content}`).join('\n');
-      contextString += '\n';
-    }
-
-    return contextString.trim().slice(0, 15000);
   }
 
   private buildTools({ toolsEnabled, includeTaskTools }: BuildPromptParams): AIToolDefinition[] | undefined {
@@ -128,7 +134,7 @@ class PromptRepositoryFactory {
     const toolsRepository = ToolsRepositoryFactory.create(skillsRepository.get());
     const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
     const memoryRepository = MemoryRepositoryFactory.create(db);
-    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, memoryRepository, aiProvider);
+    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, memoryRepository, aiProvider, logger);
   }
 }
 

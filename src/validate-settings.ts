@@ -176,6 +176,12 @@ async function main() {
     `hard_ms (${config.AI.TIMEOUTS.HARD_MS}) must be greater than idle_ms (${config.AI.TIMEOUTS.IDLE_MS})`,
   );
 
+  advisory(
+    config.AI.SERPAPI_KEY.trim().length > 0,
+    'ai.serpapi_key is set',
+    'Required for web search tool',
+  );
+
   // Connectivity check (skipped for mock)
   if (config.AI.PROVIDER === 'ollama') {
     process.stdout.write(`  ${c.gray}⟳ Checking AI provider connectivity …${c.reset}\r`);
