@@ -58,7 +58,7 @@ class PromptRepository implements IPromptRepository {
     if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
 
     const memory = await this.buildMemoryContext(userMessage);
-    if (memory) systemBlocks.push(`# Cross-session Memory\n${memory}`);
+    if (memory) systemBlocks.push(`# Cross-session Memory Context\n${memory}`);
 
     const context = this.contextRepository.get({ channel });
     if (context) systemBlocks.push(`# Session Context\n${context}`);
@@ -83,14 +83,29 @@ class PromptRepository implements IPromptRepository {
 
   private async buildMemoryContext(userMessage: string): Promise<string> {
     const queryEmbedding = await this.aiProvider.embed(userMessage);
-    console.log('Query embedding generated for memory search lenght:', queryEmbedding.length );
+    const memories = this.memoryRepository.search(queryEmbedding, 20);
 
-    const memories = this.memoryRepository
-      .search(queryEmbedding, 10)
-      .map(m => `${m.type}: ${m.content}`)
-      .join('\n');
+    if (memories.length === 0) {
+      return '';
+    }
 
-    return memories.slice(0, 15000);
+    const groupedMemories = memories.reduce((acc, memory) => {
+      const source = memory.source || 'Unknown';
+      if (!acc[source]) {
+        acc[source] = [];
+      }
+      acc[source].push(memory);
+      return acc;
+    }, {} as Record<string, typeof memories>);
+
+    let contextString = '';
+    for (const [source, sourceMemories] of Object.entries(groupedMemories)) {
+      contextString += `\n### channel: ${source}\n`;
+      contextString += sourceMemories.map(m => `- ${m.content}`).join('\n');
+      contextString += '\n';
+    }
+
+    return contextString.trim().slice(0, 15000);
   }
 
   private buildTools({ toolsEnabled, includeTaskTools }: BuildPromptParams): AIToolDefinition[] | undefined {

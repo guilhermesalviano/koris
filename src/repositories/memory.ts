@@ -18,11 +18,12 @@ class MemoryRepository implements IMemoryRepository {
 
   save(memory: Memory): void {
     this.db.run(
-      `INSERT INTO memories (id, session_id, type, content, embedding, tags, importance, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO memories (id, session_id, source, type, content, embedding, tags, importance, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         memory.id,
         memory.sessionId,
+        memory.source,
         memory.type,
         memory.content,
         memory.embedding ? JSON.stringify(memory.embedding) : null,
@@ -49,7 +50,7 @@ class MemoryRepository implements IMemoryRepository {
 
   getAll(): Memory[] {
     const rows = this.db.query<any>(
-      `SELECT id, session_id, type, content, embedding, tags, importance, created_at FROM memories
+      `SELECT id, session_id, source, type, content, embedding, tags, importance, created_at FROM memories
        ORDER BY created_at DESC`
     );
 
@@ -58,7 +59,7 @@ class MemoryRepository implements IMemoryRepository {
 
   getBySessionId(sessionId: string): Memory[] {
     const rows = this.db.query<any>(
-      `SELECT id, session_id, type, content, embedding, tags, importance, created_at FROM memories
+      `SELECT id, session_id, source, type, content, embedding, tags, importance, created_at FROM memories
        WHERE session_id = ?
        ORDER BY created_at DESC`,
       [sessionId]
@@ -89,6 +90,7 @@ class MemoryRepository implements IMemoryRepository {
     return new Memory({
       id: row.id,
       sessionId: row.session_id,
+      source: row.source,
       type: row.type as MemoryType,
       content: row.content,
       embedding: row.embedding ? JSON.parse(row.embedding) : undefined,

@@ -2,8 +2,8 @@ import { handleCommand, isCommand } from '../../commands';
 import { previewMessage, toSafeMessage } from './helpers';
 import { ILogger } from '../../../infrastructure/logger';
 import { IDatabaseService } from '../../../infrastructure/db-sqlite';
-import { ISessionService } from '../../session-service';
-import { IMessageService, MessageServiceFactory } from '../../message-service';
+import { ISessionManager } from '../../session-manager';
+import { MessageServiceFactory } from '../../message-service';
 import { ConversationWorkerFactory } from '../../workers/conversation-worker';
 import { SummarizerFactory } from '../sub-agents/summarizer/sub-agent';
 import { IMemoryService, MemoryServiceFactory } from '../../memory-service';
@@ -12,59 +12,56 @@ import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
 import { IWorker } from '../../../types/workers';
 import { ISubAgent } from '../../../types/agents';
 import { config } from '../../../config';
+import { ISessionService } from '../../session-service';
 
 interface IAgent {
-  handle(message: unknown, options?: ProcessOptions): Promise<ProcessedMessage>;
+  handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage>;
 }
 
 class Agent implements IAgent {
   constructor(
     private logger: ILogger,
-    private messageService: IMessageService,
-    private memoryService: IMemoryService,
+    private db: IDatabaseService,
+    private sessionManager: ISessionManager,
     private conversationWorker: IWorker,
     private summarizerWorker: ISubAgent,
     private manager: IManager,
     private channel: string,
-    private sessionService: ISessionService,
   ) { }
 
-  async handle(message: string, options?: ProcessOptions): Promise<ProcessedMessage> {
+  async handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage> {
+    const sessionService = this.sessionManager.getSessionService(originId);
+    const messageService = MessageServiceFactory.create(this.db, sessionService);
+    const memoryService = MemoryServiceFactory.create(this.db, sessionService);
     const safeMessage = toSafeMessage(message);
 
-    this.logger.info(`Processing message from ${this.channel}: "${previewMessage(safeMessage)}"`);
-
-    // const result = (await handlePlan(safeMessage, this.logger, options)).response || '';
+    this.logger.info(`Processing message from ${this.channel} (origin: ${originId}): "${previewMessage(safeMessage)}"`);
 
     // todo: do not limit commands with slash, but with a list of known commands
     if (isCommand(safeMessage)) {
       const response = handleCommand(safeMessage, { source: this.channel }).response || '';
-      this.historyHelper(safeMessage, response);
+      this.historyHelper(safeMessage, response, sessionService);
       return response;
     }
 
     const response = await this.manager.run({
       userMessage: safeMessage,
       channel: this.channel,
-      message: this.messageService,
+      message: messageService,
       options: { ...options },
     });
     
     this.logger.info(`Processed message from ${this.channel}: "${previewMessage(safeMessage)}" => "${previewMessage(response)}"`);
 
-    // if (typeof response !== 'string') {
-    //   return this.persistAssistantStream(response, safeMessage);
-    // }
-
-    this.historyHelper(safeMessage, response);
-    this.summarizerHelper(safeMessage, response);
+    this.historyHelper(safeMessage, response, sessionService);
+    this.summarizerHelper(safeMessage, response, sessionService, memoryService);
 
     return response;
   }
 
-  private historyHelper(ask: string, answer: string) {
+  private historyHelper(ask: string, answer: string, sessionService: ISessionService) {
     this.conversationWorker.run({
-      sessionId: this.sessionService.getSession().id,
+      sessionId: sessionService.getSession().id,
       ask,
       answer,
       channel: this.channel,
@@ -74,15 +71,15 @@ class Agent implements IAgent {
       );
   }
 
-  private summarizerHelper(ask: string, answer: string) {
+  private summarizerHelper(ask: string, answer: string, sessionService: ISessionService, memoryService: IMemoryService) {
     if (!config.AI.SUMMARIZER.ENABLED) return;
 
     const conversation = {
-      sessionId: this.sessionService.getSession().id,
+      sessionId: sessionService.getSession().id,
       ask,
       answer,
       channel: this.channel,
-      memoryService: this.memoryService,
+      memoryService: memoryService,
     };
 
     this.summarizerWorker.handler(conversation)
@@ -93,22 +90,19 @@ class Agent implements IAgent {
 }
 
 class AgentFactory {
-  static create(logger: ILogger, channel: string, db: IDatabaseService, session: ISessionService): Agent {
-    const messageService = MessageServiceFactory.create(db, session);
-    const memoryService = MemoryServiceFactory.create(db, session);
-    const conversationWorker = ConversationWorkerFactory.create(logger, messageService);
+  static create(logger: ILogger, channel: string, db: IDatabaseService, sessionManager: ISessionManager): Agent {
+    const conversationWorker = ConversationWorkerFactory.create(logger, db, sessionManager);
     const summarizerWorker = SummarizerFactory.create(logger);
     const manager = ManagerFactory.create(logger);
 
     return new Agent(
       logger,
-      messageService,
-      memoryService,
+      db,
+      sessionManager,
       conversationWorker,
       summarizerWorker,
       manager,
       channel,
-      session,
     );
   }
 }
