@@ -12,9 +12,9 @@ import { IHeartbeatRunner, HeartbeatSingleton } from './services/agents/sub-agen
 import { ChannelsSingleton, ADAPTERS, type IChannelsManager } from './channels';
 import { SHUTDOWN_SIGNALS } from './constants/tui';
 import { hasFlag, logError } from './utils/runtime';
+import { SessionManager } from './services/session-manager';
 import { DatabaseServiceFactory } from './infrastructure/db-sqlite';
 import { HeartbeatRepositoryFactory } from './repositories/heartbeat';
-import { SessionServiceFactory } from './services/session-service';
 import { DashboardServerFactory, WebServerHandle } from './dashboard';
 import { createPlugins, buildRegistry } from '../plugins';
 
@@ -53,8 +53,8 @@ class Application implements IApplication {
 
   private async createCliRuntime(): Promise<IRuntime> {
     const db = DatabaseServiceFactory.create();
-    const session = SessionServiceFactory.create(db, this.source);
-    const agent = AgentFactory.create(this.logger, this.source, db, session);
+    const sessionManager = new SessionManager(db);
+    const agent = AgentFactory.create(this.logger, this.source, db, sessionManager);
     const registry = buildRegistry(createPlugins());
     const channels = ChannelsSingleton.getInstance(this.logger, agent, registry.collect(ADAPTERS));
     const heartbeat = HeartbeatSingleton.getInstance(this.logger, HeartbeatRepositoryFactory.create(db), channels);
@@ -86,7 +86,7 @@ class Application implements IApplication {
       title: 'koris-agent',
       showHints: false,
       placeholder: 'Type /help for commands.',
-      onInput: async (input: string) => agent.handle(input),
+      onInput: async (input: string) => agent.handle(input, 'tui'),
     });
   }
 

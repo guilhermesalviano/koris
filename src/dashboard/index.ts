@@ -94,7 +94,7 @@ class ChatRouteHandler {
     this.setupSseHeaders(res);
 
     try {
-      const result = await this.agent.handle(message, {
+      const result = await this.agent.handle(message, 'web', {
         signal: abortController.signal,
         onProgress: (summary: string) => {
           if (clientClosed) {

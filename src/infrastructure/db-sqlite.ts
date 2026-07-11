@@ -84,7 +84,7 @@ class DatabaseService implements IDatabaseService {
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (
           id TEXT PRIMARY KEY,
-          source TEXT NOT NULL CHECK(source IN ('tui', 'web', 'telegram')),
+          source TEXT NOT NULL,
           started_at DATETIME,
           ended_at DATETIME,
           message_count INTEGER DEFAULT 0,
@@ -100,6 +100,7 @@ class DatabaseService implements IDatabaseService {
         CREATE TABLE IF NOT EXISTS memories (
           id TEXT PRIMARY KEY,
           session_id TEXT NOT NULL,
+          source TEXT NOT NULL,
           type TEXT NOT NULL CHECK(type IN ('summary', 'fact', 'lesson', 'reminder')),
           content TEXT NOT NULL,
           embedding TEXT NULL,

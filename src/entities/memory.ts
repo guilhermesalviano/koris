@@ -4,6 +4,7 @@ import { MemoryType } from "../types/memory";
 export class Memory {
   public id: string;
   public sessionId: string;
+  public source: string;
   public type: MemoryType;
   public content: string;
   public embedding?: number[];
@@ -14,6 +15,7 @@ export class Memory {
   constructor(data: {
     id?: string;
     sessionId: string;
+    source: string;
     type: MemoryType;
     content: string;
     embedding?: number[];
@@ -23,6 +25,7 @@ export class Memory {
   }) {
     this.id = data.id || generateId();
     this.sessionId = data.sessionId;
+    this.source = data.source;
     this.type = data.type;
     this.content = data.content;
     this.embedding = data.embedding;
