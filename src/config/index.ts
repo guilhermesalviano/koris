@@ -36,6 +36,7 @@ export const config = {
     ALLOW_REMOTE_BASE_URL: get('ai.allow_remote_url', 'false') === 'true',
     BASE_URL:  get('ai.base_url', 'http://localhost:11434'),
     API_TOKEN: get('ai.api_token', ''),
+    SERPAPI_KEY: get('ai.serpapi_key', ''),
     MODEL:     get('ai.model', 'gemma4:e2b'),
     TIMEOUTS: {
       IDLE_MS:   Number(get('ai.timeouts.idle_ms', String(6 * 60_000))),

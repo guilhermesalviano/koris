@@ -34,7 +34,8 @@
     "allow_remote_url": false,
     "provider": "ollama",
     "base_url": "http://localhost:11434",
-    "api_token": "",
+    "api_token": "PROVIDER_API_TOKEN",
+    "serpapi_key": "SERPAPI_KEY",
     "model": "gemma4:e4b",
     "embedding": {
       "enabled": true,
