@@ -57,13 +57,15 @@ class ContextRepository implements IContextRepository {
    */
   private formatAsPrompt(system: SystemInfo, personal: PersonalInformation): string {
     return [
-      system.source ? `- Channel Source: ${system.source}` : null,
-      system.datetime ? `- Datetime: ${system.datetime}` : null,
-      personal.name ? `- User name: ${personal.name}` : null,
-      personal.gender ? `- User gender: ${personal.gender}` : null,
-      personal.birthday ? `- User birthday: ${personal.birthday}` : null,
-      personal.location ? `- User location: ${personal.location}` : null,
-      personal.occupation ? `- User occupation: ${personal.occupation}` : null,
+      "# Before responding, consider the following context information:",
+      system.datetime ? `1. Datetime: ${system.datetime}` : null,
+      system.source ? `2. Channel Source: ${system.source}` : null,
+      system.platform ? `3. Platform: ${system.platform}` : null,
+      `4. Main Human Information:`,
+      `- Name: ${personal.name}${personal.gender ? `, gender: ${personal.gender}` : null}${personal.birthday ? `, birthday: ${personal.birthday}` : null}`,
+      // To do: variable information... Refactor in future.
+      personal.location ? `- location: ${personal.location}` : null,
+      personal.occupation ? `- occupation: ${personal.occupation}` : null,
     ].join('\n');
   }
 }
