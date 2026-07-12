@@ -17,6 +17,7 @@ interface BuildPromptParams {
   toolsEnabled?: boolean;
   messageHistory?: Message[];
   includeTaskTools?: boolean;
+  sessionId?: string;
 }
 
 interface IPromptRepository {
@@ -49,7 +50,7 @@ class PromptRepository implements IPromptRepository {
     return { messages, tools };
   }
 
-  private async buildHistory({ channel, userMessage, messageHistory }: BuildPromptParams): Promise<Message[]> {
+  private async buildHistory({ channel, userMessage, messageHistory, sessionId }: BuildPromptParams): Promise<Message[]> {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
 
     const injectedContent = InjectManager.getInjectedContent();
@@ -58,7 +59,7 @@ class PromptRepository implements IPromptRepository {
     const learnedSkills = this.buildLearnedSkills();
     if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
 
-    const memory = await this.buildMemoryContext(userMessage);
+    const memory = await this.buildMemoryContext(userMessage, sessionId);
     if (memory) systemBlocks.push(`# Cross-session Memory Context\n${memory}`);
 
     const context = this.contextRepository.get({ channel });
@@ -82,10 +83,10 @@ class PromptRepository implements IPromptRepository {
       .slice(0, 15000);
   }
 
-  private async buildMemoryContext(userMessage: string): Promise<string> {
+  private async buildMemoryContext(userMessage: string, sessionId?: string): Promise<string> {
     try {
       const queryEmbedding = await this.aiProvider.embed(userMessage);
-      const memories = this.memoryRepository.search(queryEmbedding, 20);
+      const memories = this.memoryRepository.search(queryEmbedding, 20, sessionId);
 
       if (memories.length === 0) {
         return '';

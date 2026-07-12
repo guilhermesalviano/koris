@@ -18,14 +18,16 @@ class ChatService implements IChatService {
     message: string,
     channel: string,
     options?: ProcessOptions,
-    messageHistory?: Message[]
+    messageHistory?: Message[],
+    sessionId?: string
   ): Promise<AIResponse> {
     const messagesHistory = messageHistory?.map(m => ({ role: m.role, content: m.content }));
     const promptPayload = await this.promptRepository.build({
       userMessage: message,
       channel,
       toolsEnabled: options?.toolsEnabled,
-      messageHistory: messagesHistory
+      messageHistory: messagesHistory,
+      sessionId
     });
 
     try {
@@ -46,9 +48,10 @@ class ChatService implements IChatService {
     message: string,
     channel: string,
     options?: ProcessOptions,
-    messageHistory?: Message[]
+    messageHistory?: Message[],
+    sessionId?: string
   ): Promise<ProcessedMessage> {
-    const response = await this.complete(message, channel, options, messageHistory);
+    const response = await this.complete(message, channel, options, messageHistory, sessionId);
     if (response.kind === 'message') return response.text;
     return JSON.stringify({
       tool_calls: response.calls.map(call => ({

@@ -7,10 +7,10 @@ import { similarity } from 'ml-distance';
 interface IMemoryRepository {
   save(memory: Memory): void;
   update(memory: Memory): void;
-  getAll(): Memory[];
+  getAll(excludeSessionId?: string): Memory[];
   getBySessionId(sessionId: string): Memory[];
   deleteById(id: string): void;
-  search(queryEmbedding: number[], limit: number): Memory[];
+  search(queryEmbedding: number[], limit: number, excludeSessionId?: string): Memory[];
 }
 
 class MemoryRepository implements IMemoryRepository {
@@ -48,11 +48,18 @@ class MemoryRepository implements IMemoryRepository {
     );
   }
 
-  getAll(): Memory[] {
-    const rows = this.db.query<any>(
-      `SELECT id, session_id, source, type, content, embedding, tags, importance, created_at FROM memories
-       ORDER BY created_at DESC`
-    );
+  getAll(excludeSessionId?: string): Memory[] {
+    let sql = `SELECT id, session_id, source, type, content, embedding, tags, importance, created_at FROM memories`;
+    const params: string[] = [];
+
+    if (excludeSessionId) {
+      sql += ` WHERE session_id != ?`;
+      params.push(excludeSessionId);
+    }
+    
+    sql += ` ORDER BY created_at DESC`;
+
+    const rows = this.db.query<any>(sql, params);
 
     return rows.map(this.mapRow);
   }
@@ -68,8 +75,8 @@ class MemoryRepository implements IMemoryRepository {
     return rows.map(this.mapRow);
   }
 
-  search(queryEmbedding: number[], limit: number): Memory[] {
-    const memories = this.getAll();
+  search(queryEmbedding: number[], limit: number, excludeSessionId?: string): Memory[] {
+    const memories = this.getAll(excludeSessionId);
     const scoredMemories = memories
       .filter((m) => m.embedding)
       .map((m) => ({
