@@ -11,6 +11,8 @@ import { InjectManager } from '../services/inject-manager';
 import { SYSTEM_PROMPT } from '../constants';
 import { config } from '../config';
 
+const CHAT_HISTORY_LIMIT = 20;
+
 interface BuildPromptParams {
   userMessage: string;
   channel: string;
@@ -65,9 +67,16 @@ class PromptRepository implements IPromptRepository {
     const context = this.contextRepository.get({ channel });
     if (context) systemBlocks.push(`# Session Context\n${context}`);
 
+    const limitedHistory = messageHistory?.slice(-CHAT_HISTORY_LIMIT) ?? [];
+
+    // need more tests
+    // if (limitedHistory.length > 0 || memory) {
+    //   systemBlocks.push("Direct answer preferred based on provided context.");
+    // }
+
     return [
       { role: 'system', content: systemBlocks.join('\n\n') },
-      ...(messageHistory ?? []),
+      ...limitedHistory,
       { role: 'user', content: userMessage },
     ];
   }
