@@ -6,7 +6,13 @@ import type { IAgent } from '../../src/services/agents/main-agent/agent';
 import { stripInternalStreamMarkers } from '../../src/utils/stream-markers';
 import { config } from '../../src/config';
 
+const whatsappConfig = config?.CHANNELS?.WHATSAPP;
+const mentionId = whatsappConfig?.MENTION_ID;
+
 const WHATSAPP_MESSAGE_LIMIT = 4_000;
+const whitelist = whatsappConfig?.WHITELIST
+  ? whatsappConfig.WHITELIST.split(',').map(num => num.trim()).filter(Boolean)
+  : [];
 
 interface WhatsAppChannelStartOptions {
   authFolder: string;
@@ -82,56 +88,70 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
     for (const msg of messages) {
       options.logger.debug(`[whatsapp] raw message received: ${JSON.stringify(msg)}`);
 
-      if (msg.key.fromMe) continue;
+      const { key, pushName: senderName } = msg;
+      const { fromMe, remoteJid: jid, participantAlt, remoteJidAlt } = key;
 
-      const isWhitelisted = config?.CHANNELS?.WHATSAPP?.WHITELIST
-        .split(",")
-        .map(number => number.trim())
-        .filter(Boolean)
-        .some(number =>
-          msg.key.participantAlt?.includes(number) ||
-          msg.key.remoteJidAlt?.includes(number));
+      if (fromMe) continue;
+
+      const isWhitelisted = whitelist.some(number =>
+        participantAlt?.includes(number) || remoteJidAlt?.includes(number)
+      );
 
       if (!isWhitelisted) {
         options.logger.debug(`[whatsapp] message ignored: not from whitelisted number`);
         continue;
       }
 
-      const jid = msg.key.remoteJid;
-      if (!jid) continue;
+      if (!jid || !senderName) continue;
 
-      const text = extractText(msg);
-      if (!text) continue;
+       const rawText = extractText(msg);
+       if (!rawText) continue;
 
-      const name = msg.pushName;
-      if (!name) continue;
+       if (isGroupMessageAndMentioned(msg, rawText, mentionId)) {
+         const cleanedText = mentionId ? rawText.replace(`@${mentionId}`, '').trim() : rawText;
 
-      const channel = new WhatsAppChannel(sock, options.mentionId, options.logger);
-      void channel.handleMessage(options.agent, jid, name, text).catch((err: Error) => {
-        options.logger.warn(`WhatsApp message handling error: ${err.message}`);
-      });
-    }
-  });
+         const channel = new WhatsAppChannel(sock);
+         void channel.handleMessage(options.agent, jid, senderName, cleanedText).catch((err: Error) => {
+           options.logger.warn(`WhatsApp message handling error: ${err.message}`);
+         });
+       } else if (!jid.endsWith('@g.us')) {
+         const cleanedText = mentionId ? rawText.replace(`@${mentionId}`, '').trim() : rawText;
 
-  return sock;
-}
+         const channel = new WhatsAppChannel(sock);
+         void channel.handleMessage(options.agent, jid, senderName, cleanedText).catch((err: Error) => {
+           options.logger.warn(`WhatsApp message handling error: ${err.message}`);
+         });
+       }
+     }
+   });
 
-function extractText(msg: { message?: unknown }): string | null {
-  if (!msg.message || typeof msg.message !== 'object') return null;
+   return sock;
+ }
 
-  const content = msg.message as Record<string, unknown>;
+ function extractText(msg: { message?: unknown }): string | null {
+   if (!msg.message || typeof msg.message !== 'object') return null;
 
-  const conversation = content['conversation'];
-  if (typeof conversation === 'string') return conversation;
+   const content = msg.message as Record<string, unknown>;
 
-  const extended = content['extendedTextMessage'];
-  if (extended && typeof extended === 'object') {
-    const text = (extended as Record<string, unknown>)['text'];
-    if (typeof text === 'string') return text;
-  }
+   const conversation = content['conversation'];
+   if (typeof conversation === 'string') return conversation;
 
-  return null;
-}
+   const extended = content['extendedTextMessage'];
+   if (extended && typeof extended === 'object') {
+     const text = (extended as Record<string, unknown>)['text'];
+     if (typeof text === 'string') return text;
+   }
+
+   return null;
+ }
+
+ function isGroupMessageAndMentioned(msg: any, text: string, mentionId: string): boolean {
+   const jid = msg.key?.remoteJid;
+   if (!jid || !jid.endsWith('@g.us')) return false;
+
+   const mention = `@${mentionId}`;
+   return mentionId.length > 0 && text.includes(mention);
+ }
 
 function createBaileysLogger(logger: ILogger) {
   return {
@@ -148,26 +168,13 @@ function createBaileysLogger(logger: ILogger) {
 
 class WhatsAppChannel implements IWhatsAppChannel {
   constructor(
-    private readonly sock?: SocketLike,
-    private readonly mentionId: string = '',
-    private readonly logger?: ILogger,
+    private readonly sock?: SocketLike
   ) {}
 
   async handleMessage(agent: IAgent, jid: string, name: string, text: string): Promise<void> {
     try {
-      if (jid.endsWith('@g.us')) {
-        const mention = `@${this.mentionId}`;
-        const isMentioned = this.mentionId.length > 0 && text.includes(mention);
-
-        this.logger?.debug(
-          `[whatsapp] group message — expected="${mention}" text_start="${text.slice(0, 30)}" match=${isMentioned}`,
-        );
-
-        if (!isMentioned) return;
-      }
-
-      const prompt = `Message from ${name}: ${text}`;
-
+      // In testing... To remember old version: `Message from ${name}: ${text}`;
+      const prompt = `${name} says: ${text}`;
       const response = await agent.handle(prompt, jid);
       const resolved = await this.resolveResponse(response);
       await this.sendText(jid, resolved);
@@ -223,7 +230,7 @@ class WhatsAppChannelFactory {
   static async start(
     options: WhatsAppChannelStartOptions,
   ): Promise<{ channel: IWhatsAppChannel; stop: () => void }> {
-    const channel = new WhatsAppChannel(undefined, options.mentionId, options.logger);
+    const channel = new WhatsAppChannel(undefined);
     const sock = await startBaileysSocket(options);
     activeSocket = sock;
 
