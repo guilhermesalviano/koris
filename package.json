@@ -43,7 +43,7 @@
   "dependencies": {
     "@guilhermesalviano/telegram-bot": "^0.1.2",
     "@whiskeysockets/baileys": "7.0.0-rc13",
-    "better-sqlite3": "^12.9.0",
+    "better-sqlite3": "^12.11.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "gray-matter": "^4.0.3",
