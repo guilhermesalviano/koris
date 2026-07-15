@@ -57,7 +57,6 @@ class ContextRepository implements IContextRepository {
    */
   private formatAsPrompt(system: SystemInfo, personal: PersonalInformation): string {
     return [
-      '[Session Context]',
       system.source ? `- Channel Source: ${system.source}` : null,
       system.datetime ? `- Datetime: ${system.datetime}` : null,
       personal.name ? `- User name: ${personal.name}` : null,
@@ -65,7 +64,6 @@ class ContextRepository implements IContextRepository {
       personal.birthday ? `- User birthday: ${personal.birthday}` : null,
       personal.location ? `- User location: ${personal.location}` : null,
       personal.occupation ? `- User occupation: ${personal.occupation}` : null,
-      'The user above is the human. "I/me/my" in their messages refer to them; "you/your" refer to Koris (you, the assistant).',
     ].join('\n');
   }
 }

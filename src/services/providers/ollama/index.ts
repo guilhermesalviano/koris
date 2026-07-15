@@ -24,11 +24,13 @@ class OllamaAIProvider implements AIProvider {
   readonly name = 'ollama';
   private readonly baseUrl: string;
   private readonly defaultModel: string;
+  private readonly embeddingModel: string;
 
   constructor(private readonly logger: ILogger, opts?: { baseUrl?: string; model?: string }) {
     const resolvedBaseUrl = (opts?.baseUrl ?? config.AI.BASE_URL).replace(/\/+$/, '');
     this.baseUrl = validateBaseUrl(resolvedBaseUrl, config.AI.ALLOW_REMOTE_BASE_URL);
     this.defaultModel = opts?.model ?? config.AI.MODEL;
+    this.embeddingModel = config.AI.EMBEDDING.MODEL;
   }
 
   async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
@@ -206,6 +208,27 @@ class OllamaAIProvider implements AIProvider {
     }
   }
 
+  async embed(text: string): Promise<number[]> {
+    if (!config.AI.EMBEDDING.ENABLED) {
+      throw new Error('Embeddings are disabled in configuration');
+    }
+    const res = await fetch(`${this.baseUrl}/api/embeddings`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: this.embeddingModel,
+        prompt: text
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error(`Ollama /api/embeddings failed (${res.status})`);
+    }
+
+    const data = await res.json() as { embedding: number[] };
+    return data.embedding;
+  }
+
   private async postChat(request: AIChatRequest, signal: AbortSignal): Promise<string> {
     const res = await this.post(request, signal, false);
     const data = await res.json() as OllamaChatChunk;
@@ -216,7 +239,10 @@ class OllamaAIProvider implements AIProvider {
     }
 
     const content = this.parseChunk(data);
-    if (!content) throw new Error('Ollama response missing content');
+    if (!content) {
+      this.logger.warn('Ollama response content was empty, returning empty string', { data });
+      return '';
+    }
     return content;
   }
 

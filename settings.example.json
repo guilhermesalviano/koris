@@ -2,6 +2,7 @@
   "temp_folder": "./temp",
   "web_port": 3000,
   "timezone": "America/Sao_Paulo",
+  "learned_skills_limit": 10,
   "log": {
     "level": "debug"
   },
@@ -33,8 +34,13 @@
     "allow_remote_url": false,
     "provider": "ollama",
     "base_url": "http://localhost:11434",
-    "api_token": "",
+    "api_token": "PROVIDER_API_TOKEN",
+    "serpapi_key": "SERPAPI_KEY",
     "model": "gemma4:e4b",
+    "embedding": {
+      "enabled": true,
+      "model": "nomic-embed-text"
+    },
     "think_model": "gemma4:26b-a4b-it-q4_K_M",
     "summarizer": {
       "enabled": true

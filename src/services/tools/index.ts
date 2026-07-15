@@ -1,5 +1,6 @@
 import { CommandFn, ToolCall, ToolResult } from '../../types/tools';
 import { executeCurl } from './curl-request';
+import { executeSearch } from './search';
 import { executeCommand } from './execute-command';
 import { executeGetSkill } from './get-skill';
 import { setTask } from './task/create';
@@ -53,6 +54,7 @@ class AgnosticExecutionToolFactory {
       'execute_command': executeCommand,
       'get_skill': executeGetSkill,
       'curl_request': executeCurl,
+      'search_engine': executeSearch,
       'set_task': setTask,
       'list_tasks': listTasks,
       'update_task': updateTask,

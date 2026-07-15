@@ -7,7 +7,7 @@ import { ISessionService } from "./session-service";
 interface SaveMemoryProps {
   type: MemoryType;
   content: string;
-  embedding?: string;
+  embedding?: number[];
   tags?: string;
   importance?: number;
 }
@@ -28,9 +28,10 @@ class MemoryService implements IMemoryService {
   }
 
   save(props: SaveMemoryProps): void {
-    const sessionId = this.sessionService.getSession().id;
+    const session = this.sessionService.getSession();
     const memory = new Memory({
-      sessionId,
+      sessionId: session.id,
+      source: session.source,
       type: props.type,
       content: props.content,
       embedding: props.embedding,
@@ -41,15 +42,16 @@ class MemoryService implements IMemoryService {
   }
 
   upsert(props: SaveMemoryProps): void {
-    const sessionId = this.sessionService.getSession().id;
+    const session = this.sessionService.getSession();
     const existing = this.memoryRepository
-      .getBySessionId(sessionId)
+      .getBySessionId(session.id)
       .find((m) => m.type === props.type);
 
     if (existing) {
       const updatedMemory = new Memory({
         id: existing.id,
         sessionId: existing.sessionId,
+        source: session.source,
         type: props.type,
         content: this.mergeContent(existing.content, props.content),
         embedding: props.embedding ?? existing.embedding,

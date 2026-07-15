@@ -1,6 +1,6 @@
 import { IMemoryService } from "../../../memory-service";
 import type { ILogger } from "../../../../infrastructure/logger";
-import { createAIProvider } from "../../../providers";
+import { createAIProvider, getAIProvider } from "../../../providers";
 import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
 import { SUMMARIZATION_PROMPT } from "../../../../constants";
 import { replacePlaceholders } from "../../../../utils/prompt";
@@ -35,9 +35,22 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
         throw new Error('Summarizer received an unexpected tool-call response');
       }
 
-      const memory = parseSummarizerResponse(response.text);
+      const parsedMemory = parseSummarizerResponse(response.text);
+      
+      let embedding: number[] | undefined;
+      try {
+        const provider = getAIProvider(this.logger);
+        embedding = await provider.embed(parsedMemory.content);
+      } catch (error) {
+        this.logger.error(`Failed to generate embedding for summarized memory`, { error });
+      }
 
-      props.memoryService.upsert(memory);
+      const memory = {
+        ...parsedMemory,
+        embedding,
+      };
+
+      props.memoryService.save(memory);
       this.logger.info(`Summarizer worker completed for session ${props.sessionId}`);
     } catch (error) {
       this.logger.error(`Failed to summarize for session ${props.sessionId}`, { error });

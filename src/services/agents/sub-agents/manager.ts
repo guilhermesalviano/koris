@@ -50,7 +50,8 @@ class Manager implements IManager {
     };
 
     const prompt = replacePlaceholders(FIRST_PROMPT_HELPER, { v1: userMessage });
-    const response = await this.ChatService.complete(prompt, channel, options, messageHistory);
+    const sessionId = message.getSessionId();
+    const response = await this.ChatService.complete(prompt, channel, options, messageHistory, sessionId);
     if (response.kind === 'message') return response.text;
     return this.dispatchToolCalls(response.calls, userMessage, messageHistory, ctx);
   }
@@ -75,7 +76,8 @@ class Manager implements IManager {
       await this.learner.run({ toolCalls: toLearn, userMessage, messageHistory, ctx });
 
       const skillPrompt = replacePlaceholders(SKILL_READY_PROMPT, { v1: userMessage });
-      const response = await this.ChatService.complete(skillPrompt, ctx.channel, ctx.options, ctx.message.getHistory());
+      const sessionId = ctx.message.getSessionId();
+      const response = await this.ChatService.complete(skillPrompt, ctx.channel, ctx.options, ctx.message.getHistory(), sessionId);
       if (response.kind === 'message') return response.text;
       toExecute = response.calls.filter(cb => cb.name !== 'get_skill');
 

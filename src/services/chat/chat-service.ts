@@ -18,14 +18,16 @@ class ChatService implements IChatService {
     message: string,
     channel: string,
     options?: ProcessOptions,
-    messageHistory?: Message[]
+    messageHistory?: Message[],
+    sessionId?: string
   ): Promise<AIResponse> {
     const messagesHistory = messageHistory?.map(m => ({ role: m.role, content: m.content }));
-    const promptPayload = this.promptRepository.build({
+    const promptPayload = await this.promptRepository.build({
       userMessage: message,
       channel,
       toolsEnabled: options?.toolsEnabled,
-      messageHistory: messagesHistory
+      messageHistory: messagesHistory,
+      sessionId
     });
 
     try {
@@ -46,9 +48,10 @@ class ChatService implements IChatService {
     message: string,
     channel: string,
     options?: ProcessOptions,
-    messageHistory?: Message[]
+    messageHistory?: Message[],
+    sessionId?: string
   ): Promise<ProcessedMessage> {
-    const response = await this.complete(message, channel, options, messageHistory);
+    const response = await this.complete(message, channel, options, messageHistory, sessionId);
     if (response.kind === 'message') return response.text;
     return JSON.stringify({
       tool_calls: response.calls.map(call => ({
@@ -61,8 +64,9 @@ class ChatService implements IChatService {
 class ChatServiceFactory {
   static create(logger: ILogger): IChatService {
     const db = DatabaseServiceFactory.create();
-    const promptRepository = PromptRepositoryFactory.create(db, logger);
-    const completionService = new AICompletionService(createAIProvider(logger), logger);
+    const aiProvider = createAIProvider(logger);
+    const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
+    const completionService = new AICompletionService(aiProvider, logger);
     return new ChatService(completionService, promptRepository);
   }
 }
