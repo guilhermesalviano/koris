@@ -19,6 +19,7 @@ export const config = {
   WEB_PORT:    Number(get('web_port', '3000')),
   BASE_DIR:    process.cwd(),
   GATEWAY_HOST: get('gateway_host', 'http://localhost:3000'),
+  LEARNED_SKILLS_LIMIT: Number(get('learned_skills_limit', '10')),
   SESSION: {
     TTL_MS: Number(get('session.ttl_ms', String(30 * 60 * 1000))),
   },
@@ -35,6 +36,7 @@ export const config = {
     ALLOW_REMOTE_BASE_URL: get('ai.allow_remote_url', 'false') === 'true',
     BASE_URL:  get('ai.base_url', 'http://localhost:11434'),
     API_TOKEN: get('ai.api_token', ''),
+    SERPAPI_KEY: get('ai.serpapi_key', ''),
     MODEL:     get('ai.model', 'gemma4:e2b'),
     TIMEOUTS: {
       IDLE_MS:   Number(get('ai.timeouts.idle_ms', String(6 * 60_000))),
@@ -43,6 +45,10 @@ export const config = {
     },
     SUMMARIZER: {
       ENABLED: get('ai.summarizer.enabled', 'true') === 'true',
+    },
+    EMBEDDING: {
+      ENABLED: get('ai.embedding.enabled', 'false') === 'true',
+      MODEL:   get('ai.embedding.model', 'nomic-embed-text'),
     },
   },
   CHANNELS: {

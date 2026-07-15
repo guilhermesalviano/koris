@@ -59,7 +59,7 @@ class Heartbeat implements ISubAgent<Date> {
 
       try {
         // refactor - usar um novo tipo de manager para heartbeat tasks, que não precisa de message history, channel, etc. Talvez só passar o texto da task e um contexto com logger.
-        const payload = this.promptRepository
+        const payload = await this.promptRepository
           .build({
             userMessage: prompt,
             channel: 'background',
@@ -162,12 +162,13 @@ class Heartbeat implements ISubAgent<Date> {
 class HeartbeatFactory {
   static create(logger: ILogger, channelsManager: IChannelsManager): Heartbeat {
     const db = DatabaseServiceFactory.create();
-    const promptRepository = PromptRepositoryFactory.create(db, logger);
+    const aiProvider = createAIProvider(logger);
+    const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
     const heartbeatRepository = HeartbeatRepositoryFactory.create(db);
     const agnosticExecutionTool = AgnosticExecutionToolFactory.create();
     const toolsQueue = new ToolsQueue(logger, agnosticExecutionTool);
 
-    const completionService = new AICompletionService(createAIProvider(logger), logger);
+    const completionService = new AICompletionService(aiProvider, logger);
     const executorWorker = ExecutorWorkerFactory.create(logger);
     return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, channelsManager, completionService, executorWorker);
   }

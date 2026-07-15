@@ -1,15 +1,17 @@
 import { IContextRepository, ContextRepositoryFactory } from './context';
-import type { AIChatRequest, AIToolDefinition } from '../types/chat';
+import type { AIChatRequest, AIToolDefinition, AIProvider } from '../types/chat';
 import { IToolsRepository, ToolsRepositoryFactory } from './tools';
-import { Message, MessageRole } from '../types/messages';
+import { Message } from '../types/messages';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
 import { IMemoryRepository, MemoryRepositoryFactory } from './memory';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
-import { SYSTEM_PROMPT } from '../constants';
 import { SkillsRepositoryFactory } from './skills';
 import { ILogger } from '../infrastructure/logger';
+import { InjectManager } from '../services/inject-manager';
+import { SYSTEM_PROMPT } from '../constants';
+import { config } from '../config';
 
-const DEFAULT_LEARNED_SKILLS_LIMIT = 10;
+const CHAT_HISTORY_LIMIT = 20;
 
 interface BuildPromptParams {
   userMessage: string;
@@ -17,10 +19,11 @@ interface BuildPromptParams {
   toolsEnabled?: boolean;
   messageHistory?: Message[];
   includeTaskTools?: boolean;
+  sessionId?: string;
 }
 
 interface IPromptRepository {
-  build(params: BuildPromptParams): AIChatRequest;
+  build(params: BuildPromptParams): Promise<AIChatRequest>;
 }
 
 /**
@@ -33,6 +36,8 @@ class PromptRepository implements IPromptRepository {
     private toolsRepository: IToolsRepository,
     private learnedSkillsRepository: ILearnedSkillsRepository,
     private memoryRepository: IMemoryRepository,
+    private aiProvider: AIProvider,
+    private logger: ILogger,
   ) {}
 
   /**
@@ -40,61 +45,83 @@ class PromptRepository implements IPromptRepository {
    * @param params BuildPromptParams
    * @returns AIChatRequest
    */
-  build(params: BuildPromptParams): AIChatRequest {
-    const messages = this.buildHistory(params);
+  async build(params: BuildPromptParams): Promise<AIChatRequest> {
+    const messages = await this.buildHistory(params);
     const tools = this.buildTools(params);
 
     return { messages, tools };
   }
 
-  /**
-   * Build all messages (system + history + user)
-   */
-  private buildHistory({ channel, userMessage, messageHistory }: BuildPromptParams): Message[] {
+  private async buildHistory({ channel, userMessage, messageHistory, sessionId }: BuildPromptParams): Promise<Message[]> {
+    const systemBlocks: string[] = [SYSTEM_PROMPT];
+
+    const injectedContent = InjectManager.getInjectedContent();
+    if (injectedContent) systemBlocks.push(injectedContent);
+
+    const learnedSkills = this.buildLearnedSkills();
+    if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
+
+    const memory = await this.buildMemoryContext(userMessage, sessionId);
+    if (memory) systemBlocks.push(`# Cross-session Memory Context\n${memory}`);
+
+    const context = this.contextRepository.get({ channel });
+    if (context) systemBlocks.push(`# Session Context\n${context}`);
+
+    const limitedHistory = messageHistory?.slice(-CHAT_HISTORY_LIMIT) ?? [];
+
+    // need more tests
+    // if (limitedHistory.length > 0 || memory) {
+    //   systemBlocks.push("Direct answer preferred based on provided context.");
+    // }
+
     return [
-      ...this.buildSystemPrompt(channel),
-      ...(messageHistory || []),
-      this.buildMessage("user", userMessage),
+      { role: 'system', content: systemBlocks.join('\n\n') },
+      ...limitedHistory,
+      { role: 'user', content: userMessage },
     ];
   }
 
-  /**
-   * Build system prompt messages
-   */
-  private buildSystemPrompt(channel: string): Message[] {
-    const messages: Message[] = [];
-    const baseHistory = this.buildBaseHistoryPrompt(SYSTEM_PROMPT);
+  private buildLearnedSkills(): string {
+    const learnedSkillsLimit = config.LEARNED_SKILLS_LIMIT;
 
-    // TODO: get only old and relevant memories instead of all. Exclude actual session.
-    const memory = this.buildMemoryContext();
-    let systemInstructions = memory ? `
-      ${baseHistory}\n Persistent context from other sessions: ${memory}` : baseHistory;
-
-    const context = this.contextRepository.get({ channel });
-    if (context) systemInstructions += `\n ${context}`;
-
-    messages.push({ role: 'system', content: systemInstructions });
-
-    return messages;
-  }
-
-  private buildMemoryContext(): string {
-    const memories = this.memoryRepository.getAll().map(m => `${m.type}: ${m.content}`).join('\n');
-    return memories.slice(0, 15000);
-  }
-
-  private buildBaseHistoryPrompt(basePrompt: string): string {
-    const learnedSkillsLimit = DEFAULT_LEARNED_SKILLS_LIMIT;
-    const learnedSkillsContent = this.learnedSkillsRepository
+    return this.learnedSkillsRepository
       .getRecent(learnedSkillsLimit)
       .map(skill => skill.skill_content?.trim())
       .filter((content): content is string => Boolean(content))
       .join('\n')
       .slice(0, 15000);
+  }
 
-    if (!learnedSkillsContent) return basePrompt;
+  private async buildMemoryContext(userMessage: string, sessionId?: string): Promise<string> {
+    try {
+      const queryEmbedding = await this.aiProvider.embed(userMessage);
+      const memories = this.memoryRepository.search(queryEmbedding, 20, sessionId);
 
-    return `${basePrompt}\n${learnedSkillsContent}`;
+      if (memories.length === 0) {
+        return '';
+      }
+
+      const groupedMemories = memories.reduce((acc, memory) => {
+        const source = memory.source || 'Unknown';
+        if (!acc[source]) {
+          acc[source] = [];
+        }
+        acc[source].push(memory);
+        return acc;
+      }, {} as Record<string, typeof memories>);
+
+      let contextString = '';
+      for (const [source, sourceMemories] of Object.entries(groupedMemories)) {
+        contextString += `\n### channel: ${source}\n`;
+        contextString += sourceMemories.map(m => `- ${m.content}`).join('\n');
+        contextString += '\n';
+      }
+
+      return contextString.trim().slice(0, 15000);
+    } catch (e) {
+      this.logger.warn('Failed to embed user message for memory retrieval', { error: e instanceof Error ? e.message : String(e) });
+      return '';
+    }
   }
 
   private buildTools({ toolsEnabled, includeTaskTools }: BuildPromptParams): AIToolDefinition[] | undefined {
@@ -108,20 +135,16 @@ class PromptRepository implements IPromptRepository {
       includeTaskTools,
     });
   }
-
-  private buildMessage(role: MessageRole, content: string): Message {
-    return { role, content };
-  }
 }
 
 class PromptRepositoryFactory {
-  static create(db: IDatabaseService, logger: ILogger): PromptRepository {
+  static create(db: IDatabaseService, logger: ILogger, aiProvider: AIProvider): PromptRepository {
     const contextRepository = ContextRepositoryFactory.create();
     const skillsRepository = SkillsRepositoryFactory.create(logger);
     const toolsRepository = ToolsRepositoryFactory.create(skillsRepository.get());
     const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
     const memoryRepository = MemoryRepositoryFactory.create(db);
-    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, memoryRepository);
+    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, memoryRepository, aiProvider, logger);
   }
 }
 

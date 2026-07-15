@@ -5,7 +5,7 @@ export type Memory = {
   sessionId: string;
   type: MemoryType;
   content: string;
-  embedding?: string;
+  embedding?: number[];
   tags?: string;
   importance?: number;
   createdAt: Date;

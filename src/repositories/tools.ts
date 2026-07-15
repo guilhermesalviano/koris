@@ -20,6 +20,7 @@ class ToolsRepository implements IToolsRepository {
     const includeTaskTools = options?.includeTaskTools ?? true;
 
     tools.push(this.curlTool());
+    tools.push(this.searchTool());
     if (this.skills?.length > 0) tools.push(this.getSkillTool(this.skills));
     
     if (includeTaskTools) {
@@ -98,6 +99,26 @@ class ToolsRepository implements IToolsRepository {
             },
           },
           required: ['url'],
+        },
+      },
+    };
+  }
+
+  private searchTool(): AIToolDefinition {
+    return {
+      type: 'function',
+      function: {
+        name: 'search_engine',
+        description: 'Perform a web search using Google Search API.',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'The search query string.',
+            },
+          },
+          required: ['query'],
         },
       },
     };
