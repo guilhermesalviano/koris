@@ -7,6 +7,7 @@ import { replacePlaceholders } from "../../../../utils/prompt";
 import { beginFooterActivity } from "../../../../utils/footer-activity";
 import { parseSummarizerResponse } from "../../../../utils/summarizer-response";
 import { ISubAgent } from "../../../../types/agents";
+import { config } from "../../../../config";
 
 export interface SummarizerWorkerProps {
   sessionId: string,
@@ -38,11 +39,13 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
       const parsedMemory = parseSummarizerResponse(response.text);
       
       let embedding: number[] | undefined;
-      try {
-        const provider = getAIProvider(this.logger);
-        embedding = await provider.embed(parsedMemory.content);
-      } catch (error) {
-        this.logger.error(`Failed to generate embedding for summarized memory`, { error });
+      if (config.AI.EMBEDDING.ENABLED) {
+        try {
+          const provider = getAIProvider(this.logger);
+          embedding = await provider.embed(parsedMemory.content);
+        } catch (error) {
+          this.logger.error(`Failed to generate embedding for summarized memory`, { error });
+        }
       }
 
       const memory = {

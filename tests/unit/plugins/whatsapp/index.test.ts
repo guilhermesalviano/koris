@@ -67,41 +67,41 @@ describe('channels/whatsapp', () => {
       const senderName = 'TestUser';
       const text = `@${MENTION_ID} what time is it?`;
 
-      const channel = new WhatsAppChannel(mockSock as never, MENTION_ID);
+      const channel = new WhatsAppChannel(mockSock as never);
       await channel.handleMessage(agent, 'group123@g.us', senderName, text);
 
-      expect(agent.handle).toHaveBeenCalledWith(`Message from ${senderName}: ${text}`);
+      expect(agent.handle).toHaveBeenCalledWith(`${senderName} says: ${text}`, 'group123@g.us');
       expect(mockSock.sendMessage).toHaveBeenCalled();
     });
 
-    it('ignores group message that does not start with the mention', async () => {
-      const agent = { handle: vi.fn() };
+    it('forwards group message that does not start with the mention', async () => {
+      const agent = { handle: vi.fn().mockResolvedValue('pong') };
       const senderName = 'TestUser';
       const text = 'anyone know the weather today?';
 
-      const channel = new WhatsAppChannel(mockSock as never, MENTION_ID);
+      const channel = new WhatsAppChannel(mockSock as never);
       await channel.handleMessage(agent, 'group123@g.us', senderName, text);
 
-      expect(agent.handle).not.toHaveBeenCalled();
-      expect(mockSock.sendMessage).not.toHaveBeenCalled();
+      expect(agent.handle).toHaveBeenCalledWith(`${senderName} says: ${text}`, 'group123@g.us');
+      expect(mockSock.sendMessage).toHaveBeenCalled();
     });
 
-    it('ignores group message where mention appears mid-text', async () => {
-      const agent = { handle: vi.fn() };
+    it('forwards group message where mention appears mid-text', async () => {
+      const agent = { handle: vi.fn().mockResolvedValue('pong') };
 
-      const channel = new WhatsAppChannel(mockSock as never, MENTION_ID);
+      const channel = new WhatsAppChannel(mockSock as never);
       await channel.handleMessage(agent, 'group123@g.us', 'guilherme', `hey @${MENTION_ID} help`);
 
-      expect(agent.handle).not.toHaveBeenCalled();
+      expect(agent.handle).toHaveBeenCalledWith(`guilherme says: hey @${MENTION_ID} help`, 'group123@g.us');
     });
 
-    it('ignores group messages when mentionId is not configured', async () => {
-      const agent = { handle: vi.fn() };
+    it('forwards group messages even when mentionId is not configured', async () => {
+      const agent = { handle: vi.fn().mockResolvedValue('pong') };
 
-      const channel = new WhatsAppChannel(mockSock as never, '');
+      const channel = new WhatsAppChannel(mockSock as never);
       await channel.handleMessage(agent, 'group123@g.us', 'guilherme', `@${MENTION_ID} hello`);
 
-      expect(agent.handle).not.toHaveBeenCalled();
+      expect(agent.handle).toHaveBeenCalledWith(`guilherme says: @${MENTION_ID} hello`, 'group123@g.us');
     });
   });
 

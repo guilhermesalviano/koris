@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildOnboardingScreen,
   buildOnboardingSettings,
@@ -23,6 +23,8 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
+  vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('buildOnboardingScreen', () => {
@@ -133,6 +135,8 @@ describe('Onboard footer progress', () => {
   });
 
   it('creates the temp settings draft when onboarding completes from a false picker selection', () => {
+    vi.useFakeTimers();
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     const repoRoot = createTempDir();
     const appRoot = join(repoRoot, 'apps', 'client');
     const previousCwd = process.cwd();
@@ -184,9 +188,13 @@ describe('Onboard footer progress', () => {
         redraw: () => {
           redrawCalls.push('redraw');
         },
+        println: vi.fn(),
+        rl: { close: vi.fn() },
       };
 
       expect(onboard.handleKeypress('', { name: 'return' }, ctx)).toBe(true);
+      vi.advanceTimersByTime(80);
+      expect(exitSpy).toHaveBeenCalledWith(0);
       expect(readFileSync(join(appRoot, SETTINGS_FILENAME), 'utf-8')).toContain('"personal_information": {}');
       expect(inputValues).toContain('');
       expect(redrawCalls).toHaveLength(1);

@@ -197,7 +197,7 @@ describe('createChatHandler', () => {
   });
 
   it('streams progress + final response in SSE format', async () => {
-    mockAgentHandle.mockImplementation(async (_msg: string, options: { onProgress?: (s: string) => void }) => {
+    mockAgentHandle.mockImplementation(async (_msg: string, _originId: string, options: { onProgress?: (s: string) => void }) => {
       options.onProgress?.('working');
       return 'done';
     });
@@ -222,7 +222,7 @@ describe('createChatHandler', () => {
   });
 
   it('filters internal stream markers from async responses before sending SSE chunks', async () => {
-    mockAgentHandle.mockImplementation(async (_msg: string, options: { onProgress?: (s: string) => void }) => {
+    mockAgentHandle.mockImplementation(async (_msg: string, _originId: string, options: { onProgress?: (s: string) => void }) => {
       options.onProgress?.('working');
 
       return (async function* (): AsyncGenerator<string> {
