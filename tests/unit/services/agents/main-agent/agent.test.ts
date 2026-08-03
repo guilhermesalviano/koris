@@ -1,5 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Agent } from '../../../../../src/services/agents/main-agent/agent';
+import { MessageServiceFactory } from '../../../../../src/services/message-service';
+import { MemoryServiceFactory } from '../../../../../src/services/memory-service';
 import { applyTestConfigDefaults } from '../../../../helpers/test-config';
 import type { ILogger } from '../../../../../src/infrastructure/logger';
 
@@ -9,7 +11,7 @@ function makeLogger(): ILogger {
 
 function makeDeps() {
   return {
-    messageService: { getHistory: vi.fn(), save: vi.fn() },
+    messageService: { getHistory: vi.fn(), getSessionId: vi.fn(), save: vi.fn() },
     memoryService: { upsert: vi.fn() },
     conversationWorker: { run: vi.fn().mockResolvedValue(undefined) },
     summarizerWorker: { handler: vi.fn().mockResolvedValue(undefined) },
@@ -25,28 +27,40 @@ function makeAgent(channel = 'tui', sessionId = 'session-1') {
     ensureActiveSession: vi.fn().mockReturnValue({ id: sessionId }),
     updateCount: vi.fn(),
   };
+  const sessionManager = {
+    getSessionService: vi.fn().mockReturnValue(sessionService),
+    getSessionServiceById: vi.fn(),
+  };
+
+  vi.spyOn(MessageServiceFactory, 'create').mockReturnValue(deps.messageService as never);
+  vi.spyOn(MemoryServiceFactory, 'create').mockReturnValue(deps.memoryService as never);
+
   const agent = new Agent(
     logger,
-    deps.messageService as never,
-    deps.memoryService as never,
+    {} as never,
+    sessionManager as never,
     deps.conversationWorker as never,
     deps.summarizerWorker as never,
     deps.manager as never,
     channel,
-    sessionService as never,
   );
-  return { agent, logger, deps, sessionService };
+  return { agent, logger, deps, sessionService, sessionManager };
 }
 
 describe('Agent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    applyTestConfigDefaults();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('handles slash commands without calling the manager', async () => {
     const { agent, deps } = makeAgent();
 
-    const result = await agent.handle('/help');
+    const result = await agent.handle('/help', 'origin-1');
 
     expect(deps.manager.run).not.toHaveBeenCalled();
     expect(result).toContain('/help');
@@ -55,7 +69,7 @@ describe('Agent', () => {
   it('delegates regular messages to the manager', async () => {
     const { agent, deps } = makeAgent('web');
 
-    const result = await agent.handle('hello there');
+    const result = await agent.handle('hello there', 'origin-1');
 
     expect(deps.manager.run).toHaveBeenCalledWith({
       userMessage: 'hello there',
@@ -71,7 +85,7 @@ describe('Agent', () => {
     const onProgress = vi.fn();
     const controller = new AbortController();
 
-    await agent.handle('run task', { onProgress, signal: controller.signal, toolsEnabled: true });
+    await agent.handle('run task', 'origin-1', { onProgress, signal: controller.signal, toolsEnabled: true });
 
     expect(deps.manager.run).toHaveBeenCalledWith({
       userMessage: 'run task',
@@ -85,7 +99,7 @@ describe('Agent', () => {
     const { agent, deps, sessionService } = makeAgent('tui', 'session-1');
     sessionService.getSession.mockReturnValue({ id: 'session-2' });
 
-    await agent.handle('question');
+    await agent.handle('question', 'origin-1');
     await vi.waitFor(() => {
       expect(deps.conversationWorker.run).toHaveBeenCalledWith(
         expect.objectContaining({ sessionId: 'session-2' }),
@@ -96,7 +110,7 @@ describe('Agent', () => {
   it('persists conversation history in the background', async () => {
     const { agent, deps } = makeAgent();
 
-    await agent.handle('question');
+    await agent.handle('question', 'origin-1');
     await vi.waitFor(() => {
       expect(deps.conversationWorker.run).toHaveBeenCalledWith({
         sessionId: 'session-1',
@@ -110,7 +124,7 @@ describe('Agent', () => {
   it('triggers the summarizer for non-command messages', async () => {
     const { agent, deps } = makeAgent();
 
-    await agent.handle('question');
+    await agent.handle('question', 'origin-1');
     await vi.waitFor(() => {
       expect(deps.summarizerWorker.handler).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -128,7 +142,7 @@ describe('Agent', () => {
     applyTestConfigDefaults({ summarizerEnabled: false });
 
     const { agent, deps } = makeAgent();
-    await agent.handle('question');
+    await agent.handle('question', 'origin-1');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(deps.summarizerWorker.handler).not.toHaveBeenCalled();
   });
@@ -137,7 +151,7 @@ describe('Agent', () => {
     const { agent, logger, deps } = makeAgent();
     deps.summarizerWorker.handler.mockRejectedValue(new Error('summarizer down'));
 
-    await agent.handle('question');
+    await agent.handle('question', 'origin-1');
     await vi.waitFor(() => {
       expect(logger.error).toHaveBeenCalledWith(
         'Background summarizer failed',
@@ -149,7 +163,7 @@ describe('Agent', () => {
   it('coerces non-string input before processing', async () => {
     const { agent, deps } = makeAgent();
 
-    await agent.handle(null as unknown as string);
+    await agent.handle(null as unknown as string, 'origin-1');
 
     expect(deps.manager.run).toHaveBeenCalledWith(
       expect.objectContaining({ userMessage: '' }),
@@ -160,7 +174,7 @@ describe('Agent', () => {
     const { agent, logger, deps } = makeAgent();
     deps.conversationWorker.run.mockRejectedValue(new Error('db down'));
 
-    await agent.handle('question');
+    await agent.handle('question', 'origin-1');
     await vi.waitFor(() => {
       expect(logger.error).toHaveBeenCalledWith(
         'Background conversation processing failed',

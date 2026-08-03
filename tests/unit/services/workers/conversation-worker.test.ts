@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ConversationWorkerFactory } from '../../../../src/services/workers/conversation-worker';
+import { MessageServiceFactory } from '../../../../src/services/message-service';
 import type { ILogger } from '../../../../src/infrastructure/logger';
 
 function makeLogger(): ILogger {
@@ -7,14 +8,32 @@ function makeLogger(): ILogger {
 }
 
 function makeMessageService() {
-  return { save: vi.fn(), getHistory: vi.fn() };
+  return { save: vi.fn(), getHistory: vi.fn(), getSessionId: vi.fn() };
+}
+
+function makeSessionManager() {
+  return { getSessionService: vi.fn(), getSessionServiceById: vi.fn() };
+}
+
+function makeWorker(logger: ILogger, messageSvc = makeMessageService()) {
+  vi.spyOn(MessageServiceFactory, 'create').mockReturnValue(messageSvc as never);
+  const sessionManager = makeSessionManager();
+  const worker = ConversationWorkerFactory.create(logger, {} as never, sessionManager as never);
+  return { worker, messageSvc, sessionManager };
 }
 
 describe('ConversationWorker', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('saves user message with correct role and content', async () => {
     const logger = makeLogger();
-    const messageSvc = makeMessageService();
-    const worker = ConversationWorkerFactory.create(logger, messageSvc as any);
+    const { worker, messageSvc } = makeWorker(logger);
 
     await worker.run({ sessionId: 's1', ask: 'hello', answer: 'hi', channel: 'tui' });
 
@@ -23,8 +42,7 @@ describe('ConversationWorker', () => {
 
   it('saves assistant message with correct role and content', async () => {
     const logger = makeLogger();
-    const messageSvc = makeMessageService();
-    const worker = ConversationWorkerFactory.create(logger, messageSvc as any);
+    const { worker, messageSvc } = makeWorker(logger);
 
     await worker.run({ sessionId: 's1', ask: 'hello', answer: 'hi', channel: 'tui' });
 
@@ -33,8 +51,7 @@ describe('ConversationWorker', () => {
 
   it('calls save exactly twice (user + assistant)', async () => {
     const logger = makeLogger();
-    const messageSvc = makeMessageService();
-    const worker = ConversationWorkerFactory.create(logger, messageSvc as any);
+    const { worker, messageSvc } = makeWorker(logger);
 
     await worker.run({ sessionId: 's1', ask: 'q', answer: 'a', channel: 'web' });
 
@@ -45,7 +62,7 @@ describe('ConversationWorker', () => {
     const logger = makeLogger();
     const messageSvc = makeMessageService();
     messageSvc.save.mockImplementationOnce(() => { throw new Error('db error'); });
-    const worker = ConversationWorkerFactory.create(logger, messageSvc as any);
+    const { worker } = makeWorker(logger, messageSvc);
 
     await expect(
       worker.run({ sessionId: 's1', ask: 'q', answer: 'a', channel: 'web' })
@@ -56,7 +73,7 @@ describe('ConversationWorker', () => {
     const logger = makeLogger();
     const messageSvc = makeMessageService();
     messageSvc.save.mockImplementationOnce(() => { throw new Error('db error'); });
-    const worker = ConversationWorkerFactory.create(logger, messageSvc as any);
+    const { worker } = makeWorker(logger, messageSvc);
 
     await worker.run({ sessionId: 's1', ask: 'q', answer: 'a', channel: 'web' });
 
@@ -64,7 +81,7 @@ describe('ConversationWorker', () => {
   });
 
   it('has name "conversationWorker"', () => {
-    const worker = ConversationWorkerFactory.create(makeLogger(), makeMessageService() as any);
+    const { worker } = makeWorker(makeLogger());
     expect((worker as any).name).toBe('conversationWorker');
   });
 });
