@@ -1,5 +1,6 @@
 import os from 'node:os';
 import { config } from '../config';
+import { nowISO } from '../utils/date';
 
 export interface PersonalInformation {
   name?: string;
@@ -37,7 +38,7 @@ class ContextRepository implements IContextRepository {
     return {
       source: params.channel,
       platform: os.platform(),
-      datetime: new Date().toISOString(),
+      datetime: nowISO(),
     };
   }
 
