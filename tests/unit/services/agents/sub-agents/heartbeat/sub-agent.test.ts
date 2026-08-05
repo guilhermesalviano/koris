@@ -5,6 +5,13 @@ import { Heartbeat } from '../../../../../../src/services/agents/sub-agents/hear
 import { config } from '../../../../../../src/config';
 import { applyTestConfigDefaults } from '../../../../../helpers/test-config';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
+import { getLastWhitelistedJid } from '../../../../../../plugins/whatsapp';
+
+vi.mock('../../../../../../plugins/whatsapp', () => ({
+  getLastWhitelistedJid: vi.fn(() => null),
+}));
+
+const mockedGetLastWhitelistedJid = vi.mocked(getLastWhitelistedJid);
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
@@ -281,6 +288,50 @@ describe('Heartbeat', () => {
         'all good',
       );
       expect(logger.info).toHaveBeenCalledWith('Heartbeat: Task "success" completed successfully.');
+    });
+
+    it('sends the result to the whitelisted sender remoteJid on WhatsApp', async () => {
+      mockedGetLastWhitelistedJid.mockReturnValue('5511948449969@s.whatsapp.net');
+      const now = localDate(9, 0);
+      const { heartbeat, channelsManager } = makeHeartbeat({
+        tasks: [{
+          id: 'morning',
+          task: 'send status',
+          cronExpression: '0 9 * * *',
+          type: 'report',
+        }],
+        completionResponse: { kind: 'message', text: 'status ok' },
+      });
+
+      await heartbeat.handler(now);
+
+      expect(channelsManager.sendMessage).toHaveBeenCalledWith(
+        'whatsapp',
+        '5511948449969@s.whatsapp.net',
+        'status ok',
+      );
+    });
+
+    it('falls back to configured target_jid when no whitelisted sender is known', async () => {
+      mockedGetLastWhitelistedJid.mockReturnValue(null);
+      const now = localDate(9, 0);
+      const { heartbeat, channelsManager } = makeHeartbeat({
+        tasks: [{
+          id: 'morning',
+          task: 'send status',
+          cronExpression: '0 9 * * *',
+          type: 'report',
+        }],
+        completionResponse: { kind: 'message', text: 'status ok' },
+      });
+
+      await heartbeat.handler(now);
+
+      expect(channelsManager.sendMessage).toHaveBeenCalledWith(
+        'whatsapp',
+        config.CHANNELS.WHATSAPP.TARGET_JID,
+        'status ok',
+      );
     });
 
     it('logs task failures without stopping other tasks', async () => {
