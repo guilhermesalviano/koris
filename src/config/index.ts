@@ -13,7 +13,7 @@ function get(path: string, fallback: string): string {
 
 export const config = {
   LOG_LEVEL:   get('log.level', 'info'),
-  TIMEZONE:    get('timezone', 'AMERICA/Sao_Paulo'),
+  TIMEZONE:    get('timezone', 'America/Sao_Paulo'),
   ENVIRONMENT: get('environment', 'development'),
   TEMP_FOLDER: get('temp_folder', './temp'),
   WEB_PORT:    Number(get('web_port', '3000')),

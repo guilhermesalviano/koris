@@ -1,5 +1,6 @@
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { Heartbeat } from '../entities/heartbeat';
+import { formatISO } from '../utils/date';
 
 interface UpdateHeartbeatInput {
   task?: string;
@@ -28,8 +29,8 @@ class HeartbeatRepository implements IHeartbeatRepository {
         heartbeat.task,
         heartbeat.type,
         heartbeat.cronExpression,
-        heartbeat.lastRun?.toISOString() ?? null,
-        heartbeat.createdAt.toISOString(),
+        heartbeat.lastRun ? formatISO(heartbeat.lastRun) : null,
+        formatISO(heartbeat.createdAt),
       ],
     );
   }
@@ -72,7 +73,7 @@ class HeartbeatRepository implements IHeartbeatRepository {
   }
 
   updateLastRun(id: string, lastRun: Date): void {
-    this.db.run(`UPDATE heartbeat SET last_run = ? WHERE id = ?`, [lastRun.toISOString(), id]);
+    this.db.run(`UPDATE heartbeat SET last_run = ? WHERE id = ?`, [formatISO(lastRun), id]);
   }
 
   deleteById(id: string): boolean {
