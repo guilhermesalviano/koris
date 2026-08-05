@@ -41,6 +41,11 @@ interface SocketLike {
 }
 
 let activeSocket: SocketLike | null = null;
+let lastWhitelistedJid: string | null = null;
+
+function getLastWhitelistedJid(): string | null {
+  return lastWhitelistedJid;
+}
 
 async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise<SocketLike> {
   const { makeWASocket, useMultiFileAuthState, DisconnectReason } = await import('@whiskeysockets/baileys');
@@ -100,6 +105,10 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
       if (!isWhitelisted) {
         options.logger.debug(`[whatsapp] message ignored: not from whitelisted number`);
         continue;
+      }
+
+      if (jid) {
+        lastWhitelistedJid = jid;
       }
 
       if (!jid || !senderName) continue;
@@ -289,6 +298,7 @@ function createWhatsAppPlugin(options: WhatsAppPluginOptions): Plugin {
 
 export {
   createWhatsAppPlugin,
+  getLastWhitelistedJid,
   handleMessage,
   IWhatsAppChannel,
   sendText,

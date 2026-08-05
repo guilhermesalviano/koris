@@ -15,6 +15,7 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { AgnosticExecutionToolFactory } from "../../../tools";
 import { IChannelsManager } from "../../../../channels";
+import { getLastWhitelistedJid } from "../../../../../plugins/whatsapp";
 import type { IWorker } from "../../../../types/workers";
 
 class Heartbeat implements ISubAgent<Date> {
@@ -97,10 +98,13 @@ class Heartbeat implements ISubAgent<Date> {
           this.logger.error(`Failed to send heartbeat result to Telegram for task "${task.id}".`, { err });
         });
 
-        if (config.CHANNELS.WHATSAPP.ENABLED && config.CHANNELS.WHATSAPP.TARGET_JID) {
-          this.channelsManager.sendMessage('whatsapp', config.CHANNELS.WHATSAPP.TARGET_JID, result).catch(err => {
-            this.logger.error(`Failed to send heartbeat result to WhatsApp for task "${task.id}".`, { err });
-          });
+        if (config.CHANNELS.WHATSAPP.ENABLED) {
+          const whatsappTarget = getLastWhitelistedJid() ?? config.CHANNELS.WHATSAPP.TARGET_JID;
+          if (whatsappTarget) {
+            this.channelsManager.sendMessage('whatsapp', whatsappTarget, result).catch(err => {
+              this.logger.error(`Failed to send heartbeat result to WhatsApp for task "${task.id}".`, { err });
+            });
+          }
         }
 
         this.heartbeatRepository.updateLastRun(task.id, date);
