@@ -26,10 +26,6 @@ export const config = {
   HEARTBEAT: {
     ENABLED: get('heartbeat.enabled', 'true') === 'true',
     INTERVAL_MS: Number(get('heartbeat.interval_ms', (30 * 60 * 1000).toString())),
-    ACTIVE_HOURS: {
-      START: get('heartbeat.active_hours.start', '08:00'),
-      END: get('heartbeat.active_hours.end', '22:00'),
-    },
   },
   AI: {
     PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.provider', 'mock'),

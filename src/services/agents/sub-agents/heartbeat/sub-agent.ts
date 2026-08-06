@@ -32,12 +32,6 @@ class Heartbeat implements ISubAgent<Date> {
   async handler(date: Date): Promise<void> {
     const tasks = this.heartbeatRepository.getAll();
 
-    const [ start, end ] = this.activeHoursHelper();
-
-    if (!this.isWithinActiveHours(date, start, end)) {
-      this.logger.info(`Heartbeat skipped: Current time (${date.toLocaleTimeString()}) is outside of active hours (${start.toLocaleTimeString()} - ${end.toLocaleTimeString()}).`);
-      return;
-    }
     this.logger.info('Heartbeat: Agent is alive and functioning.');
 
 
@@ -115,32 +109,6 @@ class Heartbeat implements ISubAgent<Date> {
     }
   }
 
-
-  activeHoursHelper(): Date[] {
-    const start = new Date();
-    const [startHour, startMinute] = config.HEARTBEAT.ACTIVE_HOURS.START.split(':').map(Number);
-    start.setHours(startHour, startMinute, 0, 0);
-
-    const end = new Date();
-    const [endHour, endMinute] = config.HEARTBEAT.ACTIVE_HOURS.END.split(':').map(Number);
-    end.setHours(endHour, endMinute, 0, 0);
-
-    return [start, end];
-  }
-
-  /** Supports same-day windows (08:00–22:00) and overnight windows (22:00–06:00). */
-  isWithinActiveHours(date: Date, start: Date, end: Date): boolean {
-    const toMinutes = (value: Date) => value.getHours() * 60 + value.getMinutes();
-    const current = toMinutes(date);
-    const startMinutes = toMinutes(start);
-    const endMinutes = toMinutes(end);
-
-    if (startMinutes <= endMinutes) {
-      return current >= startMinutes && current <= endMinutes;
-    }
-
-    return current >= startMinutes || current <= endMinutes;
-  }
 
   formatDateStamp(date: Date): string {
     const pad = (n: number) => String(n).padStart(2, '0');
