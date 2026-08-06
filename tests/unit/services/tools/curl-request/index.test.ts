@@ -231,7 +231,7 @@ describe('buildCurlArgs', () => {
 
   it('builds minimal GET args', () => {
     const args = buildCurlArgs(URL, 'GET', false, null, null, false);
-    expect(args).toEqual(['-s', '-X', 'GET', URL]);
+    expect(args).toEqual(['-s', '-k', '-X', 'GET', URL]);
   });
 
   it('adds -L when followRedirects is true', () => {
@@ -324,6 +324,13 @@ describe('executeCurl', () => {
     mockExecFilePromise.mockResolvedValue('Not Found\n---HTTP_STATUS:404---');
     const result = await executeCurl(mockLogger, { url: 'https://example.com' });
     expect(result.success).toBe(false); // 404 is not 2xx
+  });
+
+  it('uses the last status marker when curl emits one per redirect hop', async () => {
+    mockExecFilePromise.mockResolvedValue('{"ok":true}\n---HTTP_STATUS:302---\n---HTTP_STATUS:200---');
+    const result = await executeCurl(mockLogger, { url: 'https://example.com', follow_redirects: true });
+    expect(result.success).toBe(true); // final hop was 200
+    expect(result.result).toContain('"ok":true');
   });
 
   it('includes headers as separate argv elements (not interpolated into a shell string)', async () => {
