@@ -2,6 +2,7 @@ import { IContextRepository, ContextRepositoryFactory } from './context';
 import type { AIChatRequest, AIToolDefinition, AIProvider } from '../types/chat';
 import { IToolsRepository, ToolsRepositoryFactory } from './tools';
 import { Message } from '../types/messages';
+import { Memory } from '../entities/memory';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
 import { IMemoryRepository, MemoryRepositoryFactory } from './memory';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
@@ -12,6 +13,7 @@ import { SYSTEM_PROMPT } from '../constants';
 import { config } from '../config';
 
 const CHAT_HISTORY_LIMIT = 20;
+const MEMORY_CONTEXT_LIMIT = 20;
 
 interface BuildPromptParams {
   userMessage: string;
@@ -93,39 +95,49 @@ class PromptRepository implements IPromptRepository {
   }
 
   private async buildMemoryContext(userMessage: string, sessionId?: string): Promise<string> {
-    if (!config.AI.EMBEDDING.ENABLED) {
-      return '';
-    }
+    if (config.AI.EMBEDDING.ENABLED) {
+      try {
+        const queryEmbedding = await this.aiProvider.embed(userMessage);
+        const memories = this.memoryRepository.search(queryEmbedding, MEMORY_CONTEXT_LIMIT, sessionId);
 
-    try {
-      const queryEmbedding = await this.aiProvider.embed(userMessage);
-      const memories = this.memoryRepository.search(queryEmbedding, 20, sessionId);
+        if (memories.length === 0) {
+          return '';
+        }
 
-      if (memories.length === 0) {
+        return this.formatMemories(memories);
+      } catch (e) {
+        this.logger.warn('Failed to embed user message for memory retrieval', { error: e instanceof Error ? e.message : String(e) });
         return '';
       }
+    }
 
-      const groupedMemories = memories.reduce((acc, memory) => {
-        const source = memory.source || 'Unknown';
-        if (!acc[source]) {
-          acc[source] = [];
-        }
-        acc[source].push(memory);
-        return acc;
-      }, {} as Record<string, typeof memories>);
+    const memories = this.memoryRepository.getAll(sessionId).slice(0, MEMORY_CONTEXT_LIMIT);
 
-      let contextString = '';
-      for (const [source, sourceMemories] of Object.entries(groupedMemories)) {
-        contextString += `\n### channel: ${source}\n`;
-        contextString += sourceMemories.map(m => `- ${m.content}`).join('\n');
-        contextString += '\n';
-      }
-
-      return contextString.trim().slice(0, 15000);
-    } catch (e) {
-      this.logger.warn('Failed to embed user message for memory retrieval', { error: e instanceof Error ? e.message : String(e) });
+    if (memories.length === 0) {
       return '';
     }
+
+    return this.formatMemories(memories);
+  }
+
+  private formatMemories(memories: Memory[]): string {
+    const groupedMemories = memories.reduce((acc, memory) => {
+      const source = memory.source || 'Unknown';
+      if (!acc[source]) {
+        acc[source] = [];
+      }
+      acc[source].push(memory);
+      return acc;
+    }, {} as Record<string, typeof memories>);
+
+    let contextString = '';
+    for (const [source, sourceMemories] of Object.entries(groupedMemories)) {
+      contextString += `\n### channel: ${source}\n`;
+      contextString += sourceMemories.map(m => `- ${m.content}`).join('\n');
+      contextString += '\n';
+    }
+
+    return contextString.trim().slice(0, 15000);
   }
 
   private buildTools({ toolsEnabled, includeTaskTools }: BuildPromptParams): AIToolDefinition[] | undefined {
