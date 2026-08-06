@@ -52,7 +52,7 @@ read_when:
     <trigger>Get Today's Schedule</trigger>
     <request>
       <description>Fetch today's and important upcoming events. Uses a compact filter to keep only fields used by the assistant.</description>
-      <bash>curl -X GET <GATEWAY_HOST>/api/calendar/ | jq '{message, data: {todayEvents: [.data.todayEvents[]? | {id, start, end, title, color, type}], importantEvents: [.data.importantEvents[]? | {id, start, end, title, type}]}}'</bash>
+      <bash>curl -k -X GET <GATEWAY_HOST>/api/calendar/ | jq '{message, data: {todayEvents: [.data.todayEvents[]? | {id, start, end, title, color, type}], importantEvents: [.data.importantEvents[]? | {id, start, end, title, type}]}}'</bash>
     </request>
     <response>
       <description>Returns today's events and important upcoming events.</description>
