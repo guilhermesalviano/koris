@@ -13,7 +13,7 @@ function get(path: string, fallback: string): string {
 
 export const config = {
   LOG_LEVEL:   get('log.level', 'info'),
-  TIMEZONE:    get('timezone', 'AMERICA/Sao_Paulo'),
+  TIMEZONE:    get('timezone', 'America/Sao_Paulo'),
   ENVIRONMENT: get('environment', 'development'),
   TEMP_FOLDER: get('temp_folder', './temp'),
   WEB_PORT:    Number(get('web_port', '3000')),
@@ -26,10 +26,6 @@ export const config = {
   HEARTBEAT: {
     ENABLED: get('heartbeat.enabled', 'true') === 'true',
     INTERVAL_MS: Number(get('heartbeat.interval_ms', (30 * 60 * 1000).toString())),
-    ACTIVE_HOURS: {
-      START: get('heartbeat.active_hours.start', '08:00'),
-      END: get('heartbeat.active_hours.end', '22:00'),
-    },
   },
   AI: {
     PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.provider', 'mock'),

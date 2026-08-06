@@ -45,10 +45,6 @@ function isValidUrl(value: string): boolean {
   try { new URL(value); return true; } catch { return false; }
 }
 
-function isValidTimeHHMM(value: string): boolean {
-  return /^\d{2}:\d{2}$/.test(value);
-}
-
 function isValidDateYYYYMMDD(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -123,12 +119,6 @@ async function main() {
     'log.level is valid',
     `Got: "${config.LOG_LEVEL}". Must be one of: ${validLogLevels.join(', ')}.`,
     config.LOG_LEVEL,
-  );
-
-  check(
-    isValidTimeHHMM(config.HEARTBEAT.ACTIVE_HOURS.START) && isValidTimeHHMM(config.HEARTBEAT.ACTIVE_HOURS.END),
-    'heartbeat.active_hours are valid HH:MM times',
-    `Got: start="${config.HEARTBEAT.ACTIVE_HOURS.START}", end="${config.HEARTBEAT.ACTIVE_HOURS.END}"`,
   );
 
   check(

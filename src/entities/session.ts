@@ -1,4 +1,5 @@
 import { generateId } from "../utils/generate-id";
+import { nowISO } from "../utils/date";
 
 export interface SessionProps {
   id?: string;
@@ -20,7 +21,7 @@ export class Session {
   constructor(props: SessionProps) {
     this.id = props.id || generateId();
     this.source = props.source;
-    this.startedAt = props.startedAt || new Date().toISOString();
+    this.startedAt = props.startedAt || nowISO();
     this.endedAt = props.endedAt;
     this.messageCount = props.messageCount || 0;
     this.metadata = props.metadata || {};

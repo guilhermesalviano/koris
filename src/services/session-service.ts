@@ -3,6 +3,7 @@ import { config } from "../config";
 import { IDatabaseService } from "../infrastructure/db-sqlite";
 import { ISessionRepository, SessionRepositoryFactory } from "../repositories/session";
 import { getLastActivityAt, isSessionExpired } from "../utils/session";
+import { nowISO } from "../utils/date";
 
 interface ISessionService {
   getSession(): Session;
@@ -47,7 +48,7 @@ class SessionService implements ISessionService {
   }
 
   updateCount(): void {
-    const now = new Date().toISOString();
+    const now = nowISO();
     const updatedSession = new Session({
       ...this.session,
       messageCount: this.session.messageCount + 1,
@@ -68,7 +69,7 @@ class SessionService implements ISessionService {
   }
 
   private endSession(session: Session): void {
-    const endedAt = new Date().toISOString();
+    const endedAt = nowISO();
     this.sessionRepository.update(session.id, { endedAt });
   }
 
