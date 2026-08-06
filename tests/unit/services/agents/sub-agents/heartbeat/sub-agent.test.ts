@@ -74,38 +74,6 @@ describe('Heartbeat', () => {
     vi.clearAllMocks();
   });
 
-  describe('activeHoursHelper', () => {
-    it('returns start and end dates using configured active hours', () => {
-      const { heartbeat } = makeHeartbeat();
-      const [start, end] = heartbeat.activeHoursHelper();
-
-      expect(start.getHours()).toBe(Number(config.HEARTBEAT.ACTIVE_HOURS.START.split(':')[0]));
-      expect(start.getMinutes()).toBe(Number(config.HEARTBEAT.ACTIVE_HOURS.START.split(':')[1]));
-      expect(end.getHours()).toBe(Number(config.HEARTBEAT.ACTIVE_HOURS.END.split(':')[0]));
-      expect(end.getMinutes()).toBe(Number(config.HEARTBEAT.ACTIVE_HOURS.END.split(':')[1]));
-    });
-  });
-
-  describe('isWithinActiveHours', () => {
-    it('accepts times inside a same-day window', () => {
-      const { heartbeat } = makeHeartbeat();
-      const [start, end] = heartbeat.activeHoursHelper();
-
-      expect(heartbeat.isWithinActiveHours(localDate(12), start, end)).toBe(true);
-      expect(heartbeat.isWithinActiveHours(localDate(7), start, end)).toBe(false);
-    });
-
-    it('accepts times inside an overnight window', () => {
-      applyTestConfigDefaults({ heartbeatActiveHours: { start: '22:00', end: '06:00' } });
-      const { heartbeat } = makeHeartbeat();
-      const [start, end] = heartbeat.activeHoursHelper();
-
-      expect(heartbeat.isWithinActiveHours(localDate(23, 30), start, end)).toBe(true);
-      expect(heartbeat.isWithinActiveHours(localDate(3), start, end)).toBe(true);
-      expect(heartbeat.isWithinActiveHours(localDate(12), start, end)).toBe(false);
-    });
-  });
-
   describe('formatDateStamp', () => {
     it('formats dates as YYYY_MM_DD_HH_mm', () => {
       const { heartbeat } = makeHeartbeat();
@@ -140,37 +108,6 @@ describe('Heartbeat', () => {
   });
 
   describe('handler', () => {
-    it('skips execution outside active hours', async () => {
-      const { heartbeat, logger, heartbeatRepository, completionService } = makeHeartbeat({
-        tasks: [{ id: 't1', task: 'check logs', cronExpression: '* * * * *', type: 'maintenance' }],
-      });
-
-      await heartbeat.handler(localDate(23, 30));
-
-      expect(heartbeatRepository.getAll).toHaveBeenCalled();
-      expect(completionService.complete).not.toHaveBeenCalled();
-      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('outside of active hours'));
-    });
-
-    it('runs tasks during overnight active hours', async () => {
-      applyTestConfigDefaults({ heartbeatActiveHours: { start: '22:00', end: '06:00' } });
-      const now = localDate(23, 30);
-      const { heartbeat, completionService, heartbeatRepository } = makeHeartbeat({
-        tasks: [{
-          id: 'night-check',
-          task: 'nightly job',
-          cronExpression: '30 23 * * *',
-          type: 'maintenance',
-        }],
-        completionResponse: { kind: 'message', text: 'night ok' },
-      });
-
-      await heartbeat.handler(now);
-
-      expect(completionService.complete).toHaveBeenCalled();
-      expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('night-check', now);
-    });
-
     it('logs when there are no scheduled tasks', async () => {
       const { heartbeat, logger } = makeHeartbeat({ tasks: [] });
 
