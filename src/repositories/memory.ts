@@ -3,6 +3,7 @@ import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { Memory } from '../entities/memory';
 import { MemoryType } from '../types/memory';
 import { similarity } from 'ml-distance';
+import { formatISO } from '../utils/date';
 
 interface IMemoryRepository {
   save(memory: Memory): void;
@@ -29,7 +30,7 @@ class MemoryRepository implements IMemoryRepository {
         memory.embedding ? JSON.stringify(memory.embedding) : null,
         memory.tags ?? null,
         memory.importance ?? null,
-        memory.createdAt.toISOString(),
+        formatISO(memory.createdAt),
       ]
     );
   }

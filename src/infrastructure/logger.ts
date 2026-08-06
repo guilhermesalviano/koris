@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { config } from '../config';
 import { sanitizeLogText, sanitizeMeta } from '../utils/sanitize-log-text';
+import { nowISO } from '../utils/date';
 
 interface ILogger {
   info(message: string, meta?: Record<string, unknown>): void;
@@ -85,7 +86,7 @@ class LoggerFactory {
       level: config.LOG_LEVEL || 'info',
       format: format.json(),
       defaultMeta: {
-        date: new Date().toISOString(),
+        date: nowISO(),
       },
       transports: activeTransports,
     };

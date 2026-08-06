@@ -64,7 +64,7 @@ export function buildCurlArgs(
   data: string | null,
   includeStatusMarker: boolean,
 ): string[] {
-  const args: string[] = ['-s'];
+  const args: string[] = ['-s', '-k'];
 
   if (followRedirects) args.push('-L');
   args.push('-X', method);
@@ -198,12 +198,14 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     } else {
       const curlArgs = buildCurlArgs(encodedUrl, method, followRedirects, headers, data, true);
       const raw = await execFilePromise('curl', curlArgs, timeout * 1000);
-      const lines = raw.split('\n');
-      const statusLine = lines.find(line => line.startsWith('---HTTP_STATUS:'));
+      // Parse the LAST status marker — curl may emit one per redirect hop, and
+      // only the final code reflects the resolved request.
+      const statusLines = raw.split('\n').filter(line => line.startsWith('---HTTP_STATUS:'));
+      const statusLine = statusLines[statusLines.length - 1];
       httpStatus = statusLine
-        ? parseInt(statusLine.replace('---HTTP_STATUS:', '').replace('---', ''), 10)
+        ? parseInt(statusLine.replace(/---HTTP_STATUS:(\d{3})---/, '$1'), 10)
         : 0;
-      output = lines.filter(line => !line.startsWith('---HTTP_STATUS:')).join('\n').trim();
+      output = raw.split('\n').filter(line => !line.startsWith('---HTTP_STATUS:')).join('\n').trim();
     }
 
     logger.info('curl request completed', {

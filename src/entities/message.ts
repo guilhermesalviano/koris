@@ -1,4 +1,5 @@
 import { generateId } from "../utils/generate-id";
+import { nowISO } from "../utils/date";
 import { MessageRole } from "../types/messages";
 
 export class Message {
@@ -19,6 +20,6 @@ export class Message {
     this.sessionId = data.sessionId;
     this.role = data.role;
     this.content = data.content;
-    this.createdAt = data.createdAt || new Date().toISOString();
+    this.createdAt = data.createdAt || nowISO();
   }
 }

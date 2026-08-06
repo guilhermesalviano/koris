@@ -1,6 +1,7 @@
 import { Session, SessionProps } from '../entities/session';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { camelToSnakeCase } from '../utils/fields';
+import { nowISO } from '../utils/date';
 
 interface SessionRow {
   id: string;
@@ -103,7 +104,7 @@ class SessionRepository implements ISessionRepository {
   deleteExpired(): void {
     this.db.run(
       'DELETE FROM sessions WHERE ended_at IS NOT NULL AND ended_at < ?',
-      [new Date().toISOString()],
+      [nowISO()],
     );
   }
 

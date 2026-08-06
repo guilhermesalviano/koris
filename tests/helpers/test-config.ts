@@ -4,14 +4,12 @@ export interface TestConfigPatch {
   heartbeatEnabled?: boolean;
   summarizerEnabled?: boolean;
   tempFolder?: string;
-  heartbeatActiveHours?: { start: string; end: string };
 }
 
 const DEFAULTS: Required<TestConfigPatch> = {
   heartbeatEnabled: true,
   summarizerEnabled: true,
   tempFolder: './temp',
-  heartbeatActiveHours: { start: '08:00', end: '22:00' },
 };
 
 export function applyTestConfigDefaults(patch: TestConfigPatch = {}): void {
@@ -31,18 +29,6 @@ export function applyTestConfigDefaults(patch: TestConfigPatch = {}): void {
 
   Object.defineProperty(config, 'TEMP_FOLDER', {
     value: values.tempFolder,
-    configurable: true,
-    writable: true,
-  });
-
-  Object.defineProperty(config.HEARTBEAT.ACTIVE_HOURS, 'START', {
-    value: values.heartbeatActiveHours.start,
-    configurable: true,
-    writable: true,
-  });
-
-  Object.defineProperty(config.HEARTBEAT.ACTIVE_HOURS, 'END', {
-    value: values.heartbeatActiveHours.end,
     configurable: true,
     writable: true,
   });

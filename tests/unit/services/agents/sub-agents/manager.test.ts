@@ -10,6 +10,7 @@ function makeLogger(): ILogger {
 function makeMessageService(history: Message[] = []) {
   return {
     getHistory: vi.fn().mockReturnValue(history),
+    getSessionId: vi.fn().mockReturnValue('session-1'),
     save: vi.fn(),
   };
 }

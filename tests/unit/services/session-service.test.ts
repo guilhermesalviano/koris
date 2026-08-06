@@ -74,7 +74,7 @@ describe('SessionService', () => {
     const svc = new SessionService(repo as any, session);
     svc.updateCount();
 
-    expect(svc.getSession().metadata.lastActivityAt).toBe('2024-06-01T12:00:00.000Z');
+    expect(svc.getSession().metadata.lastActivityAt).toBe('2024-06-01T09:00:00.000-03:00');
   });
 
   it('updateCount passes original id to repo.update', () => {
@@ -140,7 +140,7 @@ describe('SessionService', () => {
       const result = svc.ensureActiveSession();
 
       expect(repo.update).toHaveBeenCalledWith('old-session', expect.objectContaining({
-        endedAt: '2024-06-01T12:00:00.000Z',
+        endedAt: '2024-06-01T09:00:00.000-03:00',
       }));
       expect(repo.save).toHaveBeenCalledTimes(1);
       expect(result.id).not.toBe('old-session');

@@ -4,6 +4,7 @@ import type { ILogger } from '../../../../infrastructure/logger';
 import { HeartbeatFactory } from './sub-agent';
 import { beginFooterActivity } from '../../../../utils/footer-activity';
 import { nextCronFire } from '../../../../utils/heartbeat';
+import { formatISO } from '../../../../utils/date';
 import { IHeartbeatRepository } from '../../../../repositories/heartbeat';
 
 interface IHeartbeatRunner {
@@ -79,7 +80,7 @@ class HeartbeatRunner implements IHeartbeatRunner {
 
     const delay = Math.max(0, earliest.getTime() - now.getTime());
     this.timer = setTimeout(() => { void this.runOnce(); }, delay);
-    this.logger.info(`Next heartbeat scheduled at ${earliest.toISOString()} (in ${Math.round(delay / 1000)}s)`);
+    this.logger.info(`Next heartbeat scheduled at ${formatISO(earliest)} (in ${Math.round(delay / 1000)}s)`);
   }
 
   private async runOnce(): Promise<void> {
@@ -91,7 +92,7 @@ class HeartbeatRunner implements IHeartbeatRunner {
     this.isRunning = true;
     const endFooterActivity = beginFooterActivity('heartbeat');
     const date = new Date();
-    this.logger.info(`[${date.toISOString()}] Agent waking up...`);
+    this.logger.info(`[${formatISO(date)}] Agent waking up...`);
 
     try {
       const agent = HeartbeatFactory.create(this.logger, this.channelsManager);
