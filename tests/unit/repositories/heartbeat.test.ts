@@ -201,4 +201,14 @@ describe('HeartbeatRepository', () => {
 
     expect(HeartbeatRepositoryFactory.getInstance()).toBe(instance);
   });
+
+  it('factory create returns the same instance when called again', () => {
+    const db1 = makeDb();
+    const db2 = makeDb();
+    const first = HeartbeatRepositoryFactory.create(db1 as never);
+
+    const second = HeartbeatRepositoryFactory.create(db2 as never);
+
+    expect(second).toBe(first);
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { SessionRepository } from '../../../src/repositories/session';
+import { SessionRepository, SessionRepositoryFactory } from '../../../src/repositories/session';
 import { Session } from '../../../src/entities/session';
 
 function makeDb() {
@@ -85,6 +85,16 @@ describe('SessionRepository', () => {
     expect(session?.metadata).toEqual({});
   });
 
+  it('findById keeps metadata empty when the row metadata is null', () => {
+    const db = makeDb();
+    db.get.mockReturnValue({ id: 's1', source: 'tui', metadata: null });
+    const repository = new SessionRepository(db as never);
+
+    const session = repository.findById('s1');
+
+    expect(session?.metadata).toEqual({});
+  });
+
   it('findLatestOpenBySource queries for open sessions most recent first', () => {
     const db = makeDb();
     db.get.mockReturnValue({ id: 's1', source: 'tui' });
@@ -107,6 +117,18 @@ describe('SessionRepository', () => {
     expect(repository.findLatestOpenBySource('tui')).toBeNull();
   });
 
+  it('findLatestOpenBySource returns the mapped session when a row is found', () => {
+    const db = makeDb();
+    db.get.mockReturnValue({ id: 's1', source: 'tui', metadata: '{"k":"v"}' });
+    const repository = new SessionRepository(db as never);
+
+    const session = repository.findLatestOpenBySource('tui');
+
+    expect(session).not.toBeNull();
+    expect(session?.id).toBe('s1');
+    expect(session?.metadata).toEqual({ k: 'v' });
+  });
+
   it('deleteExpired deletes rows that ended before now', () => {
     const db = makeDb();
     const repository = new SessionRepository(db as never);
@@ -126,5 +148,14 @@ describe('SessionRepository', () => {
     repository.deleteById('s1');
 
     expect(db.run).toHaveBeenCalledWith('DELETE FROM sessions WHERE id = ?', ['s1']);
+  });
+
+  it('factory create returns a SessionRepository bound to the db', () => {
+    const db = makeDb();
+    const repository = SessionRepositoryFactory.create(db as never);
+
+    expect(repository).toBeInstanceOf(SessionRepository);
+    repository.findById('s1');
+    expect(db.get).toHaveBeenCalledWith('SELECT * FROM sessions WHERE id = ?', ['s1']);
   });
 });

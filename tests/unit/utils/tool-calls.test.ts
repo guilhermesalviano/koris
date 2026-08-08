@@ -68,6 +68,30 @@ describe('extractJson', () => {
     expect(extractJson('prefix {"a": ')).toBeNull();
   });
 
+  it('returns the whole string when pure JSON starts with { but is unclosed', () => {
+    expect(extractJson('{x')).toBe('{x');
+  });
+
+  it('extracts JSON whose opening brace is not at the start', () => {
+    expect(extractJson('x{"a":1}')).toBe('{"a":1}');
+  });
+
+  it('extracts unbalanced JSON inside a markdown block verbatim', () => {
+    expect(extractJson('```json\n{"a":1\n```')).toBe('{"a":1');
+  });
+
+  it('keeps trailing text after the closing brace of pure JSON', () => {
+    expect(extractJson('  {"a":1}  tail')).toBe('{"a":1}  tail');
+  });
+
+  it('keeps extra content inside a markdown block without the json marker', () => {
+    expect(extractJson('```\n{"a":1}\nrest\n```')).toBe('{"a":1}\nrest');
+  });
+
+  it('keeps extra content after JSON that starts right after the json marker', () => {
+    expect(extractJson('```json{"a":1}\nrest\n```')).toBe('{"a":1}\nrest');
+  });
+
   it('returns null for plain text with no JSON', () => {
     expect(extractJson('just some text')).toBeNull();
   });
@@ -115,6 +139,12 @@ describe('extractToolCalls', () => {
 
   it('returns empty array when tool_calls is not an array', () => {
     expect(extractToolCalls(JSON.stringify({ tool_calls: 'bad' }))).toEqual([]);
+  });
+
+  it('does not log a warning when tool_calls is absent or not an array', () => {
+    vi.mocked(mockLogger.warn).mockClear();
+    expect(extractToolCalls(JSON.stringify({ tool_calls: 'bad' }), mockLogger)).toEqual([]);
+    expect(mockLogger.warn).not.toHaveBeenCalled();
   });
 
   it('parses tool calls with object arguments', () => {
@@ -193,6 +223,22 @@ describe('extractToolCalls', () => {
     const result = extractToolCalls(JSON.stringify(payload));
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('good');
+  });
+
+  it('logs a warn when an individual tool call entry fails to parse', () => {
+    vi.mocked(mockLogger.warn).mockClear();
+    const payload = {
+      tool_calls: [
+        { function: { name: 'good', arguments: {} } },
+        null,
+      ],
+    };
+    const result = extractToolCalls(JSON.stringify(payload), mockLogger);
+    expect(result).toHaveLength(1);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'Failed to parse tool call',
+      expect.objectContaining({ index: 1 }),
+    );
   });
 
   it('defaults name and arguments when the function object is missing', () => {
@@ -347,6 +393,12 @@ describe('shouldSkipToolCall', () => {
   it('returns false when skillName is not a string', () => {
     const tc = { name: 'get_skill', arguments: { name: 123 } };
     expect(shouldSkipToolCall(tc, [])).toBe(false);
+  });
+
+  it('returns false for non-string skillName even when the history mentions the value', () => {
+    const tc = { name: 'get_skill', arguments: { name: 123 } };
+    const history = [makeMessage('system', 'You have just learned "123".')];
+    expect(shouldSkipToolCall(tc, history)).toBe(false);
   });
 
   it('does not match skill name in non-system messages', () => {

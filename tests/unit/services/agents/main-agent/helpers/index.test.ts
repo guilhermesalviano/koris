@@ -25,6 +25,15 @@ describe('toSafeMessage', () => {
   it('converts object via String()', () => {
     expect(toSafeMessage({ toString: () => 'custom' })).toBe('custom');
   });
+
+  it('returns empty string when String() throws', () => {
+    const input = {
+      toString() {
+        throw new Error('boom');
+      },
+    };
+    expect(toSafeMessage(input)).toBe('');
+  });
 });
 
 describe('previewMessage', () => {

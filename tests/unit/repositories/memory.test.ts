@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { MemoryRepository } from '../../../src/repositories/memory';
+import { MemoryRepository, MemoryRepositoryFactory } from '../../../src/repositories/memory';
 import { Memory } from '../../../src/entities/memory';
 import { formatISO } from '../../../src/utils/date';
 
@@ -196,6 +196,15 @@ describe('MemoryRepository', () => {
 
     repository.deleteById('m1');
 
+    expect(db.run).toHaveBeenCalledWith('DELETE FROM memories WHERE id = ?', ['m1']);
+  });
+
+  it('factory create returns a MemoryRepository bound to the db', () => {
+    const db = makeDb();
+    const repository = MemoryRepositoryFactory.create(db as never);
+
+    expect(repository).toBeInstanceOf(MemoryRepository);
+    repository.deleteById('m1');
     expect(db.run).toHaveBeenCalledWith('DELETE FROM memories WHERE id = ?', ['m1']);
   });
 });

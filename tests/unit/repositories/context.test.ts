@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ContextRepository } from '../../../src/repositories/context';
+import { ContextRepository, ContextRepositoryFactory } from '../../../src/repositories/context';
 
 const configMock = vi.hoisted(() => ({
   config: {
@@ -45,5 +45,9 @@ describe('ContextRepository', () => {
     expect(result).not.toContain('gender:');
     expect(result).not.toContain('location:');
     expect(result).not.toContain('occupation:');
+  });
+
+  it('factory create returns a ContextRepository', () => {
+    expect(ContextRepositoryFactory.create()).toBeInstanceOf(ContextRepository);
   });
 });
