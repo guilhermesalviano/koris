@@ -1,4 +1,4 @@
-import { createAIProvider } from "../providers";
+import { getAIProvider } from "../providers";
 import { escapeTelegramMarkdown, isAbortError } from "../../utils/telegram";
 import { ILogger } from "../../infrastructure/logger";
 import { IPromptRepository, PromptRepositoryFactory } from "../../repositories/prompt";
@@ -64,7 +64,7 @@ class ChatService implements IChatService {
 class ChatServiceFactory {
   static create(logger: ILogger): IChatService {
     const db = DatabaseServiceFactory.create();
-    const aiProvider = createAIProvider(logger);
+    const aiProvider = getAIProvider(logger);
     const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
     const completionService = new AICompletionService(aiProvider, logger);
     return new ChatService(completionService, promptRepository);

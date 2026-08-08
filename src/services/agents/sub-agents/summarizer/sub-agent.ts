@@ -1,6 +1,6 @@
 import { IMemoryService } from "../../../memory-service";
 import type { ILogger } from "../../../../infrastructure/logger";
-import { createAIProvider, getAIProvider } from "../../../providers";
+import { getAIProvider } from "../../../providers";
 import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
 import { SUMMARIZATION_PROMPT } from "../../../../constants";
 import { replacePlaceholders } from "../../../../utils/prompt";
@@ -65,7 +65,7 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
 
 class SummarizerFactory {
   static create(logger: ILogger): Summarizer {
-    const completionService = new AICompletionService(createAIProvider(logger), logger);
+    const completionService = new AICompletionService(getAIProvider(logger), logger);
     return new Summarizer(logger, completionService);
   }
 }

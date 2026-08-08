@@ -2,6 +2,7 @@ import { ILogger } from "../../../infrastructure/logger";
 import { URL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { ToolResult } from "../../../types/tools";
+import { toCurlCommand } from "../../../utils/curl";
 import {
   execFilePromise,
   getOptionalBooleanArg,
@@ -185,12 +186,17 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     ? getOptionalStringArg(args, 'data')
     : null;
 
-  logger.debug('Executing curl request', {
-    url,
-    encodedUrl,
+  logger.info('curl command', {
+    command: toCurlCommand({
+      url: encodedUrl,
+      method,
+      headers,
+      data,
+      extra: ['-k', ...(followRedirects ? ['-L'] : [])],
+    }),
+    url: encodedUrl,
     method,
     timeout,
-    pipe: pipeRaw || 'none',
   });
 
   try {
