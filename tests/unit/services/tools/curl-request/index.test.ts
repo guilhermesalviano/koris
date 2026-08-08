@@ -203,6 +203,14 @@ describe('parseJqArgs', () => {
     expect(parseJqArgs('  | jq .')).toEqual(['.']);
   });
 
+  it('strips multiple spaces after the leading pipe', () => {
+    expect(parseJqArgs('|   jq .')).toEqual(['.']);
+  });
+
+  it('leaves a non-leading pipe untouched when no jq prefix precedes it', () => {
+    expect(parseJqArgs('jq|')).toEqual(['|']);
+  });
+
   it('rejects pipes that do not contain jq at all', () => {
     expect(parseJqArgs('| sort')).toBeNull();
   });
@@ -213,6 +221,18 @@ describe('parseJqArgs', () => {
 describe('shellWords', () => {
   it('splits plain tokens on whitespace', () => {
     expect(shellWords('-r .foo')).toEqual(['-r', '.foo']);
+  });
+
+  it('does not emit empty tokens for repeated whitespace', () => {
+    expect(shellWords('a  b')).toEqual(['a', 'b']);
+  });
+
+  it('unescapes a backslash and keeps the following char inside double quotes', () => {
+    expect(shellWords('"a\\"b"')).toEqual(['a"b']);
+  });
+
+  it('does not let an escaped backslash swallow the next character', () => {
+    expect(shellWords('"ab"')).toEqual(['ab']);
   });
 
   it('preserves content inside single quotes', () => {
@@ -666,6 +686,111 @@ describe('executeCurl', () => {
     mockExecFilePromise.mockResolvedValue(`${longBody}\n---HTTP_STATUS:200---`);
     const result = await executeCurl(mockLogger, { url: 'https://example.com' });
     expect((result.result ?? '').length).toBeLessThanOrEqual(20000);
+  });
+
+  it('still parses the status when trailing text follows the last marker', async () => {
+    mockExecFilePromise.mockResolvedValue('body\n---HTTP_STATUS:200---\ntrailing');
+    const result = await executeCurl(mockLogger, { url: 'https://example.com' });
+    expect(result.success).toBe(true);
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      'curl request completed',
+      expect.objectContaining({ httpStatus: 200 }),
+    );
+  });
+
+  it('trims leading and trailing whitespace from the response body', async () => {
+    mockExecFilePromise.mockResolvedValue('  body  \n---HTTP_STATUS:200---');
+    const result = await executeCurl(mockLogger, { url: 'https://example.com' });
+    expect(result.result).toBe('body');
+  });
+
+  it('keeps newlines between multi-line response bodies', async () => {
+    mockExecFilePromise.mockResolvedValue('{"a":1}\n{"b":2}\n---HTTP_STATUS:200---');
+    const result = await executeCurl(mockLogger, { url: 'https://example.com' });
+    expect(result.result).toBe('{"a":1}\n{"b":2}');
+  });
+
+  it('treats a response without any status marker as a failure', async () => {
+    mockExecFilePromise.mockResolvedValue('plain body');
+    const result = await executeCurl(mockLogger, { url: 'https://example.com' });
+    expect(result.success).toBe(false);
+  });
+
+  it('returns an error when a curl command has no extractable URL', async () => {
+    const result = await executeCurl(mockLogger, { url: 'curl foo' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid URL');
+    expect(mockLogger.warn).not.toHaveBeenCalledWith(
+      'curl_request received a shell command as URL; extracted URL',
+      expect.anything(),
+    );
+  });
+
+  it('does not extract a URL from a non-curl url containing spaces', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+    const result = await executeCurl(mockLogger, { url: 'abc curl https://example.com' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid URL');
+    expect(mockLogger.warn).not.toHaveBeenCalledWith(
+      'curl_request received a shell command as URL; extracted URL',
+      expect.anything(),
+    );
+  });
+
+  it('does not extract a URL-looking token that starts with a hyphen', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+    const result = await executeCurl(mockLogger, { url: 'curl -foo.bar' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid URL');
+  });
+
+  it('extracts the URL from curl commands with leading whitespace', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+    const result = await executeCurl(mockLogger, { url: '  curl https://example.com' });
+    expect(result.success).toBe(true);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'curl_request received a shell command as URL; extracted URL',
+      expect.objectContaining({ extracted: 'https://example.com' }),
+    );
+  });
+
+  it('does not reject a fast success when a small timeout is provided', async () => {
+    setupPipedSpawn({ jqOutput: '"value"\n', jqExitCode: 0 });
+
+    const result = await executeCurl(mockLogger, {
+      url: 'https://example.com',
+      pipe: '| jq .',
+      timeout: 5,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it('does not time out a piped request while the processes are still completing', async () => {
+    const curlProc = makeMockProc();
+    const jqProc = makeMockProc();
+    let count = 0;
+    mockSpawn.mockImplementation(() => {
+      count++;
+      if (count === 1) return curlProc;
+      setTimeout(() => {
+        jqProc.stdout.push('"value"\n');
+        jqProc.stdout.push(null);
+        jqProc.stderr.push(null);
+        jqProc.emit('close', 0);
+      }, 50);
+      return jqProc;
+    });
+
+    const result = await executeCurl(mockLogger, {
+      url: 'https://example.com',
+      pipe: '| jq .',
+      timeout: 10,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
   });
 });
 

@@ -132,7 +132,7 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     );
     if (extracted) {
       logger.warn('curl_request received a shell command as URL; extracted URL', { original: url, extracted });
-      url = extracted.replace(/^["']|["']$/g, '');
+      url = extracted;
     }
   }
 

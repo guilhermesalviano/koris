@@ -1,5 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ChatService } from '../../../../src/services/chat/chat-service';
+import { ChatService, ChatServiceFactory } from '../../../../src/services/chat/chat-service';
+
+vi.mock('../../../../src/infrastructure/db-sqlite', () => ({
+  DatabaseServiceFactory: { create: vi.fn().mockReturnValue({}) },
+}));
+vi.mock('../../../../src/services/providers', () => ({
+  createAIProvider: vi.fn().mockReturnValue({ name: 'mock', complete: vi.fn() }),
+}));
+vi.mock('../../../../src/repositories/prompt', () => ({
+  PromptRepositoryFactory: { create: vi.fn().mockReturnValue({ build: vi.fn() }) },
+}));
 
 function makePromptRepository() {
   return {
@@ -116,6 +126,24 @@ describe('ChatService.complete', () => {
     controller.abort();
 
     await expect(service.complete('hi', 'tui', { signal: controller.signal })).rejects.toThrow('provider down');
+  });
+
+  it('returns a fallback when options has a signal key without a value', async () => {
+    const completionService = makeCompletionService();
+    completionService.complete.mockRejectedValue(new Error('provider down'));
+    const service = new ChatService(completionService as never, makePromptRepository() as never);
+
+    const response = await service.complete('hello', 'tui', { signal: undefined });
+
+    expect(response).toEqual({
+      kind: 'message',
+      text: 'I received your message: "hello"\n\n(AI provider error: provider down)',
+      finishReason: 'unknown',
+    });
+  });
+
+  it('factory create returns a ChatService', () => {
+    expect(ChatServiceFactory.create({} as never)).toBeInstanceOf(ChatService);
   });
 });
 

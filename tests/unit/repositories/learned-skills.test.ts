@@ -17,7 +17,7 @@ describe('LearnedSkillsRepository', () => {
     expect(db.run).toHaveBeenCalledTimes(1);
     const [sql, params] = db.run.mock.calls[0];
     expect(sql).toContain('INSERT INTO learned_skills');
-    expect(params[0]).toMatch(/^skill_/);
+    expect(params[0]).toMatch(/^skill_\d+_[a-z0-9]{9}$/);
     expect(params[1]).toBe('git');
     expect(params[2]).toBe('use rebase');
     expect(result).toEqual(skill);
@@ -222,5 +222,15 @@ describe('LearnedSkillsRepository', () => {
     const instance = LearnedSkillsRepositoryFactory.create(db as never);
 
     expect(LearnedSkillsRepositoryFactory.getInstance()).toBe(instance);
+  });
+
+  it('factory create returns the same instance when called again', () => {
+    const db1 = makeDb();
+    const db2 = makeDb();
+    const first = LearnedSkillsRepositoryFactory.create(db1 as never);
+
+    const second = LearnedSkillsRepositoryFactory.create(db2 as never);
+
+    expect(second).toBe(first);
   });
 });

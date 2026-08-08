@@ -64,6 +64,7 @@ describe('executeCommand', () => {
   it('returns error when command is missing', async () => {
     const result = await executeCommand(mockLogger, {});
     expect(result.success).toBe(false);
+    expect(result.toolName).toBe('execute_command');
     expect(result.error).toContain('Missing required parameter: command');
   });
 
@@ -97,6 +98,24 @@ describe('executeCommand', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('Security Error');
     expect(result.error).toContain('curl');
+  });
+
+  it('does not re-tokenise a space-free command into an allowed one', async () => {
+    const result = await executeCommand(mockLogger, { command: '"ls"' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Security Error');
+    expect(mockSpawnCommand).not.toHaveBeenCalled();
+  });
+
+  it('allows npm as a recognized command', async () => {
+    mockSpawnCommand.mockResolvedValue({ code: 0, stdout: 'ok\n', stderr: '' });
+
+    const result = await executeCommand(mockLogger, { command: 'npm install' });
+
+    expect(result.success).toBe(true);
+    expect(mockSpawnCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'npm', shell: false }),
+    );
   });
 
   it('executes an allowed command via spawnCommand (no shell)', async () => {
@@ -156,6 +175,7 @@ describe('executeCommand', () => {
     const result = await executeCommand(mockLogger, { command: 'git status' });
 
     expect(result.success).toBe(false);
+    expect(result.toolName).toBe('execute_command');
     expect(result.error).toContain('code 1');
     expect(mockLogger.error).toHaveBeenCalledWith(
       'execute_command failed',

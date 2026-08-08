@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { SkillsRepository } from '../../../src/repositories/skills';
+import { SkillsRepository, SkillsRepositoryFactory } from '../../../src/repositories/skills';
 
 const fsMock = vi.hoisted(() => ({
   existsSync: vi.fn(),
@@ -55,6 +55,8 @@ describe('SkillsRepository', () => {
     expect(skills).toEqual([
       { name: 'Git Helper', description: 'Git tips and commands', read_when: 'working with git' },
     ]);
+    expect(fsMock.readdirSync).toHaveBeenCalledWith('/base/skills', { withFileTypes: true });
+    expect(fsMock.readFileSync).toHaveBeenCalledWith('/base/skills/git/SKILL.md', 'utf-8');
   });
 
   it('get falls back to the folder name when frontmatter has no name', () => {
@@ -120,5 +122,23 @@ describe('SkillsRepository', () => {
     });
     expect(skill?.content).toContain('# Git Helper');
     expect(skill?.content).toContain('Use `git rebase`.');
+    expect(fsMock.readdirSync).toHaveBeenCalledWith('/base/skills', { withFileTypes: true });
+    expect(fsMock.readFileSync).toHaveBeenCalledWith('/base/skills/git/SKILL.md', 'utf-8');
+  });
+
+  it('findByName falls back to an empty description when frontmatter has none', () => {
+    fsMock.existsSync.mockReturnValue(true);
+    fsMock.readdirSync.mockReturnValue([makeEntry('git')]);
+    fsMock.readFileSync.mockReturnValue(['---', 'name: Git', '---', '', 'content'].join('\n'));
+    const repository = new SkillsRepository(logger as never);
+
+    const skill = repository.findByName({ name: 'git' });
+
+    expect(skill?.description).toBe('');
+    expect(skill?.read_when).toBeNull();
+  });
+
+  it('factory create returns a SkillsRepository', () => {
+    expect(SkillsRepositoryFactory.create(logger as never)).toBeInstanceOf(SkillsRepository);
   });
 });
