@@ -11,6 +11,7 @@ import {
   getRequiredStringArg,
   isAllowedValue,
 } from '../shared/runtime';
+import { gateErrorForUrl } from '../gate';
 
 /**
  * Parse a jq pipe string (e.g. "| jq -r '.result'") into a safe argv array
@@ -146,6 +147,12 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     encodedUrl = urlObj.toString();
   } catch {
     return { toolName: 'curl_request', success: false, error: `Invalid URL: ${url}` };
+  }
+
+  const gateError = gateErrorForUrl(encodedUrl);
+  if (gateError) {
+    logger.warn('curl_request blocked by domain gate', { url: encodedUrl, error: gateError });
+    return { toolName: 'curl_request', success: false, error: gateError };
   }
 
   const method = (getOptionalStringArg(args, 'method') || 'GET').toUpperCase();

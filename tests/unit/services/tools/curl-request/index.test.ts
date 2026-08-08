@@ -46,6 +46,12 @@ vi.mock(
   },
 );
 
+// ── config mock (domain gate allowlist) ─────────────────────────────────────
+
+vi.mock('../../../../../src/config', () => ({
+  config: { ALLOWED_DOMAINS: ['example.com', 'api.example.com'] },
+}));
+
 // ── node:child_process mock ─────────────────────────────────────────────────
 
 vi.mock('node:child_process', async (importOriginal) => {
@@ -326,6 +332,30 @@ describe('executeCurl', () => {
     expect(result.toolName).toBe('curl_request');
     expect(result.error).toContain('Invalid URL');
     expect(result.error).toContain('not a url at all!!');
+  });
+
+  it('blocks requests when the hostname is not in allowed_domains', async () => {
+    const result = await executeCurl(mockLogger, { url: 'https://evil.com' });
+
+    expect(result.success).toBe(false);
+    expect(result.toolName).toBe('curl_request');
+    expect(result.error).toContain('Domain gate');
+    expect(result.error).toContain('evil.com');
+    expect(result.error).toContain('allowed_domains');
+    expect(mockExecFilePromise).not.toHaveBeenCalled();
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'curl_request blocked by domain gate',
+      expect.objectContaining({ url: 'https://evil.com/', error: expect.stringContaining('evil.com') }),
+    );
+  });
+
+  it('blocks requests to a disallowed subdomain of an allowed domain', async () => {
+    const result = await executeCurl(mockLogger, { url: 'https://sub.example.com' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Domain gate');
+    expect(result.error).toContain('sub.example.com');
+    expect(mockExecFilePromise).not.toHaveBeenCalled();
   });
 
   it('returns error for disallowed HTTP method', async () => {
