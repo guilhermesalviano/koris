@@ -294,10 +294,14 @@ export function _setBotUsernameForTesting(username: string | null): void {
   botUsername = username;
 }
 
-export function create(): Plugin {
+export function create(): Plugin | null {
+  if (!config.CHANNELS.TELEGRAM.ENABLED) {
+    return null;
+  }
+
   return createTelegramPlugin({
     token: config.CHANNELS.TELEGRAM.BOT_TOKEN,
-    enabled: config.CHANNELS.TELEGRAM.ENABLED,
+    enabled: true,
   });
 }
 
