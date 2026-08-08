@@ -3,6 +3,7 @@ import { config } from '../../../config';
 import { ILogger } from '../../../infrastructure/logger';
 import { THINK_START, THINK_END } from '../../../constants/thinking';
 import { extractToolCalls } from '../../../utils/tool-calls';
+import { toCurlCommand } from '../../../utils/curl';
 
 type OpenAIMessage = {
   role: string;
@@ -281,14 +282,26 @@ class NvidiaAIProvider implements AIProvider {
     if (!config.AI.EMBEDDING.ENABLED) {
       throw new Error('Embeddings are disabled in configuration');
     }
+
+    const body = JSON.stringify({
+      model: this.embeddingModel,
+      input: text,
+      input_type: 'query'
+    });
+
+    this.logger.debug('NVIDIA /embeddings curl', {
+      command: toCurlCommand({
+        url: `${this.baseUrl}/embeddings`,
+        method: 'POST',
+        headers: this.curlHeaders(),
+        data: body,
+      }),
+    });
+
     const res = await fetch(`${this.baseUrl}/embeddings`, {
       method: 'POST',
       headers: this.authHeaders(),
-      body: JSON.stringify({
-        model: this.embeddingModel,
-        input: text,
-        input_type: 'query'
-      })
+      body
     });
 
     if (!res.ok) {
@@ -393,6 +406,16 @@ class NvidiaAIProvider implements AIProvider {
     return headers;
   }
 
+  /**
+   * Headers for curl logging with the API token redacted so secrets are never
+   * written to the log files.
+   */
+  private curlHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (this.apiToken) headers['Authorization'] = 'Bearer <API_TOKEN>';
+    return headers;
+  }
+
   private async post(request: AIChatRequest, signal: AbortSignal, stream: boolean): Promise<Response> {
     const body: Record<string, unknown> = {
       model: request.model ?? this.defaultModel,
@@ -402,6 +425,15 @@ class NvidiaAIProvider implements AIProvider {
 
     if (request.tools?.length) body['tools'] = request.tools;
     if (request.temperature != null) body['temperature'] = request.temperature;
+
+    this.logger.debug('NVIDIA /chat/completions curl', {
+      command: toCurlCommand({
+        url: `${this.baseUrl}/chat/completions`,
+        method: 'POST',
+        headers: this.curlHeaders(),
+        data: JSON.stringify(body),
+      }),
+    });
 
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',

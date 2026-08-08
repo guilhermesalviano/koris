@@ -95,7 +95,7 @@ read_when:
     <trigger>Check a Task</trigger>
     <request>
       <description>Mark a specific task as checked (<code>checked == 1</code>) once it is done. Always use the task id returned by the API and confirm the task with the user before updating.</description>
-      <bash>curl -k -X PUT <GATEWAY_HOST>/api/todo/<TASK_ID> -H 'Content-Type: application/json' -d '{"checked": 1}'</bash>
+      <bash>curl -k -X PUT <GATEWAY_HOST>/api/todo -H 'Content-Type: application/json' -d '{"id": <TASK_ID>,"checked": 1}'</bash>
     </request>
     <response>
       <description>Returns the updated task with <code>checked</code> set to 1.</description>

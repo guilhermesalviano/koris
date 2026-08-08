@@ -689,14 +689,36 @@ describe('executeCurl', () => {
     );
   });
 
-  it('logs the request details via debug before executing', async () => {
+  it('logs the exact curl command before executing', async () => {
     mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
 
     await executeCurl(mockLogger, { url: 'https://example.com', method: 'GET' });
 
-    expect(mockLogger.debug).toHaveBeenCalledWith(
-      'Executing curl request',
-      expect.objectContaining({ url: 'https://example.com', encodedUrl: 'https://example.com/', pipe: 'none' }),
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      'curl command',
+      expect.objectContaining({
+        command: 'curl -s -k -L https://example.com/',
+        url: 'https://example.com/',
+        method: 'GET',
+      }),
+    );
+  });
+
+  it('logs the curl command with headers and body data', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+
+    await executeCurl(mockLogger, {
+      url: 'https://example.com',
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      data: '{"checked":1,"id":13}',
+    });
+
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      'curl command',
+      expect.objectContaining({
+        command: "curl -s -k -L -X PUT -H 'Content-Type: application/json' -d '{\"checked\":1,\"id\":13}' https://example.com/",
+      }),
     );
   });
 

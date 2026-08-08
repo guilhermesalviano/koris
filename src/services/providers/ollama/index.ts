@@ -4,6 +4,7 @@ import { ILogger } from '../../../infrastructure/logger';
 import { validateBaseUrl } from '../../../utils/provider';
 import { THINK_START, THINK_END } from '../../../constants/thinking';
 import { extractToolCalls } from '../../../utils/tool-calls';
+import { toCurlCommand } from '../../../utils/curl';
 
 type OllamaChatChunk = {
   message?: {
@@ -212,13 +213,25 @@ class OllamaAIProvider implements AIProvider {
     if (!config.AI.EMBEDDING.ENABLED) {
       throw new Error('Embeddings are disabled in configuration');
     }
+
+    const body = JSON.stringify({
+      model: this.embeddingModel,
+      prompt: text
+    });
+
+    this.logger.debug('Ollama embed curl', {
+      command: toCurlCommand({
+        url: `${this.baseUrl}/api/embeddings`,
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        data: body,
+      }),
+    });
+
     const res = await fetch(`${this.baseUrl}/api/embeddings`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: this.embeddingModel,
-        prompt: text
-      })
+      body
     });
 
     if (!res.ok) {
@@ -326,20 +339,30 @@ class OllamaAIProvider implements AIProvider {
   }
 
   private async post(request: AIChatRequest, signal: AbortSignal, stream: boolean): Promise<Response> {
+    const body = JSON.stringify({
+      model: request.model ?? this.defaultModel,
+      messages: request.messages,
+      tools: request.tools,
+      keep_alive: '15m',
+      options: {
+        num_ctx: 32768
+      },
+      stream
+    });
+
+    this.logger.debug('Ollama /api/chat curl', {
+      command: toCurlCommand({
+        url: `${this.baseUrl}/api/chat`,
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        data: body,
+      }),
+    });
 
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: request.model ?? this.defaultModel,
-        messages: request.messages,
-        tools: request.tools,
-        keep_alive: '15m',
-        options: {
-          num_ctx: 32768
-        },
-        stream
-      }),
+      body,
       signal,
     });
 

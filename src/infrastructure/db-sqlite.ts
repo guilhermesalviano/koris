@@ -6,6 +6,10 @@ import { LoggerFactory } from './logger';
 
 const logger = LoggerFactory.create();
 
+// Multiple DatabaseService instances are created per process (chat service,
+// workers, tools...). Only report initialization once to avoid log spam.
+let initReported = false;
+
 interface DatabaseOptions {
   filepath?: string;
   verbose?: boolean;
@@ -54,10 +58,14 @@ class DatabaseService implements IDatabaseService {
 
       if (this.verbose) {
         this.db.pragma('journal_mode = WAL');
-        logger.debug(`[database] SQLite initialized at ${this.filepath}`);
       }
 
       this.initializeSchema();
+
+      if (!initReported) {
+        initReported = true;
+        logger.debug(`[database] SQLite initialized at ${this.filepath}`);
+      }
     } catch (error) {
       logger.error('[database] Failed to initialize database', { error, filepath: this.filepath });
       throw error;
@@ -148,8 +156,6 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_learned_skills_skill_name ON learned_skills(skill_name);
         CREATE INDEX IF NOT EXISTS idx_learned_skills_learned_at ON learned_skills(learned_at);
       `);
-
-      logger.debug('[database] schema initialized successfully');
     } catch (error) {
       logger.error('[database] Failed to initialize database schema', { error });
       throw error;

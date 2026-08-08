@@ -3,7 +3,7 @@ import { DatabaseServiceFactory } from "../../../../infrastructure/db-sqlite";
 import { HeartbeatRepositoryFactory, IHeartbeatRepository } from "../../../../repositories/heartbeat";
 import { isCronDue } from "../../../../utils/heartbeat";
 import { IPromptRepository, PromptRepositoryFactory } from "../../../../repositories/prompt";
-import { createAIProvider } from "../../../providers";
+import { getAIProvider } from "../../../providers";
 import { replacePlaceholders } from "../../../../utils/prompt";
 import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
 import { HEARTBEAT_PROMPT } from "../../../../constants";
@@ -136,7 +136,7 @@ class Heartbeat implements ISubAgent<Date> {
 class HeartbeatFactory {
   static create(logger: ILogger, channelsManager: IChannelsManager): Heartbeat {
     const db = DatabaseServiceFactory.create();
-    const aiProvider = createAIProvider(logger);
+    const aiProvider = getAIProvider(logger);
     const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
     const heartbeatRepository = HeartbeatRepositoryFactory.create(db);
     const agnosticExecutionTool = AgnosticExecutionToolFactory.create();

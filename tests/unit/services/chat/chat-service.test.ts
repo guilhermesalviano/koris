@@ -5,7 +5,7 @@ vi.mock('../../../../src/infrastructure/db-sqlite', () => ({
   DatabaseServiceFactory: { create: vi.fn().mockReturnValue({}) },
 }));
 vi.mock('../../../../src/services/providers', () => ({
-  createAIProvider: vi.fn().mockReturnValue({ name: 'mock', complete: vi.fn() }),
+  getAIProvider: vi.fn().mockReturnValue({ name: 'mock', complete: vi.fn() }),
 }));
 vi.mock('../../../../src/repositories/prompt', () => ({
   PromptRepositoryFactory: { create: vi.fn().mockReturnValue({ build: vi.fn() }) },

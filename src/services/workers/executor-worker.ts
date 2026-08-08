@@ -38,7 +38,7 @@ class ExecutorWorker implements IWorker {
     }
     ctx.onProgress(`Iteration ${iteration}`);
 
-    this.logger.info(`Executing tools (${toolCalls})...`);
+    this.logger.info(`Executing tools (${JSON.stringify(toolCalls)})...`);
 
     const toolResultsArray = await ctx.toolsQueue.handle(
       toolCalls,
