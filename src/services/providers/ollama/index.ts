@@ -4,7 +4,6 @@ import { ILogger } from '../../../infrastructure/logger';
 import { validateBaseUrl } from '../../../utils/provider';
 import { THINK_START, THINK_END } from '../../../constants/thinking';
 import { extractToolCalls } from '../../../utils/tool-calls';
-import { toCurlCommand } from '../../../utils/curl';
 
 type OllamaChatChunk = {
   message?: {
@@ -219,15 +218,6 @@ class OllamaAIProvider implements AIProvider {
       prompt: text
     });
 
-    this.logger.debug('Ollama embed curl', {
-      command: toCurlCommand({
-        url: `${this.baseUrl}/api/embeddings`,
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        data: body,
-      }),
-    });
-
     const res = await fetch(`${this.baseUrl}/api/embeddings`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -348,15 +338,6 @@ class OllamaAIProvider implements AIProvider {
         num_ctx: 32768
       },
       stream
-    });
-
-    this.logger.debug('Ollama /api/chat curl', {
-      command: toCurlCommand({
-        url: `${this.baseUrl}/api/chat`,
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        data: body,
-      }),
     });
 
     const res = await fetch(`${this.baseUrl}/api/chat`, {
