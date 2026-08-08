@@ -16,6 +16,18 @@ describe('validateBaseUrl', () => {
     );
   });
 
+  it('throws when the URL includes only a username', () => {
+    expect(() => validateBaseUrl('http://user@localhost:11434', false)).toThrow(
+      'AI base URL must not include credentials',
+    );
+  });
+
+  it('throws when the URL includes only a password', () => {
+    expect(() => validateBaseUrl('http://:pass@localhost:11434', false)).toThrow(
+      'AI base URL must not include credentials',
+    );
+  });
+
   it('allows localhost when remote is disallowed', () => {
     expect(validateBaseUrl('http://localhost:11434', false)).toBe('http://localhost:11434');
   });

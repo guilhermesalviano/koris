@@ -56,6 +56,18 @@ describe('extractJson', () => {
     expect(extractJson(input)).toBe('{"tool_calls":[]}');
   });
 
+  it('extracts nested objects with balanced braces', () => {
+    expect(extractJson('prefix {"a":{"b":[1,2]},"c":3} suffix')).toBe('{"a":{"b":[1,2]},"c":3}');
+  });
+
+  it('stops at the matching closing brace', () => {
+    expect(extractJson('prefix {"a":1} {"b":2}')).toBe('{"a":1}');
+  });
+
+  it('returns null when braces are unbalanced', () => {
+    expect(extractJson('prefix {"a": ')).toBeNull();
+  });
+
   it('returns null for plain text with no JSON', () => {
     expect(extractJson('just some text')).toBeNull();
   });
@@ -74,12 +86,21 @@ describe('looksLikeToolCallJson', () => {
     expect(looksLikeToolCallJson('```json\n{}\n```')).toBe(true);
   });
 
+  it('returns true for ``` text that does not end with ```', () => {
+    expect(looksLikeToolCallJson('```json\n{"tool_calls":[]}')).toBe(true);
+  });
+
   it('returns true even with leading whitespace', () => {
     expect(looksLikeToolCallJson('  {"tool_calls":[]}')).toBe(true);
   });
 
   it('returns false for plain prose', () => {
     expect(looksLikeToolCallJson('The answer is 42')).toBe(false);
+  });
+
+  it('returns false for text starting with other punctuation', () => {
+    expect(looksLikeToolCallJson('["tool_calls"]')).toBe(false);
+    expect(looksLikeToolCallJson('...{"a":1}')).toBe(false);
   });
 });
 
@@ -128,6 +149,16 @@ describe('extractToolCalls', () => {
     expect(result[0].arguments).toEqual({ raw: 'not json' });
   });
 
+  it('wraps unparseable string arguments even without a logger', () => {
+    const payload = {
+      tool_calls: [
+        { function: { name: 'cmd', arguments: 'not json' } },
+      ],
+    };
+    const result = extractToolCalls(JSON.stringify(payload));
+    expect(result[0].arguments).toEqual({ raw: 'not json' });
+  });
+
   it('defaults name to "unknown" when function.name is absent', () => {
     const payload = {
       tool_calls: [{ function: { arguments: {} } }],
@@ -144,6 +175,14 @@ describe('extractToolCalls', () => {
     expect(result[0].arguments).toEqual({});
   });
 
+  it('defaults arguments to {} when rawArgs is null even without a logger', () => {
+    const payload = {
+      tool_calls: [{ function: { name: 'tool', arguments: null } }],
+    };
+    const result = extractToolCalls(JSON.stringify(payload));
+    expect(result[0].arguments).toEqual({});
+  });
+
   it('keeps valid entries and skips null tool_call items', () => {
     const payload = {
       tool_calls: [
@@ -154,6 +193,16 @@ describe('extractToolCalls', () => {
     const result = extractToolCalls(JSON.stringify(payload));
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('good');
+  });
+
+  it('defaults name and arguments when the function object is missing', () => {
+    const payload = {
+      tool_calls: [{ function: null }],
+    };
+    const result = extractToolCalls(JSON.stringify(payload), mockLogger);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('unknown');
+    expect(result[0].arguments).toEqual({});
   });
 
   it('returns multiple tool calls in order', () => {
@@ -183,12 +232,93 @@ describe('extractToolCalls', () => {
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('tool_b');
   });
+
+  it('logs debug when non-empty text contains no JSON', () => {
+    extractToolCalls('plain text', mockLogger);
+    expect(mockLogger.debug).toHaveBeenCalledWith(
+      'No JSON found in provider response, treating as plain text',
+    );
+  });
+
+  it('does not log debug when the response is empty', () => {
+    vi.mocked(mockLogger.debug).mockClear();
+    extractToolCalls('', mockLogger);
+    expect(mockLogger.debug).not.toHaveBeenCalled();
+  });
+
+  it('does not log debug for whitespace-only responses', () => {
+    vi.mocked(mockLogger.debug).mockClear();
+    extractToolCalls('   ', mockLogger);
+    expect(mockLogger.debug).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty array and never throws when JSON is invalid and no logger is given', () => {
+    expect(extractToolCalls('{"tool_calls": }')).toEqual([]);
+  });
+
+  it('returns an empty array when the response is not valid JSON', () => {
+    expect(extractToolCalls('{"tool_calls": }', mockLogger)).toEqual([]);
+  });
+
+  it('logs a warn with details when the response is not valid JSON', () => {
+    extractToolCalls('{"tool_calls": }', mockLogger);
+    expect(mockLogger.warn).toHaveBeenCalledWith('Failed to parse response as JSON', {
+      error: expect.stringContaining('Unexpected token'),
+    });
+  });
+
+  it('logs debug when string arguments parse successfully', () => {
+    const payload = {
+      tool_calls: [{ function: { name: 'cmd', arguments: '{"a":1}' } }],
+    };
+    extractToolCalls(JSON.stringify(payload), mockLogger);
+    expect(mockLogger.debug).toHaveBeenCalledWith('Parsed string arguments', {
+      toolName: 'cmd',
+      index: 0,
+    });
+  });
+
+  it('logs a warn with the raw arguments when the string cannot be parsed', () => {
+    const payload = {
+      tool_calls: [{ function: { name: 'cmd', arguments: 'not json' } }],
+    };
+    extractToolCalls(JSON.stringify(payload), mockLogger);
+    expect(mockLogger.warn).toHaveBeenCalledWith('Failed to parse arguments string, using as-is', {
+      toolName: 'cmd',
+      index: 0,
+      arguments: 'not json',
+    });
+  });
+
+  it('logs a warn with the type when arguments are null', () => {
+    const payload = {
+      tool_calls: [{ function: { name: 'tool', arguments: null } }],
+    };
+    extractToolCalls(JSON.stringify(payload), mockLogger);
+    expect(mockLogger.warn).toHaveBeenCalledWith('Unexpected arguments type', {
+      toolName: 'tool',
+      index: 0,
+      type: 'object',
+    });
+  });
 });
 
 describe('shouldSkipToolCall', () => {
   it('returns false for non-get_skill tool calls', () => {
     const tc = { name: 'execute_command', arguments: { command: 'ls' } };
     expect(shouldSkipToolCall(tc, [])).toBe(false);
+  });
+
+  it('returns false for non-get_skill calls even when the skill is in history', () => {
+    const tc = { name: 'execute_command', arguments: { name: 'my-skill' } };
+    const history = [makeMessage('system', 'You have just learned how to use "my-skill" skill.')];
+    expect(shouldSkipToolCall(tc, history)).toBe(false);
+  });
+
+  it('logs the resolved skill name for get_skill calls', () => {
+    const tc = { name: 'get_skill', arguments: { skill_name: 'my-skill' } };
+    shouldSkipToolCall(tc, [], mockLogger);
+    expect(mockLogger.info).toHaveBeenCalledWith('Skill name: my-skill');
   });
 
   it('returns false when skillName is missing', () => {
