@@ -312,5 +312,26 @@ describe('Heartbeat', () => {
         expect.objectContaining({ err: expect.any(Error) }),
       );
     });
+
+    it('marks lastRun at dispatch even when the task execution fails', async () => {
+      const now = localDate(9, 0);
+      const { heartbeat, logger, completionService, heartbeatRepository } = makeHeartbeat({
+        tasks: [{
+          id: 'failing',
+          task: 'broken task',
+          cronExpression: '0 9 * * *',
+          type: 'report',
+        }],
+      });
+      completionService.complete.mockRejectedValue(new Error('model failed'));
+
+      await heartbeat.handler(now);
+
+      expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('failing', now);
+      expect(logger.error).toHaveBeenCalledWith(
+        'Heartbeat: Task "failing" failed.',
+        expect.objectContaining({ err: expect.any(Error) }),
+      );
+    });
   });
 });

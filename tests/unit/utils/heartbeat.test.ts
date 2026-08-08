@@ -158,13 +158,43 @@ describe('matchesCron', () => {
 });
 
 describe('isCronDue', () => {
-  it('returns true when cron fired between since and now', () => {
-    const now = new Date(2024, 0, 15, 9, 5, 0);
+  it('returns true when the wake minute matches the cron', () => {
+    const now = new Date(2024, 0, 15, 9, 0, 0);
     const since = new Date(2024, 0, 15, 8, 55, 0);
     expect(isCronDue('0 9 * * *', now, since)).toBe(true);
   });
 
-  it('returns false when cron did not fire in interval', () => {
+  it('returns true when the wake is within the grace window after the cron minute', () => {
+    const now = new Date(2024, 0, 15, 9, 1, 0);
+    const since = new Date(2024, 0, 15, 8, 55, 0);
+    expect(isCronDue('0 9 * * *', now, since)).toBe(true);
+  });
+
+  it('returns true when the wake is exactly the cron minute after a long idle period', () => {
+    const now = new Date(2024, 0, 15, 9, 0, 0);
+    const since = new Date(2024, 0, 5, 8, 0, 0);
+    expect(isCronDue('0 9 * * *', now, since)).toBe(true);
+  });
+
+  it('does not fire a task at a wake long after its scheduled minute (regression: 8:30 task firing at 19:04)', () => {
+    const now = new Date(2024, 0, 15, 19, 4, 0);
+    const since = new Date(2024, 0, 10, 0, 0, 0);
+    expect(isCronDue('30 8 * * *', now, since)).toBe(false);
+  });
+
+  it('does not catch up on a cron that matched hours earlier', () => {
+    const now = new Date(2024, 0, 15, 11, 0, 0);
+    const since = new Date(2024, 0, 15, 8, 0, 0);
+    expect(isCronDue('0 9 * * *', now, since)).toBe(false);
+  });
+
+  it('does not double-fire when the cron minute already ran just before now', () => {
+    const now = new Date(2024, 0, 15, 8, 31, 0);
+    const since = new Date(2024, 0, 15, 8, 30, 0);
+    expect(isCronDue('30 8 * * *', now, since)).toBe(false);
+  });
+
+  it('returns false when cron did not fire near the wake', () => {
     const now = new Date(2024, 0, 15, 9, 5, 0);
     const since = new Date(2024, 0, 15, 9, 2, 0);
     expect(isCronDue('0 10 * * *', now, since)).toBe(false);
@@ -180,12 +210,6 @@ describe('isCronDue', () => {
     const now = new Date(2024, 0, 15, 9, 0, 0);
     const since = new Date(2024, 0, 15, 10, 0, 0);
     expect(isCronDue('0 9 * * *', now, since)).toBe(false);
-  });
-
-  it('handles a wide interval covering multiple fires', () => {
-    const now = new Date(2024, 0, 15, 11, 0, 0);
-    const since = new Date(2024, 0, 15, 8, 0, 0);
-    expect(isCronDue('0 9 * * *', now, since)).toBe(true);
   });
 });
 

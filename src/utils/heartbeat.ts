@@ -71,16 +71,21 @@ export function matchesCron(expr: string, date: Date): boolean {
   );
 }
 
+// Tolerance for scheduling jitter (event-loop delay) when the runner wakes up.
+// Tasks are only considered due within a few minutes of their scheduled minute,
+// so a missed occurrence is skipped instead of firing at the wrong hour.
+const GRACE_MS = 2 * 60_000;
+
 /**
- * Returns true if the cron expression has a scheduled minute between "since"
- * (exclusive) and "now" (inclusive), meaning the task is overdue.
+ * Returns true if the cron expression has a scheduled minute at or shortly before
+ * "now" (but strictly after "since"). This ensures a task only fires at its
+ * scheduled hour and is never executed late as a catch-up for missed occurrences.
  */
 export function isCronDue(expr: string, now: Date, since: Date): boolean {
-  const sinceMs = since.getTime();
-  const nowMs   = now.getTime();
+  const nowMs = now.getTime();
+  const start = Math.max(since.getTime() + 60_000, nowMs - GRACE_MS);
 
-  // Walk minute-by-minute from (since + 1 min) up to now
-  for (let t = sinceMs + 60_000; t <= nowMs; t += 60_000) {
+  for (let t = start; t <= nowMs; t += 60_000) {
     if (matchesCron(expr, new Date(t))) return true;
   }
   return false;
