@@ -1,6 +1,7 @@
 import { config } from "../../../../config";
 import { DatabaseServiceFactory } from "../../../../infrastructure/db-sqlite";
 import { HeartbeatRepositoryFactory, IHeartbeatRepository } from "../../../../repositories/heartbeat";
+import { Heartbeat as HeartbeatEntity } from "../../../../entities/heartbeat";
 import { isCronDue } from "../../../../utils/heartbeat";
 import { IPromptRepository, PromptRepositoryFactory } from "../../../../repositories/prompt";
 import { getAIProvider } from "../../../providers";
@@ -18,6 +19,35 @@ import { IChannelsManager } from "../../../../channels";
 import { getLastWhitelistedJid } from "../../../../../plugins/whatsapp";
 import type { IWorker } from "../../../../types/workers";
 
+class TaskQueue {
+  private queue: Array<() => Promise<void>> = [];
+  private active = 0;
+
+  constructor(private concurrency: number) {}
+
+  add(task: () => Promise<void>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(() =>
+        Promise.resolve()
+          .then(task)
+          .then(resolve, reject),
+      );
+      this.pump();
+    });
+  }
+
+  private pump(): void {
+    while (this.active < this.concurrency && this.queue.length > 0) {
+      const task = this.queue.shift()!;
+      this.active += 1;
+      task().finally(() => {
+        this.active -= 1;
+        this.pump();
+      });
+    }
+  }
+}
+
 class Heartbeat implements ISubAgent<Date> {
   constructor(
     private logger: ILogger,
@@ -27,7 +57,11 @@ class Heartbeat implements ISubAgent<Date> {
     private channelsManager: IChannelsManager,
     private completionService: IAICompletionService,
     private executorWorker: IWorker,
-  ) { }
+  ) {
+    this.queue = new TaskQueue(2);
+  }
+
+  private queue: TaskQueue;
 
   async handler(date: Date): Promise<void> {
     const tasks = this.heartbeatRepository.getAll();
@@ -40,74 +74,88 @@ class Heartbeat implements ISubAgent<Date> {
       return;
     }
 
-    // if dont have task, keep necessity to execute AI 
-    for (const task of tasks) {
+    const dueTasks = tasks.filter((task) => {
       const since = task.lastRun ?? task.createdAt ?? new Date(0);
 
       if (!isCronDue(task.cronExpression, date, since)) {
         this.logger.info(`Heartbeat: Task "${task.id}" not due yet (cron: ${task.cronExpression}).`);
-        continue;
+        return false;
       }
 
-      this.logger.info(`Heartbeat: Executing task "${task.id}" — ${task.task}`);
-      const prompt = replacePlaceholders(HEARTBEAT_PROMPT, { v1: `${task.type}`, v2: `task: ${task.task}` });
+      return true;
+    });
 
-      try {
-        // refactor - usar um novo tipo de manager para heartbeat tasks, que não precisa de message history, channel, etc. Talvez só passar o texto da task e um contexto com logger.
-        const payload = await this.promptRepository
-          .build({
-            userMessage: prompt,
-            channel: 'background',
-            toolsEnabled: true,
-            messageHistory: [],
-            includeTaskTools: false
-          });
+    if (dueTasks.length === 0) {
+      return;
+    }
 
-        // this.logger.debug(`heartbeat prompt value ${JSON.stringify(payload)}`);
-      
-        const response = await this.completionService.complete(payload);
-        let result: string;
-        if (response.kind === 'message') {
-          result = response.text;
-        } else {
-          result = await this.executorWorker.run({
-            toolCalls: response.calls,
-            userMessage: task.task,
-            messageHistory: [],
-            ctx: {
-              channel: 'tui',
-              toolsQueue: this.toolsQueue,
-              signal: new AbortController().signal,
-              onProgress: (progress: string) => this.logger.info(progress),
-              options: { toolsEnabled: true },
-            },
-          });
-        }
-        this.saveTaskResult({ taskId: task.id, date, result });
+    const promises = dueTasks.map((task) =>
+      this.queue.add(() => this.executeTask(task, date)),
+    );
 
-        this.logger.info(`Heartbeat: Task "${task.id}" executed. Result: ${result}`);
+    await Promise.all(promises);
+  }
 
-        // Hardcoded for tests
-        if (config.CHANNELS.TELEGRAM.ENABLED) {
-          this.channelsManager.sendMessage('telegram', config.CHANNELS.TELEGRAM.CHAT_ID, result).catch(err => {
-            this.logger.error(`Failed to send heartbeat result to Telegram for task "${task.id}".`, { err });
-          });
-        }
+  private async executeTask(task: HeartbeatEntity, date: Date): Promise<void> {
+    this.logger.info(`Heartbeat: Executing task "${task.id}" — ${task.task}`);
+    this.heartbeatRepository.updateLastRun(task.id, date);
 
-        if (config.CHANNELS.WHATSAPP.ENABLED) {
-          const whatsappTarget = getLastWhitelistedJid() ?? config.CHANNELS.WHATSAPP.TARGET_JID;
-          if (whatsappTarget) {
-            this.channelsManager.sendMessage('whatsapp', whatsappTarget, result).catch(err => {
-              this.logger.error(`Failed to send heartbeat result to WhatsApp for task "${task.id}".`, { err });
-            });
-          }
-        }
+    const prompt = replacePlaceholders(HEARTBEAT_PROMPT, { v1: `${task.type}`, v2: `task: ${task.task}` });
 
-        this.heartbeatRepository.updateLastRun(task.id, date);
-        this.logger.info(`Heartbeat: Task "${task.id}" completed successfully.`);
-      } catch (err) {
-        this.logger.error(`Heartbeat: Task "${task.id}" failed.`, { err });
+    try {
+      // refactor - usar um novo tipo de manager para heartbeat tasks, que não precisa de message history, channel, etc. Talvez só passar o texto da task e um contexto com logger.
+      const payload = await this.promptRepository
+        .build({
+          userMessage: prompt,
+          channel: 'background',
+          toolsEnabled: true,
+          messageHistory: [],
+          includeTaskTools: false
+        });
+
+      // this.logger.debug(`heartbeat prompt value ${JSON.stringify(payload)}`);
+    
+      const response = await this.completionService.complete(payload);
+      let result: string;
+      if (response.kind === 'message') {
+        result = response.text;
+      } else {
+        result = await this.executorWorker.run({
+          toolCalls: response.calls,
+          userMessage: task.task,
+          messageHistory: [],
+          ctx: {
+            channel: 'tui',
+            toolsQueue: this.toolsQueue,
+            signal: new AbortController().signal,
+            onProgress: (progress: string) => this.logger.info(progress),
+            options: { toolsEnabled: true },
+          },
+        });
       }
+      this.saveTaskResult({ taskId: task.id, date, result });
+
+      this.logger.info(`Heartbeat: Task "${task.id}" executed. Result: ${result}`);
+
+      // Hardcoded for tests
+      if (config.CHANNELS.TELEGRAM.ENABLED) {
+        this.channelsManager.sendMessage('telegram', config.CHANNELS.TELEGRAM.CHAT_ID, result).catch(err => {
+          this.logger.error(`Failed to send heartbeat result to Telegram for task "${task.id}".`, { err });
+        });
+      }
+
+      if (config.CHANNELS.WHATSAPP.ENABLED) {
+        const whatsappTarget = getLastWhitelistedJid() ?? config.CHANNELS.WHATSAPP.TARGET_JID;
+        if (whatsappTarget) {
+          this.channelsManager.sendMessage('whatsapp', whatsappTarget, result).catch(err => {
+            this.logger.error(`Failed to send heartbeat result to WhatsApp for task "${task.id}".`, { err });
+          });
+        }
+      }
+
+      this.logger.info(`Heartbeat: Task "${task.id}" completed successfully.`);
+    } catch (err) {
+      this.logger.error(`Heartbeat: Task "${task.id}" failed.`, { err });
     }
   }
 
