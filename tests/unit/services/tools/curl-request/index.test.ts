@@ -95,10 +95,12 @@ function setupPipedSpawn({
   curlBody = '{"ok":true}',
   jqOutput = '"true"',
   jqExitCode = 0,
+  jqStderr = '',
 }: {
   curlBody?: string;
   jqOutput?: string;
   jqExitCode?: number;
+  jqStderr?: string;
 } = {}) {
   const curlProc = makeMockProc();
   const jqProc   = makeMockProc();
@@ -117,7 +119,9 @@ function setupPipedSpawn({
     // Second spawn → jq: push output then close
     setImmediate(() => {
       if (jqOutput) jqProc.stdout.push(jqOutput);
+      if (jqStderr) jqProc.stderr.push(jqStderr);
       jqProc.stdout.push(null);
+      jqProc.stderr.push(null);
       jqProc.emit('close', jqExitCode);
     });
     return jqProc;
@@ -189,6 +193,18 @@ describe('parseJqArgs', () => {
   it('injection with backtick → parsed as jq argv', () => {
     const argv = parseJqArgs('| jq `id`');
     expect(argv).toEqual(['`id`']);
+  });
+
+  it('rejects a token that merely contains "jq" (anchored match)', () => {
+    expect(parseJqArgs('| xjq .')).toBeNull();
+  });
+
+  it('strips leading whitespace before the pipe', () => {
+    expect(parseJqArgs('  | jq .')).toEqual(['.']);
+  });
+
+  it('rejects pipes that do not contain jq at all', () => {
+    expect(parseJqArgs('| sort')).toBeNull();
   });
 });
 
@@ -272,6 +288,7 @@ describe('executeCurl', () => {
   it('returns error when url is missing', async () => {
     const result = await executeCurl(mockLogger, {});
     expect(result.success).toBe(false);
+    expect(result.toolName).toBe('curl_request');
     expect(result.error).toContain('Missing required parameter: url');
   });
 
@@ -286,13 +303,17 @@ describe('executeCurl', () => {
   it('returns error for completely invalid URL', async () => {
     const result = await executeCurl(mockLogger, { url: 'not a url at all!!' });
     expect(result.success).toBe(false);
+    expect(result.toolName).toBe('curl_request');
     expect(result.error).toContain('Invalid URL');
+    expect(result.error).toContain('not a url at all!!');
   });
 
   it('returns error for disallowed HTTP method', async () => {
     const result = await executeCurl(mockLogger, { url: 'https://example.com', method: 'HACK' });
     expect(result.success).toBe(false);
+    expect(result.toolName).toBe('curl_request');
     expect(result.error).toContain('Invalid HTTP method');
+    expect(result.error).toContain('HACK');
   });
 
   it('returns error when pipe does not start with jq (injection blocked)', async () => {
@@ -302,6 +323,7 @@ describe('executeCurl', () => {
     });
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid pipe');
+    expect(result.toolName).toBe('curl_request');
     expect(mockLogger.warn).toHaveBeenCalledWith(
       'Rejected curl_request with invalid pipe argument',
       expect.objectContaining({ pipe: expect.stringContaining('bash') }),
@@ -314,16 +336,87 @@ describe('executeCurl', () => {
     const result = await executeCurl(mockLogger, { url: 'https://example.com' });
 
     expect(result.success).toBe(true);
+    expect(result.toolName).toBe('curl_request');
     expect(result.result).toContain('"status":"ok"');
     expect(mockSpawn).not.toHaveBeenCalled();
     // execFilePromise receives ('curl', [...argv], timeout) — no shell option
     expect(mockExecFilePromise).toHaveBeenCalledWith('curl', expect.any(Array), expect.any(Number));
+
+    // followRedirects defaults to true → -L is added; status marker always requested
+    const [, curlArgs] = mockExecFilePromise.mock.calls[0]!;
+    expect(curlArgs).toContain('-L');
+    expect(curlArgs).toContain('-w');
+    const wIdx = curlArgs.indexOf('-w');
+    expect(curlArgs[wIdx + 1]).toBe('\n---HTTP_STATUS:%{http_code}---');
+  });
+
+  it('forwards the exact timeout in milliseconds to execFilePromise', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+
+    const result = await executeCurl(mockLogger, { url: 'https://example.com', timeout: 7 });
+
+    expect(result.success).toBe(true);
+    expect(mockExecFilePromise).toHaveBeenCalledWith('curl', expect.any(Array), 7000);
+  });
+
+  it('does not prepend https:// when the URL already has a non-http scheme', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+
+    const result = await executeCurl(mockLogger, { url: 'ftp://example.com/file' });
+
+    expect(result.success).toBe(true);
+    const [, curlArgs] = mockExecFilePromise.mock.calls[0]!;
+    expect(curlArgs.join(' ')).toContain('ftp://example.com/file');
+  });
+
+  it('does not log the shell-command warning for a plain URL', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+
+    await executeCurl(mockLogger, { url: 'https://example.com' });
+
+    expect(mockLogger.warn).not.toHaveBeenCalledWith(
+      'curl_request received a shell command as URL',
+      expect.anything(),
+    );
   });
 
   it('parses HTTP status from the marker line', async () => {
     mockExecFilePromise.mockResolvedValue('Not Found\n---HTTP_STATUS:404---');
     const result = await executeCurl(mockLogger, { url: 'https://example.com' });
     expect(result.success).toBe(false); // 404 is not 2xx
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'curl request returned error status',
+      expect.objectContaining({ httpStatus: 404, response: 'Not Found' }),
+    );
+  });
+
+  it('treats exactly 400 as an error status', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:400---');
+    const result = await executeCurl(mockLogger, { url: 'https://example.com' });
+    expect(result.success).toBe(false);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'curl request returned error status',
+      expect.objectContaining({ httpStatus: 400 }),
+    );
+  });
+
+  it('treats 300 as a non-2xx status', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:300---');
+    const result = await executeCurl(mockLogger, { url: 'https://example.com' });
+    expect(result.success).toBe(false);
+  });
+
+  it('does not warn about error status when the request succeeds', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+    await executeCurl(mockLogger, { url: 'https://example.com' });
+    expect(mockLogger.warn).not.toHaveBeenCalledWith('curl request returned error status', expect.anything());
+  });
+
+  it('omits -L when follow_redirects is explicitly false', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+    await executeCurl(mockLogger, { url: 'https://example.com', follow_redirects: false });
+    const [, curlArgs] = mockExecFilePromise.mock.calls[0]!;
+    expect(curlArgs).not.toContain('-L');
   });
 
   it('uses the last status marker when curl emits one per redirect hop', async () => {
@@ -331,6 +424,7 @@ describe('executeCurl', () => {
     const result = await executeCurl(mockLogger, { url: 'https://example.com', follow_redirects: true });
     expect(result.success).toBe(true); // final hop was 200
     expect(result.result).toContain('"ok":true');
+    expect(result.result).not.toContain('HTTP_STATUS');
   });
 
   it('includes headers as separate argv elements (not interpolated into a shell string)', async () => {
@@ -358,6 +452,35 @@ describe('executeCurl', () => {
     expect(curlArgs[dataIdx + 1]).toBe(payload); // exact, unescaped
   });
 
+  it('sends data for PUT requests', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+
+    await executeCurl(mockLogger, { url: 'https://example.com', method: 'PUT', data: 'payload' });
+
+    const [, curlArgs] = mockExecFilePromise.mock.calls[0]!;
+    expect(curlArgs).toContain('PUT');
+    expect(curlArgs).toContain('payload');
+  });
+
+  it('sends data for PATCH requests', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+
+    await executeCurl(mockLogger, { url: 'https://example.com', method: 'PATCH', data: 'payload' });
+
+    const [, curlArgs] = mockExecFilePromise.mock.calls[0]!;
+    expect(curlArgs).toContain('PATCH');
+    expect(curlArgs).toContain('payload');
+  });
+
+  it('ignores data for GET requests', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+
+    await executeCurl(mockLogger, { url: 'https://example.com', method: 'GET', data: 'payload' });
+
+    const [, curlArgs] = mockExecFilePromise.mock.calls[0]!;
+    expect(curlArgs).not.toContain('-d');
+  });
+
   it('uses spawn (no shell) to pipe curl stdout into jq for piped requests', async () => {
     setupPipedSpawn({ curlBody: '{"key":"value"}', jqOutput: '"value"\n', jqExitCode: 0 });
 
@@ -368,12 +491,100 @@ describe('executeCurl', () => {
 
     expect(result.success).toBe(true);
     expect(result.result).toContain('"value"');
+    expect(result.result).not.toContain('Stryker was here!');
 
     // spawn was called twice: once for curl, once for jq
     expect(mockSpawn).toHaveBeenCalledTimes(2);
     const [jqCmd, jqArgv] = mockSpawn.mock.calls[1];
     expect(jqCmd).toBe('jq');
     expect(jqArgv).toEqual(['-r', '.key']); // argv, no shell string
+
+    // No status marker for piped requests; stdio must pipe stdout → jq stdin
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'curl',
+      expect.any(Array),
+      expect.objectContaining({ stdio: ['ignore', 'pipe', 'pipe'] }),
+    );
+    const curlArgs = mockSpawn.mock.calls[0][1];
+    expect(curlArgs).not.toContain('-w');
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'jq',
+      expect.any(Array),
+      expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] }),
+    );
+
+    // Completion is logged with the pipe flag set
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      'curl request completed',
+      expect.objectContaining({ httpStatus: 200, pipeUsed: true }),
+    );
+  });
+
+  it('includes jq stderr in the error when jq exits non-zero', async () => {
+    setupPipedSpawn({ jqExitCode: 3, jqOutput: '', jqStderr: 'jq: error: cannot compile\n' });
+
+    const result = await executeCurl(mockLogger, {
+      url: 'https://example.com',
+      pipe: '| jq .',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.toolName).toBe('curl_request');
+    expect(result.error).toBe('jq exited with code 3: jq: error: cannot compile\n');
+    expect(result.error).not.toContain('Stryker was here!');
+  });
+
+  it('returns error when the curl process emits an error', async () => {
+    const curlProc = makeMockProc();
+    const jqProc = makeMockProc();
+    let count = 0;
+    mockSpawn.mockImplementation(() => (count++ === 0 ? curlProc : jqProc));
+
+    const resultPromise = executeCurl(mockLogger, { url: 'https://example.com', pipe: '| jq .' });
+    curlProc.emit('error', new Error('curl crashed'));
+    const result = await resultPromise;
+
+    expect(result.success).toBe(false);
+    expect(result.toolName).toBe('curl_request');
+    expect(result.error).toContain('curl crashed');
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'curl request failed',
+      expect.objectContaining({ error: 'curl crashed' }),
+    );
+  });
+
+  it('returns error when the jq process emits an error', async () => {
+    const curlProc = makeMockProc();
+    const jqProc = makeMockProc();
+    let count = 0;
+    mockSpawn.mockImplementation(() => (count++ === 0 ? curlProc : jqProc));
+
+    const resultPromise = executeCurl(mockLogger, { url: 'https://example.com', pipe: '| jq .' });
+    jqProc.emit('error', new Error('jq crashed'));
+    const result = await resultPromise;
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('jq crashed');
+  });
+
+  it('returns timeout error for piped requests when jq never closes', async () => {
+    const curlProc = makeMockProc();
+    const jqProc = makeMockProc();
+    mockSpawn.mockReturnValue(curlProc);
+    mockSpawn.mockReturnValueOnce(curlProc);
+    mockSpawn.mockReturnValueOnce(jqProc);
+
+    const result = await executeCurl(mockLogger, { url: 'https://example.com', pipe: '| jq .', timeout: 1 });
+
+    expect(result.success).toBe(false);
+    expect(result.toolName).toBe('curl_request');
+    expect(result.error).toContain('Request timeout after 1 seconds');
+    expect(curlProc.kill).toHaveBeenCalled();
+    expect(jqProc.kill).toHaveBeenCalled();
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'curl request timed out',
+      expect.objectContaining({ timeout: 1 }),
+    );
   });
 
   /**
@@ -408,7 +619,46 @@ describe('executeCurl', () => {
     mockExecFilePromise.mockRejectedValue(new Error('Command timed out: timeout'));
     const result = await executeCurl(mockLogger, { url: 'https://example.com', timeout: 1 });
     expect(result.success).toBe(false);
-    expect(result.error).toContain('timeout');
+    expect(result.toolName).toBe('curl_request');
+    expect(result.error).toContain('Request timeout after 1 seconds');
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'curl request timed out',
+      expect.objectContaining({ timeout: 1 }),
+    );
+  });
+
+  it('returns the error message when execFilePromise rejects for other reasons', async () => {
+    mockExecFilePromise.mockRejectedValue(new Error('Connection refused'));
+    const result = await executeCurl(mockLogger, { url: 'https://example.com' });
+    expect(result.success).toBe(false);
+    expect(result.toolName).toBe('curl_request');
+    expect(result.error).toBe('Connection refused');
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'curl request failed',
+      expect.objectContaining({ error: 'Connection refused' }),
+    );
+  });
+
+  it('logs the request details via debug before executing', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+
+    await executeCurl(mockLogger, { url: 'https://example.com', method: 'GET' });
+
+    expect(mockLogger.debug).toHaveBeenCalledWith(
+      'Executing curl request',
+      expect.objectContaining({ url: 'https://example.com', encodedUrl: 'https://example.com/', pipe: 'none' }),
+    );
+  });
+
+  it('reports the piped completion with pipeUsed false for execFile requests', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+
+    await executeCurl(mockLogger, { url: 'https://example.com' });
+
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      'curl request completed',
+      expect.objectContaining({ httpStatus: 200, pipeUsed: false }),
+    );
   });
 
   it('truncates response to 20000 characters', async () => {
@@ -482,6 +732,20 @@ describe('executeCurl — URL normalization from shell command', () => {
 
   it('is case-insensitive on the leading "curl" keyword', async () => {
     await executeCurl(mockLogger, { url: 'CURL https://example.com' });
+    expect(capturedUrl()).toBe('https://example.com/');
+  });
+
+  it('extracts a bare hostname URL from a curl invocation', async () => {
+    await executeCurl(mockLogger, { url: 'curl example.com' });
+    expect(capturedUrl()).toBe('https://example.com/');
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'curl_request received a shell command as URL; extracted URL',
+      expect.objectContaining({ original: 'curl example.com', extracted: 'example.com' }),
+    );
+  });
+
+  it('prefers the last URL-like token when flags follow the URL', async () => {
+    await executeCurl(mockLogger, { url: 'curl -o out.txt https://example.com' });
     expect(capturedUrl()).toBe('https://example.com/');
   });
 
