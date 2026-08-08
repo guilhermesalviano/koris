@@ -60,6 +60,23 @@ describe('createPlugins', () => {
     expect(result).toEqual([plugin]);
   });
 
+  it('skips plugins whose create() returns null', () => {
+    const plugin: Plugin = { name: 'valid', setup: vi.fn() };
+
+    const readdirSync = vi.fn().mockReturnValue([
+      makeEntry('disabled-plugin', true),
+      makeEntry('valid-plugin', true),
+    ]);
+    const loadModule = vi.fn()
+      .mockReturnValueOnce({ create: () => null })
+      .mockReturnValueOnce({ create: () => plugin });
+
+    const result = createPlugins({ directory: '/fake', readdirSync, loadModule });
+
+    expect(result).toEqual([plugin]);
+    expect(loadModule).toHaveBeenCalledTimes(2);
+  });
+
   it('returns an empty array when the directory has no subdirectories', () => {
     const readdirSync = vi.fn().mockReturnValue([
       makeEntry('index.ts', false),

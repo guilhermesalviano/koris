@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TelegramMessage } from '@guilhermesalviano/telegram-bot';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../../src/constants/thinking';
-import { _setBotUsernameForTesting, handleMessage } from '../../../../plugins/telegram';
+import { _setBotUsernameForTesting, create, handleMessage } from '../../../../plugins/telegram';
 
 const BOT_USERNAME = 'KorisBot';
 
@@ -11,10 +11,23 @@ const bot = vi.hoisted(() => ({
   getMe: vi.fn(),
 }));
 
+const configMock = vi.hoisted(() => ({
+  config: {
+    CHANNELS: {
+      TELEGRAM: {
+        ENABLED: false,
+        BOT_TOKEN: 'test-token',
+      },
+    },
+  },
+}));
+
 vi.mock('@guilhermesalviano/telegram-bot', () => ({
   getBot: () => bot,
   initBot: vi.fn(),
 }));
+
+vi.mock('../../../../src/config', () => configMock);
 
 function createMessage(
   text: string,
@@ -112,5 +125,22 @@ describe('channels/telegram', () => {
 
     expect(agent.handle).not.toHaveBeenCalled();
     expect(bot.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('create()', () => {
+  it('returns null when telegram is disabled', () => {
+    configMock.config.CHANNELS.TELEGRAM.ENABLED = false;
+
+    expect(create()).toBeNull();
+  });
+
+  it('returns a plugin when telegram is enabled', () => {
+    configMock.config.CHANNELS.TELEGRAM.ENABLED = true;
+
+    const plugin = create();
+
+    expect(plugin).not.toBeNull();
+    expect(plugin?.name).toBe('telegram');
   });
 });

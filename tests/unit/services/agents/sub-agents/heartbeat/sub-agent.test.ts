@@ -249,6 +249,28 @@ describe('Heartbeat', () => {
       );
     });
 
+    it('does not send to Telegram when the channel is disabled', async () => {
+      applyTestConfigDefaults({ telegramEnabled: false });
+      const now = localDate(9, 0);
+      const { heartbeat, channelsManager } = makeHeartbeat({
+        tasks: [{
+          id: 'morning',
+          task: 'send status',
+          cronExpression: '0 9 * * *',
+          type: 'report',
+        }],
+        completionResponse: { kind: 'message', text: 'status ok' },
+      });
+
+      await heartbeat.handler(now);
+
+      expect(channelsManager.sendMessage).not.toHaveBeenCalledWith(
+        'telegram',
+        config.CHANNELS.TELEGRAM.CHAT_ID,
+        'status ok',
+      );
+    });
+
     it('falls back to configured target_jid when no whitelisted sender is known', async () => {
       mockedGetLastWhitelistedJid.mockReturnValue(null);
       const now = localDate(9, 0);
