@@ -281,14 +281,17 @@ class NvidiaAIProvider implements AIProvider {
     if (!config.AI.EMBEDDING.ENABLED) {
       throw new Error('Embeddings are disabled in configuration');
     }
+
+    const body = JSON.stringify({
+      model: this.embeddingModel,
+      input: text,
+      input_type: 'query'
+    });
+
     const res = await fetch(`${this.baseUrl}/embeddings`, {
       method: 'POST',
       headers: this.authHeaders(),
-      body: JSON.stringify({
-        model: this.embeddingModel,
-        input: text,
-        input_type: 'query'
-      })
+      body
     });
 
     if (!res.ok) {

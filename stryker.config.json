@@ -2,7 +2,7 @@
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "testRunner": "vitest",
   "plugins": ["@stryker-mutator/vitest-runner"],
-  "reporters": ["html", "clear-text", "progress"],
+  "reporters": ["html", "json", "clear-text", "progress"],
   "coverageAnalysis": "perTest",
   "mutate": [
     "src/utils/fields.ts",
@@ -14,9 +14,16 @@
     "src/utils/provider.ts",
     "src/entities/message.ts",
     "src/entities/session.ts",
-    "src/services/agents/helpers/index.ts",
-    "src/services/tools-queue/tools/curl-request/index.ts",
-    "src/services/tools-queue/tools/execute-command/index.ts"
+    "src/repositories/context.ts",
+    "src/repositories/heartbeat.ts",
+    "src/repositories/learned-skills.ts",
+    "src/repositories/memory.ts",
+    "src/repositories/session.ts",
+    "src/repositories/skills.ts",
+    "src/services/chat/chat-service.ts",
+    "src/services/agents/main-agent/helpers/index.ts",
+    "src/services/tools/curl-request/index.ts",
+    "src/services/tools/execute-command/index.ts"
   ],
   "thresholds": {
     "high": 80,

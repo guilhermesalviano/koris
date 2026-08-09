@@ -2,15 +2,18 @@ import { ILogger } from "../../../infrastructure/logger";
 import { URL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { ToolResult } from "../../../types/tools";
+import { toCurlCommand } from "../../../utils/curl";
 import {
   execFilePromise,
   getOptionalBooleanArg,
+  getOptionalDataArg,
   getOptionalNumberArg,
   getOptionalStringArg,
   getOptionalStringRecord,
   getRequiredStringArg,
   isAllowedValue,
 } from '../shared/runtime';
+import { gateErrorForUrl } from '../gate';
 
 /**
  * Parse a jq pipe string (e.g. "| jq -r '.result'") into a safe argv array
@@ -132,7 +135,7 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     );
     if (extracted) {
       logger.warn('curl_request received a shell command as URL; extracted URL', { original: url, extracted });
-      url = extracted.replace(/^["']|["']$/g, '');
+      url = extracted;
     }
   }
 
@@ -146,6 +149,12 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
     encodedUrl = urlObj.toString();
   } catch {
     return { toolName: 'curl_request', success: false, error: `Invalid URL: ${url}` };
+  }
+
+  const gateError = gateErrorForUrl(encodedUrl);
+  if (gateError) {
+    logger.warn('curl_request blocked by domain gate', { url: encodedUrl, error: gateError });
+    return { toolName: 'curl_request', success: false, error: gateError };
   }
 
   const method = (getOptionalStringArg(args, 'method') || 'GET').toUpperCase();
@@ -175,15 +184,20 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
   const headers = getOptionalStringRecord(args, 'headers');
 
   const data = ['POST', 'PUT', 'PATCH'].includes(method)
-    ? getOptionalStringArg(args, 'data')
+    ? getOptionalDataArg(args, 'data')
     : null;
 
-  logger.debug('Executing curl request', {
-    url,
-    encodedUrl,
+  logger.info('curl command', {
+    command: toCurlCommand({
+      url: encodedUrl,
+      method,
+      headers,
+      data,
+      extra: ['-k', ...(followRedirects ? ['-L'] : [])],
+    }),
+    url: encodedUrl,
     method,
     timeout,
-    pipe: pipeRaw || 'none',
   });
 
   try {

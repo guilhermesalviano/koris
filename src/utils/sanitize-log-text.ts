@@ -50,5 +50,9 @@ function sanitizeMetaValue(value: unknown, seen: WeakSet<object>): unknown {
     return sanitized;
   }
 
-  return sanitizeLogText(String(value));
+  if (typeof value === 'symbol' || typeof value === 'function' || typeof value === 'bigint') {
+    return sanitizeLogText(String(value));
+  }
+
+  return value;
 }

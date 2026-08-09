@@ -4,12 +4,14 @@ export interface TestConfigPatch {
   heartbeatEnabled?: boolean;
   summarizerEnabled?: boolean;
   tempFolder?: string;
+  telegramEnabled?: boolean;
 }
 
 const DEFAULTS: Required<TestConfigPatch> = {
   heartbeatEnabled: true,
   summarizerEnabled: true,
   tempFolder: './temp',
+  telegramEnabled: true,
 };
 
 export function applyTestConfigDefaults(patch: TestConfigPatch = {}): void {
@@ -23,6 +25,12 @@ export function applyTestConfigDefaults(patch: TestConfigPatch = {}): void {
 
   Object.defineProperty(config.AI.SUMMARIZER, 'ENABLED', {
     value: values.summarizerEnabled,
+    configurable: true,
+    writable: true,
+  });
+
+  Object.defineProperty(config.CHANNELS.TELEGRAM, 'ENABLED', {
+    value: values.telegramEnabled,
     configurable: true,
     writable: true,
   });

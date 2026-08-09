@@ -5,7 +5,7 @@ import { PluginRegistry, type Plugin } from './registry';
 type PluginDirectoryEntry = Pick<fs.Dirent, 'name' | 'isDirectory'>;
 
 interface PluginModule {
-  create?(): Plugin;
+  create?(): Plugin | null;
 }
 
 interface CreatePluginsOptions {
@@ -25,7 +25,9 @@ function createPlugins(options: CreatePluginsOptions = {}): Plugin[] {
     .filter((entry) => entry.isDirectory())
     .flatMap((entry) => {
       const mod = loadModule(path.join(directory, entry.name));
-      return typeof mod.create === 'function' ? [mod.create()] : [];
+      if (typeof mod.create !== 'function') return [];
+      const plugin = mod.create();
+      return plugin ? [plugin] : [];
     });
 }
 

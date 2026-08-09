@@ -64,6 +64,7 @@ describe('executeCommand', () => {
   it('returns error when command is missing', async () => {
     const result = await executeCommand(mockLogger, {});
     expect(result.success).toBe(false);
+    expect(result.toolName).toBe('execute_command');
     expect(result.error).toContain('Missing required parameter: command');
   });
 
@@ -99,6 +100,24 @@ describe('executeCommand', () => {
     expect(result.error).toContain('curl');
   });
 
+  it('does not re-tokenise a space-free command into an allowed one', async () => {
+    const result = await executeCommand(mockLogger, { command: '"ls"' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Security Error');
+    expect(mockSpawnCommand).not.toHaveBeenCalled();
+  });
+
+  it('allows npm as a recognized command', async () => {
+    mockSpawnCommand.mockResolvedValue({ code: 0, stdout: 'ok\n', stderr: '' });
+
+    const result = await executeCommand(mockLogger, { command: 'npm install' });
+
+    expect(result.success).toBe(true);
+    expect(mockSpawnCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'npm', shell: false }),
+    );
+  });
+
   it('executes an allowed command via spawnCommand (no shell)', async () => {
     mockSpawnCommand.mockResolvedValue({ code: 0, stdout: 'file1\nfile2\n', stderr: '' });
 
@@ -109,6 +128,45 @@ describe('executeCommand', () => {
     expect(mockSpawnCommand).toHaveBeenCalledWith(
       expect.objectContaining({ command: 'ls', shell: false }),
     );
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      'execute_command executed successfully',
+      expect.objectContaining({ command: 'ls' }),
+    );
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'execute_command requested',
+      expect.objectContaining({ command: 'ls' }),
+    );
+  });
+
+  it('executes a bare command with no arguments', async () => {
+    mockSpawnCommand.mockResolvedValue({ code: 0, stdout: 'out\n', stderr: '' });
+
+    const result = await executeCommand(mockLogger, { command: 'ls' });
+
+    expect(result.success).toBe(true);
+    const call = mockSpawnCommand.mock.calls[0][0];
+    expect(call.command).toBe('ls');
+    expect(call.args).toEqual([]);
+  });
+
+  it('tokenises double-quoted arguments and unescapes embedded quotes', async () => {
+    mockSpawnCommand.mockResolvedValue({ code: 0, stdout: 'ok\n', stderr: '' });
+
+    await executeCommand(mockLogger, { command: 'echo "a\\"b"' });
+
+    const call = mockSpawnCommand.mock.calls[0][0];
+    expect(call.command).toBe('echo');
+    expect(call.args).toEqual(['a"b']);
+  });
+
+  it('tokenises single-quoted arguments and unescapes embedded quotes', async () => {
+    mockSpawnCommand.mockResolvedValue({ code: 0, stdout: 'ok\n', stderr: '' });
+
+    await executeCommand(mockLogger, { command: "echo 'it\\'s'" });
+
+    const call = mockSpawnCommand.mock.calls[0][0];
+    expect(call.command).toBe('echo');
+    expect(call.args).toEqual(["it's"]);
   });
 
   it('returns error when command exits with non-zero code', async () => {
@@ -117,7 +175,12 @@ describe('executeCommand', () => {
     const result = await executeCommand(mockLogger, { command: 'git status' });
 
     expect(result.success).toBe(false);
+    expect(result.toolName).toBe('execute_command');
     expect(result.error).toContain('code 1');
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'execute_command failed',
+      expect.objectContaining({ error: expect.stringContaining('code 1') }),
+    );
   });
 
   it('tokenises quoted arguments correctly', async () => {
@@ -154,5 +217,18 @@ describe('executeCommand', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Output size exceeded');
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'execute_command setup failed',
+      expect.objectContaining({ command: 'git' }),
+    );
+  });
+
+  it('truncates stderr to 1000 characters on non-zero exit', async () => {
+    mockSpawnCommand.mockResolvedValue({ code: 2, stdout: '', stderr: 'e'.repeat(1500) });
+
+    const result = await executeCommand(mockLogger, { command: 'cat fail' });
+
+    expect(result.error).toContain('e'.repeat(1000));
+    expect((result.error ?? '').length).toBeLessThan(1200);
   });
 });
