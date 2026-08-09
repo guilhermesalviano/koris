@@ -32,6 +32,21 @@ function getOptionalStringArg(args: Record<string, unknown>, key: string): strin
   return typeof value === 'string' ? value.trim() : null;
 }
 
+function getOptionalDataArg(args: Record<string, unknown>, key: string): string | null {
+  const value = args[key];
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return JSON.stringify(value);
+  }
+
+  return null;
+}
+
 function getOptionalStringArrayArg(args: Record<string, unknown>, key: string): string[] {
   const value = args[key];
 
@@ -150,6 +165,7 @@ function spawnCommand(options: SpawnCommandOptions): Promise<SpawnCommandResult>
 export {
   execFilePromise,
   getOptionalBooleanArg,
+  getOptionalDataArg,
   getOptionalNumberArg,
   getOptionalStringArg,
   getOptionalStringArrayArg,
