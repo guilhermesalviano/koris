@@ -113,6 +113,13 @@ async function main() {
     config.GATEWAY_HOST,
   );
 
+  advisory(
+    config.ALLOWED_DOMAINS.length > 0,
+    'allowed_domains is configured',
+    'Add allowed_domains to settings.json to permit curl_request (default-deny)',
+    config.ALLOWED_DOMAINS.join(', '),
+  );
+
   const validLogLevels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
   check(
     validLogLevels.includes(config.LOG_LEVEL),

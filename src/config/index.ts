@@ -19,6 +19,10 @@ export const config = {
   WEB_PORT:    Number(get('web_port', '3000')),
   BASE_DIR:    process.cwd(),
   GATEWAY_HOST: get('gateway_host', 'http://localhost:3000'),
+  ALLOWED_DOMAINS: get('allowed_domains', '')
+    .split(',')
+    .map((domain) => domain.trim().toLowerCase())
+    .filter(Boolean),
   LEARNED_SKILLS_LIMIT: Number(get('learned_skills_limit', '10')),
   SESSION: {
     TTL_MS: Number(get('session.ttl_ms', String(30 * 60 * 1000))),

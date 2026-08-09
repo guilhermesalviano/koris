@@ -21,6 +21,19 @@ describe('sanitizeMeta', () => {
     expect(sanitizeMeta(undefined)).toBeUndefined();
   });
 
+  it('returns undefined when meta is null', () => {
+    expect(sanitizeMeta(null)).toBeUndefined();
+  });
+
+  it('keeps nested null values as null', () => {
+    expect(sanitizeMeta({ a: null, b: undefined, c: 0, d: false })).toEqual({
+      a: null,
+      b: undefined,
+      c: 0,
+      d: false,
+    });
+  });
+
   it('sanitizes string fields recursively', () => {
     const meta = {
       message: 'hello\nworld',
@@ -61,5 +74,15 @@ describe('sanitizeMeta', () => {
   it('stringifies unsupported primitive-like values safely', () => {
     const out = sanitizeMeta({ value: Symbol('x') }) as { value: string };
     expect(out.value).toContain('Symbol(x)');
+  });
+
+  it('stringifies function values safely', () => {
+    const out = sanitizeMeta({ value: () => 'fn' }) as { value: string };
+    expect(out.value).toBe('() => "fn"');
+  });
+
+  it('stringifies bigint values safely', () => {
+    const out = sanitizeMeta({ value: 123n }) as { value: string };
+    expect(out.value).toBe('123');
   });
 });

@@ -249,6 +249,28 @@ describe('Heartbeat', () => {
       );
     });
 
+    it('does not send to Telegram when the channel is disabled', async () => {
+      applyTestConfigDefaults({ telegramEnabled: false });
+      const now = localDate(9, 0);
+      const { heartbeat, channelsManager } = makeHeartbeat({
+        tasks: [{
+          id: 'morning',
+          task: 'send status',
+          cronExpression: '0 9 * * *',
+          type: 'report',
+        }],
+        completionResponse: { kind: 'message', text: 'status ok' },
+      });
+
+      await heartbeat.handler(now);
+
+      expect(channelsManager.sendMessage).not.toHaveBeenCalledWith(
+        'telegram',
+        config.CHANNELS.TELEGRAM.CHAT_ID,
+        'status ok',
+      );
+    });
+
     it('falls back to configured target_jid when no whitelisted sender is known', async () => {
       mockedGetLastWhitelistedJid.mockReturnValue(null);
       const now = localDate(9, 0);
@@ -285,6 +307,27 @@ describe('Heartbeat', () => {
 
       await heartbeat.handler(now);
 
+      expect(logger.error).toHaveBeenCalledWith(
+        'Heartbeat: Task "failing" failed.',
+        expect.objectContaining({ err: expect.any(Error) }),
+      );
+    });
+
+    it('marks lastRun at dispatch even when the task execution fails', async () => {
+      const now = localDate(9, 0);
+      const { heartbeat, logger, completionService, heartbeatRepository } = makeHeartbeat({
+        tasks: [{
+          id: 'failing',
+          task: 'broken task',
+          cronExpression: '0 9 * * *',
+          type: 'report',
+        }],
+      });
+      completionService.complete.mockRejectedValue(new Error('model failed'));
+
+      await heartbeat.handler(now);
+
+      expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('failing', now);
       expect(logger.error).toHaveBeenCalledWith(
         'Heartbeat: Task "failing" failed.',
         expect.objectContaining({ err: expect.any(Error) }),

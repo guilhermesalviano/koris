@@ -212,13 +212,16 @@ class OllamaAIProvider implements AIProvider {
     if (!config.AI.EMBEDDING.ENABLED) {
       throw new Error('Embeddings are disabled in configuration');
     }
+
+    const body = JSON.stringify({
+      model: this.embeddingModel,
+      prompt: text
+    });
+
     const res = await fetch(`${this.baseUrl}/api/embeddings`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: this.embeddingModel,
-        prompt: text
-      })
+      body
     });
 
     if (!res.ok) {
@@ -326,20 +329,21 @@ class OllamaAIProvider implements AIProvider {
   }
 
   private async post(request: AIChatRequest, signal: AbortSignal, stream: boolean): Promise<Response> {
+    const body = JSON.stringify({
+      model: request.model ?? this.defaultModel,
+      messages: request.messages,
+      tools: request.tools,
+      keep_alive: '15m',
+      options: {
+        num_ctx: 32768
+      },
+      stream
+    });
 
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: request.model ?? this.defaultModel,
-        messages: request.messages,
-        tools: request.tools,
-        keep_alive: '15m',
-        options: {
-          num_ctx: 32768
-        },
-        stream
-      }),
+      body,
       signal,
     });
 

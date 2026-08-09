@@ -33,9 +33,7 @@ function tokenizeCommand(input: string): string[] {
       continue;
     }
 
-    if (match[3] !== undefined) {
-      tokens.push(match[3]);
-    }
+    tokens.push(match[3]);
   }
 
   return tokens;
@@ -50,7 +48,7 @@ export async function executeCommand(logger: ILogger, args: Record<string, unkno
   }
 
   const tokenized = rawCommand.includes(' ') ? tokenizeCommand(rawCommand) : [rawCommand];
-  const command = tokenized[0] ?? '';
+  const command = tokenized[0];
   const commandArgs = rawArgs.length > 0 ? rawArgs : tokenized.slice(1);
 
   // 2. Authorization Gate: Reject any command not strictly defined in the allowlist
