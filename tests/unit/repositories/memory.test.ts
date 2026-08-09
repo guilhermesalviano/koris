@@ -92,7 +92,8 @@ describe('MemoryRepository', () => {
 
     const [sql, params] = db.query.mock.calls[0];
     expect(sql).toContain('SELECT id, session_id, source, type, content, embedding, tags, importance, created_at FROM memories');
-    expect(sql).toContain('ORDER BY created_at DESC');
+    expect(sql).toContain("WHERE type != 'reminder'");
+    expect(sql).toContain("ORDER BY CASE type WHEN 'lesson' THEN 0 WHEN 'fact' THEN 1 WHEN 'summary' THEN 2 ELSE 3 END, created_at DESC");
     expect(params).toEqual([]);
   });
 
@@ -125,8 +126,9 @@ describe('MemoryRepository', () => {
     repository.getAll('sess-1');
 
     const [sql, params] = db.query.mock.calls[0];
-    expect(sql).toContain('WHERE session_id != ?');
-    expect(sql).toContain('ORDER BY created_at DESC');
+    expect(sql).toContain("WHERE type != 'reminder'");
+    expect(sql).toContain('AND session_id != ?');
+    expect(sql).toContain('ORDER BY');
     expect(params).toEqual(['sess-1']);
   });
 
