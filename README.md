@@ -81,14 +81,3 @@ All commands are run via `pnpm` (or `pnpm run <script>`).
 | `test:ui` | Opens the Vitest web UI for browsing and running tests interactively. |
 | `test:coverage` | Runs the tests and reports code coverage. |
 | `test:mutation` | Runs mutation testing with Stryker to assess test-suite quality. |
-
-## Development
-
-- **Run tests:**
-  ```bash
-  pnpm run test
-  ```
-- **Type-check:**
-  ```bash
-  pnpm run lint
-  ```
