@@ -81,8 +81,9 @@ class ToolsRepository implements IToolsRepository {
                 'Custom HTTP headers. Example: {"Authorization": "Bearer token", "Content-Type": "application/json"}',
             },
             data: {
-              type: 'string',
-              description: 'Request body for POST/PUT/PATCH. Can be JSON string or form data.',
+              type: ['string', 'object'],
+              description:
+                'Request body for POST/PUT/PATCH. Can be a JSON object (e.g. {"id": 1, "checked": 1}), a JSON string, or form data.',
             },
             follow_redirects: {
               type: 'boolean',

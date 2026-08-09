@@ -6,6 +6,7 @@ import { toCurlCommand } from "../../../utils/curl";
 import {
   execFilePromise,
   getOptionalBooleanArg,
+  getOptionalDataArg,
   getOptionalNumberArg,
   getOptionalStringArg,
   getOptionalStringRecord,
@@ -183,7 +184,7 @@ export async function executeCurl(logger: ILogger, args: Record<string, unknown>
   const headers = getOptionalStringRecord(args, 'headers');
 
   const data = ['POST', 'PUT', 'PATCH'].includes(method)
-    ? getOptionalStringArg(args, 'data')
+    ? getOptionalDataArg(args, 'data')
     : null;
 
   logger.info('curl command', {

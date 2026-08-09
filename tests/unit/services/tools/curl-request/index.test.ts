@@ -502,6 +502,30 @@ describe('executeCurl', () => {
     expect(curlArgs[dataIdx + 1]).toBe(payload); // exact, unescaped
   });
 
+  it('serializes an object data argument as JSON for the request body', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+
+    await executeCurl(mockLogger, {
+      url: 'https://example.com/api/todo',
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      data: { id: 13, checked: 1 },
+    });
+
+    const [, curlArgs] = mockExecFilePromise.mock.calls[0]!;
+    const dataIdx = curlArgs.indexOf('-d');
+    expect(curlArgs[dataIdx + 1]).toBe('{"id":13,"checked":1}');
+  });
+
+  it('does not send an empty body when data is an empty string', async () => {
+    mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
+
+    await executeCurl(mockLogger, { url: 'https://example.com', method: 'POST', data: '   ' });
+
+    const [, curlArgs] = mockExecFilePromise.mock.calls[0]!;
+    expect(curlArgs).not.toContain('-d');
+  });
+
   it('sends data for PUT requests', async () => {
     mockExecFilePromise.mockResolvedValue('\n---HTTP_STATUS:200---');
 
