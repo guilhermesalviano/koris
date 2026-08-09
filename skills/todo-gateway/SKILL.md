@@ -12,20 +12,7 @@ read_when:
 
 <api_response_shape>
   <description>Expected gateway response format:</description>
-  <json>
-    {
-      "message": "Todos data retrieved from cache",
-      "data": [
-        {
-          "id": 1,
-          "title": "feed dogs",
-          "checked": 0,
-          "priority": "medium",
-          "sponsor": "human x",
-          "usualCompletionTime": "20:00"
-        }
-      ]
-    }
+  <json>{"message":"Todos data retrieved from cache","data": [{"id": 100,"title": "sample - drink water","checked": 0,"priority": "medium","sponsor": "human x","usualCompletionTime": "20:00"}]}
   </json>
 </api_response_shape>
 
@@ -47,20 +34,7 @@ read_when:
     </request>
     <response>
       <description>Returns all today's tasks with their completion status.</description>
-      <bash>
-        {
-          "message": "Todos data retrieved from cache",
-          "data": [
-            {
-              "id": 1,
-              "title": "feed dogs",
-              "checked": 0,
-              "priority": "medium",
-              "sponsor": "human x",
-              "usualCompletionTime": "20:00"
-            }
-          ]
-        }
+      <bash>{"message":"Todos data retrieved from cache","data":[{"id":100,"title":"sample - drink water","checked": 1,"priority": "medium","sponsor": "human x","usualCompletionTime": "09:00"},{"id": 101,"title": "sample2 - drink water","checked": 1,"priority": "medium","sponsor": "human x","usualCompletionTime": "09:01"}]}
       </bash>
     </response>
   </command>
@@ -73,20 +47,7 @@ read_when:
     </request>
     <response>
       <description>Returns only the unchecked tasks.</description>
-      <bash>
-        {
-          "message": "Todos data retrieved from cache",
-          "data": [
-            {
-              "id": 1,
-              "title": "feed dogs",
-              "checked": 0,
-              "priority": "medium",
-              "sponsor": "human x",
-              "usualCompletionTime": "20:00"
-            }
-          ]
-        }
+      <bash>{"message":"Todos data retrieved from cache","data": [{"id": 100,"title": "sample - drink water","checked": 0,"priority": "medium","sponsor": "human x","usualCompletionTime": "09:00"}]}
       </bash>
     </response>
   </command>
@@ -99,18 +60,7 @@ read_when:
     </request>
     <response>
       <description>Returns the updated task with <code>checked</code> set to 1.</description>
-      <bash>
-        {
-          "message": "Todo updated successfully",
-          "data": {
-            "id": 1,
-            "title": "feed dogs",
-            "checked": 1,
-            "priority": "medium",
-            "sponsor": "human x",
-            "usualCompletionTime": "20:00"
-          }
-        }
+      <bash>{"message":"Todo updated successfully","data": {"id": 100,"title": "sample - drink water","checked": 1,"priority": "medium","sponsor": "human x","usualCompletionTime": "09:00"}}
       </bash>
     </response>
   </command>
