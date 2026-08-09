@@ -53,12 +53,14 @@ class MemoryRepository implements IMemoryRepository {
     let sql = `SELECT id, session_id, source, type, content, embedding, tags, importance, created_at FROM memories`;
     const params: string[] = [];
 
+    sql += ` WHERE type != 'reminder'`;
+
     if (excludeSessionId) {
-      sql += ` WHERE session_id != ?`;
+      sql += ` AND session_id != ?`;
       params.push(excludeSessionId);
     }
-    
-    sql += ` ORDER BY created_at DESC`;
+
+    sql += ` ORDER BY CASE type WHEN 'lesson' THEN 0 WHEN 'fact' THEN 1 WHEN 'summary' THEN 2 ELSE 3 END, created_at DESC`;
 
     const rows = this.db.query<any>(sql, params);
 
