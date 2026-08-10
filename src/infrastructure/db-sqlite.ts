@@ -80,8 +80,8 @@ class DatabaseService implements IDatabaseService {
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS heartbeat (
           id TEXT PRIMARY KEY,
-          task TEXT NOT NULL,
-          type TEXT NOT NULL CHECK(type IN ('reminder', 'scheduled_task')),
+          beat TEXT NOT NULL,
+          type TEXT NOT NULL CHECK(type IN ('reminder', 'scheduled_beat')),
           cron_expression TEXT NOT NULL,
           last_run DATETIME,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP

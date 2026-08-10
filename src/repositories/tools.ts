@@ -2,7 +2,7 @@ import type { AIToolDefinition } from '../types/chat';
 import { Skill } from '../types/skills';
 
 interface GetAllOptions {
-  includeTaskTools?: boolean;
+  includeBeatTools?: boolean;
 }
 
 interface IToolsRepository {
@@ -17,17 +17,17 @@ class ToolsRepository implements IToolsRepository {
 
   getAll(options?: GetAllOptions): AIToolDefinition[] {
     const tools: AIToolDefinition[] = [];
-    const includeTaskTools = options?.includeTaskTools ?? true;
+    const includeBeatTools = options?.includeBeatTools ?? true;
 
     tools.push(this.curlTool());
     tools.push(this.searchTool());
     if (this.skills?.length > 0) tools.push(this.getSkillTool(this.skills));
     
-    if (includeTaskTools) {
-      tools.push(this.createTaskTool());
-      tools.push(this.listTasksTool());
-      tools.push(this.updateTaskTool());
-      tools.push(this.deleteTaskTool());
+    if (includeBeatTools) {
+      tools.push(this.createBeatTool());
+      tools.push(this.listBeatsTool());
+      tools.push(this.updateBeatTool());
+      tools.push(this.deleteBeatTool());
     }
 
     return tools;
@@ -125,24 +125,24 @@ class ToolsRepository implements IToolsRepository {
     };
   }
 
-  private createTaskTool(): AIToolDefinition {
+  private createBeatTool(): AIToolDefinition {
     return {
       type: 'function',
       function: {
-        name: 'set_task',
+        name: 'set_beat',
         description:
-          'Save a reminder or scheduled task for the user. DEFAULT BEHAVIOR: always create a one-time task by pinning the exact minute, hour, day-of-month, and month — NEVER use * for day-of-month or month unless the user explicitly asks for a recurring schedule (e.g. "every day", "every Monday", "every month"). Only use wildcard (*) fields when the user clearly requests a recurring pattern.',
+          'Save a reminder or scheduled beat for the user. DEFAULT BEHAVIOR: always create a one-time beat by pinning the exact minute, hour, day-of-month, and month — NEVER use * for day-of-month or month unless the user explicitly asks for a recurring schedule (e.g. "every day", "every Monday", "every month"). Only use wildcard (*) fields when the user clearly requests a recurring pattern.',
         parameters: {
           type: 'object',
           properties: {
-            task: {
+            beat: {
               type: 'string',
-              description: 'Clear description of what the user wants to be reminded about or the task to schedule.',
+              description: 'Clear description of what the user wants to be reminded about or the beat to schedule.',
             },
             type: {
               type: 'string',
-              enum: ['reminder', 'scheduled_task'],
-              description: 'Type of the task (optional, defaults to "reminder"): "reminder" for one-time or recurring reminders to the user, "scheduled_task" for automated background tasks to be executed by the agent.',
+              enum: ['reminder', 'scheduled_beat'],
+              description: 'Type of the beat (optional, defaults to "reminder"): "reminder" for one-time or recurring reminders to the user, "scheduled_beat" for automated background beats to be executed by the agent.',
             },
             cron_expression: {
               type: 'string',
@@ -153,18 +153,18 @@ class ToolsRepository implements IToolsRepository {
                 '"0 9 * * *" (every day at 9am), "0 9 * * 1" (every Monday at 9am), "0 8 1 * *" (1st of every month at 8am), "*/30 * * * *" (every 30 min).',
             },
           },
-          required: ['task', 'cron_expression'],
+          required: ['beat', 'cron_expression'],
         },
       },
     };
   }
 
-  private listTasksTool(): AIToolDefinition {
+  private listBeatsTool(): AIToolDefinition {
     return {
       type: 'function',
       function: {
-        name: 'list_tasks',
-        description: 'List all saved tasks and scheduled tasks. Call this when the user asks to see, check, or review their tasks.',
+        name: 'list_beats',
+        description: 'List all saved beats and scheduled beats. Call this when the user asks to see, check, or review their beats.',
         parameters: {
           type: 'object',
           properties: {},
@@ -174,27 +174,27 @@ class ToolsRepository implements IToolsRepository {
     };
   }
 
-  private updateTaskTool(): AIToolDefinition {
+  private updateBeatTool(): AIToolDefinition {
     return {
       type: 'function',
       function: {
-        name: 'update_task',
-        description: 'Update an existing task. Call this when the user wants to change the description, type, or schedule of a task. Use list_tasks first if the ID is not known.',
+        name: 'update_beat',
+        description: 'Update an existing beat. Call this when the user wants to change the description, type, or schedule of a beat. Use list_beats first if the ID is not known.',
         parameters: {
           type: 'object',
           properties: {
             id: {
               type: 'string',
-              description: 'The UUID of the task to update.',
+              description: 'The UUID of the beat to update.',
             },
-            task: {
+            beat: {
               type: 'string',
-              description: 'New description for the task (optional).',
+              description: 'New description for the beat (optional).',
             },
             type: {
               type: 'string',
-              enum: ['reminder', 'scheduled_task'],
-              description: 'New type for the task (optional): "reminder" or "scheduled_task".',
+              enum: ['reminder', 'scheduled_beat'],
+              description: 'New type for the beat (optional): "reminder" or "scheduled_beat".',
             },
             cron_expression: {
               type: 'string',
@@ -207,18 +207,18 @@ class ToolsRepository implements IToolsRepository {
     };
   }
 
-  private deleteTaskTool(): AIToolDefinition {
+  private deleteBeatTool(): AIToolDefinition {
     return {
       type: 'function',
       function: {
-        name: 'delete_task',
-        description: 'Delete a task by ID. Call this when the user wants to remove or cancel a task. Use list_tasks first if the ID is not known.',
+        name: 'delete_beat',
+        description: 'Delete a beat by ID. Call this when the user wants to remove or cancel a beat. Use list_beats first if the ID is not known.',
         parameters: {
           type: 'object',
           properties: {
             id: {
               type: 'string',
-              description: 'The UUID of the task to delete.',
+              description: 'The UUID of the beat to delete.',
             },
           },
           required: ['id'],

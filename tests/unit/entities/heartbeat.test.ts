@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Heartbeat } from '../../../src/entities/heartbeat';
 
 describe('Heartbeat entity', () => {
-  const base = { task: 'send report', type: 'reminder' as const, cronExpression: '0 9 * * 1' };
+  const base = { beat: 'send report', type: 'reminder' as const, cronExpression: '0 9 * * 1' };
 
   it('assigns provided id', () => {
     expect(new Heartbeat({ ...base, id: 'hb-1' }).id).toBe('hb-1');
@@ -12,16 +12,16 @@ describe('Heartbeat entity', () => {
     expect(new Heartbeat(base).id).toMatch(/^[0-9a-f]{13}$/);
   });
 
-  it('stores task', () => {
-    expect(new Heartbeat(base).task).toBe('send report');
+  it('stores beat', () => {
+    expect(new Heartbeat(base).beat).toBe('send report');
   });
 
   it('stores type', () => {
     expect(new Heartbeat(base).type).toBe('reminder');
   });
 
-  it('accepts scheduled_task type', () => {
-    expect(new Heartbeat({ ...base, type: 'scheduled_task' }).type).toBe('scheduled_task');
+  it('accepts scheduled_beat type', () => {
+    expect(new Heartbeat({ ...base, type: 'scheduled_beat' }).type).toBe('scheduled_beat');
   });
 
   it('stores cronExpression', () => {

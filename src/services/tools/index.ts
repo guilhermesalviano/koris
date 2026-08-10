@@ -3,10 +3,10 @@ import { executeCurl } from './curl-request';
 import { executeSearch } from './search';
 import { executeCommand } from './execute-command';
 import { executeGetSkill } from './get-skill';
-import { setTask } from './task/create';
-import { listTasks } from './task/list';
-import { updateTask } from './task/update';
-import { deleteTask } from './task/delete';
+import { setBeat } from './beats/create';
+import { listBeats } from './beats/list';
+import { updateBeat } from './beats/update';
+import { deleteBeat } from './beats/delete';
 import { ILogger } from '../../infrastructure/logger';
 
 type Command = { [key: string]: CommandFn };
@@ -55,10 +55,10 @@ class AgnosticExecutionToolFactory {
       'get_skill': executeGetSkill,
       'curl_request': executeCurl,
       'search_engine': executeSearch,
-      'set_task': setTask,
-      'list_tasks': listTasks,
-      'update_task': updateTask,
-      'delete_task': deleteTask,
+      'set_beat': setBeat,
+      'list_beats': listBeats,
+      'update_beat': updateBeat,
+      'delete_beat': deleteBeat,
     };
 
     return new AgnosticExecutionTool(COMMAND_MAP);

@@ -10,8 +10,8 @@ function makeDb(rows: any[] = []) {
 function makeHeartbeat() {
   return new Heartbeat({
     id: 'h1',
-    task: 'send report',
-    type: 'scheduled_task',
+    beat: 'send report',
+    type: 'scheduled_beat',
     cronExpression: '0 9 * * *',
     lastRun: new Date('2026-01-01T00:00:00Z'),
     createdAt: new Date('2025-12-01T00:00:00Z'),
@@ -31,7 +31,7 @@ describe('HeartbeatRepository', () => {
     expect(params).toEqual([
       'h1',
       'send report',
-      'scheduled_task',
+      'scheduled_beat',
       '0 9 * * *',
       formatISO(heartbeat.lastRun as Date),
       formatISO(heartbeat.createdAt),
@@ -42,7 +42,7 @@ describe('HeartbeatRepository', () => {
     const db = makeDb();
     const repository = new HeartbeatRepository(db as never);
     const heartbeat = new Heartbeat({
-      task: 't',
+      beat: 't',
       type: 'reminder',
       cronExpression: '0 8 * * *',
     });
@@ -65,8 +65,8 @@ describe('HeartbeatRepository', () => {
     const db = makeDb();
     db.get.mockReturnValue({
       id: 'h1',
-      task: 't',
-      type: 'scheduled_task',
+      beat: 't',
+      type: 'scheduled_beat',
       cron_expression: '0 9 * * *',
       created_at: '2025-12-01T00:00:00.000Z',
     });
@@ -90,8 +90,8 @@ describe('HeartbeatRepository', () => {
     const db = makeDb([
       {
         id: 'h1',
-        task: 't',
-        type: 'scheduled_task',
+        beat: 't',
+        type: 'scheduled_beat',
         cron_expression: '0 9 * * *',
         last_run: '2026-01-01T00:00:00.000Z',
         created_at: '2025-12-01T00:00:00.000Z',
@@ -111,16 +111,16 @@ describe('HeartbeatRepository', () => {
     const db = makeDb();
     db.get.mockReturnValue({
       id: 'h1',
-      task: 'new',
+      beat: 'new',
       type: 'reminder',
       cron_expression: '0 8 * * *',
     });
     const repository = new HeartbeatRepository(db as never);
 
-    repository.update('h1', { task: 'new', cronExpression: '0 8 * * *' });
+    repository.update('h1', { beat: 'new', cronExpression: '0 8 * * *' });
 
     const [sql, params] = db.run.mock.calls[0];
-    expect(sql).toBe('UPDATE heartbeat SET task = ?, cron_expression = ? WHERE id = ?');
+    expect(sql).toBe('UPDATE heartbeat SET beat = ?, cron_expression = ? WHERE id = ?');
     expect(params).toEqual(['new', '0 8 * * *', 'h1']);
   });
 
@@ -128,7 +128,7 @@ describe('HeartbeatRepository', () => {
     const db = makeDb();
     db.get.mockReturnValue({
       id: 'h1',
-      task: 't',
+      beat: 't',
       type: 'reminder',
       cron_expression: '0 9 * * *',
     });
@@ -178,8 +178,8 @@ describe('HeartbeatRepository', () => {
     const db = makeDb();
     db.get.mockReturnValue({
       id: 'h1',
-      task: 't',
-      type: 'scheduled_task',
+      beat: 't',
+      type: 'scheduled_beat',
       cron_expression: '0 9 * * *',
     });
     const repository = new HeartbeatRepository(db as never);

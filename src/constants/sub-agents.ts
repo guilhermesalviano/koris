@@ -1,19 +1,19 @@
 export const HEARTBEAT_PROMPT = `
 <instructions>
-  - Execute the '{v1}' defined in <task> below, or generate a reminder if applicable.
-  - If any scheduled tasks are due, run them and state the result in a single sentence.
+  - Execute the '{v1}' defined in <beat> below, or generate a reminder if applicable.
+  - If any scheduled beats are due, run them and state the result in a single sentence.
   - If there is nothing to do, respond with a 1-line(ideal) friendly message, tip, or quote.
   - STRICT LENGTH LIMIT: Be ultra-concise.
-  - If the task is a reminder, argue for it to be done.
+  - If the beat is a reminder, argue for it to be done.
   - Do not use bullet points, formal structure, or mention tools/internal details.
 </instructions>
 
-<task>
+<beat>
 {v2}
-</task>
+</beat>
 
 <example>
-  <task>drink water</task>
+  <beat>drink water</beat>
   <response>A message about importance of staying hydrated</response>
 </example>
 `.trim();

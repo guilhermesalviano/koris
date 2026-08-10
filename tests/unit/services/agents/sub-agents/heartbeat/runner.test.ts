@@ -171,7 +171,7 @@ describe('HeartbeatSingleton', () => {
     runner.start();
 
     expect(logger.info).toHaveBeenCalledWith(
-      'Heartbeat: No scheduled tasks, waiting for new tasks to be added.',
+      'Heartbeat: No scheduled beats, waiting for new beats to be added.',
     );
     expect(nextCronFire).not.toHaveBeenCalled();
   });
