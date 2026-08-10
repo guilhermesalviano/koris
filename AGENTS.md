@@ -75,7 +75,7 @@ Guidance for AI coding agents working in this repository.
 ## Tools
 
 - Tool registry: `src/services/tools/index.ts` — `AgnosticExecutionTool` dispatches tool name → handler via `COMMAND_MAP`.
-- Tools: `execute-command`, `curl-request` (respects `allowed_domains` in settings), `search` (SerpAPI), `get-skill` (loads `skills/<name>/SKILL.md`, path-traversal guarded), `beats/*` (create/list/update/delete recurring beats). Shared helper: `src/services/tools/shared/runtime.ts`.
+- Tools: `execute-command`, `curl-request` (respects `allowed_domains` in settings), `search` (SerpAPI), `get-skill` (loads `skills/<name>/SKILL.md`, path-traversal guarded), `beats/*` (create/list/update/delete recurring beats). Shared helper: `src/services/tools/runtime.ts`.
 - `src/services/tools/gate/` — permission gating for tools.
 - `src/services/tools-queue/` — throttling/serialization of tool calls.
 

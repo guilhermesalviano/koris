@@ -3,7 +3,7 @@ import { HeartbeatRepositoryFactory } from '../../../repositories/heartbeat';
 import { HeartbeatSingleton } from '../../../services/agents/sub-agents/heartbeat/runner';
 import type { ILogger } from '../../../infrastructure/logger';
 import type { ToolResult } from '../../../types/tools';
-import { getRequiredStringArg } from '../shared/runtime';
+import { getRequiredStringArg } from '../runtime';
 
 export async function deleteBeat(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const id = getRequiredStringArg(args, 'id');
