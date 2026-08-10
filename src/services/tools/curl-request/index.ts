@@ -12,7 +12,7 @@ import {
   getOptionalStringRecord,
   getRequiredStringArg,
   isAllowedValue,
-} from '../shared/runtime';
+} from '../runtime';
 import { gateErrorForUrl } from '../gate';
 
 /**

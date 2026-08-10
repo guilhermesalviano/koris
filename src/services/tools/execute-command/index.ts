@@ -5,7 +5,7 @@ import {
   getOptionalStringArrayArg,
   getRequiredStringArg,
   spawnCommand,
-} from '../shared/runtime';
+} from '../runtime';
 
 const BASE_DIR = config.BASE_DIR;
 

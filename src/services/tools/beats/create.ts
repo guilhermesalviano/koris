@@ -4,7 +4,7 @@ import { Heartbeat } from '../../../entities/heartbeat';
 import { HeartbeatSingleton } from '../../../services/agents/sub-agents/heartbeat/runner';
 import type { ILogger } from '../../../infrastructure/logger';
 import type { ToolResult } from '../../../types/tools';
-import { getRequiredStringArg, getOptionalStringArg, isAllowedValue } from '../shared/runtime';
+import { getRequiredStringArg, getOptionalStringArg, isAllowedValue } from '../runtime';
 import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../../../utils/heartbeat';
 import { BEAT_TYPES, BeatType } from '../../../types/beat';
 

@@ -3,7 +3,7 @@ import { HeartbeatRepositoryFactory } from '../../../repositories/heartbeat';
 import { HeartbeatSingleton } from '../../../services/agents/sub-agents/heartbeat/runner';
 import type { ILogger } from '../../../infrastructure/logger';
 import type { ToolResult } from '../../../types/tools';
-import { getOptionalStringArg, getRequiredStringArg, isAllowedValue } from '../shared/runtime';
+import { getOptionalStringArg, getRequiredStringArg, isAllowedValue } from '../runtime';
 import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../../../utils/heartbeat';
 import { BEAT_TYPES } from '../../../types/beat';
 
