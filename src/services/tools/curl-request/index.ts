@@ -13,7 +13,7 @@ import {
   getRequiredStringArg,
   isAllowedValue,
 } from '../runtime';
-import { gateErrorForUrl } from '../gate';
+import { gateErrorForUrl } from '../../security/gate';
 
 /**
  * Parse a jq pipe string (e.g. "| jq -r '.result'") into a safe argv array

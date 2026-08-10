@@ -10,7 +10,7 @@ const { mockConfig } = vi.hoisted(() => ({
   mockConfig: { ALLOWED_DOMAINS: ['mac.local', 'example.com'] },
 }));
 
-vi.mock('../../../../../src/config', () => ({ config: mockConfig }));
+vi.mock('../../../../src/config', () => ({ config: mockConfig }));
 
 // ── imports (after mocks) ───────────────────────────────────────────────────
 
@@ -18,7 +18,7 @@ import {
   extractHostname,
   gateErrorForUrl,
   getAllowedDomains,
-} from '../../../../../src/services/tools/gate';
+} from '../../../../src/services/security/gate';
 
 describe('extractHostname', () => {
   it('extracts the hostname from a full URL', () => {
