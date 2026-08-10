@@ -1,6 +1,6 @@
 ---
 name: emails-gateway
-description: The Gmail Gateway Skill enables the assistant to interact with a user's Gmail inbox through a secure internal gateway. It is optimized for triage and retrieval, allowing users to scan their most recent correspondence and access full message details without leaving the interface.
+description: The Emails Gateway Skill enables the assistant to interact with a user's Email inbox through a secure internal gateway. It is optimized for triage and retrieval, allowing users to scan their most recent correspondence and access full message details without leaving the interface.
 read_when:
   - asked about recent emails
   - asked about specific email details
