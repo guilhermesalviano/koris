@@ -1,5 +1,5 @@
 ---
-name: gmail-gateway
+name: emails-gateway
 description: The Gmail Gateway Skill enables the assistant to interact with a user's Gmail inbox through a secure internal gateway. It is optimized for triage and retrieval, allowing users to scan their most recent correspondence and access full message details without leaving the interface.
 read_when:
   - asked about recent emails
@@ -21,7 +21,7 @@ read_when:
     <trigger>Get Recent Emails</trigger>
     <request>
       <description>Fetch the last 15 emails received. Use the compact jq filter below to extract only essential fields — this keeps the response small enough to return all emails without truncation.</description>
-      <bash>curl -k -X GET <GATEWAY_HOST>/api/emails/recent | jq '[.data.emails[] | {id, from, subject, date, isUnread}]'</bash>
+      <bash>curl -k -X GET <GATEWAY_HOST>/api/emails | jq '[.data.emails[] | {id, from, subject, date, isUnread}]'</bash>
     </request>
     <response>
       <description>Returns a compact list of all recent emails with only the key fields.</description>
@@ -43,7 +43,7 @@ read_when:
     <trigger>Get Email Snippet</trigger>
     <request>
       <description>Fetch the snippet/preview of a specific email by its ID. Use this when the user wants a quick preview without loading the full body.</description>
-      <bash>curl -k -X GET <GATEWAY_HOST>/api/emails/recent | jq '.data.emails[] | select(.id == "[email_id]") | {id, from, subject, date, snippet}'</bash>
+      <bash>curl -k -X GET <GATEWAY_HOST>/api/emails | jq '.data.emails[] | select(.id == "[email_id]") | {id, from, subject, date, snippet}'</bash>
     </request>
     <response>
       <description>Returns the snippet of the matched email.</description>
@@ -63,7 +63,7 @@ read_when:
     <trigger>Get Email Details</trigger>
     <request>
       <description>Fetch the full body of a specific email by its ID. The body is HTML — summarize or extract the relevant text for the user.</description>
-      <bash>curl -k -X GET "<GATEWAY_HOST>/api/emails/message?id=[email_id]" | jq  '.data.emails[] | select(.id == "[email_id]") | {id, from, subject, date, body}'</bash>
+      <bash>curl -k -X GET "<GATEWAY_HOST>/api/emails/[email_id]" | jq  '.data.emails[] | select(.id == "[email_id]") | {id, from, subject, date, body}'</bash>
     </request>
     <response>
       <description>Returns the HTML body of the specified email. Note: large HTML bodies may be truncated — extract the key content from what is returned.</description>
