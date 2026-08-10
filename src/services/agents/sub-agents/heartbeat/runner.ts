@@ -54,27 +54,27 @@ class HeartbeatRunner implements IHeartbeatRunner {
   }
 
   private scheduleNext(): void {
-    const tasks = this.heartbeatRepository.getAll();
+    const beats = this.heartbeatRepository.getAll();
 
-    if (tasks.length === 0) {
-      this.logger.info('Heartbeat: No scheduled tasks, waiting for new tasks to be added.');
+    if (beats.length === 0) {
+      this.logger.info('Heartbeat: No scheduled beats, waiting for new beats to be added.');
       return;
     }
 
     const now = new Date();
     let earliest: Date | null = null;
 
-    for (const task of tasks) {
-      const since = task.lastRun ?? task.createdAt;
+    for (const beat of beats) {
+      const since = beat.lastRun ?? beat.createdAt;
       const from = since > now ? since : now;
-      const next = nextCronFire(task.cronExpression, from);
+      const next = nextCronFire(beat.cronExpression, from);
       if (next && (!earliest || next.getTime() < earliest.getTime())) {
         earliest = next;
       }
     }
 
     if (!earliest) {
-      this.logger.info('Heartbeat: No future cron matches found for any task.');
+      this.logger.info('Heartbeat: No future cron matches found for any beat.');
       return;
     }
 

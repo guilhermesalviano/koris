@@ -20,7 +20,7 @@ interface BuildPromptParams {
   channel: string;
   toolsEnabled?: boolean;
   messageHistory?: Message[];
-  includeTaskTools?: boolean;
+  includeBeatTools?: boolean;
   sessionId?: string;
 }
 
@@ -140,7 +140,7 @@ class PromptRepository implements IPromptRepository {
     return contextString.trim().slice(0, 15000);
   }
 
-  private buildTools({ toolsEnabled, includeTaskTools }: BuildPromptParams): AIToolDefinition[] | undefined {
+  private buildTools({ toolsEnabled, includeBeatTools }: BuildPromptParams): AIToolDefinition[] | undefined {
     const toolsEnabledFinal = toolsEnabled ?? true;
     
     if (!toolsEnabledFinal) {
@@ -148,7 +148,7 @@ class PromptRepository implements IPromptRepository {
     }
 
     return this.toolsRepository.getAll({
-      includeTaskTools,
+      includeBeatTools,
     });
   }
 }
