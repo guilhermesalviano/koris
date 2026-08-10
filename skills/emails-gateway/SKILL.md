@@ -8,7 +8,7 @@ read_when:
   - asked to list recent emails
 ---
 
-<overview>Fetch and work with the user's last 15 received Gmail messages via the internal API.</overview>
+<overview>Fetch and work with the user's last 5 received Gmail messages via the internal API.</overview>
 
 <rules>
   <rule name="data_enforcement">You MUST base your response strictly on the data returned from the API response or the `recent_emails` command. Do not hallucinate, guess, or invent information under any circumstances.</rule>
@@ -20,7 +20,7 @@ read_when:
   <command>
     <trigger>Get Recent Emails</trigger>
     <request>
-      <description>Fetch the last 15 emails received. Use the compact jq filter below to extract only essential fields — this keeps the response small enough to return all emails without truncation.</description>
+      <description>Fetch the last 5 emails received. Use the compact jq filter below to extract only essential fields — this keeps the response small enough to return all emails without truncation.</description>
       <bash>curl -k -X GET <GATEWAY_HOST>/api/emails | jq '[.data.emails[] | {id, from, subject, date, isUnread}]'</bash>
     </request>
     <response>
