@@ -11,9 +11,20 @@ import { ILogger } from '../infrastructure/logger';
 import { InjectManager } from '../services/inject-manager';
 import { SYSTEM_PROMPT } from '../constants';
 import { config } from '../config';
+import { sanitizePrompt, SanitizeStats } from '../utils/prompt-sanitizer';
 
 const CHAT_HISTORY_LIMIT = 20;
 const MEMORY_CONTEXT_LIMIT = 20;
+
+function sumStats(target: SanitizeStats, source: SanitizeStats): void {
+  target.originalLength += source.originalLength;
+  target.sanitizedLength += source.sanitizedLength;
+  target.removedChars += source.removedChars;
+  target.removedWords += source.removedWords;
+  target.removedFillers += source.removedFillers;
+  target.dedupedLines += source.dedupedLines;
+  target.dedupedSentences += source.dedupedSentences;
+}
 
 interface BuildPromptParams {
   userMessage: string;
@@ -71,16 +82,56 @@ class PromptRepository implements IPromptRepository {
 
     const limitedHistory = messageHistory?.slice(-CHAT_HISTORY_LIMIT) ?? [];
 
-    // need more tests
-    // if (limitedHistory.length > 0 || memory) {
-    //   systemBlocks.push("Direct answer preferred based on provided context.");
-    // }
+    const sanitized = this.sanitizePromptIfEnabled(userMessage, limitedHistory);
 
     return [
       { role: 'system', content: systemBlocks.join('\n\n') },
-      ...limitedHistory,
-      { role: 'user', content: userMessage },
+      ...sanitized.history,
+      { role: 'user', content: sanitized.userMessage },
     ];
+  }
+
+  private sanitizePromptIfEnabled(userMessage: string, history: Message[]): { userMessage: string; history: Message[] } {
+    if (!config.AI.PROMPT_SANITIZER.ENABLED) {
+      return { userMessage, history };
+    }
+
+    const aggregate: SanitizeStats = {
+      originalLength: 0,
+      sanitizedLength: 0,
+      removedChars: 0,
+      removedWords: 0,
+      removedFillers: 0,
+      dedupedLines: 0,
+      dedupedSentences: 0,
+      percentReduced: 0,
+    };
+
+    const sanitizedHistory = history.map((message) => {
+      const result = sanitizePrompt(message.content);
+      sumStats(aggregate, result.stats);
+      return { ...message, content: result.text };
+    });
+
+    const userResult = sanitizePrompt(userMessage);
+    sumStats(aggregate, userResult.stats);
+
+    aggregate.percentReduced = aggregate.originalLength > 0
+      ? Math.round((aggregate.removedChars / aggregate.originalLength) * 100)
+      : 0;
+
+    this.logger.info('[prompt-sanitizer] prompt sanitized', {
+      originalChars: aggregate.originalLength,
+      sanitizedChars: aggregate.sanitizedLength,
+      removedChars: aggregate.removedChars,
+      removedWords: aggregate.removedWords,
+      removedFillers: aggregate.removedFillers,
+      dedupedLines: aggregate.dedupedLines,
+      dedupedSentences: aggregate.dedupedSentences,
+      percentReduced: aggregate.percentReduced,
+    });
+
+    return { userMessage: userResult.text, history: sanitizedHistory };
   }
 
   private buildLearnedSkills(): string {
