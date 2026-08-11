@@ -17,6 +17,8 @@ interface ISessionRepository {
   update(id: string, updates: Partial<SessionProps>): void;
   findById(id: string): Session | null;
   findLatestOpenBySource(source: string): Session | null;
+  findAll(limit?: number, offset?: number): Session[];
+  count(): number;
   deleteExpired(): void;
   deleteById(id: string): void;
 }
@@ -99,6 +101,20 @@ class SessionRepository implements ISessionRepository {
     if (!row) return null;
 
     return mapRowToSession(row);
+  }
+
+  findAll(limit = 50, offset = 0): Session[] {
+    const rows = this.db.query<any>(
+      `SELECT * FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+
+    return rows.map((row: SessionRow) => mapRowToSession(row));
+  }
+
+  count(): number {
+    const row = this.db.get('SELECT COUNT(*) as total FROM sessions') as { total: number } | undefined;
+    return row?.total ?? 0;
   }
 
   deleteExpired(): void {

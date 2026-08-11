@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", sans-serif;
+  --font-mono: "DM Mono", monospace;
+
+  --color-bg: #0a0a0f;
+  --color-bg-2: #111118;
+  --color-bg-3: #18181f;
+  --color-bg-4: #1e1e28;
+
+  --color-accent: #F36246;
+  --color-accent-2: #ff8064;
+
+  --color-txt: #e8e8f0;
+  --color-txt-2: #8888a0;
+  --color-txt-3: #555568;
+
+  --radius-card: 18px;
+
+  --animate-msg-in: msgIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-blink: blink 1.3s ease-in-out infinite;
+  --animate-blink2: blink 1.3s ease-in-out 0.2s infinite;
+  --animate-blink3: blink 1.3s ease-in-out 0.4s infinite;
+  --animate-toast-in: toastIn 0.2s ease;
+  --animate-toast-out: toastOut 0.3s ease 3s forwards;
+}
+
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes blink {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40%           { opacity: 1;   transform: scale(1); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@utility border-subtle {
+  border-color: rgba(255, 255, 255, 0.07);
+}
+
+@utility border-strong {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+@utility border-accent-muted {
+  border-color: rgba(243, 98, 70, 0.3);
+}
+
+@utility bg-accent-muted {
+  background-color: rgba(243, 98, 70, 0.12);
+}
+
+/* Grid background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(243, 98, 70, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(243, 98, 70, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 2px; }
+
+.bubble pre {
+  position: relative;
+  overflow-x: auto;
+  border-radius: 10px;
+  background: #0d0d12;
+  padding: 1.5rem 0.85rem 0.85rem;
+  font-family: "DM Mono", monospace;
+  font-size: 12.5px;
+}
+
+.bubble pre::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-family: "DM Mono", monospace;
+  font-size: 10px;
+  color: #555568;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.bubble code {
+  font-family: "DM Mono", monospace;
+}
+
+.bubble :not(pre) > code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.bubble ul, .bubble ol {
+  margin: 0.4em 0;
+  padding-left: 1.3em;
+}
+
+.bubble h1, .bubble h2, .bubble h3 {
+  font-weight: 600;
+  margin: 0.5em 0 0.3em;
+}
+
+.bubble hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 0.6em 0;
+}
+
+.bubble p {
+  margin: 0.3em 0;
+}

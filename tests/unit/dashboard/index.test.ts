@@ -84,7 +84,7 @@ describe('serveIndexHandler', () => {
     handler(req, res);
 
     expect(res.sendFile).toHaveBeenCalledTimes(1);
-    expect(res.sendFile.mock.calls[0][0]).toContain('/chat/index.html');
+    expect(res.sendFile.mock.calls[0][0]).toContain('/index.html');
     expect(res.status).not.toHaveBeenCalledWith(429);
   });
 
