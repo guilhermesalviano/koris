@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
 
@@ -14,13 +14,12 @@ const PROMPTS = [
 
 export default function ChatPage() {
   const { sessionId } = useParams();
-  const navigate = useNavigate();
-  const { messages, input, setInput, streaming, historyLoaded, toast, submit, fillPrompt, openSession, activeSessionEnded, activeSessionSource, newChat } = useChat();
+  const { messages, input, setInput, streaming, historyLoaded, toast, submit, fillPrompt, openSession } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Sync the viewed session with the URL. `null` targets the live chat (latest
-  // open web session, creating one when none exists yet).
+  // open web session, without creating one).
   useEffect(() => {
     openSession(sessionId ?? null);
   }, [sessionId, openSession]);
@@ -40,9 +39,7 @@ export default function ChatPage() {
     }
   }, [input]);
 
-  const chatEnded = activeSessionEnded;
-  const canEdit = !chatEnded && activeSessionSource === 'web';
-  const canSend = canEdit && !streaming && input.trim().length > 0;
+  const canSend = !streaming && input.trim().length > 0;
 
   function handlePromptClick(text: string) {
     fillPrompt(text);
@@ -56,17 +53,8 @@ export default function ChatPage() {
     }
   }
 
-  async function handleStartNewChat() {
-    await newChat();
-    navigate('/admin/chat');
-  }
-
-  const showEmptyState = historyLoaded && messages.length === 0 && canEdit;
-  const footerHint = chatEnded
-    ? 'This conversation has ended and is now read-only.'
-    : activeSessionSource !== 'web'
-      ? 'Read-only — this conversation belongs to another channel.'
-      : '↵ send · ⇧↵ newline';
+  const showEmptyState = historyLoaded && messages.length === 0;
+  const footerHint = '↵ send · ⇧↵ newline';
   const charCount = input.length;
 
   return (
@@ -127,41 +115,20 @@ export default function ChatPage() {
             </div>
           </div>
         ))}
-
-        {chatEnded && (
-          <div className="flex flex-col items-center gap-2 pb-1 animate-msg-in">
-            <div className="flex items-center gap-2 rounded-full border border-subtle bg-bg-2 px-4 py-2 font-mono text-xs text-txt-3">
-              <svg className="h-3.5 w-3.5 fill-none stroke-current" style={{ strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-                <rect x="3" y="11" width="18" height="11" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              This conversation has ended
-            </div>
-            <button
-              onClick={handleStartNewChat}
-              className="rounded-full border border-strong bg-bg-3 px-3.5 py-1.5 font-mono text-xs text-txt-2 transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2"
-            >
-              Start a new chat
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="flex-shrink-0 border-t border-subtle bg-bg/90 px-4 pb-4 pt-3 backdrop-blur-md">
-        <div className={`flex items-start gap-2 rounded-card border px-4 py-2.5 pr-2.5 transition-colors duration-200 ${
-          canEdit ? 'border-strong bg-bg-3 focus-within:border-accent' : 'border-subtle bg-bg-2 opacity-70'
-        }`}>
+        <div className="flex items-start gap-2 rounded-card border border-strong bg-bg-3 px-4 py-2.5 pr-2.5 transition-colors duration-200 focus-within:border-accent">
           <textarea
             ref={textareaRef}
             rows={1}
-            placeholder={chatEnded ? 'Conversation ended' : canEdit ? 'Ask something…' : 'Read-only'}
+            placeholder="Ask something…"
             autoComplete="off"
             value={input}
             maxLength={MAX_CHARS}
-            disabled={!canEdit}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3 disabled:cursor-not-allowed"
+            className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3"
           />
           <button
             disabled={!canSend}
@@ -177,7 +144,7 @@ export default function ChatPage() {
         </div>
         <div className="mt-1.5 flex items-center justify-between px-1 font-mono text-[11px] text-txt-3">
           <span>{footerHint}</span>
-          {canEdit && <span className={charCount > MAX_CHARS * 0.85 ? 'text-amber-500' : ''}>{charCount}</span>}
+          <span className={charCount > MAX_CHARS * 0.85 ? 'text-amber-500' : ''}>{charCount}</span>
         </div>
       </div>
 

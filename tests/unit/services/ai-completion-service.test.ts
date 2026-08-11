@@ -71,16 +71,16 @@ describe('AICompletionService', () => {
       code: 'rate_limited',
       statusCode: 429,
     });
-    await expect(service.complete(request)).rejects.toThrow(/rate limited/i);
+    await expect(service.complete(request)).rejects.toThrow(/so many requests/i);
   });
 
   it.each([
     [401, 'authentication', /API key/i],
     [403, 'authentication', /permission/i],
-    [408, 'timeout', /took too long/i],
-    [500, 'unavailable', /server error/i],
-    [503, 'unavailable', /unavailable/i],
-    [504, 'timeout', /timed out/i],
+    [408, 'timeout', /bit too long/i],
+    [500, 'unavailable', /went wrong on the server/i],
+    [503, 'unavailable', /quick nap/i],
+    [504, 'timeout', /too long to reply/i],
   ] as const)('maps status %s to %s with a friendly message', async (status, code, messagePattern) => {
     const service = new AICompletionService(
       providerWith(vi.fn().mockRejectedValue(new Error(`Ollama /api/chat failed (${status}): raw body`))),
@@ -113,7 +113,7 @@ describe('AICompletionService', () => {
     expect(JSON.parse(JSON.stringify(err))).toEqual({
       code: 'rate_limited',
       statusCode: 429,
-      message: expect.stringMatching(/rate limited/i),
+      message: expect.stringMatching(/so many requests/i),
     });
   });
 
