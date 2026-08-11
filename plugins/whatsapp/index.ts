@@ -197,11 +197,10 @@ class WhatsAppChannel implements IWhatsAppChannel {
       const response = await agent.handle(prompt, jid);
       const resolved = await this.resolveResponse(response);
       await this.sendText(jid, resolved);
-    } catch (error) {
+    } catch (err) {
       const sock = await this.getSocket();
-      await sock.sendMessage(jid, {
-        text: '❌ Sorry, I encountered an error processing your message. Please try again.',
-      });
+      const error = err instanceof Error ? err.message : 'Sorry, I ran into an unexpected problem. Could you try again?';
+      await sock.sendMessage(jid, { text: `❌ ${error}` });
     }
   }
 

@@ -5,6 +5,7 @@ import { config } from '../config';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../constants/thinking';
 import { ILogger } from '../infrastructure/logger';
 import { healthCheck } from '../services/provider-health-service';
+import { AIServiceError } from '../services/ai-completion-service';
 import { IAgent } from '../services/agents/main-agent/agent';
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
@@ -129,10 +130,12 @@ class ChatRouteHandler {
         return;
       }
 
-      const messageText = error instanceof Error ? error.message : String(error);
+      const payload = error instanceof AIServiceError
+        ? error.toJSON()
+        : { code: 'unknown' as const, message: error instanceof Error ? error.message : String(error) };
       writeSse({
-        type: 'content_block_delta',
-        delta: { text: `Error: ${messageText}` },
+        type: 'error',
+        error: payload,
       });
       res.write('data: [DONE]\n\n');
       res.end();
