@@ -12,8 +12,8 @@ import {
   getOptionalStringRecord,
   getRequiredStringArg,
   isAllowedValue,
-} from '../shared/runtime';
-import { gateErrorForUrl } from '../gate';
+} from '../runtime';
+import { gateErrorForUrl } from '../../security/gate';
 
 /**
  * Parse a jq pipe string (e.g. "| jq -r '.result'") into a safe argv array

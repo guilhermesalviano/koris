@@ -64,53 +64,53 @@ class Heartbeat implements ISubAgent<Date> {
   private queue: TaskQueue;
 
   async handler(date: Date): Promise<void> {
-    const tasks = this.heartbeatRepository.getAll();
+    const beats = this.heartbeatRepository.getAll();
 
     this.logger.info('Heartbeat: Agent is alive and functioning.');
 
 
-    if (tasks.length === 0) {
-      this.logger.info('Heartbeat: No scheduled tasks found.');
+    if (beats.length === 0) {
+      this.logger.info('Heartbeat: No scheduled beats found.');
       return;
     }
 
-    const dueTasks = tasks.filter((task) => {
-      const since = task.lastRun ?? task.createdAt ?? new Date(0);
+    const dueBeats = beats.filter((beat) => {
+      const since = beat.lastRun ?? beat.createdAt ?? new Date(0);
 
-      if (!isCronDue(task.cronExpression, date, since)) {
-        this.logger.info(`Heartbeat: Task "${task.id}" not due yet (cron: ${task.cronExpression}).`);
+      if (!isCronDue(beat.cronExpression, date, since)) {
+        this.logger.info(`Heartbeat: Beat "${beat.id}" not due yet (cron: ${beat.cronExpression}).`);
         return false;
       }
 
       return true;
     });
 
-    if (dueTasks.length === 0) {
+    if (dueBeats.length === 0) {
       return;
     }
 
-    const promises = dueTasks.map((task) =>
-      this.queue.add(() => this.executeTask(task, date)),
+    const promises = dueBeats.map((beat) =>
+      this.queue.add(() => this.executeBeat(beat, date)),
     );
 
     await Promise.all(promises);
   }
 
-  private async executeTask(task: HeartbeatEntity, date: Date): Promise<void> {
-    this.logger.info(`Heartbeat: Executing task "${task.id}" — ${task.task}`);
-    this.heartbeatRepository.updateLastRun(task.id, date);
+  private async executeBeat(beat: HeartbeatEntity, date: Date): Promise<void> {
+    this.logger.info(`Heartbeat: Executing beat "${beat.id}" — ${beat.beat}`);
+    this.heartbeatRepository.updateLastRun(beat.id, date);
 
-    const prompt = replacePlaceholders(HEARTBEAT_PROMPT, { v1: `${task.type}`, v2: `task: ${task.task}` });
+    const prompt = replacePlaceholders(HEARTBEAT_PROMPT, { v1: `${beat.type}`, v2: `beat: ${beat.beat}` });
 
     try {
-      // refactor - usar um novo tipo de manager para heartbeat tasks, que não precisa de message history, channel, etc. Talvez só passar o texto da task e um contexto com logger.
+      // refactor - usar um novo tipo de manager para heartbeat beats, que não precisa de message history, channel, etc. Talvez só passar o texto do beat e um contexto com logger.
       const payload = await this.promptRepository
         .build({
           userMessage: prompt,
           channel: 'background',
           toolsEnabled: true,
           messageHistory: [],
-          includeTaskTools: false
+          includeBeatTools: false
         });
 
       // this.logger.debug(`heartbeat prompt value ${JSON.stringify(payload)}`);
@@ -122,7 +122,7 @@ class Heartbeat implements ISubAgent<Date> {
       } else {
         result = await this.executorWorker.run({
           toolCalls: response.calls,
-          userMessage: task.task,
+          userMessage: beat.beat,
           messageHistory: [],
           ctx: {
             channel: 'tui',
@@ -133,14 +133,14 @@ class Heartbeat implements ISubAgent<Date> {
           },
         });
       }
-      this.saveTaskResult({ taskId: task.id, date, result });
+      this.saveBeatResult({ beatId: beat.id, date, result });
 
-      this.logger.info(`Heartbeat: Task "${task.id}" executed. Result: ${result}`);
+      this.logger.info(`Heartbeat: Beat "${beat.id}" executed. Result: ${result}`);
 
       // Hardcoded for tests
       if (config.CHANNELS.TELEGRAM.ENABLED) {
         this.channelsManager.sendMessage('telegram', config.CHANNELS.TELEGRAM.CHAT_ID, result).catch(err => {
-          this.logger.error(`Failed to send heartbeat result to Telegram for task "${task.id}".`, { err });
+          this.logger.error(`Failed to send heartbeat result to Telegram for beat "${beat.id}".`, { err });
         });
       }
 
@@ -148,14 +148,14 @@ class Heartbeat implements ISubAgent<Date> {
         const whatsappTarget = getLastWhitelistedJid() ?? config.CHANNELS.WHATSAPP.TARGET_JID;
         if (whatsappTarget) {
           this.channelsManager.sendMessage('whatsapp', whatsappTarget, result).catch(err => {
-            this.logger.error(`Failed to send heartbeat result to WhatsApp for task "${task.id}".`, { err });
+            this.logger.error(`Failed to send heartbeat result to WhatsApp for beat "${beat.id}".`, { err });
           });
         }
       }
 
-      this.logger.info(`Heartbeat: Task "${task.id}" completed successfully.`);
+      this.logger.info(`Heartbeat: Beat "${beat.id}" completed successfully.`);
     } catch (err) {
-      this.logger.error(`Heartbeat: Task "${task.id}" failed.`, { err });
+      this.logger.error(`Heartbeat: Beat "${beat.id}" failed.`, { err });
     }
   }
 
@@ -165,18 +165,18 @@ class Heartbeat implements ISubAgent<Date> {
     return `${date.getFullYear()}_${pad(date.getMonth() + 1)}_${pad(date.getDate())}_${pad(date.getHours())}_${pad(date.getMinutes())}`;
   }
 
-  saveTaskResult(props: { taskId: string; date: Date; result: string }): void {
-    const { taskId, date, result } = props;
+  saveBeatResult(props: { beatId: string; date: Date; result: string }): void {
+    const { beatId, date, result } = props;
     const tempDir = resolve(config.BASE_DIR, config.TEMP_FOLDER);
-    const filename = `${taskId}_${this.formatDateStamp(date)}.md`;
+    const filename = `${beatId}_${this.formatDateStamp(date)}.md`;
     const filePath = join(tempDir, filename);
 
     try {
       mkdirSync(tempDir, { recursive: true });
       writeFileSync(filePath, result, 'utf-8');
-      this.logger.info(`Heartbeat: Task result saved to ${filePath}`);
+      this.logger.info(`Heartbeat: Beat result saved to ${filePath}`);
     } catch (err) {
-      this.logger.error(`Heartbeat: Failed to save task result to ${filePath}`, { err });
+      this.logger.error(`Heartbeat: Failed to save beat result to ${filePath}`, { err });
     }
   }
 }

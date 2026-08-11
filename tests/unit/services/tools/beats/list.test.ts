@@ -16,43 +16,43 @@ vi.mock('../../../../../src/repositories/heartbeat', () => ({
   HeartbeatRepositoryFactory: { create: vi.fn().mockReturnValue(mockRepo) },
 }));
 
-import { listTasks } from '../../../../../src/services/tools/task/list';
+import { listBeats } from '../../../../../src/services/tools/beats/list';
 import type { ILogger } from '../../../../../src/infrastructure/logger';
 
 const logger: ILogger = { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
 
-describe('listTasks', () => {
+describe('listBeats', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns success with empty list', async () => {
     mockRepo.getAll.mockReturnValue([]);
-    const result = await listTasks(logger, {});
+    const result = await listBeats(logger, {});
     expect(result.success).toBe(true);
     expect(JSON.parse(result.result!)).toEqual([]);
   });
 
-  it('returns all tasks as JSON', async () => {
-    const tasks = [
-      { id: '1', task: 'task 1', type: 'reminder', cronExpression: '0 9 * * *' },
-      { id: '2', task: 'task 2', type: 'scheduled_task', cronExpression: '0 10 * * 1' },
+  it('returns all beats as JSON', async () => {
+    const beats = [
+      { id: '1', beat: 'beat 1', type: 'reminder', cronExpression: '0 9 * * *' },
+      { id: '2', beat: 'beat 2', type: 'scheduled_beat', cronExpression: '0 10 * * 1' },
     ];
-    mockRepo.getAll.mockReturnValue(tasks);
-    const result = await listTasks(logger, {});
+    mockRepo.getAll.mockReturnValue(beats);
+    const result = await listBeats(logger, {});
     expect(result.success).toBe(true);
-    expect(JSON.parse(result.result!)).toEqual(tasks);
+    expect(JSON.parse(result.result!)).toEqual(beats);
   });
 
-  it('toolName is list_tasks', async () => {
+  it('toolName is list_beats', async () => {
     mockRepo.getAll.mockReturnValue([]);
-    const result = await listTasks(logger, {});
-    expect(result.toolName).toBe('list_tasks');
+    const result = await listBeats(logger, {});
+    expect(result.toolName).toBe('list_beats');
   });
 
   it('returns error when repo throws', async () => {
     mockRepo.getAll.mockImplementationOnce(() => { throw new Error('db fail'); });
-    const result = await listTasks(logger, {});
+    const result = await listBeats(logger, {});
     expect(result.success).toBe(false);
     expect(result.error).toBe('db fail');
-    expect(result.toolName).toBe('list_tasks');
+    expect(result.toolName).toBe('list_beats');
   });
 });

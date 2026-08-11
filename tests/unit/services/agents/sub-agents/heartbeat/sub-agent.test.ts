@@ -18,13 +18,13 @@ function makeLogger(): ILogger {
 }
 
 function makeHeartbeat(overrides: Partial<{
-  tasks: Array<{ id: string; task: string; cronExpression: string; type: string; lastRun?: Date }>;
+  beats: Array<{ id: string; beat: string; cronExpression: string; type: string; lastRun?: Date }>;
   completionResponse: unknown;
   executorResult: string;
 }> = {}) {
   const logger = makeLogger();
   const heartbeatRepository = {
-    getAll: vi.fn().mockReturnValue(overrides.tasks ?? []),
+    getAll: vi.fn().mockReturnValue(overrides.beats ?? []),
     updateLastRun: vi.fn(),
   };
   const promptRepository = {
@@ -32,7 +32,7 @@ function makeHeartbeat(overrides: Partial<{
   };
   const completionService = {
     complete: vi.fn().mockResolvedValue(
-      overrides.completionResponse ?? { kind: 'message', text: 'task done' },
+      overrides.completionResponse ?? { kind: 'message', text: 'beat done' },
     ),
   };
   const executorWorker = {
@@ -83,7 +83,7 @@ describe('Heartbeat', () => {
     });
   });
 
-  describe('saveTaskResult', () => {
+  describe('saveBeatResult', () => {
     const tempDir = join(config.BASE_DIR, config.TEMP_FOLDER, 'heartbeat-tests');
 
     beforeEach(() => {
@@ -94,35 +94,35 @@ describe('Heartbeat', () => {
       rmSync(tempDir, { recursive: true, force: true });
     });
 
-    it('writes the task result to a timestamped markdown file', () => {
+    it('writes the beat result to a timestamped markdown file', () => {
       applyTestConfigDefaults({ tempFolder: join('temp', 'heartbeat-tests') });
       const { heartbeat, logger } = makeHeartbeat();
       const date = new Date(2024, 0, 15, 10, 30, 0);
 
-      heartbeat.saveTaskResult({ taskId: 'daily-check', date, result: '# report\nall good' });
+      heartbeat.saveBeatResult({ beatId: 'daily-check', date, result: '# report\nall good' });
 
       const filePath = join(config.BASE_DIR, config.TEMP_FOLDER, 'daily-check_2024_01_15_10_30.md');
       expect(readFileSync(filePath, 'utf-8')).toBe('# report\nall good');
-      expect(logger.info).toHaveBeenCalledWith(`Heartbeat: Task result saved to ${filePath}`);
+      expect(logger.info).toHaveBeenCalledWith(`Heartbeat: Beat result saved to ${filePath}`);
     });
   });
 
   describe('handler', () => {
-    it('logs when there are no scheduled tasks', async () => {
-      const { heartbeat, logger } = makeHeartbeat({ tasks: [] });
+    it('logs when there are no scheduled beats', async () => {
+      const { heartbeat, logger } = makeHeartbeat({ beats: [] });
 
       await heartbeat.handler(localDate(12));
 
-      expect(logger.info).toHaveBeenCalledWith('Heartbeat: No scheduled tasks found.');
+      expect(logger.info).toHaveBeenCalledWith('Heartbeat: No scheduled beats found.');
     });
 
-    it('skips tasks that are not due yet', async () => {
+    it('skips beats that are not due yet', async () => {
       const now = localDate(12, 5);
       const lastRun = localDate(12, 0);
       const { heartbeat, logger, completionService } = makeHeartbeat({
-        tasks: [{
+        beats: [{
           id: 'hourly',
-          task: 'sync data',
+          beat: 'sync data',
           cronExpression: '0 13 * * *',
           type: 'sync',
           lastRun,
@@ -135,12 +135,12 @@ describe('Heartbeat', () => {
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('not due yet'));
     });
 
-    it('executes due tasks and sends the result to Telegram', async () => {
+    it('executes due beats and sends the result to Telegram', async () => {
       const now = localDate(9, 0);
       const { heartbeat, completionService, channelsManager, heartbeatRepository, logger } = makeHeartbeat({
-        tasks: [{
+        beats: [{
           id: 'morning',
-          task: 'send status',
+          beat: 'send status',
           cronExpression: '0 9 * * *',
           type: 'report',
         }],
@@ -156,16 +156,16 @@ describe('Heartbeat', () => {
         'status ok',
       );
       expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('morning', now);
-      expect(logger.info).toHaveBeenCalledWith('Heartbeat: Task "morning" completed successfully.');
+      expect(logger.info).toHaveBeenCalledWith('Heartbeat: Beat "morning" completed successfully.');
     });
 
     it('routes tool-call responses through the executor worker', async () => {
       const now = localDate(9, 0);
       const toolCalls = [{ name: 'execute_command', arguments: { command: 'echo hi' } }];
       const { heartbeat, executorWorker, channelsManager } = makeHeartbeat({
-        tasks: [{
-          id: 'tool-task',
-          task: 'run command',
+        beats: [{
+          id: 'tool-beat',
+          beat: 'run command',
           cronExpression: '0 9 * * *',
           type: 'automation',
         }],
@@ -189,19 +189,19 @@ describe('Heartbeat', () => {
       );
     });
 
-    it('continues executing remaining tasks when one task fails', async () => {
+    it('continues executing remaining beats when one beat fails', async () => {
       const now = localDate(9, 0);
       const { heartbeat, logger, completionService, heartbeatRepository, channelsManager } = makeHeartbeat({
-        tasks: [
+        beats: [
           {
             id: 'failing',
-            task: 'broken task',
+            beat: 'broken beat',
             cronExpression: '0 9 * * *',
             type: 'report',
           },
           {
             id: 'success',
-            task: 'healthy task',
+            beat: 'healthy beat',
             cronExpression: '0 9 * * *',
             type: 'report',
           },
@@ -215,7 +215,7 @@ describe('Heartbeat', () => {
 
       expect(completionService.complete).toHaveBeenCalledTimes(2);
       expect(logger.error).toHaveBeenCalledWith(
-        'Heartbeat: Task "failing" failed.',
+        'Heartbeat: Beat "failing" failed.',
         expect.objectContaining({ err: expect.any(Error) }),
       );
       expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('success', now);
@@ -224,16 +224,16 @@ describe('Heartbeat', () => {
         config.CHANNELS.TELEGRAM.CHAT_ID,
         'all good',
       );
-      expect(logger.info).toHaveBeenCalledWith('Heartbeat: Task "success" completed successfully.');
+      expect(logger.info).toHaveBeenCalledWith('Heartbeat: Beat "success" completed successfully.');
     });
 
     it('sends the result to the whitelisted sender remoteJid on WhatsApp', async () => {
       mockedGetLastWhitelistedJid.mockReturnValue('5511948449969@s.whatsapp.net');
       const now = localDate(9, 0);
       const { heartbeat, channelsManager } = makeHeartbeat({
-        tasks: [{
+        beats: [{
           id: 'morning',
-          task: 'send status',
+          beat: 'send status',
           cronExpression: '0 9 * * *',
           type: 'report',
         }],
@@ -253,9 +253,9 @@ describe('Heartbeat', () => {
       applyTestConfigDefaults({ telegramEnabled: false });
       const now = localDate(9, 0);
       const { heartbeat, channelsManager } = makeHeartbeat({
-        tasks: [{
+        beats: [{
           id: 'morning',
-          task: 'send status',
+          beat: 'send status',
           cronExpression: '0 9 * * *',
           type: 'report',
         }],
@@ -275,9 +275,9 @@ describe('Heartbeat', () => {
       mockedGetLastWhitelistedJid.mockReturnValue(null);
       const now = localDate(9, 0);
       const { heartbeat, channelsManager } = makeHeartbeat({
-        tasks: [{
+        beats: [{
           id: 'morning',
-          task: 'send status',
+          beat: 'send status',
           cronExpression: '0 9 * * *',
           type: 'report',
         }],
@@ -293,12 +293,12 @@ describe('Heartbeat', () => {
       );
     });
 
-    it('logs task failures without stopping other tasks', async () => {
+    it('logs beat failures without stopping other beats', async () => {
       const now = localDate(9, 0);
       const { heartbeat, logger, completionService } = makeHeartbeat({
-        tasks: [{
+        beats: [{
           id: 'failing',
-          task: 'broken task',
+          beat: 'broken beat',
           cronExpression: '0 9 * * *',
           type: 'report',
         }],
@@ -308,17 +308,17 @@ describe('Heartbeat', () => {
       await heartbeat.handler(now);
 
       expect(logger.error).toHaveBeenCalledWith(
-        'Heartbeat: Task "failing" failed.',
+        'Heartbeat: Beat "failing" failed.',
         expect.objectContaining({ err: expect.any(Error) }),
       );
     });
 
-    it('marks lastRun at dispatch even when the task execution fails', async () => {
+    it('marks lastRun at dispatch even when the beat execution fails', async () => {
       const now = localDate(9, 0);
       const { heartbeat, logger, completionService, heartbeatRepository } = makeHeartbeat({
-        tasks: [{
+        beats: [{
           id: 'failing',
-          task: 'broken task',
+          beat: 'broken beat',
           cronExpression: '0 9 * * *',
           type: 'report',
         }],
@@ -329,7 +329,7 @@ describe('Heartbeat', () => {
 
       expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('failing', now);
       expect(logger.error).toHaveBeenCalledWith(
-        'Heartbeat: Task "failing" failed.',
+        'Heartbeat: Beat "failing" failed.',
         expect.objectContaining({ err: expect.any(Error) }),
       );
     });

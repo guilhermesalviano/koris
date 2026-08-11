@@ -50,6 +50,9 @@ export const config = {
       ENABLED: get('ai.embedding.enabled', 'false') === 'true',
       MODEL:   get('ai.embedding.model', 'nomic-embed-text'),
     },
+    PROMPT_SANITIZER: {
+      ENABLED: get('ai.prompt_sanitizer.enabled', 'false') === 'true',
+    },
   },
   CHANNELS: {
     TELEGRAM: {

@@ -57,6 +57,7 @@ Answer the human's request as Agent, using ONLY the data in TOOL RESULTS below.
 - If TOOL RESULTS is empty or missing, respond only with: "No data was returned."
 - If results are partial and another tool call is needed, make that call now — do not respond to the human yet.
 - If tool results are generic values (e.g. "success", "ok", "true"), respond with the most likely interpretation in the context of the human's request.
+- If the tool result comes from a search, specify in your answer that the information was obtained via a search.
 - Do not mention tools, functions, or internal details in your response.
 - Do not repeat the human's question.
 

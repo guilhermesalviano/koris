@@ -140,3 +140,59 @@ describe('PromptRepository buildMemoryContext', () => {
     expect(systemContent).not.toContain('# Cross-session Memory Context');
   });
 });
+
+describe('PromptRepository prompt sanitizer', () => {
+  const originalEnabled = config.AI.PROMPT_SANITIZER.ENABLED;
+
+  beforeEach(() => {
+    (config.AI.PROMPT_SANITIZER as { ENABLED: boolean }).ENABLED = true;
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    (config.AI.PROMPT_SANITIZER as { ENABLED: boolean }).ENABLED = originalEnabled;
+  });
+
+  it('sanitizes the user message and history and logs aggregate stats when enabled', async () => {
+    const logger = makeLogger();
+    const repository = makeRepository({ logger });
+
+    const { messages } = await repository.build({
+      userMessage: 'I really want to go to the store. I really want to go to the store.',
+      channel: 'whatsapp',
+      messageHistory: [
+        { role: 'user', content: 'hello hello world' },
+        { role: 'assistant', content: 'hi there' },
+      ],
+    });
+
+    expect(messages[messages.length - 1].content).toBe('I want to go to the store.');
+    expect(messages[1].content).toBe('hello world');
+    expect(logger.info).toHaveBeenCalledWith('[prompt-sanitizer] prompt sanitized', expect.objectContaining({
+      originalChars: expect.any(Number),
+      sanitizedChars: expect.any(Number),
+      removedChars: expect.any(Number),
+      removedWords: expect.any(Number),
+      removedFillers: expect.any(Number),
+      dedupedLines: expect.any(Number),
+      dedupedSentences: expect.any(Number),
+      percentReduced: expect.any(Number),
+    }));
+  });
+
+  it('leaves messages untouched and skips logging when disabled', async () => {
+    (config.AI.PROMPT_SANITIZER as { ENABLED: boolean }).ENABLED = false;
+    const logger = makeLogger();
+    const repository = makeRepository({ logger });
+
+    const { messages } = await repository.build({
+      userMessage: 'I I really want to go.',
+      channel: 'whatsapp',
+      messageHistory: [{ role: 'user', content: 'hello hello world' }],
+    });
+
+    expect(messages[messages.length - 1].content).toBe('I I really want to go.');
+    expect(messages[1].content).toBe('hello hello world');
+    expect(logger.info).not.toHaveBeenCalledWith('[prompt-sanitizer] prompt sanitized', expect.anything());
+  });
+});

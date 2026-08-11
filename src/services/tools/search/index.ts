@@ -1,7 +1,7 @@
 import { getJson } from "serpapi";
 import { ILogger } from "../../../infrastructure/logger";
 import { ToolResult } from "../../../types/tools";
-import { getRequiredStringArg } from '../shared/runtime';
+import { getRequiredStringArg } from '../runtime';
 import { config } from "../../../config";
 
 export async function executeSearch(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
