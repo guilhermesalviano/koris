@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { NavLink, Route, Routes } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import type { SessionSummary } from '../../lib/types';
 import ChatPage from './ChatPage';
 import OverviewPage from './OverviewPage';
 import SessionsPage from './SessionsPage';
@@ -7,7 +7,7 @@ import MemoriesPage from './MemoriesPage';
 import HeartbeatsPage from './HeartbeatsPage';
 import SkillsPage from './SkillsPage';
 import SettingsPage from './SettingsPage';
-import { ChatProvider } from '../../lib/chat-context';
+import { ChatProvider, useChat } from '../../lib/chat-context';
 
 function Icon({ path }: { path: string }) {
   return (
@@ -42,63 +42,156 @@ const MANAGE_ITEMS: { to: string; label: string; icon: keyof typeof ICONS }[] = 
 ];
 
 function navClass({ isActive }: { isActive: boolean }): string {
-  const base = 'flex items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-left font-mono text-[13px] text-txt-2 hover:bg-bg-3';
+  const base = 'flex items-center gap-1.5 rounded-lg border border-transparent px-2.5 py-1.5 text-[13px] text-txt-2 hover:bg-bg-3 hover:text-txt';
   return isActive ? `${base} bg-accent-muted !text-accent-2 border-accent-muted` : base;
 }
 
-function NavItem({ to, label, icon, end }: { to: string; label: string; icon: keyof typeof ICONS; end?: boolean }): ReactNode {
+function Header() {
+  const { serverHealthy, streaming } = useChat();
+  const statusOnline = serverHealthy && !streaming;
+  const statusLabel = !serverHealthy ? 'Offline' : streaming ? 'Thinking…' : 'Online';
+
   return (
-    <NavLink to={to} end={end} className={navClass}>
-      <Icon path={ICONS[icon]} />
-      <span>{label}</span>
-    </NavLink>
+    <header className="flex h-14 flex-shrink-0 items-center gap-4 border-b border-subtle bg-bg/80 px-4 backdrop-blur-md">
+      <div className="flex items-center gap-2.5">
+        <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-accent">
+          <svg className="h-4 w-4 stroke-white fill-none stroke-2" style={{ strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
+            <polyline points="16 18 22 12 16 6" />
+            <polyline points="8 6 2 12 8 18" />
+          </svg>
+        </div>
+        <div className="hidden sm:block">
+          <div className="text-[13px] font-medium">koris-agent</div>
+          <div className="font-mono text-[11px] text-txt-3">Admin panel</div>
+        </div>
+      </div>
+
+      <nav className="w-full flex justify-center min-w-0 items-center gap-0.5 overflow-x-auto">
+        {MANAGE_ITEMS.map((item) => (
+          <NavLink key={item.to} to={item.to} className={navClass}>
+            <Icon path={ICONS[item.icon]} />
+            <span className="hidden md:inline">{item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
+
+      <div className="flex flex-shrink-0 items-center gap-2">
+        <div className="flex items-center gap-1.5 rounded-full border border-subtle bg-bg-3 px-2.5 py-1 font-mono text-[11px] text-txt-3">
+          <div className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${statusOnline ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span>{statusLabel}</span>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function formatShortDate(value?: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const sameDay = date.toDateString() === new Date().toDateString();
+  return sameDay
+    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function ChatItem({ session, live }: { session: SessionSummary; live: boolean }) {
+  const { activeSessionId } = useChat();
+  const navigate = useNavigate();
+  const isActive = session.id === activeSessionId;
+  const title = session.preview?.trim() || `Chat ${session.id.slice(0, 8)}`;
+
+  function handleClick() {
+    navigate(`/admin/chat/${session.id}`);
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className={`w-full rounded-lg border px-3 py-2 text-left transition-colors duration-150 ${
+        isActive ? 'border-accent-muted bg-accent-muted' : 'border-transparent hover:bg-bg-3'
+      }`}
+    >
+      <div className="truncate text-[13px] text-txt">{title}</div>
+      <div className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-txt-3">
+        <span>{formatShortDate(session.startedAt)}</span>
+        <span>·</span>
+        {live ? (
+          <span className="text-green-400">live</span>
+        ) : session.endedAt ? (
+          <span>ended</span>
+        ) : (
+          <span>{session.source}</span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function Sidebar() {
+  const { sessions, newChat } = useChat();
+  const navigate = useNavigate();
+  const liveWebId = sessions.find((s) => s.source === 'web' && !s.endedAt)?.id;
+
+  async function handleNewChat() {
+    await newChat();
+    navigate('/admin/chat');
+  }
+
+  return (
+    <aside className="flex w-60 flex-shrink-0 flex-col border-r border-subtle bg-bg-2">
+      <div className="p-3">
+        <button
+          onClick={handleNewChat}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-strong bg-bg-3 px-3 py-2 text-[13px] text-txt transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2"
+        >
+          <svg className="h-3.5 w-3.5 fill-none stroke-current" style={{ strokeWidth: 2, strokeLinecap: 'round' }} viewBox="0 0 24 24">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          New chat
+        </button>
+      </div>
+
+      <div className="px-4 pb-1 pt-1 font-mono text-[10px] uppercase tracking-wider text-txt-3">Chats</div>
+      <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
+        {sessions.length === 0 && (
+          <div className="px-3 py-8 text-center font-mono text-[11px] text-txt-3">No chats yet.</div>
+        )}
+        {sessions.map((session) => (
+          <ChatItem
+            key={session.id}
+            session={session}
+            live={session.id === liveWebId}
+          />
+        ))}
+      </div>
+    </aside>
   );
 }
 
 export default function AdminLayout() {
   return (
-    <div className="relative z-10 flex h-screen w-full">
-      <aside className="flex w-56 flex-shrink-0 flex-col border-r border-subtle bg-bg-2 px-3 py-4">
-        <div className="mb-5 flex items-center gap-2.5 px-2">
-          <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-accent">
-            <svg className="h-4 w-4 stroke-white fill-none stroke-2" style={{ strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-              <polyline points="16 18 22 12 16 6" />
-              <polyline points="8 6 2 12 8 18" />
-            </svg>
-          </div>
-          <div>
-            <div className="text-[13px] font-medium">koris-agent</div>
-            <div className="font-mono text-[11px] text-txt-3">Admin panel</div>
-          </div>
+    <ChatProvider>
+      <div className="relative z-10 flex h-screen w-full flex-col">
+        <Header />
+        <div className="flex min-h-0 flex-1">
+          <Sidebar />
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <Routes>
+              <Route index element={<Navigate to="/admin/chat" replace />} />
+              <Route path="chat" element={<ChatPage />} />
+              <Route path="chat/:sessionId" element={<ChatPage />} />
+              <Route path="overview" element={<OverviewPage />} />
+              <Route path="sessions" element={<SessionsPage />} />
+              <Route path="memories" element={<MemoriesPage />} />
+              <Route path="heartbeats" element={<HeartbeatsPage />} />
+              <Route path="skills" element={<SkillsPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Routes>
+          </main>
         </div>
-
-        <nav className="flex flex-col gap-1">
-          <NavItem to="/admin" label="Chat" icon="chat" end />
-        </nav>
-
-        <div className="mt-5 border-t border-subtle pt-4">
-          <div className="mb-1.5 px-3 font-mono text-[10px] uppercase tracking-wider text-txt-3">Manage</div>
-          <nav className="flex flex-col gap-1">
-            {MANAGE_ITEMS.map((item) => (
-              <NavItem key={item.to} to={item.to} label={item.label} icon={item.icon} />
-            ))}
-          </nav>
-        </div>
-      </aside>
-
-      <main className="flex flex-1 flex-col overflow-hidden">
-        <ChatProvider>
-          <Routes>
-            <Route index element={<ChatPage />} />
-            <Route path="overview" element={<OverviewPage />} />
-            <Route path="sessions" element={<SessionsPage />} />
-            <Route path="memories" element={<MemoriesPage />} />
-            <Route path="heartbeats" element={<HeartbeatsPage />} />
-            <Route path="skills" element={<SkillsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Routes>
-        </ChatProvider>
-      </main>
-    </div>
+      </div>
+    </ChatProvider>
   );
 }

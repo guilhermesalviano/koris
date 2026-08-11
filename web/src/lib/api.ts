@@ -8,13 +8,19 @@ export type OnText = (text: string) => void;
 
 /**
  * Consumes the `/api/chat` SSE stream, invoking callbacks for progress
- * status updates and content deltas as they arrive.
+ * status updates and content deltas as they arrive. When a sessionId is
+ * provided the message is routed to that specific chat session.
  */
-export async function streamChat(message: string, onStatus: OnStatus, onText: OnText): Promise<void> {
+export async function streamChat(
+  message: string,
+  sessionId: string | null,
+  onStatus: OnStatus,
+  onText: OnText,
+): Promise<void> {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify(sessionId ? { message, sessionId } : { message }),
   });
 
   if (!res.ok) {

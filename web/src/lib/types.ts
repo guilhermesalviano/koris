@@ -15,6 +15,7 @@ export interface SessionSummary {
   startedAt?: string;
   endedAt?: string;
   messageCount: number;
+  preview?: string | null;
   metadata: Record<string, unknown>;
 }
 
