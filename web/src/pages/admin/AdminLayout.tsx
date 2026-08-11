@@ -52,7 +52,7 @@ function Header() {
   const statusLabel = !serverHealthy ? 'Offline' : streaming ? 'Thinking…' : 'Online';
 
   return (
-    <header className="flex h-14 flex-shrink-0 items-center gap-4 border-b border-subtle bg-bg/80 px-4 backdrop-blur-md">
+    <header className="flex justify-between h-14 flex-shrink-0 items-center gap-4 border-b border-subtle bg-bg/80 px-4 backdrop-blur-md">
       <div className="flex items-center gap-2.5">
         <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-accent">
           <svg className="h-4 w-4 stroke-white fill-none stroke-2" style={{ strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
@@ -66,7 +66,7 @@ function Header() {
         </div>
       </div>
 
-      <nav className="w-full flex justify-center min-w-0 items-center gap-0.5 overflow-x-auto">
+      <nav className="flex justify-center min-w-0 items-center gap-0.5 overflow-x-auto">
         {MANAGE_ITEMS.map((item) => (
           <NavLink key={item.to} to={item.to} className={navClass}>
             <Icon path={ICONS[item.icon]} />
