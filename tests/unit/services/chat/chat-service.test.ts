@@ -62,46 +62,12 @@ describe('ChatService.complete', () => {
     );
   });
 
-  it('returns a fallback message when the provider throws', async () => {
+  it('rethrows provider errors instead of returning a fallback message', async () => {
     const completionService = makeCompletionService();
     completionService.complete.mockRejectedValue(new Error('provider down'));
     const service = new ChatService(completionService as never, makePromptRepository() as never);
 
-    const response = await service.complete('hello', 'tui');
-
-    expect(response).toEqual({
-      kind: 'message',
-      text: 'I received your message: "hello"\n\n(AI provider error: provider down)',
-      finishReason: 'unknown',
-    });
-  });
-
-  it('escapes markdown in fallback messages for the telegram channel', async () => {
-    const completionService = makeCompletionService();
-    completionService.complete.mockRejectedValue(new Error('bad request'));
-    const service = new ChatService(completionService as never, makePromptRepository() as never);
-
-    const response = await service.complete('hello.', 'telegram');
-
-    expect(response).toEqual({
-      kind: 'message',
-      text: 'I received your message: "hello\\."\n\n(AI provider error: bad request)',
-      finishReason: 'unknown',
-    });
-  });
-
-  it('does not escape markdown in fallback messages for the tui channel', async () => {
-    const completionService = makeCompletionService();
-    completionService.complete.mockRejectedValue(new Error('bad request'));
-    const service = new ChatService(completionService as never, makePromptRepository() as never);
-
-    const response = await service.complete('hello.', 'tui');
-
-    expect(response).toEqual({
-      kind: 'message',
-      text: 'I received your message: "hello."\n\n(AI provider error: bad request)',
-      finishReason: 'unknown',
-    });
+    await expect(service.complete('hello', 'tui')).rejects.toThrow('provider down');
   });
 
   it('rethrows abort errors instead of returning a fallback', async () => {
@@ -126,20 +92,6 @@ describe('ChatService.complete', () => {
     controller.abort();
 
     await expect(service.complete('hi', 'tui', { signal: controller.signal })).rejects.toThrow('provider down');
-  });
-
-  it('returns a fallback when options has a signal key without a value', async () => {
-    const completionService = makeCompletionService();
-    completionService.complete.mockRejectedValue(new Error('provider down'));
-    const service = new ChatService(completionService as never, makePromptRepository() as never);
-
-    const response = await service.complete('hello', 'tui', { signal: undefined });
-
-    expect(response).toEqual({
-      kind: 'message',
-      text: 'I received your message: "hello"\n\n(AI provider error: provider down)',
-      finishReason: 'unknown',
-    });
   });
 
   it('factory create returns a ChatService', () => {

@@ -89,12 +89,10 @@ class TelegramChannel implements ITelegramChannel {
         const resolved = await this.resolveResponse(response);
         await this.sendText(chatId, resolved);
       });
-    } catch (error) {
-      console.error('Error processing message:', error);
-      await (await this.getBotClient()).sendMessage(
-        chatId,
-        '❌ Sorry, I encountered an error processing your message. Please try again.',
-      );
+    } catch (err) {
+      console.error('Error processing message:', err);
+      const error = err instanceof Error ? err.message : 'Sorry, I ran into an unexpected problem. Could you try again?';
+      await (await this.getBotClient()).sendMessage(chatId, `❌ ${error}`);
     }
   }
 

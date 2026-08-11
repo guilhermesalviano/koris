@@ -1,6 +1,7 @@
 export interface SseEvent {
   type: string;
   delta?: { status?: string; text?: string };
+  error?: { code?: string; statusCode?: number; message: string };
 }
 
 export type OnStatus = (status: string) => void;
@@ -34,6 +35,7 @@ export async function streamChat(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let streamError: Error | null = null;
 
   const handleLine = (line: string) => {
     if (!line.startsWith('data: ')) return;
@@ -45,6 +47,11 @@ export async function streamChat(
 
       if (parsed.type === 'progress' && parsed.delta?.status) {
         onStatus(parsed.delta.status);
+        return;
+      }
+
+      if (parsed.type === 'error' && parsed.error) {
+        streamError = new Error(parsed.error.message);
         return;
       }
 
@@ -74,6 +81,10 @@ export async function streamChat(
   const tail = (buffer + decoder.decode()).replace(/\r$/, '');
   if (tail.trim()) {
     handleLine(tail);
+  }
+
+  if (streamError) {
+    throw streamError;
   }
 }
 
