@@ -4,6 +4,7 @@ import { MessageRepository } from '../../../src/repositories/message';
 function makeDb(rows: any[] = []) {
   return {
     query: vi.fn().mockReturnValue(rows),
+    get: vi.fn().mockReturnValue(rows[0]),
     run: vi.fn(),
   };
 }
@@ -46,5 +47,25 @@ describe('MessageRepository', () => {
 
     const [, params] = db.query.mock.calls[0];
     expect(params).toEqual(['sess-1', 15]);
+  });
+
+  it('fetches the first user message as the session preview', () => {
+    const db = makeDb([{ content: 'hello there' }]);
+    const repository = new MessageRepository(db as any);
+
+    const preview = repository.getPreviewBySessionId('sess-1');
+
+    const [sql, params] = db.get.mock.calls[0];
+    expect(sql).toContain("role = 'user'");
+    expect(sql).toContain('ORDER BY created_at ASC');
+    expect(params).toEqual(['sess-1']);
+    expect(preview).toBe('hello there');
+  });
+
+  it('returns null when the session has no user message', () => {
+    const db = makeDb([undefined]);
+    const repository = new MessageRepository(db as any);
+
+    expect(repository.getPreviewBySessionId('sess-1')).toBeNull();
   });
 });

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
 
@@ -12,9 +13,17 @@ const PROMPTS = [
 ];
 
 export default function ChatPage() {
-  const { messages, input, setInput, streaming, serverHealthy, historyLoaded, toast, submit, fillPrompt } = useChat();
+  const { sessionId } = useParams();
+  const navigate = useNavigate();
+  const { messages, input, setInput, streaming, historyLoaded, toast, submit, fillPrompt, openSession, activeSessionEnded, activeSessionSource, newChat } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sync the viewed session with the URL. `null` targets the live chat (latest
+  // open web session, creating one when none exists yet).
+  useEffect(() => {
+    openSession(sessionId ?? null);
+  }, [sessionId, openSession]);
 
   // Auto-scroll to the latest message whenever the conversation changes
   // (new message, streaming delta, or returning to this page with history).
@@ -31,6 +40,10 @@ export default function ChatPage() {
     }
   }, [input]);
 
+  const chatEnded = activeSessionEnded;
+  const canEdit = !chatEnded && activeSessionSource === 'web';
+  const canSend = canEdit && !streaming && input.trim().length > 0;
+
   function handlePromptClick(text: string) {
     fillPrompt(text);
     textareaRef.current?.focus();
@@ -39,37 +52,27 @@ export default function ChatPage() {
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (input.trim() && !streaming) submit();
+      if (canSend) submit();
     }
   }
 
-  const statusOnline = serverHealthy && !streaming;
-  const statusLabel = !serverHealthy ? 'Server offline' : streaming ? 'Thinking…' : 'Online';
+  async function handleStartNewChat() {
+    await newChat();
+    navigate('/admin/chat');
+  }
+
+  const showEmptyState = historyLoaded && messages.length === 0 && canEdit;
+  const footerHint = chatEnded
+    ? 'This conversation has ended and is now read-only.'
+    : activeSessionSource !== 'web'
+      ? 'Read-only — this conversation belongs to another channel.'
+      : '↵ send · ⇧↵ newline';
   const charCount = input.length;
 
   return (
     <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col w-full">
-      <header className="sticky top-0 z-10 flex flex-shrink-0 items-center gap-2.5 border-b border-subtle bg-bg/80 px-5 py-3.5 backdrop-blur-md">
-        <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-accent">
-          <svg className="h-4 w-4 stroke-white fill-none stroke-2" style={{ strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-            <polyline points="16 18 22 12 16 6" />
-            <polyline points="8 6 2 12 8 18" />
-          </svg>
-        </div>
-        <div>
-          <div className="text-[13px] font-medium tracking-wide">koris-agent</div>
-          <div className="font-mono text-[11px] text-txt-3 mt-px">Your personal assistant</div>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-full border border-subtle bg-bg-3 px-2.5 py-1 font-mono text-[11px] text-txt-3">
-            <div className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${statusOnline ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span>{statusLabel}</span>
-          </div>
-        </div>
-      </header>
-
       <div ref={chatRef} className="flex flex-1 flex-col gap-5 overflow-y-auto scroll-smooth px-5 py-6">
-        {historyLoaded && messages.length === 0 && (
+        {showEmptyState && (
           <div className="m-auto max-w-sm px-6 py-10 text-center">
             <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-strong bg-bg-3">
               <svg className="h-6 w-6 stroke-txt-3 fill-none" style={{ strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
@@ -124,23 +127,44 @@ export default function ChatPage() {
             </div>
           </div>
         ))}
+
+        {chatEnded && (
+          <div className="flex flex-col items-center gap-2 pb-1 animate-msg-in">
+            <div className="flex items-center gap-2 rounded-full border border-subtle bg-bg-2 px-4 py-2 font-mono text-xs text-txt-3">
+              <svg className="h-3.5 w-3.5 fill-none stroke-current" style={{ strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
+                <rect x="3" y="11" width="18" height="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              This conversation has ended
+            </div>
+            <button
+              onClick={handleStartNewChat}
+              className="rounded-full border border-strong bg-bg-3 px-3.5 py-1.5 font-mono text-xs text-txt-2 transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2"
+            >
+              Start a new chat
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex-shrink-0 border-t border-subtle bg-bg/90 px-4 pb-4 pt-3 backdrop-blur-md">
-        <div className="flex items-start gap-2 rounded-card border border-strong bg-bg-3 px-4 py-2.5 pr-2.5 transition-colors duration-200 focus-within:border-accent">
+        <div className={`flex items-start gap-2 rounded-card border px-4 py-2.5 pr-2.5 transition-colors duration-200 ${
+          canEdit ? 'border-strong bg-bg-3 focus-within:border-accent' : 'border-subtle bg-bg-2 opacity-70'
+        }`}>
           <textarea
             ref={textareaRef}
             rows={1}
-            placeholder="Ask something…"
+            placeholder={chatEnded ? 'Conversation ended' : canEdit ? 'Ask something…' : 'Read-only'}
             autoComplete="off"
             value={input}
             maxLength={MAX_CHARS}
+            disabled={!canEdit}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3"
+            className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3 disabled:cursor-not-allowed"
           />
           <button
-            disabled={!input.trim() || streaming}
+            disabled={!canSend}
             title="Send message"
             onClick={submit}
             className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:enabled:opacity-90 active:enabled:scale-95 disabled:opacity-35 disabled:cursor-default"
@@ -152,8 +176,8 @@ export default function ChatPage() {
           </button>
         </div>
         <div className="mt-1.5 flex items-center justify-between px-1 font-mono text-[11px] text-txt-3">
-          <span>↵ send · ⇧↵ newline</span>
-          <span className={charCount > MAX_CHARS * 0.85 ? 'text-amber-500' : ''}>{charCount}</span>
+          <span>{footerHint}</span>
+          {canEdit && <span className={charCount > MAX_CHARS * 0.85 ? 'text-amber-500' : ''}>{charCount}</span>}
         </div>
       </div>
 

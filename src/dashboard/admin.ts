@@ -10,6 +10,7 @@ import { HeartbeatRepositoryFactory } from '../repositories/heartbeat';
 import { LearnedSkillsRepositoryFactory } from '../repositories/learned-skills';
 import { SkillsRepositoryFactory } from '../repositories/skills';
 import { Heartbeat } from '../entities/heartbeat';
+import { Session } from '../entities/session';
 import { BEAT_TYPES, BeatType } from '../types/beat';
 import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
 import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../utils/heartbeat';
@@ -43,6 +44,13 @@ function parsePagination(req: Request): { limit: number; offset: number } {
   const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 200);
   const offset = Math.max(Number(req.query.offset) || 0, 0);
   return { limit, offset };
+}
+
+function previewText(value: string | null, maxLength = 120): string | null {
+  if (!value) return null;
+  const text = value.replace(/\s+/g, ' ').trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}…`;
 }
 
 class AdminRouterFactory {
@@ -84,8 +92,22 @@ class AdminRouterFactory {
           startedAt: session.startedAt,
           endedAt: session.endedAt,
           messageCount: session.messageCount,
+          preview: previewText(messageRepo.getPreviewBySessionId(session.id)),
           metadata: session.metadata,
         })),
+      });
+    });
+
+    router.post('/sessions', (_req: Request, res: Response) => {
+      const session = new Session({ source: 'web' });
+      sessionRepo.save(session);
+      res.status(201).json({
+        id: session.id,
+        source: session.source,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        messageCount: session.messageCount,
+        metadata: session.metadata,
       });
     });
 

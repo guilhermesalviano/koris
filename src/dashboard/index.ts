@@ -84,6 +84,8 @@ class ChatRouteHandler {
       return;
     }
 
+    const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId : undefined;
+
     const abortController = new AbortController();
     let clientClosed = false;
 
@@ -101,6 +103,7 @@ class ChatRouteHandler {
     try {
       const result = await this.agent.handle(message, 'web', {
         signal: abortController.signal,
+        sessionId,
         onProgress: (summary: string) => {
           if (clientClosed) {
             return;

@@ -16,15 +16,17 @@ class SessionService implements ISessionService {
   private session: Session;
   private readonly source: string;
   private readonly persistOnConstruct: boolean;
+  private readonly rotateOnExpire: boolean;
 
   constructor(
     sessionRepository: ISessionRepository,
     session: Session,
-    options: { persistOnConstruct?: boolean } = {},
+    options: { persistOnConstruct?: boolean; rotateOnExpire?: boolean } = {},
   ) {
     this.sessionRepository = sessionRepository;
     this.source = session.source;
     this.persistOnConstruct = options.persistOnConstruct ?? true;
+    this.rotateOnExpire = options.rotateOnExpire ?? true;
 
     if (this.persistOnConstruct) {
       this.sessionRepository.save(session);
@@ -38,6 +40,10 @@ class SessionService implements ISessionService {
   }
 
   ensureActiveSession(): Session {
+    if (!this.rotateOnExpire) {
+      return this.session;
+    }
+
     if (!this.isExpired(this.session)) {
       return this.session;
     }

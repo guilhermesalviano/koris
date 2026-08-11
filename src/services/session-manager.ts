@@ -12,6 +12,7 @@ export interface ISessionManager {
 
 export class SessionManager implements ISessionManager {
   private cache: Map<string, ISessionService> = new Map();
+  private byIdCache: Map<string, ISessionService> = new Map();
 
   constructor(private db: IDatabaseService) {}
 
@@ -37,11 +38,21 @@ export class SessionManager implements ISessionManager {
   }
 
   getSessionServiceById(sessionId: string): ISessionService {
+    if (this.byIdCache.has(sessionId)) {
+      return this.byIdCache.get(sessionId)!;
+    }
+
     const sessionRepository = SessionRepositoryFactory.create(this.db);
     const session = sessionRepository.findById(sessionId);
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
     }
-    return this.getSessionService(session.source);
+
+    const sessionService = new SessionService(sessionRepository, session, {
+      persistOnConstruct: false,
+      rotateOnExpire: false,
+    });
+    this.byIdCache.set(sessionId, sessionService);
+    return sessionService;
   }
 }
