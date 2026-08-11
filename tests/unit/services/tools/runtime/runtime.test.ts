@@ -26,7 +26,7 @@ import {
   getRequiredStringArg,
   isAllowedValue,
   spawnCommand,
-} from '../../../../../src/services/tools/shared/runtime';
+} from '../../../../../src/services/tools/runtime';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 

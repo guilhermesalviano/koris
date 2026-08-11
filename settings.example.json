@@ -42,6 +42,9 @@
     "summarizer": {
       "enabled": true
     },
+    "prompt_sanitizer": {
+      "enabled": true
+    },
     "timeouts": {
       "idle_ms": 360000,
       "hard_ms": 1200000,

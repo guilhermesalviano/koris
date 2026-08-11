@@ -35,9 +35,9 @@ const { mockExecFilePromise, mockSpawnCommand, mockSpawn } = vi.hoisted(() => ({
 }));
 
 vi.mock(
-  '../../../../../src/services/tools/shared/runtime',
+  '../../../../../src/services/tools/runtime',
   async (importOriginal) => {
-    const original = await importOriginal<typeof import('../../../../../src/services/tools/shared/runtime')>();
+    const original = await importOriginal<typeof import('../../../../../src/services/tools/runtime')>();
     return {
       ...original,
       execFilePromise: mockExecFilePromise,

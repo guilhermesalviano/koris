@@ -3,21 +3,21 @@ import { HeartbeatRepositoryFactory } from '../../../repositories/heartbeat';
 import type { ILogger } from '../../../infrastructure/logger';
 import type { ToolResult } from '../../../types/tools';
 
-export async function listTasks(logger: ILogger, _args: Record<string, unknown>): Promise<ToolResult> {
+export async function listBeats(logger: ILogger, _args: Record<string, unknown>): Promise<ToolResult> {
   try {
     const repo = HeartbeatRepositoryFactory.create(DatabaseServiceFactory.create());
     const rows = repo.getAll();
 
-    logger.info('Tasks listed', { count: rows.length });
+    logger.info('Beats listed', { count: rows.length });
 
     return {
-      toolName: 'list_tasks',
+      toolName: 'list_beats',
       success: true,
       result: JSON.stringify(rows),
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    logger.error('list_tasks failed', { error: errorMsg });
-    return { toolName: 'list_tasks', success: false, error: errorMsg };
+    logger.error('list_beats failed', { error: errorMsg });
+    return { toolName: 'list_beats', success: false, error: errorMsg };
   }
 }

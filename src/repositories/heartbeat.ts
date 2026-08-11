@@ -3,8 +3,8 @@ import { Heartbeat } from '../entities/heartbeat';
 import { formatISO } from '../utils/date';
 
 interface UpdateHeartbeatInput {
-  task?: string;
-  type?: 'reminder' | 'scheduled_task';
+  beat?: string;
+  type?: 'reminder' | 'scheduled_beat';
   cronExpression?: string;
 }
 
@@ -23,10 +23,10 @@ class HeartbeatRepository implements IHeartbeatRepository {
 
   save(heartbeat: Heartbeat): void {
     this.db.run(
-      `INSERT INTO heartbeat (id, task, type, cron_expression, last_run, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO heartbeat (id, beat, type, cron_expression, last_run, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
       [
         heartbeat.id,
-        heartbeat.task,
+        heartbeat.beat,
         heartbeat.type,
         heartbeat.cronExpression,
         heartbeat.lastRun ? formatISO(heartbeat.lastRun) : null,
@@ -49,9 +49,9 @@ class HeartbeatRepository implements IHeartbeatRepository {
     const fields: string[] = [];
     const params: unknown[] = [];
 
-    if (input.task !== undefined) {
-      fields.push('task = ?');
-      params.push(input.task);
+    if (input.beat !== undefined) {
+      fields.push('beat = ?');
+      params.push(input.beat);
     }
 
     if (input.type !== undefined) {
@@ -89,7 +89,7 @@ class HeartbeatRepository implements IHeartbeatRepository {
   private mapRow(row: any): Heartbeat {
     return new Heartbeat({
       id: row.id,
-      task: row.task,
+      beat: row.beat,
       type: row.type,
       cronExpression: row.cron_expression,
       lastRun: row.last_run ? new Date(row.last_run) : undefined,

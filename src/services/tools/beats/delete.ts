@@ -3,13 +3,13 @@ import { HeartbeatRepositoryFactory } from '../../../repositories/heartbeat';
 import { HeartbeatSingleton } from '../../../services/agents/sub-agents/heartbeat/runner';
 import type { ILogger } from '../../../infrastructure/logger';
 import type { ToolResult } from '../../../types/tools';
-import { getRequiredStringArg } from '../shared/runtime';
+import { getRequiredStringArg } from '../runtime';
 
-export async function deleteTask(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
+export async function deleteBeat(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const id = getRequiredStringArg(args, 'id');
 
   if (!id) {
-    return { toolName: 'delete_task', success: false, error: 'Missing required parameter: id' };
+    return { toolName: 'delete_beat', success: false, error: 'Missing required parameter: id' };
   }
 
   try {
@@ -17,20 +17,20 @@ export async function deleteTask(logger: ILogger, args: Record<string, unknown>)
     const deleted = repo.deleteById(id);
 
     if (!deleted) {
-      return { toolName: 'delete_task', success: false, error: `Task not found: ${id}` };
+      return { toolName: 'delete_beat', success: false, error: `Beat not found: ${id}` };
     }
 
     HeartbeatSingleton.getExistingInstance()?.reschedule();
-    logger.info('Task deleted', { id });
+    logger.info('Beat deleted', { id });
 
     return {
-      toolName: 'delete_task',
+      toolName: 'delete_beat',
       success: true,
       result: JSON.stringify({ deleted_id: id }),
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    logger.error('delete_task failed', { error: errorMsg });
-    return { toolName: 'delete_task', success: false, error: errorMsg };
+    logger.error('delete_beat failed', { error: errorMsg });
+    return { toolName: 'delete_beat', success: false, error: errorMsg };
   }
 }

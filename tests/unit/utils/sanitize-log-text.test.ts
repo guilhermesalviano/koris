@@ -34,6 +34,49 @@ describe('sanitizeMeta', () => {
     });
   });
 
+  it('leaves JSON strings untouched', () => {
+    const json = '{"command":"echo hi\\nworld"}';
+    expect(sanitizeMeta({ value: json })).toEqual({ value: json });
+  });
+
+  it('leaves nested JSON strings untouched', () => {
+    const json = '[{"a":"x\\ny"}]';
+    expect(sanitizeMeta({ outer: { value: json } })).toEqual({ outer: { value: json } });
+  });
+
+  it('still sanitizes strings that are not valid JSON', () => {
+    expect(sanitizeMeta({ value: 'hello\nworld' })).toEqual({ value: 'hello\\nworld' });
+    expect(sanitizeMeta({ value: '{"broken": ' })).toEqual({ value: '{"broken": ' });
+  });
+
+  it('preserves embedded JSON while sanitizing surrounding text', () => {
+    const input = 'request failed\npayload: {"a":1,\n"b":2}\ndone';
+    expect(sanitizeMeta({ value: input })).toEqual({
+      value: 'request failed\\npayload: {"a":1,\n"b":2}\\ndone',
+    });
+  });
+
+  it('preserves multiple embedded JSON regions', () => {
+    const input = 'first {"x":1\n} second ["a\\nb"] end';
+    expect(sanitizeMeta({ value: input })).toEqual({
+      value: 'first {"x":1\n} second ["a\\nb"] end',
+    });
+  });
+
+  it('does not treat braces inside JSON strings as nesting', () => {
+    const input = 'log\n{"msg":"has {brace} and \\"quote\\""} tail';
+    expect(sanitizeMeta({ value: input })).toEqual({
+      value: 'log\\n{"msg":"has {brace} and \\"quote\\""} tail',
+    });
+  });
+
+  it('treats a JSON region followed by sanitizable text', () => {
+    const input = '{"ok":true}\nand\nmore';
+    expect(sanitizeMeta({ value: input })).toEqual({
+      value: '{"ok":true}\\nand\\nmore',
+    });
+  });
+
   it('sanitizes string fields recursively', () => {
     const meta = {
       message: 'hello\nworld',
