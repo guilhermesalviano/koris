@@ -118,8 +118,6 @@ function ChatItem({ session, live }: { session: SessionSummary; live: boolean })
         <span>·</span>
         {live ? (
           <span className="text-green-400">live</span>
-        ) : session.endedAt ? (
-          <span>ended</span>
         ) : (
           <span>{session.source}</span>
         )}
