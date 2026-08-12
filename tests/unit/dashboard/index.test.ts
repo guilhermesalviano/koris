@@ -84,7 +84,7 @@ describe('serveIndexHandler', () => {
     handler(req, res);
 
     expect(res.sendFile).toHaveBeenCalledTimes(1);
-    expect(res.sendFile.mock.calls[0][0]).toContain('/chat/index.html');
+    expect(res.sendFile.mock.calls[0][0]).toContain('/index.html');
     expect(res.status).not.toHaveBeenCalledWith(429);
   });
 
@@ -250,6 +250,48 @@ describe('createChatHandler', () => {
     expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"text":" world"'));
     expect(res.write).not.toHaveBeenCalledWith(expect.stringContaining('internal reasoning'));
     expect(res.write).not.toHaveBeenCalledWith(expect.stringContaining(RESPONSE_ANCHOR));
+    expect(res.write).toHaveBeenCalledWith('data: [DONE]\n\n');
+    expect(res.end).toHaveBeenCalled();
+  });
+
+  it('emits a structured JSON error event when the agent throws an AIServiceError', async () => {
+    const { createChatHandler } = await loadWebModule();
+    const { AIServiceError } = await import('../../../src/services/ai-completion-service');
+    mockAgentHandle.mockRejectedValue(new AIServiceError('rate_limited', 'The AI provider is rate limited. Try again shortly.', undefined, 429));
+
+    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+
+    const handler = createChatHandler(mockHandler) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    req.body = { message: 'hello' } as Request['body'];
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"type":"error"'));
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"code":"rate_limited"'));
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"statusCode":429'));
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('rate limited'));
+    expect(res.write).toHaveBeenCalledWith('data: [DONE]\n\n');
+    expect(res.end).toHaveBeenCalled();
+  });
+
+  it('emits an unknown error event for generic thrown errors', async () => {
+    mockAgentHandle.mockRejectedValue(new Error('something exploded'));
+
+    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+
+    const { createChatHandler } = await loadWebModule();
+    const handler = createChatHandler(mockHandler) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    req.body = { message: 'hello' } as Request['body'];
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"type":"error"'));
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"code":"unknown"'));
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('something exploded'));
     expect(res.write).toHaveBeenCalledWith('data: [DONE]\n\n');
     expect(res.end).toHaveBeenCalled();
   });

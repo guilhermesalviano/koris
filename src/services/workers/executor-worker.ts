@@ -38,7 +38,7 @@ class ExecutorWorker implements IWorker {
     }
     ctx.onProgress(`Iteration ${iteration}`);
 
-    this.logger.info(`Executing tools (${JSON.stringify(toolCalls)})...`);
+    this.logger.info('Executing tools...', { toolCalls });
 
     const toolResultsArray = await ctx.toolsQueue.handle(
       toolCalls,
@@ -52,7 +52,7 @@ class ExecutorWorker implements IWorker {
           : `Tool: ${r.toolName}, Success: ${r.success}, Error: ${r.error}`
       )
       .join('\n');
-    this.logger.info(`Tool results: ${JSON.stringify(toolResults)}`);
+    this.logger.info(`Tool results: ${toolResults}`);
 
     const synthesisPrompt = replacePlaceholders(TOOLS_RESULT_PROMPT, { v1: userMessage, v2: toolResults });
     const response = await this.ChatService.complete(
@@ -67,7 +67,7 @@ class ExecutorWorker implements IWorker {
     const nextToolCalls = response.calls;
     if (nextToolCalls.length === 0) return '';
 
-    this.logger.info(`Tool call (${nextToolCalls.length}) after execution phase: ${JSON.stringify(nextToolCalls)}`);
+    this.logger.info(`Tool call (${nextToolCalls.length}) after execution phase`, { toolCalls: nextToolCalls });
 
     return this.run({
       toolCalls: nextToolCalls,

@@ -95,6 +95,38 @@ describe('Agent', () => {
     });
   });
 
+  it('resolves a specific session when a sessionId is provided', async () => {
+    const { agent, deps, sessionManager } = makeAgent('web');
+    const byIdService = {
+      getSession: vi.fn().mockReturnValue({ id: 'session-by-id' }),
+      ensureActiveSession: vi.fn().mockReturnValue({ id: 'session-by-id' }),
+      updateCount: vi.fn(),
+    };
+    sessionManager.getSessionServiceById.mockReturnValue(byIdService);
+
+    await agent.handle('hello', 'origin-1', { sessionId: 'session-by-id' });
+
+    expect(sessionManager.getSessionServiceById).toHaveBeenCalledWith('session-by-id');
+    expect(sessionManager.getSessionService).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(deps.conversationWorker.run).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'session-by-id' }),
+      );
+    });
+  });
+
+  it('falls back to the source session when the session id is unknown', async () => {
+    const { agent, sessionManager } = makeAgent('web', 'session-1');
+    sessionManager.getSessionServiceById.mockImplementation(() => {
+      throw new Error('Session not found: missing');
+    });
+
+    await agent.handle('hello', 'origin-1', { sessionId: 'missing' });
+
+    expect(sessionManager.getSessionServiceById).toHaveBeenCalledWith('missing');
+    expect(sessionManager.getSessionService).toHaveBeenCalledWith('origin-1');
+  });
+
   it('uses the current session id when session rotates', async () => {
     const { agent, deps, sessionService } = makeAgent('tui', 'session-1');
     sessionService.getSession.mockReturnValue({ id: 'session-2' });

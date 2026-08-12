@@ -5,6 +5,7 @@ interface IMessageRepository {
   save(message: Message): void;
   deleteById(id: string): void;
   getBySessionId(sessionId: string, limit?: number): Message[];
+  getPreviewBySessionId(sessionId: string): string | null;
 }
 
 class MessageRepository implements IMessageRepository {
@@ -47,6 +48,18 @@ class MessageRepository implements IMessageRepository {
       content: row.content,
       createdAt: row.created_at
     }));
+  }
+
+  getPreviewBySessionId(sessionId: string): string | null {
+    const row = this.db.get(
+      `SELECT content FROM messages
+       WHERE session_id = ? AND role = 'user'
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [sessionId],
+    ) as { content?: string } | undefined;
+
+    return row?.content ?? null;
   }
 }
 
