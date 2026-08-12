@@ -15,7 +15,7 @@ import { BEAT_TYPES, BeatType } from '../types/beat';
 import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
 import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../utils/heartbeat';
 
-const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN', 'SERPAPI_KEY']);
+const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN', 'SERPAPI_KEY', 'SEARCH_API_KEY']);
 
 function maskDeep(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -72,8 +72,8 @@ class AdminRouterFactory {
         heartbeats: heartbeatRepo.getAll().length,
         learnedSkills: learnedSkillsRepo.getAll().length,
         skills: skillsRepo.get().length,
-        provider: config.AI.PROVIDER,
-        model: config.AI.MODEL,
+        provider: config.AI.MANAGER.PROVIDER,
+        model: config.AI.MANAGER.MODEL,
         environment: config.ENVIRONMENT,
         health: { status: health.status, details: health.details },
       });

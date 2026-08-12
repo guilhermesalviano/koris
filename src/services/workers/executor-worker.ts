@@ -83,7 +83,7 @@ class ExecutorWorker implements IWorker {
 
 class ExecutorWorkerFactory {
   static create(logger: ILogger): IWorker {
-    const ChatService = ChatServiceFactory.create(logger);
+    const ChatService = ChatServiceFactory.create(logger, 'worker');
     return new ExecutorWorker(logger, 'executorWorker', ChatService);
   }
 }

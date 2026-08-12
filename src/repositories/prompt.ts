@@ -146,7 +146,7 @@ class PromptRepository implements IPromptRepository {
   }
 
   private async buildMemoryContext(userMessage: string, sessionId?: string): Promise<string> {
-    if (config.AI.EMBEDDING.ENABLED) {
+    if (config.AI.WORKERS.EMBEDDING_ENABLED) {
       try {
         const queryEmbedding = await this.aiProvider.embed(userMessage);
         const memories = this.memoryRepository.search(queryEmbedding, MEMORY_CONTEXT_LIMIT, sessionId);

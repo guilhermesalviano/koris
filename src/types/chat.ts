@@ -26,6 +26,14 @@ export interface AIChatOptions {
   signal?: AbortSignal;
 }
 
+export interface AIProviderOptions {
+  baseUrl?: string;
+  model?: string;
+  apiToken?: string;
+  embeddingModel?: string;
+  embeddingEnabled?: boolean;
+}
+
 export type AIFinishReason = 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'unknown';
 
 export type AIResponse =

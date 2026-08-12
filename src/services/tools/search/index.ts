@@ -10,9 +10,9 @@ export async function executeSearch(logger: ILogger, args: Record<string, unknow
     return { toolName: 'search_engine', success: false, error: 'Missing required parameter: query' };
   }
 
-  const apiKey = config.AI.SERPAPI_KEY;
+  const apiKey = config.AI.SEARCH_API_KEY;
   if (!apiKey) {
-    return { toolName: 'search_engine', success: false, error: 'SerpApi key is not configured' };
+    return { toolName: 'search_engine', success: false, error: 'Search API key is not configured' };
   }
 
   logger.info('Executing search', { query });

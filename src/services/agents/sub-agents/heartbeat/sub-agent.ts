@@ -184,7 +184,7 @@ class Heartbeat implements ISubAgent<Date> {
 class HeartbeatFactory {
   static create(logger: ILogger, channelsManager: IChannelsManager): Heartbeat {
     const db = DatabaseServiceFactory.create();
-    const aiProvider = getAIProvider(logger);
+    const aiProvider = getAIProvider(logger, 'worker');
     const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
     const heartbeatRepository = HeartbeatRepositoryFactory.create(db);
     const agnosticExecutionTool = AgnosticExecutionToolFactory.create();

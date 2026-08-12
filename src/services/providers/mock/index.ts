@@ -1,5 +1,5 @@
 import { ILogger } from '../../../infrastructure/logger';
-import type { AIChatOptions, AIChatRequest, AIProvider, AIResponse } from '../../../types/chat';
+import type { AIChatOptions, AIChatRequest, AIProvider, AIProviderOptions, AIResponse } from '../../../types/chat';
 
 class MockAIProvider implements AIProvider {
   readonly name: string;
@@ -65,7 +65,8 @@ class MockAIProvider implements AIProvider {
 }
 
 class MockAIProviderFactory {
-  static create(logger: ILogger, name?: string): AIProvider {
+  static create(logger: ILogger, opts?: AIProviderOptions | string): AIProvider {
+    const name = typeof opts === 'string' ? opts : 'mock';
     return new MockAIProvider(logger, name);
   }
 }

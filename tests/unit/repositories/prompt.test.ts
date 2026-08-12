@@ -37,19 +37,19 @@ function makeRepository(overrides: Partial<{
 }
 
 describe('PromptRepository buildMemoryContext', () => {
-  const originalEmbeddingEnabled = config.AI.EMBEDDING.ENABLED;
+  const originalEmbeddingEnabled = config.AI.WORKERS.EMBEDDING_ENABLED;
 
   beforeEach(() => {
-    (config.AI.EMBEDDING as { ENABLED: boolean }).ENABLED = true;
+    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = true;
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    (config.AI.EMBEDDING as { ENABLED: boolean }).ENABLED = originalEmbeddingEnabled;
+    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = originalEmbeddingEnabled;
   });
 
   it('injects memory context from the most recent memories when embeddings are disabled', async () => {
-    (config.AI.EMBEDDING as { ENABLED: boolean }).ENABLED = false;
+    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
 
     const memoryRepository = {
       getAll: vi.fn().mockReturnValue([
@@ -80,7 +80,7 @@ describe('PromptRepository buildMemoryContext', () => {
   });
 
   it('limits the fallback to the most recent memories', async () => {
-    (config.AI.EMBEDDING as { ENABLED: boolean }).ENABLED = false;
+    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
 
     const recent = Array.from({ length: 25 }, (_, i) =>
       makeMemory({ id: `m${i}`, content: `memory ${i}` })
@@ -102,7 +102,7 @@ describe('PromptRepository buildMemoryContext', () => {
   });
 
   it('injects memory context from semantic search when embeddings are enabled', async () => {
-    (config.AI.EMBEDDING as { ENABLED: boolean }).ENABLED = true;
+    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = true;
 
     const memoryRepository = {
       getAll: vi.fn(),
@@ -127,7 +127,7 @@ describe('PromptRepository buildMemoryContext', () => {
   });
 
   it('omits the memory block when there are no memories', async () => {
-    (config.AI.EMBEDDING as { ENABLED: boolean }).ENABLED = false;
+    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
 
     const repository = makeRepository();
 

@@ -28,23 +28,23 @@
     }
   },
   "ai": {
-    "allow_remote_url": false,
-    "provider": "ollama",
-    "base_url": "http://localhost:11434",
-    "api_token": "PROVIDER_API_TOKEN",
-    "serpapi_key": "SERPAPI_KEY",
-    "model": "gemma4:e4b",
-    "embedding": {
-      "enabled": true,
-      "model": "nomic-embed-text"
+    "manager": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_token": "PROVIDER_API_TOKEN",
+      "model": "gemma4:e4b"
     },
-    "think_model": "gemma4:26b-a4b-it-q4_K_M",
-    "summarizer": {
-      "enabled": true
+    "workers": {
+      "provider": "ollama",
+      "base_url": "http://localhost:11434",
+      "api_token": "PROVIDER_API_TOKEN",
+      "model": "qwen:3.5:2b",
+      "embedding": true,
+      "embed_model": "nomic-embed-text"
     },
-    "prompt_sanitizer": {
-      "enabled": true
-    },
+    "search_api_key": "SERPAPI_KEY",
+    "summarizer": true,
+    "prompt_sanitizer": true,
     "timeouts": {
       "idle_ms": 360000,
       "hard_ms": 1200000,
@@ -59,3 +59,4 @@
     "occupation": "Software Engineer"
   }
 }
+
