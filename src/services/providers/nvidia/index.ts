@@ -1,4 +1,4 @@
-import type { AIChatOptions, AIChatRequest, AIProvider, AIResponse } from '../../../types/chat';
+import type { AIChatOptions, AIChatRequest, AIProvider, AIProviderOptions, AIResponse } from '../../../types/chat';
 import { config } from '../../../config';
 import { ILogger } from '../../../infrastructure/logger';
 import { THINK_START, THINK_END } from '../../../constants/thinking';
@@ -56,16 +56,18 @@ class NvidiaAIProvider implements AIProvider {
   private readonly baseUrl: string;
   private readonly defaultModel: string;
   private readonly embeddingModel: string;
+  private readonly embeddingEnabled: boolean;
   private readonly apiToken: string;
 
   constructor(
     private readonly logger: ILogger,
-    opts?: { baseUrl?: string; model?: string; apiToken?: string },
+    opts?: AIProviderOptions,
   ) {
-    this.baseUrl = (opts?.baseUrl ?? config.AI.BASE_URL).replace(/\/+$/, '');
-    this.defaultModel = opts?.model ?? config.AI.MODEL;
-    this.embeddingModel = config.AI.EMBEDDING.MODEL;
-    this.apiToken = opts?.apiToken ?? config.AI.API_TOKEN;
+    this.baseUrl = (opts?.baseUrl ?? config.AI.MANAGER.BASE_URL).replace(/\/+$/, '');
+    this.defaultModel = opts?.model ?? config.AI.MANAGER.MODEL;
+    this.embeddingModel = opts?.embeddingModel ?? config.AI.WORKERS.EMBED_MODEL;
+    this.embeddingEnabled = opts?.embeddingEnabled ?? config.AI.WORKERS.EMBEDDING_ENABLED;
+    this.apiToken = opts?.apiToken ?? config.AI.MANAGER.API_TOKEN;
   }
 
   async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
@@ -278,7 +280,7 @@ class NvidiaAIProvider implements AIProvider {
   }
 
   async embed(text: string): Promise<number[]> {
-    if (!config.AI.EMBEDDING.ENABLED) {
+    if (!this.embeddingEnabled) {
       throw new Error('Embeddings are disabled in configuration');
     }
 
@@ -440,8 +442,8 @@ class NvidiaAIProvider implements AIProvider {
 }
 
 class NvidiaAIProviderFactory {
-  static create(logger: ILogger): AIProvider {
-    return new NvidiaAIProvider(logger);
+  static create(logger: ILogger, opts?: AIProviderOptions): AIProvider {
+    return new NvidiaAIProvider(logger, opts);
   }
 }
 

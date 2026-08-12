@@ -39,9 +39,9 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
       const parsedMemory = parseSummarizerResponse(response.text);
       
       let embedding: number[] | undefined;
-      if (config.AI.EMBEDDING.ENABLED) {
+      if (config.AI.WORKERS.EMBEDDING_ENABLED) {
         try {
-          const provider = getAIProvider(this.logger);
+          const provider = getAIProvider(this.logger, 'worker');
           embedding = await provider.embed(parsedMemory.content);
         } catch (error) {
           this.logger.error(`Failed to generate embedding for summarized memory`, { error });
@@ -65,7 +65,7 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
 
 class SummarizerFactory {
   static create(logger: ILogger): Summarizer {
-    const completionService = new AICompletionService(getAIProvider(logger), logger);
+    const completionService = new AICompletionService(getAIProvider(logger, 'worker'), logger);
     return new Summarizer(logger, completionService);
   }
 }

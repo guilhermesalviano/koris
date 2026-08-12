@@ -1,4 +1,4 @@
-import type { AIChatOptions, AIChatRequest, AIProvider, AIResponse } from '../../../types/chat';
+import type { AIChatOptions, AIChatRequest, AIProvider, AIProviderOptions, AIResponse } from '../../../types/chat';
 import { config } from '../../../config';
 import { ILogger } from '../../../infrastructure/logger';
 import { validateBaseUrl } from '../../../utils/provider';
@@ -25,12 +25,14 @@ class OllamaAIProvider implements AIProvider {
   private readonly baseUrl: string;
   private readonly defaultModel: string;
   private readonly embeddingModel: string;
+  private readonly embeddingEnabled: boolean;
 
-  constructor(private readonly logger: ILogger, opts?: { baseUrl?: string; model?: string }) {
-    const resolvedBaseUrl = (opts?.baseUrl ?? config.AI.BASE_URL).replace(/\/+$/, '');
-    this.baseUrl = validateBaseUrl(resolvedBaseUrl, config.AI.ALLOW_REMOTE_BASE_URL);
-    this.defaultModel = opts?.model ?? config.AI.MODEL;
-    this.embeddingModel = config.AI.EMBEDDING.MODEL;
+  constructor(private readonly logger: ILogger, opts?: AIProviderOptions) {
+    const resolvedBaseUrl = (opts?.baseUrl ?? config.AI.MANAGER.BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = validateBaseUrl(resolvedBaseUrl);
+    this.defaultModel = opts?.model ?? config.AI.MANAGER.MODEL;
+    this.embeddingModel = opts?.embeddingModel ?? config.AI.WORKERS.EMBED_MODEL;
+    this.embeddingEnabled = opts?.embeddingEnabled ?? config.AI.WORKERS.EMBEDDING_ENABLED;
   }
 
   async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
@@ -209,7 +211,7 @@ class OllamaAIProvider implements AIProvider {
   }
 
   async embed(text: string): Promise<number[]> {
-    if (!config.AI.EMBEDDING.ENABLED) {
+    if (!this.embeddingEnabled) {
       throw new Error('Embeddings are disabled in configuration');
     }
 
@@ -359,8 +361,8 @@ class OllamaAIProvider implements AIProvider {
 }
 
 class OllamaAIProviderFactory {
-  static create(logger: ILogger): AIProvider {
-    return new OllamaAIProvider(logger);
+  static create(logger: ILogger, opts?: AIProviderOptions): AIProvider {
+    return new OllamaAIProvider(logger, opts);
   }
 }
 

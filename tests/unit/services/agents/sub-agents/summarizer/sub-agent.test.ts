@@ -25,15 +25,15 @@ function makeProps(overrides: Partial<{
 }
 
 describe('Summarizer', () => {
-  const originalEmbeddingEnabled = config.AI.EMBEDDING.ENABLED;
+  const originalEmbeddingEnabled = config.AI.WORKERS.EMBEDDING_ENABLED;
 
   beforeEach(() => {
-    (config.AI.EMBEDDING as { ENABLED: boolean }).ENABLED = true;
+    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = true;
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    (config.AI.EMBEDDING as { ENABLED: boolean }).ENABLED = originalEmbeddingEnabled;
+    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = originalEmbeddingEnabled;
   });
 
   it('stores parsed memory type and content from AI JSON', async () => {
@@ -88,7 +88,7 @@ describe('Summarizer', () => {
   it('skips embedding generation when embeddings are disabled', async () => {
     const embed = vi.fn().mockResolvedValue([0.1, 0.2]);
     vi.spyOn(providerRegistry, 'getAIProvider').mockReturnValue({ embed } as any);
-    (config.AI.EMBEDDING as { ENABLED: boolean }).ENABLED = false;
+    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
 
     const logger = makeLogger();
     const completionService = {
