@@ -87,12 +87,14 @@ class ChatRouteHandler {
 
     const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId : undefined;
 
-    const abortController = new AbortController();
+    // The AI run is decoupled from the client connection: when the browser
+    // disconnects (tab close/reload, navigating away) we keep processing so
+    // the exchange is still persisted by the conversation worker. `clientClosed`
+    // only stops further SSE writes.
     let clientClosed = false;
 
     const onClose = () => {
       clientClosed = true;
-      abortController.abort();
     };
 
     req.on('aborted', onClose);
@@ -103,7 +105,6 @@ class ChatRouteHandler {
 
     try {
       const result = await this.agent.handle(message, 'web', {
-        signal: abortController.signal,
         sessionId,
         onProgress: (summary: string) => {
           if (clientClosed) {
