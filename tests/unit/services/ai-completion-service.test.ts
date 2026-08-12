@@ -61,6 +61,62 @@ describe('AICompletionService', () => {
     await expect(service.complete(request)).rejects.toMatchObject({ code });
   });
 
+  it('maps a provider HTTP status to its friendly message', async () => {
+    const service = new AICompletionService(
+      providerWith(vi.fn().mockRejectedValue(new Error('NVIDIA /chat/completions failed (429): {"error":"rate limit"}'))),
+      logger,
+    );
+
+    await expect(service.complete(request)).rejects.toMatchObject({
+      code: 'rate_limited',
+      statusCode: 429,
+    });
+    await expect(service.complete(request)).rejects.toThrow(/so many requests/i);
+  });
+
+  it.each([
+    [401, 'authentication', /API key/i],
+    [403, 'authentication', /permission/i],
+    [408, 'timeout', /bit too long/i],
+    [500, 'unavailable', /went wrong on the server/i],
+    [503, 'unavailable', /quick nap/i],
+    [504, 'timeout', /too long to reply/i],
+  ] as const)('maps status %s to %s with a friendly message', async (status, code, messagePattern) => {
+    const service = new AICompletionService(
+      providerWith(vi.fn().mockRejectedValue(new Error(`Ollama /api/chat failed (${status}): raw body`))),
+      logger,
+    );
+
+    const err = await service.complete(request).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code, statusCode: status });
+    expect((err as Error).message).toMatch(messagePattern);
+  });
+
+  it('keeps the raw provider message and status when the status has no mapping', async () => {
+    const service = new AICompletionService(
+      providerWith(vi.fn().mockRejectedValue(new Error('Ollama /api/chat failed (418): I am a teapot'))),
+      logger,
+    );
+
+    const err = await service.complete(request).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'unknown', statusCode: 418 });
+    expect((err as Error).message).toBe('Ollama /api/chat failed (418): I am a teapot');
+  });
+
+  it('serializes an AIServiceError into a structured JSON payload', async () => {
+    const service = new AICompletionService(
+      providerWith(vi.fn().mockRejectedValue(new Error('Ollama /api/chat failed (429): nope'))),
+      logger,
+    );
+
+    const err = await service.complete(request).catch((e: unknown) => e);
+    expect(JSON.parse(JSON.stringify(err))).toEqual({
+      code: 'rate_limited',
+      statusCode: 429,
+      message: expect.stringMatching(/so many requests/i),
+    });
+  });
+
   it('maps an aborted signal to an aborted error', async () => {
     const controller = new AbortController();
     controller.abort();

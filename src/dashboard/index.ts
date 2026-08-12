@@ -1,12 +1,15 @@
-import express, { type Request, type Response, type Application } from 'express';
+import express, { type Request, type Response, type Application, type NextFunction } from 'express';
 import { type Server } from 'node:http';
 import path from 'node:path';
 import { config } from '../config';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../constants/thinking';
 import { ILogger } from '../infrastructure/logger';
 import { healthCheck } from '../services/provider-health-service';
+import { AIServiceError } from '../services/ai-completion-service';
 import { IAgent } from '../services/agents/main-agent/agent';
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
+import { IDatabaseService } from '../infrastructure/db-sqlite';
+import { AdminRouterFactory } from './admin';
 
 interface WebServerHandle {
   start(): Promise<WebServerHandle>;
@@ -26,7 +29,10 @@ const INDEX_RATE_LIMIT_MAX_REQUESTS = 60;
 class IndexRouteHandler {
   private static readonly rateLimitStore = new Map<string, RateLimitEntry>();
 
-  constructor(private readonly publicDir: string) {}
+  constructor(
+    private readonly publicDir: string,
+    private readonly relativeFilePath: string = '/index.html',
+  ) {}
 
   readonly handle = (req: Request, res: Response): void => {
     const now = Date.now();
@@ -44,7 +50,7 @@ class IndexRouteHandler {
     }
 
     this.pruneExpiredEntries(now);
-    res.sendFile(path.join(this.publicDir, '/chat/index.html'));
+    res.sendFile(path.join(this.publicDir, this.relativeFilePath));
   };
 
   private pruneExpiredEntries(now: number): void {
@@ -79,6 +85,8 @@ class ChatRouteHandler {
       return;
     }
 
+    const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId : undefined;
+
     const abortController = new AbortController();
     let clientClosed = false;
 
@@ -96,6 +104,7 @@ class ChatRouteHandler {
     try {
       const result = await this.agent.handle(message, 'web', {
         signal: abortController.signal,
+        sessionId,
         onProgress: (summary: string) => {
           if (clientClosed) {
             return;
@@ -121,10 +130,12 @@ class ChatRouteHandler {
         return;
       }
 
-      const messageText = error instanceof Error ? error.message : String(error);
+      const payload = error instanceof AIServiceError
+        ? error.toJSON()
+        : { code: 'unknown' as const, message: error instanceof Error ? error.message : String(error) };
       writeSse({
-        type: 'content_block_delta',
-        delta: { text: `Error: ${messageText}` },
+        type: 'error',
+        error: payload,
       });
       res.write('data: [DONE]\n\n');
       res.end();
@@ -219,6 +230,7 @@ class DashboardServer implements WebServerHandle {
   constructor(
     private readonly logger: ILogger,
     private readonly agent: IAgent,
+    private readonly db: IDatabaseService,
   ) {}
 
   async start(): Promise<WebServerHandle> {
@@ -254,29 +266,41 @@ class DashboardServer implements WebServerHandle {
 
   createApp(): Application {
     const app = express();
-    const publicDir = path.resolve(config.BASE_DIR, './public');
+    const publicDir = path.resolve(config.BASE_DIR, './dist-web');
     const indexHandler = new IndexRouteHandler(publicDir);
     const chatHandler = new ChatRouteHandler(this.agent);
     const healthHandler = new HealthRouteHandler(this.logger);
+    const adminRouter = AdminRouterFactory.create(this.logger, this.db);
 
     app.use(express.json());
     app.use(express.static(publicDir));
-    app.get('/', indexHandler.handle);
     app.post('/api/chat', chatHandler.handle);
+    app.use('/api/admin', adminRouter);
     app.get('/health', healthHandler.handle);
+
+    // SPA fallback: any unmatched GET request (e.g. "/", "/admin", "/admin/sessions")
+    // is served the same index.html so React Router can handle client-side routing.
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.method !== 'GET') {
+        next();
+        return;
+      }
+
+      indexHandler.handle(req, res);
+    });
 
     return app;
   }
 }
 
 class DashboardServerFactory {
-  static create(logger: ILogger, agent: IAgent): WebServerHandle {
-    return new DashboardServer(logger, agent);
+  static create(logger: ILogger, agent: IAgent, db: IDatabaseService): WebServerHandle {
+    return new DashboardServer(logger, agent, db);
   }
 }
 
-function createApp(options: { logger: ILogger; agent: IAgent }): Application {
-  return new DashboardServer(options.logger, options.agent).createApp();
+function createApp(options: { logger: ILogger; agent: IAgent; db: IDatabaseService }): Application {
+  return new DashboardServer(options.logger, options.agent, options.db).createApp();
 }
 
 function serveIndexHandler(publicDir: string) {
@@ -291,8 +315,8 @@ function createChatHandler(agent: IAgent) {
   return new ChatRouteHandler(agent).handle;
 }
 
-async function startWebServer(logger: ILogger, agent: IAgent): Promise<WebServerHandle> {
-  return new DashboardServer(logger, agent).start();
+async function startWebServer(logger: ILogger, agent: IAgent, db: IDatabaseService): Promise<WebServerHandle> {
+  return new DashboardServer(logger, agent, db).start();
 }
 
 export {

@@ -64,7 +64,7 @@ class Application implements IApplication {
 
     try {
       const webServer = this.modes.web
-        ? await DashboardServerFactory.create(this.logger, agent).start()
+        ? await DashboardServerFactory.create(this.logger, agent, db).start()
         : null;
 
       return { agent, channels, heartbeat, webServer };

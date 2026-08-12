@@ -30,7 +30,7 @@ class Agent implements IAgent {
   ) { }
 
   async handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage> {
-    const sessionService = this.sessionManager.getSessionService(originId);
+    const sessionService = this.resolveSessionService(originId, options?.sessionId);
     const messageService = MessageServiceFactory.create(this.db, sessionService);
     const memoryService = MemoryServiceFactory.create(this.db, sessionService);
     const safeMessage = toSafeMessage(message);
@@ -57,6 +57,18 @@ class Agent implements IAgent {
     this.summarizerHelper(safeMessage, response, sessionService, memoryService);
 
     return response;
+  }
+
+  private resolveSessionService(originId: string, sessionId?: string): ISessionService {
+    if (!sessionId) {
+      return this.sessionManager.getSessionService(originId);
+    }
+
+    try {
+      return this.sessionManager.getSessionServiceById(sessionId);
+    } catch {
+      return this.sessionManager.getSessionService(originId);
+    }
   }
 
   private historyHelper(ask: string, answer: string, sessionService: ISessionService) {

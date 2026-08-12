@@ -3,6 +3,7 @@ export type ProcessOptions = {
   signal?: AbortSignal;
   toolsEnabled?: boolean;
   onProgress?: (summary: string) => void;
+  sessionId?: string;
 };
 
 export interface IAgent<TInput, TOutput> {

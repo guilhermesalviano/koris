@@ -20,11 +20,14 @@ Guidance for AI coding agents working in this repository.
 | Command | Purpose |
 | --- | --- |
 | `pnpm install` | Install dependencies |
-| `pnpm build` | Clean + compile TS → `dist/` (required before `pnpm app`) |
+| `pnpm build` | Clean + compile TS → `dist/` and build the web frontend → `dist-web/` (required before `pnpm app`) |
+| `pnpm build:client` | Build only the web frontend (`vite build` → `dist-web/`) |
+| `pnpm dev:client` | Vite dev server (port 5173), proxies `/api` and `/health` to `localhost:3000` |
 | `pnpm app` | Run agent (web on port 3000). Add `--tui` for TUI, `telegram` for Telegram |
 | `pnpm onboard` | First-time onboarding flow |
 | `pnpm validate` | Validate `settings.json` against expected schema |
-| `pnpm lint` | Type-check (`tsc --noEmit`) — run this after any change |
+| `pnpm lint` | Type-check server (`tsc --noEmit`) — run this after any change |
+| `pnpm lint:client` | Type-check the web frontend (`tsc --noEmit -p web/tsconfig.json`) |
 | `pnpm test` | Run full Vitest suite (`vitest run`) |
 | `pnpm test:watch` | Watch mode |
 | `pnpm test:coverage` | Coverage report |
@@ -43,7 +46,7 @@ Guidance for AI coding agents working in this repository.
 - `src/repositories/` — data-access layer, one file per table/concern: `session`, `message`, `memory`, `skills`, `learned-skills`, `prompt` (builds LLM prompt payload), `context`, `heartbeat`, `tools`, `pre-prompt`. All return raw rows / typed records; SQL is written here, not in services.
 - `src/services/` — business logic (see below).
 - `src/channels/` — `ChannelDefinition` contract + `ChannelsManager`/`ChannelsSingleton` and the `ADAPTERS` extension point.
-- `src/dashboard/` — Express web dashboard (`DashboardServerFactory`), port 3000.
+- `src/dashboard/` — Express web server (`DashboardServerFactory`), port 3000: serves the built frontend from `dist-web/` and mounts `/api/chat` (SSE) + `/api/admin` (see `admin.ts`).
 - `src/tui/` — terminal UI wrapper.
 - `src/utils/` — pure helper functions (prompt replacement, curl, dates, telegram escaping, tool-call parsing, sanitize-log-text, etc.).
 - `plugins/` — the plugin system: `registry.ts` (ExtensionPoint/PluginRegistry) + one folder per channel plugin (`telegram/`, `whatsapp/`), each exposing `create()`.
@@ -52,8 +55,9 @@ Guidance for AI coding agents working in this repository.
 - `temp/` — runtime scratch dir for generated files (heartbeat reports, etc.).
 - `scripts/` — helper scripts (`init.ts`).
 - `tests/` — Vitest suites: `unit/`, `integration/`, plus `helpers/test-config.ts` and `setup/vitest.setup.ts`.
-- `public/` — static assets for the dashboard.
+- `web/` — the web frontend (React 19 SPA; see "Web frontend" below).
 - `dist/` — build output (never edit).
+- `dist-web/` — built web frontend (never edit).
 
 ## Core message flow (follow this to trace behavior)
 
@@ -85,8 +89,6 @@ Guidance for AI coding agents working in this repository.
 
 ## Workers & sub-agents
 
-## Workers & sub-agents
-
 - `src/services/workers/` — `conversation-worker.ts`, `executor-worker.ts`, `learner-worker.ts`. All implement `IWorker` (`src/types/workers.ts`).
 - `src/services/agents/sub-agents/` — `manager.ts` (orchestrator), `heartbeat/` (scheduled beats: `runner.ts` schedules, `sub-agent.ts` runs the beat LLM), `summarizer/`.
 
@@ -98,6 +100,15 @@ Guidance for AI coding agents working in this repository.
 ## Database schema (`src/infrastructure/db-sqlite.ts`)
 
 Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/lesson/reminder), `messages` (short-term, `role` in user/assistant/system), `learned_skills`. Foreign keys cascade on `session_id`. Access **only** through `src/repositories/*`. `DatabaseServiceFactory.create()` is safe to call many times (multiple instances share one DB file; init is reported once).
+
+## Web frontend
+
+- The browser UI is a React 19 SPA (Vite, React Router, Tailwind v4) in `web/`; the server side is the Express dashboard in `src/dashboard/`. `src/dashboard/index.ts` serves the built bundle from `dist-web/` and ends with an SPA fallback that returns `index.html` for any unmatched GET so React Router owns routing.
+- Trace path: `web/index.html` (`#root`) → `web/src/main.tsx` (BrowserRouter) → `web/src/App.tsx` (`/` redirects to `/admin`) → `web/src/pages/admin/AdminLayout.tsx` (sidebar + nested routes) → per-page components in `web/src/pages/admin/`. Shared UI lives in `web/src/components/AdminUI.tsx`.
+- `web/src/lib/api.ts` — `streamChat()` consumes the `/api/chat` SSE stream (`progress` status + `content_block_delta` text events); `apiRequest()` calls `/api/admin/*`; `checkHealth()` polls `/health`. `web/src/lib/markdown.ts` + `types.ts` handle rendering and response types.
+- `web/src/lib/chat-context.tsx` — `ChatProvider`/`useChat` hold conversation state, hydrate prior history from `/api/admin/chat/history`, stream replies, and poll server health every 5s. Chats are sessions; `POST /api/admin/sessions` creates a new one without ending the previous, `/api/chat` accepts an optional `sessionId` to route messages to a specific session (`agent.handle(message, 'web', { sessionId })`, `src/dashboard/index.ts:104`).
+- Admin API: `src/dashboard/admin.ts` (`AdminRouterFactory`, mounted at `/api/admin`) — overview, sessions, memories, chat history, heartbeats (create/update/delete with cron validation), skills, settings. Settings are deep-masked for secrets (`BOT_TOKEN`, `API_TOKEN`, `SERPAPI_KEY`).
+- Build `pnpm build:client` → `dist-web/` (root/outDir in `vite.config.mts`); dev `pnpm dev:client` on port 5173 proxies `/api` and `/health` to `localhost:3000`; type-check via `pnpm lint:client` (`web/tsconfig.json`).
 
 ## Conventions to follow
 

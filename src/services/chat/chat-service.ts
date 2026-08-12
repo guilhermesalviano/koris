@@ -1,5 +1,4 @@
 import { getAIProvider } from "../providers";
-import { escapeTelegramMarkdown, isAbortError } from "../../utils/telegram";
 import { ILogger } from "../../infrastructure/logger";
 import { IPromptRepository, PromptRepositoryFactory } from "../../repositories/prompt";
 import { ProcessedMessage, ProcessOptions } from "../../types/agents";
@@ -30,18 +29,7 @@ class ChatService implements IChatService {
       sessionId
     });
 
-    try {
-      return await this.completionService.complete(promptPayload, { signal: options?.signal });
-    } catch (err) {
-      if (options?.signal?.aborted || isAbortError(err)) {
-        throw err;
-      }
-      const detail = err instanceof Error ? err.message : String(err);
-      const text = channel === 'telegram'
-        ? `I received your message: "${escapeTelegramMarkdown(message)}"\n\n(AI provider error: ${escapeTelegramMarkdown(detail)})`
-        : `I received your message: "${message}"\n\n(AI provider error: ${detail})`;
-      return { kind: 'message', text, finishReason: 'unknown' };
-    }
+    return this.completionService.complete(promptPayload, { signal: options?.signal });
   }
 
   async handler(

@@ -146,6 +146,29 @@ describe('SessionService', () => {
       expect(result.id).not.toBe('old-session');
       expect(result.source).toBe('tui');
     });
+
+    it('returns the same session even when expired when rotateOnExpire is false', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-06-01T12:00:00.000Z'));
+
+      const repo = makeRepo();
+      const session = new Session({
+        id: 'old-session',
+        source: 'tui',
+        startedAt: '2024-06-01T10:00:00.000Z',
+        metadata: { lastActivityAt: '2024-06-01T10:00:00.000Z' },
+      });
+      const svc = new SessionService(repo as any, session, {
+        persistOnConstruct: false,
+        rotateOnExpire: false,
+      });
+
+      const result = svc.ensureActiveSession();
+
+      expect(result.id).toBe('old-session');
+      expect(repo.update).not.toHaveBeenCalled();
+      expect(repo.save).not.toHaveBeenCalled();
+    });
   });
 });
 
