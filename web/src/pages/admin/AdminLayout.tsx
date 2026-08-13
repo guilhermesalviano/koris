@@ -78,11 +78,13 @@ function Drawer({
   open,
   onClose,
   label,
+  mobileOnly = false,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   label: string;
+  mobileOnly?: boolean;
   children: ReactNode;
 }) {
   useEffect(() => {
@@ -95,7 +97,7 @@ function Drawer({
   }, [open, onClose]);
 
   return (
-    <div className="md:hidden" aria-hidden={!open}>
+    <div className={mobileOnly ? 'md:hidden' : undefined} aria-hidden={!open}>
       <div
         className={`fixed inset-0 z-40 bg-black/60 transition-opacity duration-200 ${
           open ? 'opacity-100' : 'pointer-events-none opacity-0'
@@ -140,7 +142,7 @@ function Header({
           onClick={onOpenNav}
           aria-label="Open menu"
           aria-expanded={navOpen}
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt md:hidden"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
         >
           <Icon path={ICONS.menu} />
         </button>
@@ -152,23 +154,7 @@ function Header({
         >
           <Icon path={ICONS.chat} />
         </button>
-        <div className="ml-1 flex items-center gap-2.5">
-          <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-accent">
-            <svg className="h-4 w-4 stroke-white fill-none stroke-2" style={{ strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-              <polyline points="16 18 22 12 16 6" />
-              <polyline points="8 6 2 12 8 18" />
-            </svg>
-          </div>
-          <div className="hidden sm:block">
-            <div className="text-[13px] font-medium">koris-agent</div>
-            <div className="font-mono text-[11px] text-txt-3">Admin panel</div>
-          </div>
-        </div>
       </div>
-
-      <nav className="hidden min-w-0 items-center gap-0.5 md:flex">
-        <NavItems />
-      </nav>
 
       <div className="flex flex-shrink-0 items-center gap-2">
         {processing && currentQuestion && (
@@ -180,6 +166,24 @@ function Header({
         <div className="flex items-center gap-1.5 rounded-full border border-subtle bg-bg-3 px-2.5 py-1 font-mono text-[11px] text-txt-3">
           <div className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${statusOnline ? 'bg-green-500' : 'bg-red-500'}`} />
           <span className="hidden sm:inline">{statusLabel}</span>
+        </div>
+        <div className="ml-1 flex items-center gap-2.5">
+          <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-accent">
+            <svg className="h-4 w-4 fill-none stroke-white" style={{ strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
+              <circle cx="8" cy="6.5" r="3" />
+              <circle cx="16" cy="6.5" r="3" />
+              <circle cx="12" cy="12" r="7" />
+              <circle cx="8" cy="6.5" r="1.5" fill="white" stroke="none" />
+              <circle cx="16" cy="6.5" r="1.5" fill="white" stroke="none" />
+              <ellipse cx="12" cy="13.4" rx="1.9" ry="2.3" fill="white" stroke="none" />
+              <circle cx="9.2" cy="10.6" r="0.9" fill="white" stroke="none" />
+              <circle cx="14.8" cy="10.6" r="0.9" fill="white" stroke="none" />
+            </svg>
+          </div>
+          <div className="hidden sm:block">
+            <div className="text-[13px] font-medium">koris-agent</div>
+            <div className="font-mono text-[11px] text-txt-3">Admin panel</div>
+          </div>
         </div>
       </div>
     </header>
@@ -334,7 +338,7 @@ export default function AdminLayout() {
           </div>
         </Drawer>
 
-        <Drawer open={chatsOpen} onClose={() => setChatsOpen(false)} label="Chats">
+        <Drawer open={chatsOpen} onClose={() => setChatsOpen(false)} label="Chats" mobileOnly>
           <DrawerHeader title="Chats" onClose={() => setChatsOpen(false)} />
           <div className="min-h-0 flex-1 overflow-hidden">
             <ChatsPanel onNavigate={() => setChatsOpen(false)} />
