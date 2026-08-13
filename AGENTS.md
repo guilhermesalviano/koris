@@ -11,7 +11,7 @@ Guidance for AI coding agents working in this repository.
 - **Package manager:** `pnpm` (`pnpm@10.18.3`, single-package workspace). Never use `npm`/`yarn`.
 - **Runtime:** Node >= 24. **Build:** `tsc` → `dist/`. No bundler.
 - **Database:** `better-sqlite3` (synchronous, WAL). DB file lives in `memory/database.db`.
-- **LLM providers:** Ollama (default), NVIDIA, Mock — selected via `settings.json` (`ai.provider`).
+- **LLM providers:** Ollama, NVIDIA, Mock — selected per role via `settings.json` (`ai.manager.provider` for the main agent, `ai.workers.provider` for workers/summarizer/heartbeat).
 - **Testing:** Vitest (globals enabled, `@` alias → `src`). Mutation testing via Stryker.
 - **Channels:** `@whiskeysockets/baileys` (WhatsApp) and `@guilhermesalviano/telegram-bot`.
 
@@ -107,7 +107,7 @@ Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/l
 - Trace path: `web/index.html` (`#root`) → `web/src/main.tsx` (BrowserRouter) → `web/src/App.tsx` (`/` redirects to `/admin`) → `web/src/pages/admin/AdminLayout.tsx` (sidebar + nested routes) → per-page components in `web/src/pages/admin/`. Shared UI lives in `web/src/components/AdminUI.tsx`.
 - `web/src/lib/api.ts` — `streamChat()` consumes the `/api/chat` SSE stream (`progress` status + `content_block_delta` text events); `apiRequest()` calls `/api/admin/*`; `checkHealth()` polls `/health`. `web/src/lib/markdown.ts` + `types.ts` handle rendering and response types.
 - `web/src/lib/chat-context.tsx` — `ChatProvider`/`useChat` hold conversation state, hydrate prior history from `/api/admin/chat/history`, stream replies, and poll server health every 5s. Chats are sessions; `POST /api/admin/sessions` creates a new one without ending the previous, `/api/chat` accepts an optional `sessionId` to route messages to a specific session (`agent.handle(message, 'web', { sessionId })`, `src/dashboard/index.ts:104`).
-- Admin API: `src/dashboard/admin.ts` (`AdminRouterFactory`, mounted at `/api/admin`) — overview, sessions, memories, chat history, heartbeats (create/update/delete with cron validation), skills, settings. Settings are deep-masked for secrets (`BOT_TOKEN`, `API_TOKEN`, `SERPAPI_KEY`).
+- Admin API: `src/dashboard/admin.ts` (`AdminRouterFactory`, mounted at `/api/admin`) — overview, sessions, memories, chat history, heartbeats (create/update/delete with cron validation), skills, settings. Settings are deep-masked for secrets (`BOT_TOKEN`, `API_TOKEN`, `SEARCH_API_KEY`).
 - Build `pnpm build:client` → `dist-web/` (root/outDir in `vite.config.mts`); dev `pnpm dev:client` on port 5173 proxies `/api` and `/health` to `localhost:3000`; type-check via `pnpm lint:client` (`web/tsconfig.json`).
 
 ## Conventions to follow

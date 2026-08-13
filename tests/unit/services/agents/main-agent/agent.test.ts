@@ -75,7 +75,7 @@ describe('Agent', () => {
       userMessage: 'hello there',
       channel: 'web',
       message: deps.messageService,
-      options: {},
+      options: { runId: expect.any(String) },
     });
     expect(result).toBe('assistant reply');
   });
@@ -91,7 +91,7 @@ describe('Agent', () => {
       userMessage: 'run task',
       channel: 'tui',
       message: deps.messageService,
-      options: { onProgress, signal: controller.signal, toolsEnabled: true },
+      options: { onProgress, signal: controller.signal, toolsEnabled: true, runId: expect.any(String) },
     });
   });
 

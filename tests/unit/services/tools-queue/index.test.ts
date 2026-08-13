@@ -1,7 +1,11 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { ToolsQueueFactory } from '../../../../src/services/tools-queue';
+import { ToolsQueue, ToolsQueueFactory } from '../../../../src/services/tools-queue';
 import { AgnosticExecutionTool } from '../../../../src/services/tools';
 import { ILogger } from '../../../../src/infrastructure/logger';
+
+vi.mock('../../../../src/services/audit/audit-service', () => ({
+  AuditServiceFactory: { create: () => ({ record: vi.fn() }) },
+}));
 
 const mockLogger: ILogger = {
   info: vi.fn(),
@@ -166,6 +170,59 @@ describe('ToolsQueue', () => {
       expect(result[0].success).toBe(false);
       expect(result[0].error).toContain('Unknown tool');
       expect(mockLogger.info).toHaveBeenCalledWith('Tools completed', { count: 1 });
+    });
+
+    it('records a tool audit entry for each executed tool', async () => {
+      const auditService = { record: vi.fn() };
+      const agnosticExecutionTool = new AgnosticExecutionTool({
+        echo: vi.fn().mockResolvedValue({ toolName: 'echo', success: true, result: 'hi' }),
+      } as any);
+      const queue = new ToolsQueue(mockLogger, agnosticExecutionTool, 2, auditService as never);
+
+      const toolCall = { name: 'echo', arguments: { text: 'hello' } };
+      await queue.handle([toolCall], new AbortController().signal, {
+        channel: 'web',
+        sessionId: 's1',
+        runId: 'r1',
+        agentName: 'executorWorker',
+      });
+
+      expect(auditService.record).toHaveBeenCalledTimes(1);
+      const entry = auditService.record.mock.calls[0][0];
+      expect(entry).toMatchObject({
+        kind: 'tool',
+        role: 'worker',
+        agentName: 'executorWorker',
+        toolName: 'echo',
+        toolArgs: JSON.stringify({ text: 'hello' }),
+        success: true,
+        response: 'hi',
+        status: 'success',
+        channel: 'web',
+        sessionId: 's1',
+        runId: 'r1',
+      });
+      expect(entry.durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('records a failed tool audit entry when execution throws', async () => {
+      const auditService = { record: vi.fn() };
+      const agnosticExecutionTool = new AgnosticExecutionTool({
+        boom: vi.fn().mockRejectedValue(new Error('kaboom')),
+      } as any);
+      const queue = new ToolsQueue(mockLogger, agnosticExecutionTool, 2, auditService as never);
+
+      const toolCall = { name: 'boom', arguments: {} };
+      await queue.handle([toolCall], new AbortController().signal, { agentName: 'learnerWorker' });
+
+      const entry = auditService.record.mock.calls[0][0];
+      expect(entry).toMatchObject({
+        kind: 'tool',
+        agentName: 'learnerWorker',
+        success: false,
+        status: 'error',
+        errorMessage: 'kaboom',
+      });
     });
   });
 

@@ -24,6 +24,20 @@ export interface AIChatRequest {
 
 export interface AIChatOptions {
   signal?: AbortSignal;
+  audit?: {
+    runId?: string;
+    sessionId?: string;
+    channel?: string;
+  };
+  onUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void;
+}
+
+export interface AIProviderOptions {
+  baseUrl?: string;
+  model?: string;
+  apiToken?: string;
+  embeddingModel?: string;
+  embeddingEnabled?: boolean;
 }
 
 export type AIFinishReason = 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'unknown';

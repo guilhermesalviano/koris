@@ -1,5 +1,6 @@
 import express, { type Request, type Response, type Application, type NextFunction } from 'express';
 import { type Server } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { config } from '../config';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../constants/thinking';
@@ -10,6 +11,7 @@ import { IAgent } from '../services/agents/main-agent/agent';
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { AdminRouterFactory } from './admin';
+import { activeRunsRegistry } from './active-runs';
 
 interface WebServerHandle {
   start(): Promise<WebServerHandle>;
@@ -87,23 +89,35 @@ class ChatRouteHandler {
 
     const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId : undefined;
 
-    const abortController = new AbortController();
+    // The AI run is decoupled from the client connection: when the browser
+    // disconnects (tab close/reload, navigating away) we keep processing so
+    // the exchange is still persisted by the conversation worker. `clientClosed`
+    // only stops further SSE writes.
     let clientClosed = false;
 
     const onClose = () => {
       clientClosed = true;
-      abortController.abort();
     };
 
     req.on('aborted', onClose);
     res.on('close', onClose);
+
+    const runId = randomUUID();
+    if (sessionId) {
+      activeRunsRegistry.start({
+        id: runId,
+        sessionId,
+        question: message,
+        startedAt: new Date().toISOString(),
+        channel: 'web',
+      });
+    }
 
     const writeSse = this.createSseWriter(res, () => clientClosed);
     this.setupSseHeaders(res);
 
     try {
       const result = await this.agent.handle(message, 'web', {
-        signal: abortController.signal,
         sessionId,
         onProgress: (summary: string) => {
           if (clientClosed) {
@@ -140,6 +154,7 @@ class ChatRouteHandler {
       res.write('data: [DONE]\n\n');
       res.end();
     } finally {
+      activeRunsRegistry.finish(runId);
       req.off('aborted', onClose);
       res.off('close', onClose);
     }

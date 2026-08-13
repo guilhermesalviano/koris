@@ -229,10 +229,18 @@ describe('onboarding settings draft', () => {
           },
         },
         ai: {
-          provider: 'ollama',
-          base_url: 'http://localhost:11434',
-          api_token: '',
-          model: 'gemma4:e4b',
+          manager: {
+            provider: 'ollama',
+            base_url: 'http://localhost:11434',
+            api_token: '',
+            model: 'gemma4:e4b',
+          },
+          workers: {
+            provider: 'ollama',
+            base_url: 'http://localhost:11434',
+            api_token: '',
+            model: 'qwen:3.5:2b',
+          },
         },
         personal_information: {
           name: 'John Doe',
@@ -256,10 +264,18 @@ describe('onboarding settings draft', () => {
         },
       },
       ai: {
-        provider: 'ollama',
-        base_url: 'http://localhost:11434',
-        api_token: '',
-        model: 'gemma4:e4b',
+        manager: {
+          provider: 'ollama',
+          base_url: 'http://localhost:11434',
+          api_token: '',
+          model: 'gemma4:e4b',
+        },
+        workers: {
+          provider: 'ollama',
+          base_url: 'http://localhost:11434',
+          api_token: '',
+          model: 'qwen:3.5:2b',
+        },
       },
       personal_information: {
         name: 'Joe Doe',
@@ -303,10 +319,18 @@ describe('onboarding settings draft', () => {
         },
       },
       ai: {
-        provider: 'ollama',
-        base_url: 'http://localhost:11434',
-        api_token: '',
-        model: 'gemma4:e4b',
+        manager: {
+          provider: 'ollama',
+          base_url: 'http://localhost:11434',
+          api_token: '',
+          model: 'gemma4:e4b',
+        },
+        workers: {
+          provider: 'ollama',
+          base_url: 'http://localhost:11434',
+          api_token: '',
+          model: 'qwen:3.5:2b',
+        },
       },
       personal_information: {
         name: 'John Doe',
@@ -342,10 +366,18 @@ describe('onboarding settings draft', () => {
         },
       },
       ai: {
-        provider: 'ollama',
-        base_url: 'http://localhost:11434',
-        api_token: '',
-        model: 'gemma4:e4b',
+        manager: {
+          provider: 'ollama',
+          base_url: 'http://localhost:11434',
+          api_token: '',
+          model: 'gemma4:e4b',
+        },
+        workers: {
+          provider: 'ollama',
+          base_url: 'http://localhost:11434',
+          api_token: '',
+          model: 'qwen:3.5:2b',
+        },
       },
       personal_information: {
       },

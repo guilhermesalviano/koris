@@ -115,7 +115,10 @@ class Heartbeat implements ISubAgent<Date> {
 
       // this.logger.debug(`heartbeat prompt value ${JSON.stringify(payload)}`);
     
-      const response = await this.completionService.complete(payload);
+      const response = await this.completionService.complete(
+        payload,
+        { audit: { channel: 'background', runId: beat.id } },
+      );
       let result: string;
       if (response.kind === 'message') {
         result = response.text;
@@ -125,11 +128,11 @@ class Heartbeat implements ISubAgent<Date> {
           userMessage: beat.beat,
           messageHistory: [],
           ctx: {
-            channel: 'tui',
+            channel: 'background',
             toolsQueue: this.toolsQueue,
             signal: new AbortController().signal,
             onProgress: (progress: string) => this.logger.info(progress),
-            options: { toolsEnabled: true },
+            options: { toolsEnabled: true, runId: beat.id },
           },
         });
       }
@@ -184,13 +187,13 @@ class Heartbeat implements ISubAgent<Date> {
 class HeartbeatFactory {
   static create(logger: ILogger, channelsManager: IChannelsManager): Heartbeat {
     const db = DatabaseServiceFactory.create();
-    const aiProvider = getAIProvider(logger);
+    const aiProvider = getAIProvider(logger, 'worker');
     const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
     const heartbeatRepository = HeartbeatRepositoryFactory.create(db);
     const agnosticExecutionTool = AgnosticExecutionToolFactory.create();
     const toolsQueue = new ToolsQueue(logger, agnosticExecutionTool);
 
-    const completionService = new AICompletionService(aiProvider, logger);
+    const completionService = new AICompletionService(aiProvider, logger, { role: 'worker', agentName: 'heartbeat' });
     const executorWorker = ExecutorWorkerFactory.create(logger);
     return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, channelsManager, completionService, executorWorker);
   }
