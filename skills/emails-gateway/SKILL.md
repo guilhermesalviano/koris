@@ -25,10 +25,10 @@ read_when:
     </request>
     <response>
       <description>Returns a compact list of all recent emails with only the key fields.</description>
-      <bash>
+      <toon>
         emails[1]{id,from,subject,date,isUnread}:
         [email_id],[from name] - [from email],[email subject],2023-10-01T12:34:56,true
-      </bash>
+      </toon>
     </response>
   </command>
 
@@ -40,10 +40,10 @@ read_when:
     </request>
     <response>
       <description>Returns the snippet of the matched email.</description>
-      <bash>
+      <toon>
         email{id,from,subject,date,snippet}:
         [email_id],[from name] - [from email],[email subject],2023-10-01T12:34:56,the email snippet or preview text
-      </bash>
+      </toon>
     </response>
   </command>
 
@@ -55,10 +55,10 @@ read_when:
     </request>
     <response>
       <description>Returns the HTML body of the specified email. Note: large HTML bodies may be truncated — extract the key content from what is returned.</description>
-      <bash>
+      <toon>
         email{id,from,subject,date,body}:
         [email_id],[from name] - [from email],[email subject],2023-10-01T12:34:56,[HTML content of the email body]
-      </bash>
+      </toon>
     </response>
   </command>
 </commands>
