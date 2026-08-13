@@ -228,6 +228,7 @@ describe('Heartbeat', () => {
     });
 
     it('sends the result to the whitelisted sender remoteJid on WhatsApp', async () => {
+      applyTestConfigDefaults({ whatsappEnabled: true });
       mockedGetLastWhitelistedJid.mockReturnValue('5511948449969@s.whatsapp.net');
       const now = localDate(9, 0);
       const { heartbeat, channelsManager } = makeHeartbeat({
@@ -272,6 +273,7 @@ describe('Heartbeat', () => {
     });
 
     it('falls back to configured target_jid when no whitelisted sender is known', async () => {
+      applyTestConfigDefaults({ whatsappEnabled: true });
       mockedGetLastWhitelistedJid.mockReturnValue(null);
       const now = localDate(9, 0);
       const { heartbeat, channelsManager } = makeHeartbeat({
