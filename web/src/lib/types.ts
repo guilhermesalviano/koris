@@ -84,3 +84,15 @@ export interface SkillsResponse {
   available: Skill[];
   learned: LearnedSkill[];
 }
+
+export interface ActiveRun {
+  id: string;
+  sessionId: string;
+  question: string;
+  startedAt: string;
+  channel: string;
+}
+
+export interface ActiveRunsResponse {
+  items: ActiveRun[];
+}

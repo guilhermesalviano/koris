@@ -322,4 +322,46 @@ describe('createChatHandler', () => {
     expect(res.write).not.toHaveBeenCalledWith('data: [DONE]\n\n');
     expect(res.end).not.toHaveBeenCalled();
   });
+
+  it('registers and clears the active run while a request is processing', async () => {
+    let resolveAgent: (value: string) => void = () => {};
+    mockAgentHandle.mockImplementation(() => new Promise((resolve) => { resolveAgent = resolve; }));
+
+    const { createChatHandler } = await loadWebModule();
+    const { activeRunsRegistry } = await import('../../../src/dashboard/active-runs');
+
+    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+    const handler = createChatHandler(mockHandler) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    req.body = { message: 'hello', sessionId: 'sess-1' } as Request['body'];
+    const res = makeResponse();
+
+    const promise = handler(req, res);
+
+    const runs = activeRunsRegistry.list();
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ sessionId: 'sess-1', question: 'hello', channel: 'web' });
+
+    resolveAgent('done');
+    await promise;
+
+    expect(activeRunsRegistry.list()).toHaveLength(0);
+  });
+
+  it('does not register an active run without a session id', async () => {
+    mockAgentHandle.mockResolvedValue('done');
+
+    const { createChatHandler } = await loadWebModule();
+    const { activeRunsRegistry } = await import('../../../src/dashboard/active-runs');
+
+    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+    const handler = createChatHandler(mockHandler) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    req.body = { message: 'hello' } as Request['body'];
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(activeRunsRegistry.list()).toHaveLength(0);
+  });
 });
