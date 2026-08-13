@@ -38,14 +38,14 @@ read_when:
     </request>
     <response>
       <description>Returns today's events and important upcoming events.</description>
-      <bash>
+      <toon>
         message: Calendar data retrieved successfully
         data:
         todayEvents[1]{id,start,end,title,color,type}:
         asdasdasd_20260514T220000Z,19:00,20:00,Terapia,#6EE7B7,default
         importantEvents[1]{id,start,end,title,type}:
         asdasd_20260515T220000Z,15/05 - 19:00,20:00,Aulas de Inglês,default
-      </bash>
+      </toon>
     </response>
   </command>
 

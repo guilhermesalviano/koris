@@ -12,7 +12,8 @@ read_when:
 
 <api_response_shape>
   <description>Expected gateway response format:</description>
-  <toon>message: Todos data retrieved from cache
+  <toon>
+  message: Todos data retrieved from cache
   data[1]{id,title,checked,priority,sponsor,usualCompletionTime}:
   100,sample - drink water,0,medium,human x,20:00
   </toon>
@@ -36,11 +37,12 @@ read_when:
     </request>
     <response>
       <description>Returns all today's tasks with their completion status.</description>
-      <bash>message: Todos data retrieved from cache
+      <toon>
+  message: Todos data retrieved from cache
   data[2]{id,title,checked,priority,sponsor,usualCompletionTime}:
   100,sample - drink water,1,medium,human x,09:00
   101,sample2 - drink water,1,medium,human x,09:01
-      </bash>
+      </toon>
     </response>
   </command>
 
@@ -52,7 +54,8 @@ read_when:
     </request>
     <response>
       <description>Returns only the unchecked tasks.</description>
-      <bash>message: Todos data retrieved from cache
+      <toon>
+  message: Todos data retrieved from cache
   data[1]{id,title,checked,priority,sponsor,usualCompletionTime}:
   100,sample - drink water,0,medium,human x,09:00
       </bash>
@@ -67,10 +70,11 @@ read_when:
     </request>
     <response>
       <description>Returns the updated task with <code>checked</code> set to 1.</description>
-      <bash>message: Todo updated successfully
+      <toon>
+  message: Todo updated successfully
   data{id,title,checked,priority,sponsor,usualCompletionTime}:
   100,sample - drink water,1,medium,human x,09:00
-      </bash>
+      </toon>
     </response>
   </command>
 
