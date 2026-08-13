@@ -42,7 +42,13 @@ class ExecutorWorker implements IWorker {
 
     const toolResultsArray = await ctx.toolsQueue.handle(
       toolCalls,
-      ctx.signal
+      ctx.signal,
+      {
+        channel: ctx.channel,
+        sessionId: ctx.message.getSessionId(),
+        runId: ctx.options?.runId,
+        agentName: 'executorWorker',
+      },
     );
 
     const toolResults = toolResultsArray
@@ -83,7 +89,7 @@ class ExecutorWorker implements IWorker {
 
 class ExecutorWorkerFactory {
   static create(logger: ILogger): IWorker {
-    const ChatService = ChatServiceFactory.create(logger, 'worker');
+    const ChatService = ChatServiceFactory.create(logger, 'worker', 'executorWorker');
     return new ExecutorWorker(logger, 'executorWorker', ChatService);
   }
 }

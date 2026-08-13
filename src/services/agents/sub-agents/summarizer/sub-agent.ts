@@ -31,7 +31,10 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
     const prompt = replacePlaceholders(SUMMARIZATION_PROMPT, { v1: props.ask, v2: props.answer });
 
     try {
-      const response = await this.completionService.complete({ messages: [{ role: "user", content: prompt }] });
+      const response = await this.completionService.complete(
+        { messages: [{ role: "user", content: prompt }] },
+        { audit: { sessionId: props.sessionId, channel: props.channel } },
+      );
       if (response.kind !== 'message') {
         throw new Error('Summarizer received an unexpected tool-call response');
       }
@@ -65,7 +68,7 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
 
 class SummarizerFactory {
   static create(logger: ILogger): Summarizer {
-    const completionService = new AICompletionService(getAIProvider(logger, 'worker'), logger);
+    const completionService = new AICompletionService(getAIProvider(logger, 'worker'), logger, { role: 'worker', agentName: 'summarizer' });
     return new Summarizer(logger, completionService);
   }
 }

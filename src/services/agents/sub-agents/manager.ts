@@ -97,7 +97,7 @@ class Manager implements IManager {
 
 class ManagerFactory {
   static create(logger: ILogger): IManager {
-    const ChatService = ChatServiceFactory.create(logger);
+    const ChatService = ChatServiceFactory.create(logger, 'manager', 'manager');
     const toolsQueue = ToolsQueueFactory.create(logger);
     const learner = LearnerWorkerFactory.create(logger);
     const executor = ExecutorWorkerFactory.create(logger);

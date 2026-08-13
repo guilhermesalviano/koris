@@ -53,9 +53,12 @@ describe('Summarizer', () => {
 
     await summarizer.handler(props);
 
-    expect(completionService.complete).toHaveBeenCalledWith({
-      messages: [{ role: 'user', content: expect.stringContaining('What is TypeScript?') }],
-    });
+    expect(completionService.complete).toHaveBeenCalledWith(
+      {
+        messages: [{ role: 'user', content: expect.stringContaining('What is TypeScript?') }],
+      },
+      { audit: { sessionId: 'session-1', channel: 'tui' } },
+    );
     expect(props.memoryService.save).toHaveBeenCalledWith({
       type: 'fact',
       content: 'TS adds static typing.',

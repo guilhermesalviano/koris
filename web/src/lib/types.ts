@@ -3,6 +3,7 @@ export interface OverviewResponse {
   heartbeats: number;
   learnedSkills: number;
   skills: number;
+  auditErrors: number;
   provider: string;
   model: string;
   environment: string;
@@ -95,4 +96,39 @@ export interface ActiveRun {
 
 export interface ActiveRunsResponse {
   items: ActiveRun[];
+}
+
+export interface AuditItem {
+  id: string;
+  runId?: string;
+  sessionId?: string;
+  channel?: string;
+  kind: 'llm' | 'tool';
+  role: 'manager' | 'worker';
+  agentName?: string;
+  provider?: string;
+  model?: string;
+  prompt?: string;
+  promptPreview?: string | null;
+  promptLength?: number;
+  response?: string;
+  responsePreview?: string | null;
+  responseLength?: number;
+  finishReason?: string;
+  toolCalls?: number;
+  toolName?: string;
+  toolArgs?: string;
+  success?: boolean;
+  durationMs: number;
+  status: 'success' | 'error';
+  errorCode?: string;
+  errorMessage?: string;
+  createdAt: string;
+}
+
+export interface AuditResponse {
+  total: number;
+  limit: number;
+  offset: number;
+  items: AuditItem[];
 }
