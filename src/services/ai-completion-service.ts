@@ -1,5 +1,10 @@
+import { config } from '../config';
 import type { ILogger } from '../infrastructure/logger';
 import type { AIChatOptions, AIChatRequest, AIProvider, AIResponse } from '../types/chat';
+import type { AIProviderRole } from './providers';
+import { AuditLogLlm } from '../entities/audit-log';
+import { IAuditService, AuditServiceFactory } from './audit/audit-service';
+import { generateId } from '../utils/generate-id';
 import { HTTP_ERROR_MESSAGES } from '../constants';
 
 export type AIErrorCode = 'aborted' | 'timeout' | 'authentication' | 'rate_limited' | 'unavailable' | 'malformed_response' | 'unknown';
@@ -42,17 +47,37 @@ export interface IAICompletionService {
   complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse>;
 }
 
+export interface AICompletionServiceOptions {
+  role?: AIProviderRole;
+  agentName?: string;
+  auditService?: IAuditService;
+}
+
 export class AICompletionService implements IAICompletionService {
+  private readonly role: AIProviderRole;
+  private readonly agentName?: string;
+  private readonly auditService: IAuditService;
+
   constructor(
     private readonly provider: AIProvider,
     private readonly logger: ILogger,
-  ) {}
+    options?: AICompletionServiceOptions,
+  ) {
+    this.role = options?.role ?? 'manager';
+    this.agentName = options?.agentName;
+    this.auditService = options?.auditService ?? AuditServiceFactory.create(logger);
+  }
 
   async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
+    const startedAt = Date.now();
+
     try {
-      return await this.provider.complete(request, options);
+      const response = await this.provider.complete(request, options);
+      this.recordAudit(request, options, Date.now() - startedAt, response);
+      return response;
     } catch (error) {
       const mapped = this.mapError(error, options?.signal);
+      this.recordAudit(request, options, Date.now() - startedAt, undefined, mapped);
       this.logger.error('AI completion failed', {
         provider: this.provider.name,
         code: mapped.code,
@@ -61,6 +86,50 @@ export class AICompletionService implements IAICompletionService {
       });
       throw mapped;
     }
+  }
+
+  private recordAudit(
+    request: AIChatRequest,
+    options: AIChatOptions | undefined,
+    durationMs: number,
+    response?: AIResponse,
+    error?: AIServiceError,
+  ): void {
+    const prompt = JSON.stringify(request.messages);
+    const responseText = response
+      ? response.kind === 'message'
+        ? response.text
+        : JSON.stringify(response.calls)
+      : undefined;
+
+    const entry: AuditLogLlm = {
+      id: generateId(),
+      kind: 'llm',
+      role: this.role,
+      agentName: this.agentName,
+      runId: options?.audit?.runId,
+      sessionId: options?.audit?.sessionId,
+      channel: options?.audit?.channel,
+      provider: this.provider.name,
+      model: request.model ?? this.resolveDefaultModel(),
+      prompt,
+      promptLength: prompt.length,
+      response: responseText,
+      responseLength: responseText?.length,
+      finishReason: response?.finishReason,
+      toolCalls: response?.kind === 'tool_calls' ? response.calls.length : 0,
+      durationMs,
+      status: error ? 'error' : 'success',
+      errorCode: error?.code,
+      errorMessage: error?.message,
+      createdAt: new Date(),
+    };
+
+    this.auditService.record(entry);
+  }
+
+  private resolveDefaultModel(): string {
+    return this.role === 'worker' ? config.AI.WORKERS.MODEL : config.AI.MANAGER.MODEL;
   }
 
   private mapError(error: unknown, signal?: AbortSignal): AIServiceError {

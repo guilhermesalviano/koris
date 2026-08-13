@@ -13,6 +13,7 @@ import { IWorker } from '../../../types/workers';
 import { ISubAgent } from '../../../types/agents';
 import { config } from '../../../config';
 import { ISessionService } from '../../session-service';
+import { generateId } from '../../../utils/generate-id';
 
 interface IAgent {
   handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage>;
@@ -48,7 +49,7 @@ class Agent implements IAgent {
       userMessage: safeMessage,
       channel: this.channel,
       message: messageService,
-      options: { ...options },
+      options: { ...options, runId: options?.runId ?? generateId() },
     });
     
     this.logger.info(`Processed message from ${this.channel}: "${previewMessage(safeMessage)}" => "${previewMessage(response)}"`);

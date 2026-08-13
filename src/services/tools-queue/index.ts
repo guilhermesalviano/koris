@@ -2,24 +2,41 @@ import pLimit from "p-limit";
 import { AgnosticExecutionToolFactory, IAgnosticExecutionTool } from "../tools";
 import type { ILogger } from "../../infrastructure/logger";
 import type { ToolCall, ToolResult } from "../../types/tools";
+import { IAuditService, AuditServiceFactory } from "../audit/audit-service";
+import { AuditLogTool } from "../../entities/audit-log";
+import { generateId } from "../../utils/generate-id";
+
+export interface ToolAuditContext {
+  channel?: string;
+  sessionId?: string;
+  runId?: string;
+  agentName?: string;
+}
 
 interface IToolsQueue {
   handle(
     tools: ToolCall[],
     signal: AbortSignal,
+    audit?: ToolAuditContext,
   ): Promise<ToolResult[]>;
 }
 
 class ToolsQueue implements IToolsQueue {
+  private readonly auditService: IAuditService;
+
   constructor(
     private logger: ILogger,
     private agnosticExecutionTool: IAgnosticExecutionTool,
-    private maxWorkers: number = 2
-  ) { }
+    private maxWorkers: number = 2,
+    auditService?: IAuditService,
+  ) {
+    this.auditService = auditService ?? AuditServiceFactory.create(logger);
+  }
 
   async handle(
     tools: ToolCall[],
     signal: AbortSignal,
+    audit?: ToolAuditContext,
   ): Promise<ToolResult[]> {
     const limit = pLimit(this.maxWorkers);
 
@@ -29,16 +46,22 @@ class ToolsQueue implements IToolsQueue {
           throw new Error('Tool execution aborted');
         }
 
+        const startedAt = Date.now();
+
         try {
-          return await this.agnosticExecutionTool.handle(this.logger, tool);
+          const result = await this.agnosticExecutionTool.handle(this.logger, tool);
+          this.recordToolAudit(tool, result, Date.now() - startedAt, audit);
+          return result;
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
           this.logger.error('Tool execution failed', { toolName: tool.name, error: errorMsg });
-          return {
+          const result = {
             toolName: tool.name,
             success: false,
             error: errorMsg,
           } as ToolResult;
+          this.recordToolAudit(tool, result, Date.now() - startedAt, audit);
+          return result;
         }
       })
     );
@@ -48,6 +71,33 @@ class ToolsQueue implements IToolsQueue {
     this.logger.info('Tools completed', { count: results.length });
 
     return results;
+  }
+
+  private recordToolAudit(
+    tool: ToolCall,
+    result: ToolResult,
+    durationMs: number,
+    audit?: ToolAuditContext,
+  ): void {
+    const entry: AuditLogTool = {
+      id: generateId(),
+      kind: 'tool',
+      role: 'worker',
+      agentName: audit?.agentName,
+      runId: audit?.runId,
+      sessionId: audit?.sessionId,
+      channel: audit?.channel,
+      toolName: tool.name,
+      toolArgs: JSON.stringify(tool.arguments),
+      success: result.success,
+      response: result.success ? result.result : result.error,
+      durationMs,
+      status: result.success ? 'success' : 'error',
+      errorMessage: result.success ? undefined : result.error,
+      createdAt: new Date(),
+    };
+
+    this.auditService.record(entry);
   }
 }
 

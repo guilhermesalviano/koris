@@ -43,7 +43,13 @@ class LearnerWorker implements IWorker {
 
       const skillResults = await ctx.toolsQueue.handle(
         [ toolCall ],
-        ctx.signal
+        ctx.signal,
+        {
+          channel: ctx.channel,
+          sessionId: ctx.message.getSessionId(),
+          runId: ctx.options?.runId,
+          agentName: 'learnerWorker',
+        },
       );
       const skillContent = skillResults
         .map((r) => r.success ? r.result ?? '' : r.error ?? '')

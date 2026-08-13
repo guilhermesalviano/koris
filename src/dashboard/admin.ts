@@ -9,7 +9,9 @@ import { MemoryRepositoryFactory } from '../repositories/memory';
 import { HeartbeatRepositoryFactory } from '../repositories/heartbeat';
 import { LearnedSkillsRepositoryFactory } from '../repositories/learned-skills';
 import { SkillsRepositoryFactory } from '../repositories/skills';
+import { AuditLogRepositoryFactory, AuditLogRow } from '../repositories/audit-log';
 import { Heartbeat } from '../entities/heartbeat';
+import { AuditKind, AuditStatus } from '../entities/audit-log';
 import { Session } from '../entities/session';
 import { BEAT_TYPES, BeatType } from '../types/beat';
 import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
@@ -54,6 +56,36 @@ function previewText(value: string | null, maxLength = 120): string | null {
   return `${text.slice(0, maxLength)}…`;
 }
 
+function toAuditJson(row: AuditLogRow) {
+  return {
+    id: row.id,
+    runId: row.run_id,
+    sessionId: row.session_id,
+    channel: row.channel,
+    kind: row.kind,
+    role: row.role,
+    agentName: row.agent_name,
+    provider: row.provider,
+    model: row.model,
+    prompt: row.prompt,
+    promptPreview: previewText(row.prompt ?? null),
+    promptLength: row.prompt_length,
+    response: row.response,
+    responsePreview: previewText(row.response ?? null),
+    responseLength: row.response_length,
+    finishReason: row.finish_reason,
+    toolCalls: row.tool_calls,
+    toolName: row.tool_name,
+    toolArgs: row.tool_args,
+    success: row.success == null ? undefined : row.success === 1,
+    durationMs: row.duration_ms,
+    status: row.status,
+    errorCode: row.error_code,
+    errorMessage: row.error_message,
+    createdAt: row.created_at,
+  };
+}
+
 class AdminRouterFactory {
   static create(logger: ILogger, db: IDatabaseService): Router {
     const router = express.Router();
@@ -64,6 +96,7 @@ class AdminRouterFactory {
     const heartbeatRepo = HeartbeatRepositoryFactory.create(db);
     const learnedSkillsRepo = LearnedSkillsRepositoryFactory.create(db);
     const skillsRepo = SkillsRepositoryFactory.create(logger);
+    const auditRepo = AuditLogRepositoryFactory.create(db);
 
     router.get('/overview', async (_req: Request, res: Response) => {
       const health = await healthCheck(logger);
@@ -73,6 +106,7 @@ class AdminRouterFactory {
         heartbeats: heartbeatRepo.getAll().length,
         learnedSkills: learnedSkillsRepo.getAll().length,
         skills: skillsRepo.get().length,
+        auditErrors: auditRepo.count({ status: 'error' }),
         provider: config.AI.MANAGER.PROVIDER,
         model: config.AI.MANAGER.MODEL,
         environment: config.ENVIRONMENT,
@@ -183,6 +217,52 @@ class AdminRouterFactory {
 
     router.get('/active', (_req: Request, res: Response) => {
       res.json({ items: activeRunsRegistry.list() });
+    });
+
+    router.get('/audit', (req: Request, res: Response) => {
+      const { limit, offset } = parsePagination(req);
+      const filters: {
+        kind?: AuditKind;
+        sessionId?: string;
+        role?: 'manager' | 'worker';
+        status?: AuditStatus;
+        agentName?: string;
+      } = {
+        kind: typeof req.query.kind === 'string' ? (req.query.kind as AuditKind) : undefined,
+        sessionId: typeof req.query.sessionId === 'string' ? req.query.sessionId : undefined,
+        role: typeof req.query.role === 'string' ? (req.query.role as 'manager' | 'worker') : undefined,
+        status: typeof req.query.status === 'string' ? (req.query.status as AuditStatus) : undefined,
+        agentName: typeof req.query.agentName === 'string' ? req.query.agentName : undefined,
+      };
+
+      res.json({
+        total: auditRepo.count(filters),
+        limit,
+        offset,
+        items: auditRepo.findAll({ limit, offset, filters }).map(toAuditJson),
+      });
+    });
+
+    router.get('/audit/:id', (req: Request, res: Response) => {
+      const row = auditRepo.findById(String(req.params.id));
+      if (!row) {
+        res.status(404).json({ error: 'Audit entry not found' });
+        return;
+      }
+      res.json(toAuditJson(row));
+    });
+
+    router.delete('/audit/:id', (req: Request, res: Response) => {
+      const deleted = auditRepo.deleteById(String(req.params.id));
+      if (!deleted) {
+        res.status(404).json({ error: 'Audit entry not found' });
+        return;
+      }
+      res.json({ success: true });
+    });
+
+    router.delete('/audit', (_req: Request, res: Response) => {
+      res.json({ success: true, deleted: auditRepo.deleteAll() });
     });
 
     router.get('/chat/history', (_req: Request, res: Response) => {

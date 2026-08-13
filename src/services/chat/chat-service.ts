@@ -29,7 +29,10 @@ class ChatService implements IChatService {
       sessionId
     });
 
-    return this.completionService.complete(promptPayload, { signal: options?.signal });
+    return this.completionService.complete(promptPayload, {
+      signal: options?.signal,
+      audit: { channel, sessionId, runId: options?.runId },
+    });
   }
 
   async handler(
@@ -50,11 +53,11 @@ class ChatService implements IChatService {
 }
 
 class ChatServiceFactory {
-  static create(logger: ILogger, role: AIProviderRole = 'manager'): IChatService {
+  static create(logger: ILogger, role: AIProviderRole = 'manager', agentName?: string): IChatService {
     const db = DatabaseServiceFactory.create();
     const aiProvider = getAIProvider(logger, role);
     const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
-    const completionService = new AICompletionService(aiProvider, logger);
+    const completionService = new AICompletionService(aiProvider, logger, { role, agentName });
     return new ChatService(completionService, promptRepository);
   }
 }

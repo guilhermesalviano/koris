@@ -24,6 +24,11 @@ export interface AIChatRequest {
 
 export interface AIChatOptions {
   signal?: AbortSignal;
+  audit?: {
+    runId?: string;
+    sessionId?: string;
+    channel?: string;
+  };
 }
 
 export interface AIProviderOptions {
