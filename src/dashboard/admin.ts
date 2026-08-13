@@ -14,6 +14,7 @@ import { Session } from '../entities/session';
 import { BEAT_TYPES, BeatType } from '../types/beat';
 import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
 import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../utils/heartbeat';
+import { activeRunsRegistry } from './active-runs';
 
 const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN', 'SERPAPI_KEY', 'SEARCH_API_KEY']);
 
@@ -178,6 +179,10 @@ class AdminRouterFactory {
     router.delete('/memories/:id', (req: Request, res: Response) => {
       memoryRepo.deleteById(String(req.params.id));
       res.json({ success: true });
+    });
+
+    router.get('/active', (_req: Request, res: Response) => {
+      res.json({ items: activeRunsRegistry.list() });
     });
 
     router.get('/chat/history', (_req: Request, res: Response) => {
