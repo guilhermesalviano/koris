@@ -20,21 +20,14 @@ read_when:
   <command>
     <trigger>Get Recent Emails</trigger>
     <request>
-      <description>Fetch the last 5 emails received. Use the compact jq filter below to extract only essential fields — this keeps the response small enough to return all emails without truncation.</description>
-      <bash>curl -k -X GET <GATEWAY_HOST>/api/emails | jq '[.data.emails[] | {id, from, subject, date, isUnread}]'</bash>
+      <description>Fetch the last 5 emails received.</description>
+      <bash>curl -k -X GET <GATEWAY_HOST>/api/emails?format=toon</bash>
     </request>
     <response>
       <description>Returns a compact list of all recent emails with only the key fields.</description>
       <bash>
-        [
-          {
-            "id": "[email_id]",
-            "from": "[from name] - [from email]",
-            "subject": "[email subject]",
-            "date": "2023-10-01T12:34:56",
-            "isUnread": true
-          }
-        ]
+        emails[1]{id,from,subject,date,isUnread}:
+        [email_id],[from name] - [from email],[email subject],2023-10-01T12:34:56,true
       </bash>
     </response>
   </command>
@@ -43,18 +36,13 @@ read_when:
     <trigger>Get Email Snippet</trigger>
     <request>
       <description>Fetch the snippet/preview of a specific email by its ID. Use this when the user wants a quick preview without loading the full body.</description>
-      <bash>curl -k -X GET <GATEWAY_HOST>/api/emails | jq '.data.emails[] | select(.id == "[email_id]") | {id, from, subject, date, snippet}'</bash>
+      <bash>curl -k -X GET <GATEWAY_HOST>/api/emails?format=toon</bash>
     </request>
     <response>
       <description>Returns the snippet of the matched email.</description>
       <bash>
-        {
-          "id": "[email_id]",
-          "from": "[from name] - [from email]",
-          "subject": "[email subject]",
-          "date": "2023-10-01T12:34:56",
-          "snippet": "the email snippet or preview text"
-        }
+        email{id,from,subject,date,snippet}:
+        [email_id],[from name] - [from email],[email subject],2023-10-01T12:34:56,the email snippet or preview text
       </bash>
     </response>
   </command>
@@ -63,18 +51,13 @@ read_when:
     <trigger>Get Email Details</trigger>
     <request>
       <description>Fetch the full body of a specific email by its ID. The body is HTML — summarize or extract the relevant text for the user.</description>
-      <bash>curl -k -X GET "<GATEWAY_HOST>/api/emails/[email_id]" | jq  '.data.emails[] | select(.id == "[email_id]") | {id, from, subject, date, body}'</bash>
+      <bash>curl -k -X GET "<GATEWAY_HOST>/api/emails/[email_id]?format=toon"</bash>
     </request>
     <response>
       <description>Returns the HTML body of the specified email. Note: large HTML bodies may be truncated — extract the key content from what is returned.</description>
       <bash>
-        {
-          "id": "[email_id]",
-          "from": "[from name] - [from email]",
-          "subject": "[email subject]",
-          "date": "2023-10-01T12:34:56",
-          "body": "[HTML content of the email body]"
-        }
+        email{id,from,subject,date,body}:
+        [email_id],[from name] - [from email],[email subject],2023-10-01T12:34:56,[HTML content of the email body]
       </bash>
     </response>
   </command>

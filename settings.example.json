@@ -44,7 +44,7 @@
     },
     "search_api_key": "SERPAPI_KEY",
     "summarizer": true,
-    "prompt_sanitizer": true,
+    "prompt_sanitizer": false,
     "timeouts": {
       "idle_ms": 360000,
       "hard_ms": 1200000,
