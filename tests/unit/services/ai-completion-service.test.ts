@@ -39,7 +39,7 @@ describe('AICompletionService', () => {
     const { service } = makeService(complete);
 
     await expect(service.complete(request)).resolves.toBe(expected);
-    expect(complete).toHaveBeenCalledWith(request, undefined);
+    expect(complete).toHaveBeenCalledWith(request, expect.objectContaining({ onUsage: expect.any(Function) }));
   });
 
   it('preserves typed tool calls', async () => {
@@ -78,6 +78,20 @@ describe('AICompletionService', () => {
     });
     expect(typeof entry.id).toBe('string');
     expect(entry.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('records provider usage tokens into the audit entry', async () => {
+    const complete = vi.fn().mockImplementation((_request: unknown, options?: { onUsage?: (u: { inputTokens?: number; outputTokens?: number }) => void }) => {
+      options?.onUsage?.({ inputTokens: 300, outputTokens: 120 });
+      return Promise.resolve({ kind: 'message', text: 'world', finishReason: 'stop' });
+    });
+    const { service, auditService } = makeService(complete);
+
+    await service.complete(request);
+
+    const entry = auditService.record.mock.calls[0][0];
+    expect(entry.inputTokens).toBe(300);
+    expect(entry.outputTokens).toBe(120);
   });
 
   it('records tool-call counts in the audit entry', async () => {

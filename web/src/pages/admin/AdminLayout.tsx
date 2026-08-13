@@ -8,6 +8,7 @@ import HeartbeatsPage from './HeartbeatsPage';
 import SkillsPage from './SkillsPage';
 import SettingsPage from './SettingsPage';
 import AuditPage from './AuditPage';
+import UsagePage from './UsagePage';
 import { ChatProvider, useChat } from '../../lib/chat-context';
 
 function Icon({ path }: { path: string }) {
@@ -41,6 +42,7 @@ const MANAGE_ITEMS: { to: string; label: string; icon: keyof typeof ICONS }[] = 
   { to: '/admin/heartbeats', label: 'Beats', icon: 'heartbeats' },
   { to: '/admin/skills', label: 'Skills', icon: 'skills' },
   { to: '/admin/audit', label: 'Audit', icon: 'audit' },
+  { to: '/admin/usage', label: 'Usage', icon: 'overview' },
   { to: '/admin/settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -197,6 +199,7 @@ export default function AdminLayout() {
               <Route path="heartbeats" element={<HeartbeatsPage />} />
               <Route path="skills" element={<SkillsPage />} />
               <Route path="audit" element={<AuditPage />} />
+              <Route path="usage" element={<UsagePage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Routes>
           </main>

@@ -28,6 +28,8 @@ export interface AuditLogLlm extends AuditLogBase {
   status: AuditStatus;
   errorCode?: string;
   errorMessage?: string;
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 export interface AuditLogTool extends AuditLogBase {

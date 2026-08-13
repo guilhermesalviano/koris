@@ -70,14 +70,20 @@ export class AICompletionService implements IAICompletionService {
 
   async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
     const startedAt = Date.now();
+    let usage: { inputTokens?: number; outputTokens?: number } | undefined;
+
+    const providerOptions: AIChatOptions = {
+      ...options,
+      onUsage: (u) => { usage = u; },
+    };
 
     try {
-      const response = await this.provider.complete(request, options);
-      this.recordAudit(request, options, Date.now() - startedAt, response);
+      const response = await this.provider.complete(request, providerOptions);
+      this.recordAudit(request, options, Date.now() - startedAt, response, undefined, usage);
       return response;
     } catch (error) {
       const mapped = this.mapError(error, options?.signal);
-      this.recordAudit(request, options, Date.now() - startedAt, undefined, mapped);
+      this.recordAudit(request, options, Date.now() - startedAt, undefined, mapped, usage);
       this.logger.error('AI completion failed', {
         provider: this.provider.name,
         code: mapped.code,
@@ -94,6 +100,7 @@ export class AICompletionService implements IAICompletionService {
     durationMs: number,
     response?: AIResponse,
     error?: AIServiceError,
+    usage?: { inputTokens?: number; outputTokens?: number },
   ): void {
     const prompt = JSON.stringify(request.messages);
     const responseText = response
@@ -122,6 +129,8 @@ export class AICompletionService implements IAICompletionService {
       status: error ? 'error' : 'success',
       errorCode: error?.code,
       errorMessage: error?.message,
+      inputTokens: usage?.inputTokens,
+      outputTokens: usage?.outputTokens,
       createdAt: new Date(),
     };
 

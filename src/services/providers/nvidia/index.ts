@@ -27,6 +27,10 @@ type OpenAIChatResponse = {
     finish_reason?: string | null;
   }>;
   error?: { message: string };
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+  };
 };
 
 type OpenAIChatChunk = {
@@ -92,6 +96,13 @@ class NvidiaAIProvider implements AIProvider {
 
       if (data.error) throw new Error(`NVIDIA API error: ${data.error.message}`);
 
+      if (data.usage) {
+        options?.onUsage?.({
+          inputTokens: data.usage.prompt_tokens,
+          outputTokens: data.usage.completion_tokens,
+        });
+      }
+
       const choice = data.choices?.[0];
       if (!choice) throw new Error('NVIDIA response missing choices');
 
@@ -140,7 +151,7 @@ class NvidiaAIProvider implements AIProvider {
 
       if (!body) {
         this.logger.debug('NVIDIA stream body is null, falling back to non-stream');
-        const full = await this.chatFallback(request, controller.signal);
+        const full = await this.chatFallback(request, controller.signal, options);
         totalCharsYielded = full.length;
         yield full;
         return;
@@ -232,7 +243,7 @@ class NvidiaAIProvider implements AIProvider {
 
       if (!producedAnswer) {
         this.logger.debug('No answer parsed from NVIDIA stream, retrying in non-stream mode');
-        const full = await this.chatFallback(request, controller.signal);
+        const full = await this.chatFallback(request, controller.signal, options);
         if (full) {
           totalCharsYielded += full.length;
           yield full;
@@ -304,11 +315,18 @@ class NvidiaAIProvider implements AIProvider {
     return data.data[0].embedding;
   }
 
-  private async chatFallback(request: AIChatRequest, signal: AbortSignal): Promise<string> {
+  private async chatFallback(request: AIChatRequest, signal: AbortSignal, options?: AIChatOptions): Promise<string> {
     const res = await this.post(request, signal, false);
     const data = await res.json() as OpenAIChatResponse;
 
     if (data.error) throw new Error(`NVIDIA API error: ${data.error.message}`);
+
+    if (data.usage) {
+      options?.onUsage?.({
+        inputTokens: data.usage.prompt_tokens,
+        outputTokens: data.usage.completion_tokens,
+      });
+    }
 
     const choice = data.choices?.[0];
     if (!choice) throw new Error('NVIDIA response missing choices');

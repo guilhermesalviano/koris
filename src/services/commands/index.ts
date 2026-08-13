@@ -1,4 +1,5 @@
 import { config } from '../../config';
+import { handleUsageCommand } from './usage';
 import type { CommandContext, CommandResult } from '../../types/commands';
 
 export function handleCommand(command: string, context: CommandContext): CommandResult {
@@ -16,6 +17,9 @@ export function handleCommand(command: string, context: CommandContext): Command
 
     case '/stats':
       return handleStats(context);
+
+    case '/usage':
+      return handleUsageCommand(command, context);
 
     case '/clear':
       return handleClear(context);
@@ -75,6 +79,7 @@ function handleHelp(context: CommandContext): CommandResult {
 /start - Welcome message
 /help - Show this help
 /status - Check bot status
+/usage - Token usage report (/usage 7, /usage today)
 /clear - Clear conversation history
 
 Send me any message to interact!`;
@@ -219,7 +224,7 @@ export function isCommand(message: string): boolean {
  * Get list of available commands
  */
 export function getAvailableCommands(channel: string): string[] {
-  const commonCommands = ['/start', '/help', '/clear'];
+  const commonCommands = ['/start', '/help', '/usage', '/clear'];
   
   if (channel === 'tui') {
     return [...commonCommands, '/stats', '/status', '/reset', '/exit', '/quit', '/bye'];

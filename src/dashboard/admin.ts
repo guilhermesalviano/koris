@@ -10,6 +10,7 @@ import { HeartbeatRepositoryFactory } from '../repositories/heartbeat';
 import { LearnedSkillsRepositoryFactory } from '../repositories/learned-skills';
 import { SkillsRepositoryFactory } from '../repositories/skills';
 import { AuditLogRepositoryFactory, AuditLogRow } from '../repositories/audit-log';
+import { buildUsageReport, usageFrom } from '../services/usage/usage';
 import { Heartbeat } from '../entities/heartbeat';
 import { AuditKind, AuditStatus } from '../entities/audit-log';
 import { Session } from '../entities/session';
@@ -263,6 +264,21 @@ class AdminRouterFactory {
 
     router.delete('/audit', (_req: Request, res: Response) => {
       res.json({ success: true, deleted: auditRepo.deleteAll() });
+    });
+
+    router.get('/usage', (req: Request, res: Response) => {
+      const rawDays = req.query.days;
+      let days: number | null = null;
+
+      if (typeof rawDays === 'string' && rawDays !== '') {
+        const parsed = Number.parseInt(rawDays, 10);
+        if (!Number.isNaN(parsed) && parsed >= 0) {
+          days = parsed;
+        }
+      }
+
+      const rows = auditRepo.usage({ from: usageFrom(days) });
+      res.json(buildUsageReport(rows, days));
     });
 
     router.get('/chat/history', (_req: Request, res: Response) => {

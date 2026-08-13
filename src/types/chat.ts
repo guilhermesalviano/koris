@@ -29,6 +29,7 @@ export interface AIChatOptions {
     sessionId?: string;
     channel?: string;
   };
+  onUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void;
 }
 
 export interface AIProviderOptions {
