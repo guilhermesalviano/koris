@@ -64,7 +64,19 @@ describe('AuditLogRepository', () => {
     expect(params[7]).toBe('ollama');
     expect(params[8]).toBe('qwen2.5');
     expect(params[9]).toBe(entry.prompt);
-    expect(params[22]).toBe(formatISO(entry.createdAt));
+    expect(params[24]).toBe(formatISO(entry.createdAt));
+  });
+
+  it('save stores token counts for an llm entry', () => {
+    const db = makeDb();
+    const repository = new AuditLogRepository(db as never);
+    const entry: AuditLogLlm = { ...makeLlmEntry(), inputTokens: 1200, outputTokens: 340 };
+
+    repository.save(entry);
+
+    const params = db.run.mock.calls[0][1];
+    expect(params[22]).toBe(1200);
+    expect(params[23]).toBe(340);
   });
 
   it('save stores nulls for tool-only columns on an llm entry', () => {
@@ -142,6 +154,42 @@ describe('AuditLogRepository', () => {
     const repository = new AuditLogRepository(db as never);
 
     expect(repository.count()).toBe(0);
+  });
+
+  it('usage applies from filter and orders ascending', () => {
+    const db = makeDb([]);
+    const repository = new AuditLogRepository(db as never);
+
+    repository.usage({ from: '2026-01-01T00:00:00.000Z' });
+
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('created_at >= ?');
+    expect(sql).toContain('ORDER BY created_at ASC');
+    expect(params[0]).toBe('2026-01-01T00:00:00.000Z');
+    expect(params[1]).toBe(10000);
+  });
+
+  it('usage applies kind and sessionId filters', () => {
+    const db = makeDb([]);
+    const repository = new AuditLogRepository(db as never);
+
+    repository.usage({ kind: 'llm', sessionId: 's1' });
+
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('kind = ?');
+    expect(sql).toContain('session_id = ?');
+    expect(params).toEqual(['llm', 's1', 10000]);
+  });
+
+  it('usage applies custom limit', () => {
+    const db = makeDb([]);
+    const repository = new AuditLogRepository(db as never);
+
+    repository.usage({ limit: 5 });
+
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('LIMIT ?');
+    expect(params).toEqual([5]);
   });
 
   it('findById returns null when no row is found', () => {

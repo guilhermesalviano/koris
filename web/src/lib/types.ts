@@ -132,3 +132,21 @@ export interface AuditResponse {
   offset: number;
   items: AuditItem[];
 }
+
+export interface UsageStats {
+  calls: number;
+  toolCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  durationMs: number;
+}
+
+export interface UsageReport {
+  days: number | null;
+  total: UsageStats;
+  byAgent: Record<string, UsageStats>;
+  byChannel: Record<string, UsageStats>;
+  byTool: Record<string, UsageStats>;
+  bySkill: Record<string, UsageStats>;
+}

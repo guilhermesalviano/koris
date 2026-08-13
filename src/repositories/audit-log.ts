@@ -25,7 +25,33 @@ export interface AuditLogRow {
   status: AuditStatus;
   error_code?: string;
   error_message?: string;
+  input_tokens?: number;
+  output_tokens?: number;
   created_at: string;
+}
+
+export interface UsageRow {
+  id: string;
+  run_id?: string;
+  channel?: string;
+  kind: AuditKind;
+  role: 'manager' | 'worker';
+  agent_name?: string;
+  tool_name?: string;
+  tool_args?: string;
+  prompt_length?: number;
+  response_length?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  duration_ms: number;
+  created_at: string;
+}
+
+export interface UsageQuery {
+  from?: string;
+  kind?: AuditKind;
+  sessionId?: string;
+  limit?: number;
 }
 
 export interface AuditLogFilters {
@@ -47,6 +73,7 @@ interface IAuditLogRepository {
   findById(id: string): AuditLogRow | null;
   findAll(query?: AuditLogQuery): AuditLogRow[];
   count(filters?: AuditLogFilters): number;
+  usage(query?: UsageQuery): UsageRow[];
   deleteById(id: string): boolean;
   deleteAll(): number;
 }
@@ -96,8 +123,9 @@ class AuditLogRepository implements IAuditLogRepository {
       `INSERT INTO audit_logs (
         id, run_id, session_id, channel, kind, role, agent_name, provider, model,
         prompt, prompt_length, response, response_length, finish_reason, tool_calls,
-        tool_name, tool_args, success, duration_ms, status, error_code, error_message, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        tool_name, tool_args, success, duration_ms, status, error_code, error_message,
+        input_tokens, output_tokens, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.id,
         entry.runId ?? null,
@@ -121,6 +149,8 @@ class AuditLogRepository implements IAuditLogRepository {
         entry.status,
         entry.kind === 'llm' ? (entry.errorCode ?? null) : null,
         entry.errorMessage ?? null,
+        entry.kind === 'llm' ? (entry.inputTokens ?? null) : null,
+        entry.kind === 'llm' ? (entry.outputTokens ?? null) : null,
         formatISO(entry.createdAt),
       ],
     );
@@ -151,6 +181,37 @@ class AuditLogRepository implements IAuditLogRepository {
       params,
     );
     return row?.total ?? 0;
+  }
+
+  usage(query?: UsageQuery): UsageRow[] {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (query?.from) {
+      conditions.push('created_at >= ?');
+      params.push(query.from);
+    }
+
+    if (query?.kind) {
+      conditions.push('kind = ?');
+      params.push(query.kind);
+    }
+
+    if (query?.sessionId) {
+      conditions.push('session_id = ?');
+      params.push(query.sessionId);
+    }
+
+    const clause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+    const limit = query?.limit ?? 10000;
+    params.push(limit);
+
+    return this.db.query<any>(
+      `SELECT id, run_id, channel, kind, role, agent_name, tool_name, tool_args,
+              prompt_length, response_length, input_tokens, output_tokens, duration_ms, created_at
+       FROM audit_logs${clause} ORDER BY created_at ASC LIMIT ?`,
+      params,
+    );
   }
 
   deleteById(id: string): boolean {

@@ -181,10 +181,20 @@ class DatabaseService implements IDatabaseService {
           status TEXT NOT NULL CHECK(status IN ('success', 'error')),
           error_code TEXT,
           error_message TEXT,
+          input_tokens INTEGER,
+          output_tokens INTEGER,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
         );
       `);
+
+      const auditColumns = this.query<any>(`PRAGMA table_info(audit_logs)`).map((c) => c.name);
+      if (!auditColumns.includes('input_tokens')) {
+        this.db.exec(`ALTER TABLE audit_logs ADD COLUMN input_tokens INTEGER`);
+      }
+      if (!auditColumns.includes('output_tokens')) {
+        this.db.exec(`ALTER TABLE audit_logs ADD COLUMN output_tokens INTEGER`);
+      }
 
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
