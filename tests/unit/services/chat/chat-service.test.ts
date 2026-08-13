@@ -43,7 +43,7 @@ describe('ChatService.complete', () => {
     });
     expect(completionService.complete).toHaveBeenCalledWith(
       { messages: [{ role: 'user', content: 'hi' }] },
-      { signal: undefined },
+      { signal: undefined, audit: { channel: 'tui', sessionId: 'sess-1', runId: undefined } },
     );
     expect(response).toEqual({ kind: 'message', text: 'hello back', finishReason: 'stop' });
   });
@@ -80,7 +80,7 @@ describe('ChatService.complete', () => {
     await expect(service.complete('hi', 'tui', { signal: controller.signal })).rejects.toThrow('aborted');
     expect(completionService.complete).toHaveBeenCalledWith(
       expect.anything(),
-      { signal: controller.signal },
+      { signal: controller.signal, audit: { channel: 'tui', sessionId: undefined, runId: undefined } },
     );
   });
 

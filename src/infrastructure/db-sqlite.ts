@@ -156,6 +156,53 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_learned_skills_skill_name ON learned_skills(skill_name);
         CREATE INDEX IF NOT EXISTS idx_learned_skills_learned_at ON learned_skills(learned_at);
       `);
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS audit_logs (
+          id TEXT PRIMARY KEY,
+          run_id TEXT,
+          session_id TEXT,
+          channel TEXT,
+          kind TEXT NOT NULL CHECK(kind IN ('llm', 'tool')),
+          role TEXT NOT NULL CHECK(role IN ('manager', 'worker')),
+          agent_name TEXT,
+          provider TEXT,
+          model TEXT,
+          prompt TEXT,
+          prompt_length INTEGER,
+          response TEXT,
+          response_length INTEGER,
+          finish_reason TEXT,
+          tool_calls INTEGER DEFAULT 0,
+          tool_name TEXT,
+          tool_args TEXT,
+          success INTEGER,
+          duration_ms INTEGER,
+          status TEXT NOT NULL CHECK(status IN ('success', 'error')),
+          error_code TEXT,
+          error_message TEXT,
+          input_tokens INTEGER,
+          output_tokens INTEGER,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
+        );
+      `);
+
+      const auditColumns = this.query<any>(`PRAGMA table_info(audit_logs)`).map((c) => c.name);
+      if (!auditColumns.includes('input_tokens')) {
+        this.db.exec(`ALTER TABLE audit_logs ADD COLUMN input_tokens INTEGER`);
+      }
+      if (!auditColumns.includes('output_tokens')) {
+        this.db.exec(`ALTER TABLE audit_logs ADD COLUMN output_tokens INTEGER`);
+      }
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_session_id ON audit_logs(session_id);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_kind ON audit_logs(kind);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_role ON audit_logs(role);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_status ON audit_logs(status);
+      `);
     } catch (error) {
       logger.error('[database] Failed to initialize database schema', { error });
       throw error;

@@ -12,8 +12,11 @@ read_when:
 
 <api_response_shape>
   <description>Expected gateway response format:</description>
-  <json>{"message":"Todos data retrieved from cache","data": [{"id": 100,"title": "sample - drink water","checked": 0,"priority": "medium","sponsor": "human x","usualCompletionTime": "20:00"}]}
-  </json>
+  <toon>
+  message: Todos data retrieved from cache
+  data[1]{id,title,checked,priority,sponsor,usualCompletionTime}:
+  100,sample - drink water,0,medium,human x,20:00
+  </toon>
 </api_response_shape>
 
 <rules>
@@ -29,13 +32,17 @@ read_when:
   <command>
     <trigger>Get Today's Tasks</trigger>
     <request>
-      <description>Fetch all of the user's to-do tasks. Uses a compact filter to keep only the fields used by the assistant.</description>
-      <bash>curl -k -X GET <GATEWAY_HOST>/api/todo/ | jq '{message, data: [.data[] | {id, title, checked, priority, sponsor, usualCompletionTime}]}'</bash>
+      <description>Fetch all of the user's to-do tasks.</description>
+      <bash>curl -k -X GET <GATEWAY_HOST>/api/todo/?format=toon</bash>
     </request>
     <response>
       <description>Returns all today's tasks with their completion status.</description>
-      <bash>{"message":"Todos data retrieved from cache","data":[{"id":100,"title":"sample - drink water","checked": 1,"priority": "medium","sponsor": "human x","usualCompletionTime": "09:00"},{"id": 101,"title": "sample2 - drink water","checked": 1,"priority": "medium","sponsor": "human x","usualCompletionTime": "09:01"}]}
-      </bash>
+      <toon>
+  message: Todos data retrieved from cache
+  data[2]{id,title,checked,priority,sponsor,usualCompletionTime}:
+  100,sample - drink water,1,medium,human x,09:00
+  101,sample2 - drink water,1,medium,human x,09:01
+      </toon>
     </response>
   </command>
 
@@ -43,11 +50,14 @@ read_when:
     <trigger>Get Unchecked Tasks</trigger>
     <request>
       <description>Fetch only the tasks that are still pending (<code>checked == 0</code>). Use this when the user asks what still needs to be done today.</description>
-      <bash>curl -k -X GET <GATEWAY_HOST>/api/todo/?onlyUnchecked=1 | jq '{message, data: [.data[] | select(.checked == 0) | {id, title, checked, priority, sponsor, usualCompletionTime}]}'</bash>
+      <bash>curl -k -X GET <GATEWAY_HOST>/api/todo/?onlyUnchecked=1&format=toon</bash>
     </request>
     <response>
       <description>Returns only the unchecked tasks.</description>
-      <bash>{"message":"Todos data retrieved from cache","data": [{"id": 100,"title": "sample - drink water","checked": 0,"priority": "medium","sponsor": "human x","usualCompletionTime": "09:00"}]}
+      <toon>
+  message: Todos data retrieved from cache
+  data[1]{id,title,checked,priority,sponsor,usualCompletionTime}:
+  100,sample - drink water,0,medium,human x,09:00
       </bash>
     </response>
   </command>
@@ -60,8 +70,11 @@ read_when:
     </request>
     <response>
       <description>Returns the updated task with <code>checked</code> set to 1.</description>
-      <bash>{"message":"Todo updated successfully","data": {"id": 100,"title": "sample - drink water","checked": 1,"priority": "medium","sponsor": "human x","usualCompletionTime": "09:00"}}
-      </bash>
+      <toon>
+  message: Todo updated successfully
+  data{id,title,checked,priority,sponsor,usualCompletionTime}:
+  100,sample - drink water,1,medium,human x,09:00
+      </toon>
     </response>
   </command>
 

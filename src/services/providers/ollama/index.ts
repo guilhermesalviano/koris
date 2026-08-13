@@ -1,4 +1,4 @@
-import type { AIChatOptions, AIChatRequest, AIProvider, AIResponse } from '../../../types/chat';
+import type { AIChatOptions, AIChatRequest, AIProvider, AIProviderOptions, AIResponse } from '../../../types/chat';
 import { config } from '../../../config';
 import { ILogger } from '../../../infrastructure/logger';
 import { validateBaseUrl } from '../../../utils/provider';
@@ -14,6 +14,8 @@ type OllamaChatChunk = {
   response?: string;
   done?: boolean;
   error?: string;
+  prompt_eval_count?: number;
+  eval_count?: number;
 };
 
 type OllamaVersionResponse = {
@@ -25,12 +27,14 @@ class OllamaAIProvider implements AIProvider {
   private readonly baseUrl: string;
   private readonly defaultModel: string;
   private readonly embeddingModel: string;
+  private readonly embeddingEnabled: boolean;
 
-  constructor(private readonly logger: ILogger, opts?: { baseUrl?: string; model?: string }) {
-    const resolvedBaseUrl = (opts?.baseUrl ?? config.AI.BASE_URL).replace(/\/+$/, '');
-    this.baseUrl = validateBaseUrl(resolvedBaseUrl, config.AI.ALLOW_REMOTE_BASE_URL);
-    this.defaultModel = opts?.model ?? config.AI.MODEL;
-    this.embeddingModel = config.AI.EMBEDDING.MODEL;
+  constructor(private readonly logger: ILogger, opts?: AIProviderOptions) {
+    const resolvedBaseUrl = (opts?.baseUrl ?? config.AI.MANAGER.BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = validateBaseUrl(resolvedBaseUrl);
+    this.defaultModel = opts?.model ?? config.AI.MANAGER.MODEL;
+    this.embeddingModel = opts?.embeddingModel ?? config.AI.WORKERS.EMBED_MODEL;
+    this.embeddingEnabled = opts?.embeddingEnabled ?? config.AI.WORKERS.EMBEDDING_ENABLED;
   }
 
   async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
@@ -50,7 +54,9 @@ class OllamaAIProvider implements AIProvider {
         hasTools: !!request.tools?.length,
       });
 
-      return await this.postChat(request, controller.signal);
+      const { content, promptEvalCount, evalCount } = await this.postChat(request, controller.signal);
+      options?.onUsage?.({ inputTokens: promptEvalCount, outputTokens: evalCount });
+      return content;
     } catch (err) {
       this.logger.error('Ollama chat error', { error: err instanceof Error ? err.message : String(err) });
       if (this.isAbortError(err)) {
@@ -86,7 +92,8 @@ class OllamaAIProvider implements AIProvider {
 
       if (!body) {
         this.logger.debug('Ollama stream body is null, falling back to non-stream');
-        const full = await this.postChat(request, controller.signal);
+        const { content: full, promptEvalCount, evalCount } = await this.postChat(request, controller.signal);
+        options?.onUsage?.({ inputTokens: promptEvalCount, outputTokens: evalCount });
         totalCharsYielded = full.length;
         yield full;
         return;
@@ -122,6 +129,10 @@ class OllamaAIProvider implements AIProvider {
 
         if (chunk.done) {
           if (streamInThinking) yield THINK_END;
+
+          if (chunk.prompt_eval_count != null || chunk.eval_count != null) {
+            options?.onUsage?.({ inputTokens: chunk.prompt_eval_count, outputTokens: chunk.eval_count });
+          }
 
           if (chunk.message?.tool_calls?.length) {
             const toolCallJson = JSON.stringify({ tool_calls: chunk.message.tool_calls });
@@ -162,7 +173,8 @@ class OllamaAIProvider implements AIProvider {
 
       if (!producedAnswer) {
         this.logger.debug('No answer parsed from stream, retrying in non-stream mode');
-        const full = await this.postChat(request, controller.signal);
+        const { content: full, promptEvalCount, evalCount } = await this.postChat(request, controller.signal);
+        options?.onUsage?.({ inputTokens: promptEvalCount, outputTokens: evalCount });
         if (full) {
           totalCharsYielded += full.length;
           yield full;
@@ -209,7 +221,7 @@ class OllamaAIProvider implements AIProvider {
   }
 
   async embed(text: string): Promise<number[]> {
-    if (!config.AI.EMBEDDING.ENABLED) {
+    if (!this.embeddingEnabled) {
       throw new Error('Embeddings are disabled in configuration');
     }
 
@@ -232,21 +244,26 @@ class OllamaAIProvider implements AIProvider {
     return data.embedding;
   }
 
-  private async postChat(request: AIChatRequest, signal: AbortSignal): Promise<string> {
+  private async postChat(
+    request: AIChatRequest,
+    signal: AbortSignal,
+  ): Promise<{ content: string; promptEvalCount?: number; evalCount?: number }> {
     const res = await this.post(request, signal, false);
     const data = await res.json() as OllamaChatChunk;
 
+    const usage = { promptEvalCount: data.prompt_eval_count, evalCount: data.eval_count };
+
     if (data.message?.tool_calls?.length && !data.message?.content?.trim()) {
       this.logger.debug('Tool calls in non-stream response', { count: data.message.tool_calls.length });
-      return JSON.stringify({ tool_calls: data.message.tool_calls });
+      return { content: JSON.stringify({ tool_calls: data.message.tool_calls }), ...usage };
     }
 
     const content = this.parseChunk(data);
     if (!content) {
       this.logger.warn('Ollama response content was empty, returning empty string', { data });
-      return '';
+      return { content: '', ...usage };
     }
-    return content;
+    return { content, ...usage };
   }
 
   private makeController(outerSignal?: AbortSignal): { controller: AbortController; cleanup: () => void } {
@@ -359,8 +376,8 @@ class OllamaAIProvider implements AIProvider {
 }
 
 class OllamaAIProviderFactory {
-  static create(logger: ILogger): AIProvider {
-    return new OllamaAIProvider(logger);
+  static create(logger: ILogger, opts?: AIProviderOptions): AIProvider {
+    return new OllamaAIProvider(logger, opts);
   }
 }
 

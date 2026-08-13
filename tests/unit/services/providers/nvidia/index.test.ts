@@ -287,7 +287,7 @@ describe('NvidiaAIProvider', () => {
     const fetchArgs = (fetchMock as any).mock.calls[0]?.[1];
     const body = JSON.parse(fetchArgs.body);
 
-    expect(calledUrl).toBe(`${config.AI.BASE_URL.replace(/\/+$/, '')}/chat/completions`);
-    expect(body.model).toBe(config.AI.MODEL);
+    expect(calledUrl).toBe(`${config.AI.MANAGER.BASE_URL.replace(/\/+$/, '')}/chat/completions`);
+    expect(body.model).toBe(config.AI.MANAGER.MODEL);
   });
 });

@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { checkHealth, streamChat, apiRequest } from './api';
-import type { SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
+import type { ActiveRun, ActiveRunsResponse, SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
 
 export interface ChatMessage {
   id: number;
@@ -9,6 +9,7 @@ export interface ChatMessage {
   status?: string;
   pending?: boolean;
   timestamp: string;
+  backgroundRunKey?: string;
 }
 
 interface ChatHistoryResponse {
@@ -21,6 +22,8 @@ interface ChatContextValue {
   input: string;
   setInput: (value: string) => void;
   streaming: boolean;
+  currentQuestion: string | null;
+  backgroundRun: ActiveRun | null;
   serverHealthy: boolean;
   historyLoaded: boolean;
   toast: string | null;
@@ -35,6 +38,7 @@ interface ChatContextValue {
 const ChatContext = createContext<ChatContextValue | null>(null);
 
 const HEALTH_CHECK_MS = 5000;
+const ACTIVE_RUN_POLL_MS = 4000;
 
 let idCounter = 0;
 function nextId(): number {
@@ -64,8 +68,31 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [backgroundRun, setBackgroundRun] = useState<ActiveRun | null>(null);
   const loadToken = useRef(0);
   const pendingNewChatRef = useRef(false);
+  const streamingRef = useRef(false);
+  const streamTargetRef = useRef<string | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
+  const backgroundRunRef = useRef<ActiveRun | null>(null);
+  const surfacedRunKeyRef = useRef<string | null>(null);
+  const backgroundPendingRef = useRef(false);
+  const inFlightRef = useRef<{ sessionId: string; userMsg: ChatMessage; assistantId: number; content: string; status: string | null } | null>(null);
+
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    backgroundRunRef.current = backgroundRun;
+  }, [backgroundRun]);
+
+  const currentQuestion = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') return messages[i].content;
+    }
+    return null;
+  }, [messages]);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -89,6 +116,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           pendingNewChatRef.current = false;
           setActiveSessionId(null);
           setMessages([]);
+          return;
+        }
+
+        if (streamTargetRef.current && activeSessionIdRef.current === streamTargetRef.current) {
+          // A reply is still being streamed into the live chat while the user
+          // navigated away and back. Keep the in-progress exchange on screen
+          // instead of replacing it with history that doesn't include it yet.
+          setHistoryLoaded(true);
+          return;
+        }
+
+        if (backgroundRunRef.current && backgroundRunRef.current.sessionId === activeSessionIdRef.current) {
+          // A reply is still being processed in the background (e.g. after a
+          // reload). Keep the restored exchange on screen instead of replacing
+          // it with history that doesn't include it yet.
+          setHistoryLoaded(true);
           return;
         }
 
@@ -152,6 +195,112 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Poll for questions still being processed server-side. When the page is
+  // reloaded mid-run the SSE stream is gone, so this restores the current
+  // question/status until the run finishes and history has the answer.
+  useEffect(() => {
+    let cancelled = false;
+    let lastKey = '';
+
+    const poll = async () => {
+      let runs: ActiveRun[] = [];
+      try {
+        const res = await apiRequest<ActiveRunsResponse>('/active');
+        runs = res.items;
+      } catch {
+        return;
+      }
+      if (cancelled) return;
+
+      const webRun = runs.find((r) => r.channel === 'web') ?? null;
+      const key = webRun ? `${webRun.sessionId}:${webRun.startedAt}` : '';
+      if (key !== lastKey) {
+        lastKey = key;
+        setBackgroundRun(webRun);
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, ACTIVE_RUN_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Surface a background run into the viewed session and refresh the answer of
+  // the previous one when it completes.
+  useEffect(() => {
+    if (streamingRef.current) return;
+
+    const run = backgroundRun && activeSessionId === backgroundRun.sessionId ? backgroundRun : null;
+    const prevKey = surfacedRunKeyRef.current;
+
+    if (run && run.startedAt !== prevKey) {
+      if (prevKey) {
+        surfacedRunKeyRef.current = run.startedAt;
+        void loadSession(activeSessionId ?? null);
+        return;
+      }
+      surfacedRunKeyRef.current = run.startedAt;
+    }
+
+    if (run) {
+      setMessages((prev) => {
+        const alreadyPresent = prev.some((m) => m.backgroundRunKey === run.startedAt);
+        let lastUser: ChatMessage | undefined;
+        for (let i = prev.length - 1; i >= 0; i--) {
+          if (prev[i].role === 'user') {
+            lastUser = prev[i];
+            break;
+          }
+        }
+        const alreadyAnswered = !!lastUser
+          && lastUser.content === run.question
+          && prev.some((m) => m.role === 'assistant' && !m.pending && m.id > lastUser.id);
+        if (alreadyPresent || alreadyAnswered) return prev;
+
+        backgroundPendingRef.current = true;
+        const userMsg: ChatMessage = { id: nextId(), role: 'user', content: run.question, timestamp: timeStr(new Date(run.startedAt)) };
+        const assistantMsg: ChatMessage = { id: nextId(), role: 'assistant', content: '', pending: true, status: 'Processing in background…', timestamp: '', backgroundRunKey: run.startedAt };
+        return [...prev, userMsg, assistantMsg];
+      });
+      return;
+    }
+
+    if (prevKey) {
+      surfacedRunKeyRef.current = null;
+      if (backgroundPendingRef.current) {
+        backgroundPendingRef.current = false;
+        void loadSession(activeSessionId ?? null);
+      }
+    }
+  }, [backgroundRun, activeSessionId, loadSession, messages]);
+
+  // Restore the locally-streamed exchange when the user returns to the session
+  // it belongs to (e.g. after opening another session, which replaced messages
+  // with that session's history). The stream's status/content deltas keep
+  // flowing through the same assistant message id.
+  useEffect(() => {
+    const inFlight = inFlightRef.current;
+    if (!inFlight) return;
+    if (activeSessionId !== inFlight.sessionId) return;
+
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === inFlight.assistantId)) return prev;
+      const userMsg: ChatMessage = { ...inFlight.userMsg };
+      const assistantMsg: ChatMessage = {
+        id: inFlight.assistantId,
+        role: 'assistant',
+        content: inFlight.content,
+        pending: true,
+        status: inFlight.status ?? 'Thinking…',
+        timestamp: '',
+      };
+      return [...prev, userMsg, assistantMsg];
+    });
+  }, [activeSessionId, messages]);
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 3000);
@@ -167,6 +316,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (!text || streaming) return;
 
     setStreaming(true);
+    streamingRef.current = true;
     const userMsg: ChatMessage = { id: nextId(), role: 'user', content: text, timestamp: timeStr(new Date()) };
     const assistantId = nextId();
     setMessages((prev) => [...prev, userMsg, { id: assistantId, role: 'assistant', content: '', pending: true, timestamp: '' }]);
@@ -183,15 +333,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         targetId = created.id;
         loadSessions();
       }
+      streamTargetRef.current = targetId;
+      inFlightRef.current = { sessionId: targetId, userMsg, assistantId, content: '', status: null };
 
       await streamChat(
         text,
         targetId,
         (status) => {
+          if (inFlightRef.current) inFlightRef.current.status = status;
           setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, status, pending: true } : m)));
         },
         (chunk) => {
           accumulated += chunk;
+          if (inFlightRef.current) inFlightRef.current.content = accumulated;
           setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: accumulated, pending: false, status: undefined } : m)));
         },
       );
@@ -207,6 +361,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setServerHealthy(false);
       setToast(`Error: ${msg}`);
     } finally {
+      inFlightRef.current = null;
+      streamingRef.current = false;
+      streamTargetRef.current = null;
       setStreaming(false);
       loadSessions();
     }
@@ -217,6 +374,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     input,
     setInput,
     streaming,
+    currentQuestion,
+    backgroundRun,
     serverHealthy,
     historyLoaded,
     toast,

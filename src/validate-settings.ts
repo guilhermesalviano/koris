@@ -139,25 +139,47 @@ async function main() {
   section('AI Provider');
 
   const supportedProviders = ['ollama', 'nvidia', 'mock'];
+
   check(
-    supportedProviders.includes(config.AI.PROVIDER),
-    'ai.provider is supported',
-    `Got: "${config.AI.PROVIDER}". Supported: ${supportedProviders.join(', ')}.`,
-    config.AI.PROVIDER,
+    supportedProviders.includes(config.AI.MANAGER.PROVIDER),
+    'ai.manager.provider is supported',
+    `Got: "${config.AI.MANAGER.PROVIDER}". Supported: ${supportedProviders.join(', ')}.`,
+    config.AI.MANAGER.PROVIDER,
   );
 
   check(
-    isValidUrl(config.AI.BASE_URL),
-    'ai.base_url is a valid URL',
-    `Got: "${config.AI.BASE_URL}"`,
-    config.AI.BASE_URL,
+    isValidUrl(config.AI.MANAGER.BASE_URL),
+    'ai.manager.base_url is a valid URL',
+    `Got: "${config.AI.MANAGER.BASE_URL}"`,
+    config.AI.MANAGER.BASE_URL,
   );
 
   check(
-    config.AI.MODEL.trim().length > 0,
-    'ai.model is not empty',
-    'Set ai.model in settings.json',
-    config.AI.MODEL,
+    config.AI.MANAGER.MODEL.trim().length > 0,
+    'ai.manager.model is not empty',
+    'Set ai.manager.model in settings.json',
+    config.AI.MANAGER.MODEL,
+  );
+
+  check(
+    supportedProviders.includes(config.AI.WORKERS.PROVIDER),
+    'ai.workers.provider is supported',
+    `Got: "${config.AI.WORKERS.PROVIDER}". Supported: ${supportedProviders.join(', ')}.`,
+    config.AI.WORKERS.PROVIDER,
+  );
+
+  check(
+    isValidUrl(config.AI.WORKERS.BASE_URL),
+    'ai.workers.base_url is a valid URL',
+    `Got: "${config.AI.WORKERS.BASE_URL}"`,
+    config.AI.WORKERS.BASE_URL,
+  );
+
+  check(
+    config.AI.WORKERS.MODEL.trim().length > 0,
+    'ai.workers.model is not empty',
+    'Set ai.workers.model in settings.json',
+    config.AI.WORKERS.MODEL,
   );
 
   check(
@@ -174,45 +196,47 @@ async function main() {
   );
 
   advisory(
-    config.AI.SERPAPI_KEY.trim().length > 0,
-    'ai.serpapi_key is set',
+    config.AI.SEARCH_API_KEY.trim().length > 0,
+    'ai.search_api_key is set',
     'Required for web search tool',
   );
 
   // Connectivity check (skipped for mock)
-  if (config.AI.PROVIDER === 'ollama') {
-    process.stdout.write(`  ${c.gray}⟳ Checking AI provider connectivity …${c.reset}\r`);
-    const healthUrl = `${config.AI.BASE_URL.replace(/\/+$/, '')}/api/version`;
-    const result = await httpGet(healthUrl, config.AI.TIMEOUTS.HEALTH_MS);
+  const profiles = [
+    { label: 'manager', provider: config.AI.MANAGER.PROVIDER, baseUrl: config.AI.MANAGER.BASE_URL, apiToken: config.AI.MANAGER.API_TOKEN },
+    { label: 'workers', provider: config.AI.WORKERS.PROVIDER, baseUrl: config.AI.WORKERS.BASE_URL, apiToken: config.AI.WORKERS.API_TOKEN },
+  ];
+
+  for (const profile of profiles) {
+    if (profile.provider === 'mock') {
+      pass(`AI provider connectivity check (${profile.label})`, 'skipped (provider=mock)');
+      continue;
+    }
+
+    process.stdout.write(`  ${c.gray}⟳ Checking ${profile.label} AI provider connectivity …${c.reset}\r`);
+    const healthUrl = profile.provider === 'ollama'
+      ? `${profile.baseUrl.replace(/\/+$/, '')}/api/version`
+      : `${profile.baseUrl.replace(/\/+$/, '')}/models`;
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (profile.provider === 'nvidia' && profile.apiToken) headers['Authorization'] = `Bearer ${profile.apiToken}`;
+    const result = await httpGet(healthUrl, config.AI.TIMEOUTS.HEALTH_MS, headers);
+
     if (result.ok) {
       let detail = '';
-      try { detail = (JSON.parse(result.body ?? '{}') as { version?: string }).version ?? ''; } catch { /* ignore */ }
-      pass('AI provider reachable', detail ? `v${detail}` : healthUrl);
-    } else {
-      const hint = result.error ? `Connection error: ${result.error}` : `HTTP ${result.status} from ${healthUrl}`;
-      warn('AI provider unreachable', hint);
-      warnings++;
-    }
-  } else if (config.AI.PROVIDER === 'nvidia') {
-    process.stdout.write(`  ${c.gray}⟳ Checking AI provider connectivity …${c.reset}\r`);
-    const healthUrl = `${config.AI.BASE_URL.replace(/\/+$/, '')}/models`;
-    const headers: Record<string, string> = { 'content-type': 'application/json' };
-    if (config.AI.API_TOKEN) headers['Authorization'] = `Bearer ${config.AI.API_TOKEN}`;
-    const result = await httpGet(healthUrl, config.AI.TIMEOUTS.HEALTH_MS, headers);
-    if (result.ok) {
-      pass('AI provider reachable', healthUrl);
+      if (profile.provider === 'ollama') {
+        try { detail = (JSON.parse(result.body ?? '{}') as { version?: string }).version ?? ''; } catch { /* ignore */ }
+      }
+      pass(`AI provider reachable (${profile.label})`, detail ? `v${detail}` : healthUrl);
     } else if (result.error) {
-      warn('AI provider unreachable', result.error);
+      warn(`AI provider unreachable (${profile.label})`, result.error);
       warnings++;
     } else if (result.status === 401 || result.status === 403) {
-      fail('AI provider auth failed', `HTTP ${result.status} — check ai.api_token in settings.json`);
+      fail(`AI provider auth failed (${profile.label})`, `HTTP ${result.status} — check ai.${profile.label}.api_token in settings.json`);
       errors++;
     } else {
-      warn('AI provider unreachable', `HTTP ${result.status} from ${healthUrl}`);
+      warn(`AI provider unreachable (${profile.label})`, `HTTP ${result.status} from ${healthUrl}`);
       warnings++;
     }
-  } else {
-    pass('AI provider connectivity check', 'skipped (provider=mock)');
   }
 
   // ── 4. Channels ──────────────────────────────────────────────────────────

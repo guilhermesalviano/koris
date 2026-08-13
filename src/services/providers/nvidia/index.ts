@@ -1,4 +1,4 @@
-import type { AIChatOptions, AIChatRequest, AIProvider, AIResponse } from '../../../types/chat';
+import type { AIChatOptions, AIChatRequest, AIProvider, AIProviderOptions, AIResponse } from '../../../types/chat';
 import { config } from '../../../config';
 import { ILogger } from '../../../infrastructure/logger';
 import { THINK_START, THINK_END } from '../../../constants/thinking';
@@ -27,6 +27,10 @@ type OpenAIChatResponse = {
     finish_reason?: string | null;
   }>;
   error?: { message: string };
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+  };
 };
 
 type OpenAIChatChunk = {
@@ -56,16 +60,18 @@ class NvidiaAIProvider implements AIProvider {
   private readonly baseUrl: string;
   private readonly defaultModel: string;
   private readonly embeddingModel: string;
+  private readonly embeddingEnabled: boolean;
   private readonly apiToken: string;
 
   constructor(
     private readonly logger: ILogger,
-    opts?: { baseUrl?: string; model?: string; apiToken?: string },
+    opts?: AIProviderOptions,
   ) {
-    this.baseUrl = (opts?.baseUrl ?? config.AI.BASE_URL).replace(/\/+$/, '');
-    this.defaultModel = opts?.model ?? config.AI.MODEL;
-    this.embeddingModel = config.AI.EMBEDDING.MODEL;
-    this.apiToken = opts?.apiToken ?? config.AI.API_TOKEN;
+    this.baseUrl = (opts?.baseUrl ?? config.AI.MANAGER.BASE_URL).replace(/\/+$/, '');
+    this.defaultModel = opts?.model ?? config.AI.MANAGER.MODEL;
+    this.embeddingModel = opts?.embeddingModel ?? config.AI.WORKERS.EMBED_MODEL;
+    this.embeddingEnabled = opts?.embeddingEnabled ?? config.AI.WORKERS.EMBEDDING_ENABLED;
+    this.apiToken = opts?.apiToken ?? config.AI.MANAGER.API_TOKEN;
   }
 
   async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
@@ -89,6 +95,13 @@ class NvidiaAIProvider implements AIProvider {
       const data = await res.json() as OpenAIChatResponse;
 
       if (data.error) throw new Error(`NVIDIA API error: ${data.error.message}`);
+
+      if (data.usage) {
+        options?.onUsage?.({
+          inputTokens: data.usage.prompt_tokens,
+          outputTokens: data.usage.completion_tokens,
+        });
+      }
 
       const choice = data.choices?.[0];
       if (!choice) throw new Error('NVIDIA response missing choices');
@@ -138,7 +151,7 @@ class NvidiaAIProvider implements AIProvider {
 
       if (!body) {
         this.logger.debug('NVIDIA stream body is null, falling back to non-stream');
-        const full = await this.chatFallback(request, controller.signal);
+        const full = await this.chatFallback(request, controller.signal, options);
         totalCharsYielded = full.length;
         yield full;
         return;
@@ -230,7 +243,7 @@ class NvidiaAIProvider implements AIProvider {
 
       if (!producedAnswer) {
         this.logger.debug('No answer parsed from NVIDIA stream, retrying in non-stream mode');
-        const full = await this.chatFallback(request, controller.signal);
+        const full = await this.chatFallback(request, controller.signal, options);
         if (full) {
           totalCharsYielded += full.length;
           yield full;
@@ -278,7 +291,7 @@ class NvidiaAIProvider implements AIProvider {
   }
 
   async embed(text: string): Promise<number[]> {
-    if (!config.AI.EMBEDDING.ENABLED) {
+    if (!this.embeddingEnabled) {
       throw new Error('Embeddings are disabled in configuration');
     }
 
@@ -302,11 +315,18 @@ class NvidiaAIProvider implements AIProvider {
     return data.data[0].embedding;
   }
 
-  private async chatFallback(request: AIChatRequest, signal: AbortSignal): Promise<string> {
+  private async chatFallback(request: AIChatRequest, signal: AbortSignal, options?: AIChatOptions): Promise<string> {
     const res = await this.post(request, signal, false);
     const data = await res.json() as OpenAIChatResponse;
 
     if (data.error) throw new Error(`NVIDIA API error: ${data.error.message}`);
+
+    if (data.usage) {
+      options?.onUsage?.({
+        inputTokens: data.usage.prompt_tokens,
+        outputTokens: data.usage.completion_tokens,
+      });
+    }
 
     const choice = data.choices?.[0];
     if (!choice) throw new Error('NVIDIA response missing choices');
@@ -440,8 +460,8 @@ class NvidiaAIProvider implements AIProvider {
 }
 
 class NvidiaAIProviderFactory {
-  static create(logger: ILogger): AIProvider {
-    return new NvidiaAIProvider(logger);
+  static create(logger: ILogger, opts?: AIProviderOptions): AIProvider {
+    return new NvidiaAIProvider(logger, opts);
   }
 }
 

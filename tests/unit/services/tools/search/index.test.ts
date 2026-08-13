@@ -10,7 +10,7 @@ vi.mock('serpapi', () => ({
 vi.mock('../../../../../src/config', () => ({
   config: {
     AI: {
-      SERPAPI_KEY: 'test-api-key',
+      SEARCH_API_KEY: 'test-api-key',
     },
   },
 }));

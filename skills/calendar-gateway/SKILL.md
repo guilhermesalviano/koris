@@ -12,32 +12,14 @@ read_when:
 
 <api_response_shape>
   <description>Expected gateway response format:</description>
-  <json>
-    {
-      "message": "Calendar data retrieved successfully",
-      "data": {
-        "todayEvents": [
-          {
-            "id": "event_id",
-            "start": "HH:mm",
-            "end": "HH:mm",
-            "title": "Event title",
-            "color": "#RRGGBB",
-            "type": "default"
-          }
-        ],
-        "importantEvents": [
-          {
-            "id": "event_id",
-            "start": "DD/MM - HH:mm",
-            "end": "HH:mm",
-            "title": "Event title",
-            "type": "default"
-          }
-        ]
-      }
-    }
-  </json>
+  <toon>
+    message: Calendar data retrieved successfully
+    data:
+    todayEvents[1]{id,start,end,title,color,type}:
+    [event_id],HH:mm,HH:mm,Event title,#RRGGBB,default
+    importantEvents[1]{id,start,end,title,type}:
+    [event_id],DD/MM - HH:mm,HH:mm,Event title,default
+  </toon>
 </api_response_shape>
 
 <rules>
@@ -51,37 +33,19 @@ read_when:
   <command>
     <trigger>Get Today's Schedule</trigger>
     <request>
-      <description>Fetch today's and important upcoming events. Uses a compact filter to keep only fields used by the assistant.</description>
-      <bash>curl -k -X GET <GATEWAY_HOST>/api/calendar/ | jq '{message, data: {todayEvents: [.data.todayEvents[]? | {id, start, end, title, color, type}], importantEvents: [.data.importantEvents[]? | {id, start, end, title, type}]}}'</bash>
+      <description>Fetch today's and important upcoming events.</description>
+      <bash>curl -k -X GET <GATEWAY_HOST>/api/calendar/?format=toon</bash>
     </request>
     <response>
       <description>Returns today's events and important upcoming events.</description>
-      <bash>
-        {
-          "message": "Calendar data retrieved successfully",
-          "data": {
-            "todayEvents": [
-              {
-                "id": "jngldmek83ds86uk27rr0h4ikk_20260514T220000Z",
-                "start": "19:00",
-                "end": "20:00",
-                "title": "Terapia",
-                "color": "#6EE7B7",
-                "type": "default"
-              }
-            ],
-            "importantEvents": [
-              {
-                "id": "522rh0836vu5s113b2dmo28v1s_20260515T220000Z",
-                "start": "15/05 - 19:00",
-                "end": "20:00",
-                "title": "Aulas de Inglês",
-                "type": "default"
-              }
-            ]
-          }
-        }
-      </bash>
+      <toon>
+        message: Calendar data retrieved successfully
+        data:
+        todayEvents[1]{id,start,end,title,color,type}:
+        asdasdasd_20260514T220000Z,19:00,20:00,Terapia,#6EE7B7,default
+        importantEvents[1]{id,start,end,title,type}:
+        asdasd_20260515T220000Z,15/05 - 19:00,20:00,Aulas de Inglês,default
+      </toon>
     </response>
   </command>
 

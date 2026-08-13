@@ -1,4 +1,4 @@
-import type { AIProvider } from '../../types/chat';
+import type { AIProvider, AIProviderOptions } from '../../types/chat';
 import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
 import { OllamaAIProviderFactory } from './ollama';
@@ -16,27 +16,29 @@ const PROVIDER_FACTORIES = {
 
 type ProviderType = keyof typeof PROVIDER_FACTORIES;
 
+export type AIProviderRole = 'manager' | 'worker';
+
 /**
- * Singleton cache for AI provider instance
+ * Singleton cache for AI provider instances, keyed by role.
  */
 class ProviderCache {
-  private instance: AIProvider | null = null;
+  private instances = new Map<AIProviderRole, AIProvider>();
   private cachedLogger: ILogger | null = null;
 
-  get(logger: ILogger): AIProvider | null {
-    if (this.instance && this.cachedLogger !== logger) {
+  get(logger: ILogger, role: AIProviderRole): AIProvider | null {
+    if (this.cachedLogger !== null && this.cachedLogger !== logger) {
       this.clear();
     }
-    return this.instance;
+    return this.instances.get(role) ?? null;
   }
 
-  set(provider: AIProvider, logger: ILogger): void {
-    this.instance = provider;
+  set(provider: AIProvider, logger: ILogger, role: AIProviderRole): void {
     this.cachedLogger = logger;
+    this.instances.set(role, provider);
   }
 
   clear(): void {
-    this.instance = null;
+    this.instances.clear();
     this.cachedLogger = null;
   }
 }
@@ -44,36 +46,45 @@ class ProviderCache {
 const cache = new ProviderCache();
 
 /**
- * Get or create AI provider instance based on configuration.
- * Provider is cached as a singleton per logger instance.
- * 
+ * Get or create AI provider instance based on configuration and role.
+ * Provider is cached as a singleton per logger and role.
+ *
  * @throws {Error} If configured provider is not supported
  */
-export function getAIProvider(logger: ILogger): AIProvider {
-  const cached = cache.get(logger);
+export function getAIProvider(logger: ILogger, role: AIProviderRole = 'manager'): AIProvider {
+  const cached = cache.get(logger, role);
   if (cached) {
     return cached;
   }
 
-  const provider = createAIProvider(logger);
-  cache.set(provider, logger);
+  const provider = createAIProvider(logger, role);
+  cache.set(provider, logger, role);
 
   return provider;
 }
 
 /**
- * Create a new provider instance based on configuration
+ * Create a new provider instance based on configuration and role
  */
-export function createAIProvider(logger: ILogger): AIProvider {
-  const providerType = config.AI.PROVIDER as string;
+export function createAIProvider(logger: ILogger, role: AIProviderRole = 'manager'): AIProvider {
+  const profile = role === 'worker' ? config.AI.WORKERS : config.AI.MANAGER;
+  const providerType = profile.PROVIDER as string;
 
   if (!isValidProvider(providerType)) {
     logger.warn(`Unknown provider "${providerType}", falling back to mock`);
     return PROVIDER_FACTORIES.mock.create(logger);
   }
 
-  logger.info(`Initializing AI provider: ${providerType}`);
-  return PROVIDER_FACTORIES[providerType].create(logger);
+  const opts: AIProviderOptions = {
+    baseUrl: profile.BASE_URL,
+    model: profile.MODEL,
+    apiToken: profile.API_TOKEN,
+    embeddingEnabled: config.AI.WORKERS.EMBEDDING_ENABLED,
+    embeddingModel: config.AI.WORKERS.EMBED_MODEL,
+  };
+
+  logger.info(`Initializing AI provider: ${providerType} (${role})`);
+  return PROVIDER_FACTORIES[providerType].create(logger, opts);
 }
 
 /**
@@ -84,7 +95,7 @@ function isValidProvider(provider: string): provider is ProviderType {
 }
 
 /**
- * Clear the cached provider instance (useful for testing)
+ * Clear the cached provider instances (useful for testing)
  */
 export function clearProviderCache(): void {
   cache.clear();

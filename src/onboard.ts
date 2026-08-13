@@ -1383,12 +1383,21 @@ export function buildOnboardingSettings(
   }
 
   const ai = getOrCreateRecord(payload, 'ai');
-  ai.provider = answers.provider;
+  const manager = getOrCreateRecord(ai, 'manager');
+  const workers = getOrCreateRecord(ai, 'workers');
+  manager.provider = answers.provider;
   if (answers.providerModel) {
-    ai.model = answers.providerModel;
+    manager.model = answers.providerModel;
   }
   if (answers.providerUrl) {
-    ai.base_url = answers.providerUrl;
+    manager.base_url = answers.providerUrl;
+  }
+  workers.provider = answers.provider;
+  if (answers.providerModel) {
+    workers.model = answers.providerModel;
+  }
+  if (answers.providerUrl) {
+    workers.base_url = answers.providerUrl;
   }
 
   payload.personal_information = answers.personalInfo?.enabled

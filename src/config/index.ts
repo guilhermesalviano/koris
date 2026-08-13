@@ -32,26 +32,31 @@ export const config = {
     INTERVAL_MS: Number(get('heartbeat.interval_ms', (30 * 60 * 1000).toString())),
   },
   AI: {
-    PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.provider', 'mock'),
-    ALLOW_REMOTE_BASE_URL: get('ai.allow_remote_url', 'false') === 'true',
-    BASE_URL:  get('ai.base_url', 'http://localhost:11434'),
-    API_TOKEN: get('ai.api_token', ''),
-    SERPAPI_KEY: get('ai.serpapi_key', ''),
-    MODEL:     get('ai.model', 'gemma4:e2b'),
+    MANAGER: {
+      PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.manager.provider', 'ollama'),
+      BASE_URL: get('ai.manager.base_url', 'http://localhost:11434'),
+      API_TOKEN: get('ai.manager.api_token', ''),
+      MODEL:   get('ai.manager.model', 'gemma4:e2b'),
+    },
+    WORKERS: {
+      PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.workers.provider', 'ollama'),
+      BASE_URL: get('ai.workers.base_url', 'http://localhost:11434'),
+      API_TOKEN: get('ai.workers.api_token', ''),
+      MODEL:   get('ai.workers.model', 'qwen:3.5:2b'),
+      EMBEDDING_ENABLED: get('ai.workers.embedding', 'false') === 'true',
+      EMBED_MODEL: get('ai.workers.embed_model', 'nomic-embed-text'),
+    },
+    SEARCH_API_KEY: get('ai.search_api_key', ''),
     TIMEOUTS: {
       IDLE_MS:   Number(get('ai.timeouts.idle_ms', String(6 * 60_000))),
       HARD_MS:   Number(get('ai.timeouts.hard_ms', String(20 * 60_000))),
       HEALTH_MS: Number(get('ai.timeouts.health_ms', String(5_000))),
     },
     SUMMARIZER: {
-      ENABLED: get('ai.summarizer.enabled', 'true') === 'true',
-    },
-    EMBEDDING: {
-      ENABLED: get('ai.embedding.enabled', 'false') === 'true',
-      MODEL:   get('ai.embedding.model', 'nomic-embed-text'),
+      ENABLED: get('ai.summarizer', 'true') === 'true',
     },
     PROMPT_SANITIZER: {
-      ENABLED: get('ai.prompt_sanitizer.enabled', 'false') === 'true',
+      ENABLED: get('ai.prompt_sanitizer', 'false') === 'true',
     },
   },
   CHANNELS: {

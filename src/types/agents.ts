@@ -4,6 +4,7 @@ export type ProcessOptions = {
   toolsEnabled?: boolean;
   onProgress?: (summary: string) => void;
   sessionId?: string;
+  runId?: string;
 };
 
 export interface IAgent<TInput, TOutput> {
