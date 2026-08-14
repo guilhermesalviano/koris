@@ -1,18 +1,18 @@
 
-import { IToolsQueue, ToolsQueueFactory } from '../../tools-queue';
-import { ExecutorWorkerFactory } from '../../workers/executor-worker';
-import { LearnerWorkerFactory } from '../../workers/learner-worker';
-import { FIRST_PROMPT_HELPER, SKILL_READY_PROMPT } from '../../../constants';
-import { replacePlaceholders } from '../../../utils/prompt';
-import type { ProcessedMessage, ProcessOptions } from '../../../types/agents';
-import type { IMessageService } from '../../message-service';
-import type { ILogger } from '../../../infrastructure/logger';
-import type { Message } from '../../../entities/message';
-import type { IChatService } from '../../../types/chat';
-import type { LoopContext } from '../../../types/context';
-import type { ToolCall } from '../../../types/tools';
-import type { IWorker } from '../../../types/workers';
-import { ChatServiceFactory } from '../../chat/chat-service';
+import { IToolsQueue, ToolsQueueFactory } from '../tools-queue';
+import { ExecutorWorkerFactory } from '../workers/executor-worker';
+import { LearnerWorkerFactory } from '../workers/learner-worker';
+import { FIRST_PROMPT_HELPER, SKILL_READY_PROMPT } from '../../constants';
+import { replacePlaceholders } from '../../utils/prompt';
+import type { ProcessedMessage, ProcessOptions } from '../../types/agents';
+import type { IMessageService } from '../message-service';
+import type { ILogger } from '../../infrastructure/logger';
+import type { Message } from '../../entities/message';
+import type { IChatService } from '../../types/chat';
+import type { LoopContext } from '../../types/context';
+import type { ToolCall } from '../../types/tools';
+import type { IWorker } from '../../types/workers';
+import { ChatServiceFactory } from '../chat/chat-service';
 
 interface ManagerArgs {
   userMessage: string;

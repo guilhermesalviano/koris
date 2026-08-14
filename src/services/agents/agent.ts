@@ -1,19 +1,19 @@
-import { handleCommand, isCommand } from '../../commands';
-import { previewMessage, toSafeMessage } from '../../../utils/message';
-import { ILogger } from '../../../infrastructure/logger';
-import { IDatabaseService } from '../../../infrastructure/db-sqlite';
-import { ISessionManager } from '../../session-manager';
-import { MessageServiceFactory } from '../../message-service';
-import { ConversationWorkerFactory } from '../../workers/conversation-worker';
-import { SummarizerFactory } from '../sub-agents/summarizer/sub-agent';
-import { IMemoryService, MemoryServiceFactory } from '../../memory-service';
-import { IManager, ManagerFactory } from '../sub-agents/manager';
-import { ProcessedMessage, ProcessOptions } from '../../../types/agents';
-import { IWorker } from '../../../types/workers';
-import { ISubAgent } from '../../../types/agents';
-import { config } from '../../../config';
-import { ISessionService } from '../../session-service';
-import { generateId } from '../../../utils/generate-id';
+import { handleCommand, isCommand } from '../commands';
+import { previewMessage, toSafeMessage } from '../../utils/message';
+import { ILogger } from '../../infrastructure/logger';
+import { IDatabaseService } from '../../infrastructure/db-sqlite';
+import { ISessionManager } from '../session-manager';
+import { MessageServiceFactory } from '../message-service';
+import { ConversationWorkerFactory } from '../workers/conversation-worker';
+import { SummarizerFactory } from './sub-agents/summarizer/sub-agent';
+import { IMemoryService, MemoryServiceFactory } from '../memory-service';
+import { IManager, ManagerFactory } from './manager';
+import { ProcessedMessage, ProcessOptions } from '../../types/agents';
+import { IWorker } from '../../types/workers';
+import { ISubAgent } from '../../types/agents';
+import { config } from '../../config';
+import { ISessionService } from '../session-service';
+import { generateId } from '../../utils/generate-id';
 
 interface IAgent {
   handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage>;

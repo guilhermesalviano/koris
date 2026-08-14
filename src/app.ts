@@ -7,7 +7,7 @@ if (process.argv.includes('tui') || process.argv.includes('--tui')) {
 
 import { startTUI } from './tui';
 import { LoggerFactory, ILogger } from './infrastructure/logger';
-import { AgentFactory, IAgent } from './services/agents/main-agent/agent';
+import { AgentFactory, IAgent } from './services/agents/agent';
 import { IHeartbeatRunner, HeartbeatSingleton } from './services/agents/sub-agents/heartbeat/runner';
 import { ChannelsSingleton, ADAPTERS, type IChannelsManager } from './channels';
 import { SHUTDOWN_SIGNALS } from './constants/tui';
