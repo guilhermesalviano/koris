@@ -217,7 +217,7 @@ describe('Summarizer', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const queue = (summarizer as unknown as { queue: { snapshot(): unknown } }).queue;
-    expect(queue.snapshot()).toEqual({ queued: 1, active: 1, concurrency: 1 });
+    expect(queue.snapshot()).toEqual({ queued: 1, active: 1, concurrency: 1, queuedLabels: ['summarizer'], activeLabels: ['summarizer'] });
 
     release[0]();
     await first;
@@ -225,7 +225,7 @@ describe('Summarizer', () => {
     release[1]();
     await second;
 
-    expect(queue.snapshot()).toEqual({ queued: 0, active: 0, concurrency: 1 });
+    expect(queue.snapshot()).toEqual({ queued: 0, active: 0, concurrency: 1, queuedLabels: [], activeLabels: [] });
 
     (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = originalEmbeddingEnabled;
   });

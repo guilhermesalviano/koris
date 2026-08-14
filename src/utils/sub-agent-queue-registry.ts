@@ -5,6 +5,8 @@ export interface SubAgentQueueState {
   queued: number;
   active: number;
   concurrency: number;
+  queuedLabels: string[];
+  activeLabels: string[];
 }
 
 class SubAgentQueueRegistry {

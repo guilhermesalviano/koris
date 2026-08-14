@@ -107,6 +107,9 @@ export default function QueuePage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const subAgentQueuedLabels = data?.subAgents.flatMap((queue) => queue.queuedLabels) ?? [];
+  const totalWaiting = data ? data.queued.length + subAgentQueuedLabels.length : 0;
+
   const load = useCallback(async () => {
     try {
       const res = await apiRequest<QueueResponse>('/queue');
@@ -143,7 +146,7 @@ export default function QueuePage() {
           <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
             <StatCard label="Provider mode" value={data.parallel ? 'Parallel' : 'Serialized'} />
             <StatCard label="LLM running" value={data.running.length} />
-            <StatCard label="LLM waiting" value={data.queued.length} />
+            <StatCard label="LLM waiting" value={totalWaiting} />
             <StatCard label="Grace period" value={`${data.backgroundGraceMs / 1000}s`} />
           </div>
 
@@ -180,45 +183,36 @@ export default function QueuePage() {
               <Processor running={data.running} />
             </Card>
 
-            {!data.parallel && (
-              <Card>
-                <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">
-                  Waiting — LLM calls queued ({data.queued.length})
-                </div>
-                {data.queued.length === 0 ? (
-                  <EmptyState text="Nothing waiting" />
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {data.queued.map((task, index) => (
-                      <TaskChip key={`${task.label}-${index}`} task={task} />
-                    ))}
+            <Card>
+              <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">
+                Waiting — LLM calls queued ({totalWaiting})
+              </div>
+              <div className="flex flex-col gap-4">
+                {!data.parallel &&
+                  (data.queued.length === 0 ? (
+                    <EmptyState text="Nothing waiting" />
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {data.queued.map((task, index) => (
+                        <TaskChip key={`${task.label}-${index}`} task={task} />
+                      ))}
+                    </div>
+                  ))}
+                {subAgentQueuedLabels.length > 0 && (
+                  <div>
+                    <div className="mb-2 font-mono text-[10px] uppercase tracking-wide text-txt-3">
+                      Sub-agent tasks enqueued ({subAgentQueuedLabels.length})
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {subAgentQueuedLabels.map((label, index) => (
+                        <TaskChip key={`sub-${label}-${index}`} task={{ label, priority: 0, eligible: true }} />
+                      ))}
+                    </div>
                   </div>
                 )}
-              </Card>
-            )}
-          </div>
-
-          {data.subAgents.length > 0 && (
-            <div className="mt-6">
-              <div className="mb-2 flex items-center gap-2">
-                <h2 className="font-mono text-sm font-semibold text-txt">Sub-agents {data.subagentsParallel ? 'separate queues' : 'shared queue'}</h2>
               </div>
-              <p className="mb-3 font-mono text-[11px] text-txt-3">
-                {data.subagentsParallel
-                  ? 'Each sub-agent has its own concurrency-1 queue: they may run at the same time, but never concurrently within themselves.'
-                  : 'Heartbeat and summarizer share one queue: they never run at the same time.'}
-              </p>
-              {data.subAgents.every((agent) => subAgentStatus(agent).label === 'idle') ? (
-                <EmptyState text="No sub-agent queues registered yet" />
-              ) : (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  {data.subAgents.map((queue) => (
-                    <SubAgentCard key={queue.names.join('-')} queue={queue} sharedQueue={!data.subagentsParallel} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+            </Card>
+          </div>
 
           <div className="mt-4">
             <Card>
