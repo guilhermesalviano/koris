@@ -418,14 +418,14 @@ describe('Heartbeat', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       const queue = (heartbeat as unknown as { queue: { snapshot(): unknown } }).queue;
-      expect(queue.snapshot()).toEqual({ queued: 1, active: 1, concurrency: 1 });
+      expect(queue.snapshot()).toEqual({ queued: 1, active: 1, concurrency: 1, queuedLabels: ['heartbeat: b'], activeLabels: ['heartbeat: a'] });
 
       release[0]();
       await new Promise((resolve) => setTimeout(resolve, 0));
       release[1]();
       await run;
 
-      expect(queue.snapshot()).toEqual({ queued: 0, active: 0, concurrency: 1 });
+      expect(queue.snapshot()).toEqual({ queued: 0, active: 0, concurrency: 1, queuedLabels: [], activeLabels: [] });
     });
   });
 });

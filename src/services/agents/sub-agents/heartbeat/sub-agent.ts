@@ -64,7 +64,7 @@ class Heartbeat implements ISubAgent<Date> {
     }
 
     const promises = dueBeats.map((beat) =>
-      this.queue.add(() => this.executeBeat(beat, date)),
+      this.queue.add(() => this.executeBeat(beat, date), `heartbeat: ${beat.id}`),
     );
 
     await Promise.all(promises);

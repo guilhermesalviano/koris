@@ -33,7 +33,7 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
   async handler(
     props: SummarizerWorkerProps
   ): Promise<void> {
-    return this.queue.add(() => this.run(props));
+    return this.queue.add(() => this.run(props), 'summarizer');
   }
 
   private async run(props: SummarizerWorkerProps): Promise<void> {
