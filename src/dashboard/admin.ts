@@ -19,7 +19,7 @@ import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runn
 import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../utils/heartbeat';
 import { activeRunsRegistry } from './active-runs';
 import { sharedSerialQueue } from '../services/providers/serial-queue';
-import { subAgentQueuesRegistry } from '../utils/sub-agent-queue-registry';
+import { subAgentQueuesRegistry } from '../services/agents/sub-agents/queue/sub-agent-queue-registry';
 
 const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN', 'SERPAPI_KEY', 'SEARCH_API_KEY']);
 

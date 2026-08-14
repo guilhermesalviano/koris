@@ -8,8 +8,8 @@ import { beginFooterActivity } from "../../../../utils/footer-activity";
 import { parseSummarizerResponse } from "../../../../utils/summarizer-response";
 import { ISubAgent } from "../../../../types/agents";
 import { config } from "../../../../config";
-import { TaskQueue, sharedSubAgentQueue } from "../../../../utils/task-queue";
-import { subAgentQueuesRegistry } from "../../../../utils/sub-agent-queue-registry";
+import { TaskQueue, sharedSubAgentQueue } from "../queue/task-queue";
+import { subAgentQueuesRegistry } from "../queue/sub-agent-queue-registry";
 
 export interface SummarizerWorkerProps {
   sessionId: string,
