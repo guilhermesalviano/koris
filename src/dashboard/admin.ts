@@ -18,6 +18,7 @@ import { BEAT_TYPES, BeatType } from '../types/beat';
 import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
 import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../utils/heartbeat';
 import { activeRunsRegistry } from './active-runs';
+import { sharedSerialQueue } from '../services/providers/serial-queue';
 
 const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN', 'SERPAPI_KEY', 'SEARCH_API_KEY']);
 
@@ -218,6 +219,15 @@ class AdminRouterFactory {
 
     router.get('/active', (_req: Request, res: Response) => {
       res.json({ items: activeRunsRegistry.list() });
+    });
+
+    router.get('/queue', (_req: Request, res: Response) => {
+      res.json({
+        parallel: config.AI.PARALLEL,
+        subagentsParallel: config.AI.SUBAGENTS_PARALLEL,
+        backgroundGraceMs: config.AI.BACKGROUND_GRACE_MS,
+        ...sharedSerialQueue.snapshot(),
+      });
     });
 
     router.get('/audit', (req: Request, res: Response) => {

@@ -6,6 +6,7 @@ import { config } from '../../../../../../src/config';
 import { applyTestConfigDefaults } from '../../../../../helpers/test-config';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
 import { getLastWhitelistedJid } from '../../../../../../plugins/whatsapp';
+import { sharedSubAgentQueue } from '../../../../../../src/utils/task-queue';
 
 vi.mock('../../../../../../plugins/whatsapp', () => ({
   getLastWhitelistedJid: vi.fn(() => null),
@@ -334,6 +335,70 @@ describe('Heartbeat', () => {
         'Heartbeat: Beat "failing" failed.',
         expect.objectContaining({ err: expect.any(Error) }),
       );
+    });
+
+    it('executes due beats serially through the internal queue when subagents_parallel is false', async () => {
+      (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
+      const now = localDate(9, 0);
+      const release: Array<() => void> = [];
+      const gated = () => new Promise((resolve) => release.push(() => resolve({ kind: 'message', text: 'beat done' })));
+
+      const { heartbeat, completionService, channelsManager } = makeHeartbeat({
+        beats: [
+          {
+            id: 'beat-a',
+            beat: 'first beat',
+            cronExpression: '0 9 * * *',
+            type: 'report',
+          },
+          {
+            id: 'beat-b',
+            beat: 'second beat',
+            cronExpression: '0 9 * * *',
+            type: 'report',
+          },
+        ],
+      });
+      completionService.complete.mockImplementation(gated);
+
+      const run = heartbeat.handler(now);
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(completionService.complete).toHaveBeenCalledTimes(1);
+
+      release[0]();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(completionService.complete).toHaveBeenCalledTimes(2);
+
+      release[1]();
+      await run;
+
+      expect(channelsManager.sendMessage).toHaveBeenNthCalledWith(
+        1,
+        'telegram',
+        config.CHANNELS.TELEGRAM.CHAT_ID,
+        'beat done',
+      );
+      expect(channelsManager.sendMessage).toHaveBeenNthCalledWith(
+        2,
+        'telegram',
+        config.CHANNELS.TELEGRAM.CHAT_ID,
+        'beat done',
+      );
+    });
+
+    it('uses the shared sub-agent queue when subagents_parallel is false', async () => {
+      (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = false;
+      const { heartbeat } = makeHeartbeat();
+
+      expect((heartbeat as unknown as { queue: unknown }).queue).toBe(sharedSubAgentQueue);
+    });
+
+    it('uses its own queue when subagents_parallel is true', async () => {
+      (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
+      const { heartbeat } = makeHeartbeat();
+
+      expect((heartbeat as unknown as { queue: unknown }).queue).not.toBe(sharedSubAgentQueue);
     });
   });
 });

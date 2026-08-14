@@ -267,15 +267,9 @@ class DashboardServer implements WebServerHandle {
   }
 
   private static stopServer(server: Server): Promise<void> {
-    return new Promise((resolve, reject) => {
-      server.close((error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-
-        resolve();
-      });
+    return new Promise((resolve) => {
+      server.closeAllConnections?.();
+      server.close(() => resolve());
     });
   }
 

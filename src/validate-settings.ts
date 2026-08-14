@@ -141,6 +141,27 @@ async function main() {
   const supportedProviders = ['ollama', 'nvidia', 'mock'];
 
   check(
+    typeof config.AI.PARALLEL === 'boolean',
+    'ai.parallel is valid',
+    'Set ai.parallel to true or false in settings.json',
+    String(config.AI.PARALLEL),
+  );
+
+  check(
+    typeof config.AI.SUBAGENTS_PARALLEL === 'boolean',
+    'ai.subagents_parallel is valid',
+    'Set ai.subagents_parallel to true or false in settings.json',
+    String(config.AI.SUBAGENTS_PARALLEL),
+  );
+
+  check(
+    Number.isInteger(config.AI.BACKGROUND_GRACE_MS) && config.AI.BACKGROUND_GRACE_MS >= 0,
+    'ai.background_grace_ms is valid',
+    'Set ai.background_grace_ms to a non-negative integer in settings.json',
+    String(config.AI.BACKGROUND_GRACE_MS),
+  );
+
+  check(
     supportedProviders.includes(config.AI.MANAGER.PROVIDER),
     'ai.manager.provider is supported',
     `Got: "${config.AI.MANAGER.PROVIDER}". Supported: ${supportedProviders.join(', ')}.`,
