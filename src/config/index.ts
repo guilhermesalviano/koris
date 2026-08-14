@@ -32,6 +32,9 @@ export const config = {
     INTERVAL_MS: Number(get('heartbeat.interval_ms', (30 * 60 * 1000).toString())),
   },
   AI: {
+    PARALLEL: get('ai.parallel', 'true') === 'true',
+    SUBAGENTS_PARALLEL: get('ai.subagents_parallel', 'false') === 'true',
+    BACKGROUND_GRACE_MS: Number(get('ai.background_grace_ms', '5000')),
     MANAGER: {
       PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.manager.provider', 'ollama'),
       BASE_URL: get('ai.manager.base_url', 'http://localhost:11434'),

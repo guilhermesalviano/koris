@@ -8,6 +8,7 @@ import { beginFooterActivity } from "../../../../utils/footer-activity";
 import { parseSummarizerResponse } from "../../../../utils/summarizer-response";
 import { ISubAgent } from "../../../../types/agents";
 import { config } from "../../../../config";
+import { TaskQueue, sharedSubAgentQueue } from "../../../../utils/task-queue";
 
 export interface SummarizerWorkerProps {
   sessionId: string,
@@ -18,14 +19,22 @@ export interface SummarizerWorkerProps {
 }
 
 class Summarizer implements ISubAgent<SummarizerWorkerProps> {
+  private readonly queue: TaskQueue;
+
   constructor(
     private readonly logger: ILogger,
     private readonly completionService: IAICompletionService,
-  ) { }
+  ) {
+    this.queue = config.AI.SUBAGENTS_PARALLEL ? new TaskQueue(1) : sharedSubAgentQueue;
+  }
 
   async handler(
     props: SummarizerWorkerProps
   ): Promise<void> {
+    return this.queue.add(() => this.run(props));
+  }
+
+  private async run(props: SummarizerWorkerProps): Promise<void> {
     const endFooterActivity = beginFooterActivity('summarizer');
     this.logger.info(`Summarizer worker started for session ${props.sessionId} in ${props.channel}`);
     const prompt = replacePlaceholders(SUMMARIZATION_PROMPT, { v1: props.ask, v2: props.answer });
@@ -44,7 +53,7 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
       let embedding: number[] | undefined;
       if (config.AI.WORKERS.EMBEDDING_ENABLED) {
         try {
-          const provider = getAIProvider(this.logger, 'worker');
+          const provider = getAIProvider(this.logger, 'worker', { background: true });
           embedding = await provider.embed(parsedMemory.content);
         } catch (error) {
           this.logger.error(`Failed to generate embedding for summarized memory`, { error });
@@ -68,7 +77,7 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
 
 class SummarizerFactory {
   static create(logger: ILogger): Summarizer {
-    const completionService = new AICompletionService(getAIProvider(logger, 'worker'), logger, { role: 'worker', agentName: 'summarizer' });
+    const completionService = new AICompletionService(getAIProvider(logger, 'worker', { background: true }), logger, { role: 'worker', agentName: 'summarizer' });
     return new Summarizer(logger, completionService);
   }
 }

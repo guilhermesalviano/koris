@@ -4,6 +4,7 @@ import { ILogger } from '../../infrastructure/logger';
 import { OllamaAIProviderFactory } from './ollama';
 import { MockAIProviderFactory } from './mock';
 import { NvidiaAIProviderFactory } from './nvidia';
+import { SerialAIProvider } from './serial-provider';
 
 /**
  * Registry of available AI provider factories
@@ -18,23 +19,33 @@ type ProviderType = keyof typeof PROVIDER_FACTORIES;
 
 export type AIProviderRole = 'manager' | 'worker';
 
+export const AI_PRIORITY_BACKGROUND = 0;
+export const AI_PRIORITY_INTERACTIVE = 1;
+
+export interface GetAIProviderOptions {
+  background?: boolean;
+}
+
 /**
- * Singleton cache for AI provider instances, keyed by role.
+ * Singleton cache for AI provider instances, keyed by role and priority mode.
  */
 class ProviderCache {
-  private instances = new Map<AIProviderRole, AIProvider>();
+  private instances = new Map<string, AIProvider>();
   private cachedLogger: ILogger | null = null;
 
-  get(logger: ILogger, role: AIProviderRole): AIProvider | null {
+  get(logger: ILogger, key: string): AIProvider | null {
     if (this.cachedLogger !== null && this.cachedLogger !== logger) {
       this.clear();
     }
-    return this.instances.get(role) ?? null;
+    return this.instances.get(key) ?? null;
   }
 
-  set(provider: AIProvider, logger: ILogger, role: AIProviderRole): void {
+  set(provider: AIProvider, logger: ILogger, key: string): void {
+    if (this.cachedLogger !== null && this.cachedLogger !== logger) {
+      this.clear();
+    }
     this.cachedLogger = logger;
-    this.instances.set(role, provider);
+    this.instances.set(key, provider);
   }
 
   clear(): void {
@@ -47,20 +58,35 @@ const cache = new ProviderCache();
 
 /**
  * Get or create AI provider instance based on configuration and role.
- * Provider is cached as a singleton per logger and role.
+ * Provider is cached as a singleton per logger, role and priority mode.
+ *
+ * When `ai.parallel` is false the shared `SerialAIProvider` queue ensures
+ * manager and worker LLM calls never run at the same time. `background`
+ * callers (summarizer, heartbeat) get lower queue priority so they never
+ * block interactive requests. When `ai.parallel` is true the same wrapper
+ * still tracks in-flight activity for observability but runs calls
+ * concurrently.
  *
  * @throws {Error} If configured provider is not supported
  */
-export function getAIProvider(logger: ILogger, role: AIProviderRole = 'manager'): AIProvider {
-  const cached = cache.get(logger, role);
+export function getAIProvider(
+  logger: ILogger,
+  role: AIProviderRole = 'manager',
+  options?: GetAIProviderOptions,
+): AIProvider {
+  const priority = options?.background ? AI_PRIORITY_BACKGROUND : AI_PRIORITY_INTERACTIVE;
+  const label = options?.background ? `${role}:background` : role;
+  const key = `${role}:${priority}`;
+  const cached = cache.get(logger, key);
   if (cached) {
     return cached;
   }
 
   const provider = createAIProvider(logger, role);
-  cache.set(provider, logger, role);
+  const resolved = new SerialAIProvider(provider, undefined, priority, label);
+  cache.set(resolved, logger, key);
 
-  return provider;
+  return resolved;
 }
 
 /**
