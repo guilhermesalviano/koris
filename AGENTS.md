@@ -61,11 +61,11 @@ Guidance for AI coding agents working in this repository.
 
 ## Core message flow (follow this to trace behavior)
 
-1. A channel plugin (`plugins/telegram`, `plugins/whatsapp`, or `src/tui`) calls `Agent.handle(message, originId)`.
-2. `src/services/agents/message-gateway.ts` resolves the session, checks for commands (`/help` etc. via `src/services/commands/`), else delegates to the **MainAgent**.
+1. A channel plugin (`plugins/telegram`, `plugins/whatsapp`, or `src/tui`) calls `MessageGateway.handle(message, originId)`.
+2. `src/services/agents/message-gateway.ts` resolves the session via `session-context.ts`, checks for commands (`/help` etc. via `src/services/commands/`), else delegates to the **MainAgent**. After the response, `background-dispatcher.ts` fires the persistence + summarization jobs.
 3. `src/services/agents/main-agent.ts` builds the first prompt (`FIRST_PROMPT_HELPER`), calls `ChatService.complete()` (`src/services/chat/chat-service.ts`), which builds the full prompt via `PromptRepository.build()` and calls the AI provider.
-4. If the LLM returns tool calls, MainAgent splits them: `get_skill` calls go to the **LearnerWorker** (`src/services/workers/learner-worker.ts`), everything else goes to the **ExecutorWorker** (`src/services/workers/executor-worker.ts`) which loops tool-call → tool result → next LLM call until a final message.
-5. `Agent` fires background workers: `ConversationWorker` (`src/services/workers/conversation-worker.ts`) persists the exchange, and the **Summarizer** sub-agent (`src/services/agents/sub-agents/summarizer/`) may condense long context into memories.
+4. If the LLM returns tool calls, MainAgent hands them to the **ToolCallPipeline** (`src/services/agents/tool-call-pipeline.ts`), which splits them: `get_skill` calls go to the **LearnerWorker** (`src/services/workers/learner-worker.ts`), everything else goes to the **ExecutorWorker** (`src/services/workers/executor-worker.ts`) which loops tool-call → tool result → next LLM call until a final message.
+5. `MessageGateway` (via `background-dispatcher.ts`) fires background jobs: `ConversationWorker` (`src/services/workers/conversation-worker.ts`) persists the exchange, and the **Summarizer** sub-agent (`src/services/agents/sub-agents/summarizer/`) may condense long context into memories.
 6. Sub-agent execution loop keeps firing until terminal message or max iterations. Abort via `AbortController` passed in `ProcessOptions`.
 
 ## AI providers
@@ -81,9 +81,9 @@ Guidance for AI coding agents working in this repository.
 Two independent flags control how LLM calls are ordered:
 
 - `ai.parallel` — **provider-level** (`src/services/providers/serial-queue.ts`). `false` → all LLM calls share one slot: interactive calls (`manager`, executor/learner workers) jump ahead of background (`worker:background` — summarizer, heartbeat), and background waits a grace period after the last interactive call. Queue snapshot labels use the calling agent (`manager`, `executorWorker`, `heartbeat`, `summarizer`, …) via `AIChatOptions.audit.agentName`. `true` (default) → the shared queue is bypassed and calls run concurrently (in-flight activity still tracked for the dashboard `/api/admin/queue`).
-- `ai.subagents_parallel` — **sub-agent-level** (`src/utils/task-queue.ts`), independent of the above. `false` (default) → the `heartbeat` and `summarizer` share `sharedSubAgentQueue` (concurrency 1) so they never run simultaneously. `true` → each keeps its own concurrency-1 queue, so they may run at the same time but never concurrently within themselves.
+- `ai.subagents_parallel` — **sub-agent-level** (`src/services/sub-agents-queue/task-queue.ts`), independent of the above. `false` (default) → the `heartbeat` and `summarizer` share `sharedSubAgentQueue` (concurrency 1) so they never run simultaneously. `true` → each keeps its own concurrency-1 queue, so they may run at the same time but never concurrently within themselves.
 
-`heartbeat`/`summarizer` never run their own tasks concurrently (no internal concurrency); the flags only change whether the two sub-agents share a queue or not. Note: when both `ai.parallel` and `ai.subagents_parallel` are `false`, the provider queue already serializes everything, making the sub-agent queue redundant for cross-agent ordering (it still guarantees within-agent ordering). Sub-agent queue state is exposed via `src/utils/sub-agent-queue-registry.ts` on the dashboard queue page.
+`heartbeat`/`summarizer` never run their own tasks concurrently (no internal concurrency); the flags only change whether the two sub-agents share a queue or not. Note: when both `ai.parallel` and `ai.subagents_parallel` are `false`, the provider queue already serializes everything, making the sub-agent queue redundant for cross-agent ordering (it still guarantees within-agent ordering). Sub-agent queue state is exposed via `src/services/sub-agents-queue/sub-agent-queue-registry.ts` on the dashboard queue page.
 
 ## Tools
 
@@ -98,8 +98,8 @@ Two independent flags control how LLM calls are ordered:
 
 ## Workers & sub-agents
 
-- `src/services/workers/` — `conversation-worker.ts`, `executor-worker.ts`, `learner-worker.ts`. All implement `IWorker` (`src/types/workers.ts`).
-- `src/services/agents/` — `message-gateway.ts` (channel entry facade: sessions, commands, background workers), `main-agent.ts` (main LLM orchestrator), `sub-agents/` (`heartbeat/` scheduled beats: `runner.ts` schedules, `sub-agent.ts` runs the beat LLM; `summarizer/`).
+- `src/services/workers/` — `conversation-worker.ts`, `executor-worker.ts`, `learner-worker.ts`. All implement the generic `IWorker<TArgs, TResult>` (`src/types/workers.ts`).
+- `src/services/agents/` — `message-gateway.ts` (channel entry facade), `session-context.ts` (session + per-session message/memory services), `background-dispatcher.ts` (fire-and-forget persistence + summarization), `main-agent.ts` (main LLM orchestrator), `tool-call-pipeline.ts` (learn → execute tool orchestration, shared with heartbeat), `sub-agents/` (`heartbeat/` scheduled beats: `runner.ts` schedules, `sub-agent.ts` runs the beat LLM; `summarizer/`).
 
 ## Plugins & skills (extension mechanisms)
 
@@ -115,13 +115,13 @@ Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/l
 - The browser UI is a React 19 SPA (Vite, React Router, Tailwind v4) in `web/`; the server side is the Express dashboard in `src/dashboard/`. `src/dashboard/index.ts` serves the built bundle from `dist-web/` and ends with an SPA fallback that returns `index.html` for any unmatched GET so React Router owns routing.
 - Trace path: `web/index.html` (`#root`) → `web/src/main.tsx` (BrowserRouter) → `web/src/App.tsx` (`/` redirects to `/admin`) → `web/src/pages/admin/AdminLayout.tsx` (sidebar + nested routes) → per-page components in `web/src/pages/admin/`. Shared UI lives in `web/src/components/AdminUI.tsx`.
 - `web/src/lib/api.ts` — `streamChat()` consumes the `/api/chat` SSE stream (`progress` status + `content_block_delta` text events); `apiRequest()` calls `/api/admin/*`; `checkHealth()` polls `/health`. `web/src/lib/markdown.ts` + `types.ts` handle rendering and response types.
-- `web/src/lib/chat-context.tsx` — `ChatProvider`/`useChat` hold conversation state, hydrate prior history from `/api/admin/chat/history`, stream replies, and poll server health every 5s. Chats are sessions; `POST /api/admin/sessions` creates a new one without ending the previous, `/api/chat` accepts an optional `sessionId` to route messages to a specific session (`agent.handle(message, 'web', { sessionId })`, `src/dashboard/index.ts:104`).
+- `web/src/lib/chat-context.tsx` — `ChatProvider`/`useChat` hold conversation state, hydrate prior history from `/api/admin/chat/history`, stream replies, and poll server health every 5s. Chats are sessions; `POST /api/admin/sessions` creates a new one without ending the previous, `/api/chat` accepts an optional `sessionId` to route messages to a specific session (`gateway.handle(message, 'web', { sessionId })`, `src/dashboard/index.ts:104`).
 - Admin API: `src/dashboard/admin.ts` (`AdminRouterFactory`, mounted at `/api/admin`) — overview, sessions, memories, chat history, heartbeats (create/update/delete with cron validation), skills, settings. Settings are deep-masked for secrets (`BOT_TOKEN`, `API_TOKEN`, `SEARCH_API_KEY`).
 - Build `pnpm build:client` → `dist-web/` (root/outDir in `vite.config.mts`); dev `pnpm dev:client` on port 5173 proxies `/api` and `/health` to `localhost:3000`; type-check via `pnpm lint:client` (`web/tsconfig.json`).
 
 ## Conventions to follow
 
-- **Interfaces prefixed `I`** (`IAgent`, `ILogger`, `IChatService`); implementations are classes; creation is via `XxxFactory.create()` and singletons via `XxxSingleton.getInstance()`.
+- **Interfaces prefixed `I`** (`IMessageGateway`, `ILogger`, `IChatService`); implementations are classes; creation is via `XxxFactory.create()` and singletons via `XxxSingleton.getInstance()`.
 - **No code comments** in source files unless asked. Code should be self-explanatory.
 - **Relative imports only** (the `@` alias exists only in Vitest config, not tsconfig — tests can use `@/`, source should not).
 - Config values come from the `config` object, never hard-coded secrets or paths.

@@ -1,4 +1,4 @@
-export interface IWorker {
+export interface IWorker<TArgs = unknown, TResult = unknown> {
   name: string;
-  run: (args: any) => Promise<any>;
+  run(args: TArgs): Promise<TResult>;
 }

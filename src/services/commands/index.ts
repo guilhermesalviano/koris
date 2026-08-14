@@ -216,6 +216,7 @@ function formatCommandResult(message: string, channel: string): CommandResult {
 /**
  * Check if a message is a command
  */
+// todo: do not limit commands with slash, but with a list of known commands
 export function isCommand(message: string): boolean {
   return message.trim().startsWith('/');
 }
