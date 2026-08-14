@@ -28,6 +28,7 @@ export interface AIChatOptions {
     runId?: string;
     sessionId?: string;
     channel?: string;
+    agentName?: string;
   };
   onUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void;
 }

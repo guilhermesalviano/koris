@@ -19,6 +19,7 @@ import { IChannelsManager } from "../../../../channels";
 import { getLastWhitelistedJid } from "../../../../../plugins/whatsapp";
 import type { IWorker } from "../../../../types/workers";
 import { TaskQueue, sharedSubAgentQueue } from "../../../../utils/task-queue";
+import { subAgentQueuesRegistry } from "../../../../utils/sub-agent-queue-registry";
 
 class Heartbeat implements ISubAgent<Date> {
   constructor(
@@ -31,6 +32,7 @@ class Heartbeat implements ISubAgent<Date> {
     private executorWorker: IWorker,
   ) {
     this.queue = config.AI.SUBAGENTS_PARALLEL ? new TaskQueue(1) : sharedSubAgentQueue;
+    subAgentQueuesRegistry.register('heartbeat', this.queue);
   }
 
   private queue: TaskQueue;

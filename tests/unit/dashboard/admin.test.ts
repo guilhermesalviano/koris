@@ -220,6 +220,7 @@ describe('AdminRouterFactory /queue', () => {
     expect(typeof body.parallel).toBe('boolean');
     expect(typeof body.subagentsParallel).toBe('boolean');
     expect(typeof body.backgroundGraceMs).toBe('number');
+    expect(Array.isArray(body.subAgents)).toBe(true);
     expect(Array.isArray(body.running)).toBe(true);
     expect(body.running).toEqual([]);
     expect(body.queued).toEqual([]);

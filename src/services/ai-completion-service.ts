@@ -74,6 +74,7 @@ export class AICompletionService implements IAICompletionService {
 
     const providerOptions: AIChatOptions = {
       ...options,
+      audit: { ...(options?.audit ?? {}), agentName: this.agentName },
       onUsage: (u) => { usage = u; },
     };
 

@@ -25,6 +25,10 @@ export class TaskQueue {
       });
     }
   }
+
+  snapshot(): { queued: number; active: number; concurrency: number } {
+    return { queued: this.queue.length, active: this.active, concurrency: this.concurrency };
+  }
 }
 
 export const sharedSubAgentQueue = new TaskQueue(1);

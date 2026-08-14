@@ -104,10 +104,18 @@ export interface QueueTaskInfo {
   eligible: boolean;
 }
 
+export interface SubAgentQueueState {
+  names: string[];
+  queued: number;
+  active: number;
+  concurrency: number;
+}
+
 export interface QueueResponse {
   parallel: boolean;
   subagentsParallel: boolean;
   backgroundGraceMs: number;
+  subAgents: SubAgentQueueState[];
   running: QueueTaskInfo[];
   queued: QueueTaskInfo[];
 }

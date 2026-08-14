@@ -76,6 +76,15 @@ Guidance for AI coding agents working in this repository.
 - `src/services/provider-health-service.ts` — health checks / timeouts for providers.
 - Add a new provider: create `src/services/providers/<name>/index.ts`, register it in the `PROVIDER_FACTORIES` map.
 
+### Background sub-agent queueing
+
+Two independent flags control how LLM calls are ordered:
+
+- `ai.parallel` — **provider-level** (`src/services/providers/serial-queue.ts`). `false` → all LLM calls share one slot: interactive calls (`manager`, executor/learner workers) jump ahead of background (`worker:background` — summarizer, heartbeat), and background waits a grace period after the last interactive call. Queue snapshot labels use the calling agent (`manager`, `executorWorker`, `heartbeat`, `summarizer`, …) via `AIChatOptions.audit.agentName`. `true` (default) → the shared queue is bypassed and calls run concurrently (in-flight activity still tracked for the dashboard `/api/admin/queue`).
+- `ai.subagents_parallel` — **sub-agent-level** (`src/utils/task-queue.ts`), independent of the above. `false` (default) → the `heartbeat` and `summarizer` share `sharedSubAgentQueue` (concurrency 1) so they never run simultaneously. `true` → each keeps its own concurrency-1 queue, so they may run at the same time but never concurrently within themselves.
+
+`heartbeat`/`summarizer` never run their own tasks concurrently (no internal concurrency); the flags only change whether the two sub-agents share a queue or not. Note: when both `ai.parallel` and `ai.subagents_parallel` are `false`, the provider queue already serializes everything, making the sub-agent queue redundant for cross-agent ordering (it still guarantees within-agent ordering). Sub-agent queue state is exposed via `src/utils/sub-agent-queue-registry.ts` on the dashboard queue page.
+
 ## Tools
 
 - Tool registry: `src/services/tools/index.ts` — `AgnosticExecutionTool` dispatches tool name → handler via `COMMAND_MAP`.
