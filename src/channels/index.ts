@@ -1,13 +1,13 @@
 import { ExtensionPoint } from '../../plugins/registry';
 import type { ILogger } from '../infrastructure/logger';
-import type { IAgent } from '../services/agents/agent';
+import type { IMessageGateway } from '../services/agents/message-gateway';
 
 export type StopFn = () => void;
 
 export interface ChannelDefinition {
   name: string;
   enabled: () => boolean;
-  start: (logger: ILogger, agent: IAgent) => StopFn | void;
+  start: (logger: ILogger, gateway: IMessageGateway) => StopFn | void;
   sendMessage?: (logger: ILogger, target: string, message: string) => Promise<void>;
 }
 
@@ -19,17 +19,17 @@ export interface IChannelsManager {
 
 class ChannelsManager implements IChannelsManager {
   private logger: ILogger;
-  private agent: IAgent;
+  private gateway: IMessageGateway;
   private stopFns: StopFn[] = [];
   private channels: ChannelDefinition[];
 
   constructor(
     logger: ILogger,
-    agent: IAgent,
+    gateway: IMessageGateway,
     channels: ChannelDefinition[] = [],
   ) {
     this.logger = logger;
-    this.agent = agent;
+    this.gateway = gateway;
     this.channels = channels;
   }
 
@@ -37,7 +37,7 @@ class ChannelsManager implements IChannelsManager {
     for (const channel of this.channels) {
       if (!channel.enabled()) continue;
       this.logger.info(`Starting channel: ${channel.name}`);
-      const stop = channel.start(this.logger, this.agent);
+      const stop = channel.start(this.logger, this.gateway);
       if (typeof stop === 'function') this.stopFns.push(stop);
     }
   }
@@ -69,7 +69,7 @@ class ChannelsManager implements IChannelsManager {
 class ChannelsSingleton {
   private static instance: ChannelsManager;
 
-  static getInstance(logger: ILogger, agent: IAgent, channels: ChannelDefinition[] = []): ChannelsManager {
+  static getInstance(logger: ILogger, gateway: IMessageGateway, channels: ChannelDefinition[] = []): ChannelsManager {
     if (!ChannelsSingleton.instance) {
       const seen = new Set<string>();
       const duplicates = channels
@@ -82,7 +82,7 @@ class ChannelsSingleton {
         );
       }
 
-      ChannelsSingleton.instance = new ChannelsManager(logger, agent, channels);
+      ChannelsSingleton.instance = new ChannelsManager(logger, gateway, channels);
     }
     return ChannelsSingleton.instance;
   }

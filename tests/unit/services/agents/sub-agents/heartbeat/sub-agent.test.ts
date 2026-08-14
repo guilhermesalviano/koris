@@ -6,7 +6,7 @@ import { config } from '../../../../../../src/config';
 import { applyTestConfigDefaults } from '../../../../../helpers/test-config';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
 import { getLastWhitelistedJid } from '../../../../../../plugins/whatsapp';
-import { sharedSubAgentQueue } from '../../../../../../src/utils/task-queue';
+import { sharedSubAgentQueue } from '../../../../../../src/services/sub-agents-queue/task-queue';
 
 vi.mock('../../../../../../plugins/whatsapp', () => ({
   getLastWhitelistedJid: vi.fn(() => null),

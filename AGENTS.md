@@ -36,7 +36,7 @@ Guidance for AI coding agents working in this repository.
 
 ## Repository layout (quick map)
 
-- `src/app.ts` — process entry point: wires DB, SessionManager, Agent, channels, heartbeat, web server, TUI. Mode detection via argv flags.
+- `src/app.ts` — process entry point: wires DB, SessionManager, MessageGateway, channels, heartbeat, web server, TUI. Mode detection via argv flags.
 - `src/onboard.ts`, `src/validate-settings.ts` — CLI entry points (`pnpm onboard`, `pnpm validate`).
 - `src/config/` — loads `settings.json` into the typed `config` constant (`config/index.ts`). `config.BASE_DIR` is `process.cwd()`. Read-only; every module imports `config` directly.
 - `src/constants/` — static prompt/agent text: main agent prompt, sub-agent prompts, thinking, TUI, command help.
@@ -62,9 +62,9 @@ Guidance for AI coding agents working in this repository.
 ## Core message flow (follow this to trace behavior)
 
 1. A channel plugin (`plugins/telegram`, `plugins/whatsapp`, or `src/tui`) calls `Agent.handle(message, originId)`.
-2. `src/services/agents/main-agent/agent.ts` resolves the session, checks for commands (`/help` etc. via `src/services/commands/`), else delegates to the **Manager**.
-3. `src/services/agents/sub-agents/manager.ts` builds the first prompt (`FIRST_PROMPT_HELPER`), calls `ChatService.complete()` (`src/services/chat/chat-service.ts`), which builds the full prompt via `PromptRepository.build()` and calls the AI provider.
-4. If the LLM returns tool calls, Manager splits them: `get_skill` calls go to the **LearnerWorker** (`src/services/workers/learner-worker.ts`), everything else goes to the **ExecutorWorker** (`src/services/workers/executor-worker.ts`) which loops tool-call → tool result → next LLM call until a final message.
+2. `src/services/agents/message-gateway.ts` resolves the session, checks for commands (`/help` etc. via `src/services/commands/`), else delegates to the **MainAgent**.
+3. `src/services/agents/main-agent.ts` builds the first prompt (`FIRST_PROMPT_HELPER`), calls `ChatService.complete()` (`src/services/chat/chat-service.ts`), which builds the full prompt via `PromptRepository.build()` and calls the AI provider.
+4. If the LLM returns tool calls, MainAgent splits them: `get_skill` calls go to the **LearnerWorker** (`src/services/workers/learner-worker.ts`), everything else goes to the **ExecutorWorker** (`src/services/workers/executor-worker.ts`) which loops tool-call → tool result → next LLM call until a final message.
 5. `Agent` fires background workers: `ConversationWorker` (`src/services/workers/conversation-worker.ts`) persists the exchange, and the **Summarizer** sub-agent (`src/services/agents/sub-agents/summarizer/`) may condense long context into memories.
 6. Sub-agent execution loop keeps firing until terminal message or max iterations. Abort via `AbortController` passed in `ProcessOptions`.
 
@@ -99,7 +99,7 @@ Two independent flags control how LLM calls are ordered:
 ## Workers & sub-agents
 
 - `src/services/workers/` — `conversation-worker.ts`, `executor-worker.ts`, `learner-worker.ts`. All implement `IWorker` (`src/types/workers.ts`).
-- `src/services/agents/sub-agents/` — `manager.ts` (orchestrator), `heartbeat/` (scheduled beats: `runner.ts` schedules, `sub-agent.ts` runs the beat LLM), `summarizer/`.
+- `src/services/agents/` — `message-gateway.ts` (channel entry facade: sessions, commands, background workers), `main-agent.ts` (main LLM orchestrator), `sub-agents/` (`heartbeat/` scheduled beats: `runner.ts` schedules, `sub-agent.ts` runs the beat LLM; `summarizer/`).
 
 ## Plugins & skills (extension mechanisms)
 

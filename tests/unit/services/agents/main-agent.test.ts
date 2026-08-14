@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Manager } from '../../../../../src/services/agents/sub-agents/manager';
-import type { ILogger } from '../../../../../src/infrastructure/logger';
-import type { Message } from '../../../../../src/entities/message';
+import { MainAgent } from '../../../../src/services/agents/main-agent';
+import type { ILogger } from '../../../../src/infrastructure/logger';
+import type { Message } from '../../../../src/entities/message';
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
@@ -25,30 +25,30 @@ function makeManager(overrides: Partial<{
   const learnerRun = overrides.learnerRun ?? vi.fn().mockResolvedValue(undefined);
   const executorRun = overrides.executorRun ?? vi.fn().mockResolvedValue('tool result');
 
-  const manager = new Manager(
+  const mainAgent = new MainAgent(
     logger,
-    'Manager',
+    'MainAgent',
     { enqueue: vi.fn() } as never,
     { complete: chatComplete } as never,
     { run: learnerRun } as never,
     { run: executorRun } as never,
   );
 
-  return { manager, logger, chatComplete, learnerRun, executorRun };
+  return { mainAgent, logger, chatComplete, learnerRun, executorRun };
 }
 
-describe('Manager', () => {
+describe('MainAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('returns a direct message response from chat completion', async () => {
-    const { manager } = makeManager({
+    const { mainAgent } = makeManager({
       chatComplete: vi.fn().mockResolvedValue({ kind: 'message', text: 'hello user' }),
     });
     const message = makeMessageService();
 
-    const result = await manager.run({
+    const result = await mainAgent.run({
       userMessage: 'hello',
       channel: 'tui',
       message: message as never,
@@ -59,14 +59,14 @@ describe('Manager', () => {
 
   it('executes non-skill tool calls through the executor worker', async () => {
     const toolCalls = [{ name: 'execute_command', arguments: { command: 'ls' } }];
-    const { manager, executorRun } = makeManager({
+    const { mainAgent, executorRun } = makeManager({
       chatComplete: vi.fn().mockResolvedValue({ kind: 'tool_calls', calls: toolCalls }),
       executorRun: vi.fn().mockResolvedValue('listed files'),
     });
     const message = makeMessageService([{ role: 'user', content: 'list files' } as Message]);
     const onProgress = vi.fn();
 
-    const result = await manager.run({
+    const result = await mainAgent.run({
       userMessage: 'list files',
       channel: 'tui',
       message: message as never,
@@ -92,13 +92,13 @@ describe('Manager', () => {
       .fn()
       .mockResolvedValueOnce({ kind: 'tool_calls', calls: learnCalls })
       .mockResolvedValueOnce({ kind: 'tool_calls', calls: executeCalls });
-    const { manager, learnerRun, executorRun } = makeManager({
+    const { mainAgent, learnerRun, executorRun } = makeManager({
       chatComplete,
       executorRun: vi.fn().mockResolvedValue('deployed'),
     });
     const message = makeMessageService();
 
-    const result = await manager.run({
+    const result = await mainAgent.run({
       userMessage: 'deploy app',
       channel: 'tui',
       message: message as never,
@@ -123,10 +123,10 @@ describe('Manager', () => {
       .fn()
       .mockResolvedValueOnce({ kind: 'tool_calls', calls: learnCalls })
       .mockResolvedValueOnce({ kind: 'message', text: 'skill loaded' });
-    const { manager, executorRun } = makeManager({ chatComplete });
+    const { mainAgent, executorRun } = makeManager({ chatComplete });
     const message = makeMessageService();
 
-    const result = await manager.run({
+    const result = await mainAgent.run({
       userMessage: 'learn deploy',
       channel: 'tui',
       message: message as never,
@@ -137,13 +137,13 @@ describe('Manager', () => {
   });
 
   it('returns an empty string when there are no executable tools', async () => {
-    const { manager, executorRun } = makeManager({
+    const { mainAgent, executorRun } = makeManager({
       chatComplete: vi.fn().mockResolvedValue({ kind: 'tool_calls', calls: [] }),
     });
     const message = makeMessageService();
     const onProgress = vi.fn();
 
-    const result = await manager.run({
+    const result = await mainAgent.run({
       userMessage: 'noop',
       channel: 'tui',
       message: message as never,
@@ -157,12 +157,12 @@ describe('Manager', () => {
 
   it('uses logger.info as default onProgress callback', async () => {
     const toolCalls = [{ name: 'execute_command', arguments: { command: 'pwd' } }];
-    const { manager, logger } = makeManager({
+    const { mainAgent, logger } = makeManager({
       chatComplete: vi.fn().mockResolvedValue({ kind: 'tool_calls', calls: toolCalls }),
     });
     const message = makeMessageService();
 
-    await manager.run({
+    await mainAgent.run({
       userMessage: 'where am I',
       channel: 'tui',
       message: message as never,
