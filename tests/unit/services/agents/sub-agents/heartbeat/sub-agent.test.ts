@@ -21,7 +21,7 @@ function makeLogger(): ILogger {
 function makeHeartbeat(overrides: Partial<{
   beats: Array<{ id: string; beat: string; cronExpression: string; type: string; lastRun?: Date }>;
   completionResponse: unknown;
-  executorResult: string;
+  pipelineResult: string;
 }> = {}) {
   const logger = makeLogger();
   const heartbeatRepository = {
@@ -36,8 +36,8 @@ function makeHeartbeat(overrides: Partial<{
       overrides.completionResponse ?? { kind: 'message', text: 'beat done' },
     ),
   };
-  const executorWorker = {
-    run: vi.fn().mockResolvedValue(overrides.executorResult ?? 'executed'),
+  const pipeline = {
+    execute: vi.fn().mockResolvedValue(overrides.pipelineResult ?? 'executed'),
   };
   const channelsManager = {
     sendMessage: vi.fn().mockResolvedValue(undefined),
@@ -50,7 +50,7 @@ function makeHeartbeat(overrides: Partial<{
     { enqueue: vi.fn() } as never,
     channelsManager as never,
     completionService as never,
-    executorWorker as never,
+    pipeline as never,
   );
 
   return {
@@ -59,7 +59,7 @@ function makeHeartbeat(overrides: Partial<{
     heartbeatRepository,
     promptRepository,
     completionService,
-    executorWorker,
+    pipeline,
     channelsManager,
   };
 }
@@ -160,10 +160,10 @@ describe('Heartbeat', () => {
       expect(logger.info).toHaveBeenCalledWith('Heartbeat: Beat "morning" completed successfully.');
     });
 
-    it('routes tool-call responses through the executor worker', async () => {
+    it('routes tool-call responses through the tool-call pipeline', async () => {
       const now = localDate(9, 0);
       const toolCalls = [{ name: 'execute_command', arguments: { command: 'echo hi' } }];
-      const { heartbeat, executorWorker, channelsManager } = makeHeartbeat({
+      const { heartbeat, pipeline, channelsManager } = makeHeartbeat({
         beats: [{
           id: 'tool-beat',
           beat: 'run command',
@@ -171,16 +171,18 @@ describe('Heartbeat', () => {
           type: 'automation',
         }],
         completionResponse: { kind: 'tool_calls', calls: toolCalls },
-        executorResult: 'hi',
+        pipelineResult: 'hi',
       });
 
       await heartbeat.handler(now);
 
-      expect(executorWorker.run).toHaveBeenCalledWith(
+      expect(pipeline.execute).toHaveBeenCalledWith(
+        toolCalls,
+        'run command',
+        [],
         expect.objectContaining({
-          toolCalls,
-          userMessage: 'run command',
-          messageHistory: [],
+          channel: 'background',
+          options: expect.objectContaining({ runId: 'tool-beat' }),
         }),
       );
       expect(channelsManager.sendMessage).toHaveBeenCalledWith(

@@ -15,26 +15,22 @@ function makeMessageService(history: Message[] = []) {
   };
 }
 
-function makeManager(overrides: Partial<{
+function makeMainAgent(overrides: Partial<{
   chatComplete: ReturnType<typeof vi.fn>;
-  learnerRun: ReturnType<typeof vi.fn>;
-  executorRun: ReturnType<typeof vi.fn>;
+  pipelineExecute: ReturnType<typeof vi.fn>;
 }> = {}) {
   const logger = makeLogger();
   const chatComplete = overrides.chatComplete ?? vi.fn().mockResolvedValue({ kind: 'message', text: 'done' });
-  const learnerRun = overrides.learnerRun ?? vi.fn().mockResolvedValue(undefined);
-  const executorRun = overrides.executorRun ?? vi.fn().mockResolvedValue('tool result');
+  const pipelineExecute = overrides.pipelineExecute ?? vi.fn().mockResolvedValue('tool result');
 
   const mainAgent = new MainAgent(
     logger,
-    'MainAgent',
-    { enqueue: vi.fn() } as never,
     { complete: chatComplete } as never,
-    { run: learnerRun } as never,
-    { run: executorRun } as never,
+    { enqueue: vi.fn() } as never,
+    { execute: pipelineExecute } as never,
   );
 
-  return { mainAgent, logger, chatComplete, learnerRun, executorRun };
+  return { mainAgent, logger, chatComplete, pipelineExecute };
 }
 
 describe('MainAgent', () => {
@@ -43,7 +39,7 @@ describe('MainAgent', () => {
   });
 
   it('returns a direct message response from chat completion', async () => {
-    const { mainAgent } = makeManager({
+    const { mainAgent, pipelineExecute } = makeMainAgent({
       chatComplete: vi.fn().mockResolvedValue({ kind: 'message', text: 'hello user' }),
     });
     const message = makeMessageService();
@@ -55,109 +51,43 @@ describe('MainAgent', () => {
     });
 
     expect(result).toBe('hello user');
+    expect(pipelineExecute).not.toHaveBeenCalled();
   });
 
-  it('executes non-skill tool calls through the executor worker', async () => {
+  it('delegates tool-call responses to the pipeline', async () => {
     const toolCalls = [{ name: 'execute_command', arguments: { command: 'ls' } }];
-    const { mainAgent, executorRun } = makeManager({
+    const { mainAgent, pipelineExecute } = makeMainAgent({
       chatComplete: vi.fn().mockResolvedValue({ kind: 'tool_calls', calls: toolCalls }),
-      executorRun: vi.fn().mockResolvedValue('listed files'),
+      pipelineExecute: vi.fn().mockResolvedValue('listed files'),
     });
     const message = makeMessageService([{ role: 'user', content: 'list files' } as Message]);
     const onProgress = vi.fn();
+    const controller = new AbortController();
 
     const result = await mainAgent.run({
       userMessage: 'list files',
       channel: 'tui',
       message: message as never,
-      options: { onProgress },
+      options: { onProgress, signal: controller.signal },
     });
 
-    expect(executorRun).toHaveBeenCalledWith({
+    expect(pipelineExecute).toHaveBeenCalledWith(
       toolCalls,
-      userMessage: 'list files',
-      messageHistory: [{ role: 'user', content: 'list files' }],
-      ctx: expect.objectContaining({
+      'list files',
+      [{ role: 'user', content: 'list files' }],
+      expect.objectContaining({
         channel: 'tui',
+        message,
         onProgress,
+        signal: controller.signal,
       }),
-    });
+    );
     expect(result).toBe('listed files');
   });
 
-  it('runs the learner before executing tools after get_skill calls', async () => {
-    const learnCalls = [{ name: 'get_skill', arguments: { skill_name: 'deploy' } }];
-    const executeCalls = [{ name: 'execute_command', arguments: { command: 'deploy' } }];
-    const chatComplete = vi
-      .fn()
-      .mockResolvedValueOnce({ kind: 'tool_calls', calls: learnCalls })
-      .mockResolvedValueOnce({ kind: 'tool_calls', calls: executeCalls });
-    const { mainAgent, learnerRun, executorRun } = makeManager({
-      chatComplete,
-      executorRun: vi.fn().mockResolvedValue('deployed'),
-    });
-    const message = makeMessageService();
-
-    const result = await mainAgent.run({
-      userMessage: 'deploy app',
-      channel: 'tui',
-      message: message as never,
-    });
-
-    expect(learnerRun).toHaveBeenCalledWith(
-      expect.objectContaining({
-        toolCalls: learnCalls,
-        userMessage: 'deploy app',
-      }),
-    );
-    expect(chatComplete).toHaveBeenCalledTimes(2);
-    expect(executorRun).toHaveBeenCalledWith(
-      expect.objectContaining({ toolCalls: executeCalls }),
-    );
-    expect(result).toBe('deployed');
-  });
-
-  it('returns an empty string when learning completes without follow-up tools', async () => {
-    const learnCalls = [{ name: 'get_skill', arguments: { skill_name: 'deploy' } }];
-    const chatComplete = vi
-      .fn()
-      .mockResolvedValueOnce({ kind: 'tool_calls', calls: learnCalls })
-      .mockResolvedValueOnce({ kind: 'message', text: 'skill loaded' });
-    const { mainAgent, executorRun } = makeManager({ chatComplete });
-    const message = makeMessageService();
-
-    const result = await mainAgent.run({
-      userMessage: 'learn deploy',
-      channel: 'tui',
-      message: message as never,
-    });
-
-    expect(result).toBe('skill loaded');
-    expect(executorRun).not.toHaveBeenCalled();
-  });
-
-  it('returns an empty string when there are no executable tools', async () => {
-    const { mainAgent, executorRun } = makeManager({
-      chatComplete: vi.fn().mockResolvedValue({ kind: 'tool_calls', calls: [] }),
-    });
-    const message = makeMessageService();
-    const onProgress = vi.fn();
-
-    const result = await mainAgent.run({
-      userMessage: 'noop',
-      channel: 'tui',
-      message: message as never,
-      options: { onProgress },
-    });
-
-    expect(result).toBe('');
-    expect(executorRun).not.toHaveBeenCalled();
-    expect(onProgress).toHaveBeenCalledWith('No tools to execute');
-  });
-
-  it('uses logger.info as default onProgress callback', async () => {
+  it('uses logger.info as the default onProgress callback', async () => {
     const toolCalls = [{ name: 'execute_command', arguments: { command: 'pwd' } }];
-    const { mainAgent, logger } = makeManager({
+    const { mainAgent, logger, pipelineExecute } = makeMainAgent({
       chatComplete: vi.fn().mockResolvedValue({ kind: 'tool_calls', calls: toolCalls }),
     });
     const message = makeMessageService();
@@ -168,8 +98,28 @@ describe('MainAgent', () => {
       message: message as never,
     });
 
-    expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining('Execution phase: 1 tool(s)'),
+    const ctx = pipelineExecute.mock.calls[0][3] as { onProgress: (progress: string) => void };
+    ctx.onProgress('iteration 1');
+    expect(logger.info).toHaveBeenCalledWith('iteration 1');
+  });
+
+  it('passes the runId through to chat completion', async () => {
+    const { mainAgent, chatComplete } = makeMainAgent();
+    const message = makeMessageService();
+
+    await mainAgent.run({
+      userMessage: 'hello',
+      channel: 'tui',
+      message: message as never,
+      options: { runId: 'run-123' },
+    });
+
+    expect(chatComplete).toHaveBeenCalledWith(
+      expect.stringContaining('hello'),
+      'tui',
+      expect.objectContaining({ runId: 'run-123' }),
+      [],
+      'session-1',
     );
   });
 });

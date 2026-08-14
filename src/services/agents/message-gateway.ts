@@ -3,17 +3,11 @@ import { previewMessage, toSafeMessage } from '../../utils/message';
 import { ILogger } from '../../infrastructure/logger';
 import { IDatabaseService } from '../../infrastructure/db-sqlite';
 import { ISessionManager } from '../session-manager';
-import { MessageServiceFactory } from '../message-service';
-import { ConversationWorkerFactory } from '../workers/conversation-worker';
-import { SummarizerFactory } from './sub-agents/summarizer/sub-agent';
-import { IMemoryService, MemoryServiceFactory } from '../memory-service';
 import { IMainAgent, MainAgentFactory } from './main-agent';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
-import { IWorker } from '../../types/workers';
-import { ISubAgent } from '../../types/agents';
-import { config } from '../../config';
-import { ISessionService } from '../session-service';
 import { generateId } from '../../utils/generate-id';
+import { ISessionContextFactory, SessionContextFactory } from './session-context';
+import { IBackgroundDispatcher, BackgroundDispatcherFactory } from './background-dispatcher';
 
 interface IMessageGateway {
   handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage>;
@@ -22,26 +16,27 @@ interface IMessageGateway {
 class MessageGateway implements IMessageGateway {
   constructor(
     private logger: ILogger,
-    private db: IDatabaseService,
-    private sessionManager: ISessionManager,
-    private conversationWorker: IWorker,
-    private summarizerWorker: ISubAgent,
-    private mainAgent: IMainAgent,
     private channel: string,
-  ) { }
+    private sessionContextFactory: ISessionContextFactory,
+    private backgroundDispatcher: IBackgroundDispatcher,
+    private mainAgent: IMainAgent,
+  ) {}
 
   async handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage> {
-    const sessionService = this.resolveSessionService(originId, options?.sessionId);
-    const messageService = MessageServiceFactory.create(this.db, sessionService);
-    const memoryService = MemoryServiceFactory.create(this.db, sessionService);
     const safeMessage = toSafeMessage(message);
 
     this.logger.info(`Processing message from ${this.channel} (origin: ${originId}): "${previewMessage(safeMessage)}"`);
 
-    // todo: do not limit commands with slash, but with a list of known commands
+    const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(originId, options?.sessionId);
+
     if (isCommand(safeMessage)) {
       const response = handleCommand(safeMessage, { source: this.channel }).response || '';
-      this.historyHelper(safeMessage, response, sessionService);
+      this.backgroundDispatcher.persistConversation({
+        sessionId: sessionService.getSession().id,
+        ask: safeMessage,
+        answer: response,
+        channel: this.channel,
+      });
       return response;
     }
 
@@ -51,72 +46,30 @@ class MessageGateway implements IMessageGateway {
       message: messageService,
       options: { ...options, runId: options?.runId ?? generateId() },
     });
-    
+
     this.logger.info(`Processed message from ${this.channel}: "${previewMessage(safeMessage)}" => "${previewMessage(response)}"`);
 
-    this.historyHelper(safeMessage, response, sessionService);
-    this.summarizerHelper(safeMessage, response, sessionService, memoryService);
+    const sessionId = messageService.getSessionId();
+    this.backgroundDispatcher.persistConversation({ sessionId, ask: safeMessage, answer: response, channel: this.channel });
+    this.backgroundDispatcher.summarizeConversation({
+      sessionId,
+      ask: safeMessage,
+      answer: response,
+      channel: this.channel,
+      memoryService,
+    });
 
     return response;
-  }
-
-  private resolveSessionService(originId: string, sessionId?: string): ISessionService {
-    if (!sessionId) {
-      return this.sessionManager.getSessionService(originId);
-    }
-
-    try {
-      return this.sessionManager.getSessionServiceById(sessionId);
-    } catch {
-      return this.sessionManager.getSessionService(originId);
-    }
-  }
-
-  private historyHelper(ask: string, answer: string, sessionService: ISessionService) {
-    this.conversationWorker.run({
-      sessionId: sessionService.getSession().id,
-      ask,
-      answer,
-      channel: this.channel,
-    })
-      .catch((err: unknown) =>
-        this.logger.error('Background conversation processing failed', { err })
-      );
-  }
-
-  private summarizerHelper(ask: string, answer: string, sessionService: ISessionService, memoryService: IMemoryService) {
-    if (!config.AI.SUMMARIZER.ENABLED) return;
-
-    const conversation = {
-      sessionId: sessionService.getSession().id,
-      ask,
-      answer,
-      channel: this.channel,
-      memoryService: memoryService,
-    };
-
-    this.summarizerWorker.handler(conversation)
-      .catch((err: unknown) =>
-        this.logger.error('Background summarizer failed', { err })
-      );
   }
 }
 
 class MessageGatewayFactory {
   static create(logger: ILogger, channel: string, db: IDatabaseService, sessionManager: ISessionManager): MessageGateway {
-    const conversationWorker = ConversationWorkerFactory.create(logger, db, sessionManager);
-    const summarizerWorker = SummarizerFactory.create(logger);
+    const sessionContextFactory = SessionContextFactory.create(logger, db, sessionManager);
+    const backgroundDispatcher = BackgroundDispatcherFactory.create(logger, db, sessionManager);
     const mainAgent = MainAgentFactory.create(logger);
 
-    return new MessageGateway(
-      logger,
-      db,
-      sessionManager,
-      conversationWorker,
-      summarizerWorker,
-      mainAgent,
-      channel,
-    );
+    return new MessageGateway(logger, channel, sessionContextFactory, backgroundDispatcher, mainAgent);
   }
 }
 
