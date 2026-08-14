@@ -7,7 +7,7 @@ import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../constants/thinking';
 import { ILogger } from '../infrastructure/logger';
 import { healthCheck } from '../services/provider-health-service';
 import { AIServiceError } from '../services/ai-completion-service';
-import { IAgent } from '../services/agents/agent';
+import { IMessageGateway } from '../services/agents/message-gateway';
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { AdminRouterFactory } from './admin';
@@ -78,7 +78,7 @@ class HealthRouteHandler {
 }
 
 class ChatRouteHandler {
-  constructor(private readonly agent: IAgent) {}
+  constructor(private readonly gateway: IMessageGateway) {}
 
   readonly handle = async (req: Request, res: Response): Promise<void> => {
     const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
@@ -117,7 +117,7 @@ class ChatRouteHandler {
     this.setupSseHeaders(res);
 
     try {
-      const result = await this.agent.handle(message, 'web', {
+      const result = await this.gateway.handle(message, 'web', {
         sessionId,
         onProgress: (summary: string) => {
           if (clientClosed) {
@@ -244,7 +244,7 @@ class DashboardServer implements WebServerHandle {
 
   constructor(
     private readonly logger: ILogger,
-    private readonly agent: IAgent,
+    private readonly gateway: IMessageGateway,
     private readonly db: IDatabaseService,
   ) {}
 
@@ -277,7 +277,7 @@ class DashboardServer implements WebServerHandle {
     const app = express();
     const publicDir = path.resolve(config.BASE_DIR, './dist-web');
     const indexHandler = new IndexRouteHandler(publicDir);
-    const chatHandler = new ChatRouteHandler(this.agent);
+    const chatHandler = new ChatRouteHandler(this.gateway);
     const healthHandler = new HealthRouteHandler(this.logger);
     const adminRouter = AdminRouterFactory.create(this.logger, this.db);
 
@@ -303,13 +303,13 @@ class DashboardServer implements WebServerHandle {
 }
 
 class DashboardServerFactory {
-  static create(logger: ILogger, agent: IAgent, db: IDatabaseService): WebServerHandle {
-    return new DashboardServer(logger, agent, db);
+  static create(logger: ILogger, gateway: IMessageGateway, db: IDatabaseService): WebServerHandle {
+    return new DashboardServer(logger, gateway, db);
   }
 }
 
-function createApp(options: { logger: ILogger; agent: IAgent; db: IDatabaseService }): Application {
-  return new DashboardServer(options.logger, options.agent, options.db).createApp();
+function createApp(options: { logger: ILogger; gateway: IMessageGateway; db: IDatabaseService }): Application {
+  return new DashboardServer(options.logger, options.gateway, options.db).createApp();
 }
 
 function serveIndexHandler(publicDir: string) {
@@ -320,12 +320,12 @@ function createHealthHandler(logger: ILogger) {
   return new HealthRouteHandler(logger).handle;
 }
 
-function createChatHandler(agent: IAgent) {
-  return new ChatRouteHandler(agent).handle;
+function createChatHandler(gateway: IMessageGateway) {
+  return new ChatRouteHandler(gateway).handle;
 }
 
-async function startWebServer(logger: ILogger, agent: IAgent, db: IDatabaseService): Promise<WebServerHandle> {
-  return new DashboardServer(logger, agent, db).start();
+async function startWebServer(logger: ILogger, gateway: IMessageGateway, db: IDatabaseService): Promise<WebServerHandle> {
+  return new DashboardServer(logger, gateway, db).start();
 }
 
 export {

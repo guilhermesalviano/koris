@@ -3,7 +3,7 @@ import type { ChannelDefinition } from '../../src/channels';
 import { ADAPTERS } from '../../src/channels';
 import type { ILogger } from '../../src/infrastructure/logger';
 import type { Plugin, PluginRegistry } from '../registry';
-import type { IAgent } from '../../src/services/agents/agent';
+import type { IMessageGateway } from '../../src/services/agents/message-gateway';
 import { stripInternalStreamMarkers } from '../../src/utils/stream-markers';
 import { config } from '../../src/config';
 
@@ -13,7 +13,7 @@ const TELEGRAM_MESSAGE_LIMIT = 4_000;
 let botUsername: string | null = null;
 
 interface ITelegramChannel {
-  handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void>;
+  handleMessage(gateway: IMessageGateway, msg: TelegramMessage): Promise<void>;
   sendText(chatId: number, text: string): Promise<void>;
   sendCode(chatId: number, code: string, language?: string): Promise<void>;
   sendWithApproval(logger: ILogger, chatId: number, message: string, callbackData: string): Promise<void>;
@@ -21,7 +21,7 @@ interface ITelegramChannel {
 
 interface TelegramChannelStartOptions {
   token: string;
-  agent: IAgent;
+  gateway: IMessageGateway;
   logger: ILogger;
 }
 
@@ -33,7 +33,7 @@ interface TelegramPluginOptions {
 class TelegramChannel implements ITelegramChannel {
   constructor(private readonly bot?: TelegramBot) {}
 
-  async handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void> {
+  async handleMessage(gateway: IMessageGateway, msg: TelegramMessage): Promise<void> {
     const { id: chatId, type: chatType } = msg.chat;
     const { text, entities } = msg;
 
@@ -46,7 +46,7 @@ class TelegramChannel implements ITelegramChannel {
       return;
     }
 
-    await this.processAndReply(agent, chatId, text);
+    await this.processAndReply(gateway, chatId, text);
   }
 
   async sendText(chatId: number, text: string): Promise<void> {
@@ -82,10 +82,10 @@ class TelegramChannel implements ITelegramChannel {
     });
   }
 
-  private async processAndReply(agent: IAgent, chatId: number, text: string): Promise<void> {
+  private async processAndReply(gateway: IMessageGateway, chatId: number, text: string): Promise<void> {
     try {
       await this.withTypingIndicator(chatId, async () => {
-        const response = await agent.handle(text, String(chatId));
+        const response = await gateway.handle(text, String(chatId));
         const resolved = await this.resolveResponse(response);
         await this.sendText(chatId, resolved);
       });
@@ -183,7 +183,7 @@ class TelegramChannelFactory {
       polling: true,
       onMessage: (msg) => {
         options.logger.debug(`[telegram] raw message received: ${JSON.stringify(msg)}`);
-        return channel.handleMessage(options.agent, msg);
+        return channel.handleMessage(options.gateway, msg);
       },
       onPollingError: (error) => options.logger.warn(`Telegram polling error: ${error.message}`),
     });
@@ -209,8 +209,8 @@ class TelegramChannelFactory {
 
 const telegramChannel = TelegramChannelFactory.create();
 
-async function handleMessage(agent: IAgent, msg: TelegramMessage): Promise<void> {
-  await telegramChannel.handleMessage(agent, msg);
+async function handleMessage(gateway: IMessageGateway, msg: TelegramMessage): Promise<void> {
+  await telegramChannel.handleMessage(gateway, msg);
 }
 
 async function sendCode(chatId: number, code: string, language?: string): Promise<void> {
@@ -246,10 +246,10 @@ function createTelegramAdapter(options: TelegramPluginOptions): ChannelDefinitio
   return {
     name: 'telegram',
     enabled: () => options.enabled && options.token.length > 0,
-    start: (logger: ILogger, agent: IAgent) => {
+    start: (logger: ILogger, gateway: IMessageGateway) => {
       let stopFn: (() => void) | null = null;
 
-      TelegramChannelFactory.start({ token: options.token, agent, logger })
+      TelegramChannelFactory.start({ token: options.token, gateway, logger })
         .then(({ stop }) => { stopFn = stop; })
         .catch((err: Error) => logger.warn(`Failed to start Telegram bot: ${err.message}`));
 

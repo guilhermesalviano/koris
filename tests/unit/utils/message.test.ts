@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toSafeMessage, previewMessage } from '../../../../../../src/services/agents/main-agent/helpers';
+import { toSafeMessage, previewMessage } from '../../../src/utils/message';
 
 describe('toSafeMessage', () => {
   it('returns string as-is', () => {

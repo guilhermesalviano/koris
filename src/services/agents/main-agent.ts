@@ -14,19 +14,19 @@ import type { ToolCall } from '../../types/tools';
 import type { IWorker } from '../../types/workers';
 import { ChatServiceFactory } from '../chat/chat-service';
 
-interface ManagerArgs {
+interface MainAgentArgs {
   userMessage: string;
   channel: string;
   message: IMessageService;
   options?: ProcessOptions;
 }
 
-interface IManager {
+interface IMainAgent {
   name: string;
-  run(args: ManagerArgs): Promise<ProcessedMessage>;
+  run(args: MainAgentArgs): Promise<ProcessedMessage>;
 }
 
-class Manager implements IManager {
+class MainAgent implements IMainAgent {
   constructor(
     private logger: ILogger,
     public name: string,
@@ -36,7 +36,7 @@ class Manager implements IManager {
     private executor: IWorker,
   ) { }
 
-  async run(args: ManagerArgs): Promise<ProcessedMessage> {
+  async run(args: MainAgentArgs): Promise<ProcessedMessage> {
     const { userMessage, channel, message, options } = args;
     const messageHistory = message.getHistory();
 
@@ -95,14 +95,14 @@ class Manager implements IManager {
 
 }
 
-class ManagerFactory {
-  static create(logger: ILogger): IManager {
+class MainAgentFactory {
+  static create(logger: ILogger): IMainAgent {
     const ChatService = ChatServiceFactory.create(logger, 'manager', 'manager');
     const toolsQueue = ToolsQueueFactory.create(logger);
     const learner = LearnerWorkerFactory.create(logger);
     const executor = ExecutorWorkerFactory.create(logger);
-    return new Manager(logger, 'Manager', toolsQueue, ChatService, learner, executor);
+    return new MainAgent(logger, 'MainAgent', toolsQueue, ChatService, learner, executor);
   }
 }
 
-export { IManager, Manager, ManagerFactory };
+export { IMainAgent, MainAgent, MainAgentFactory };

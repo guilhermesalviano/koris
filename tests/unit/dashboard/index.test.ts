@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
 import type { ILogger } from '../../../src/infrastructure/logger';
-import type { IAgentHandler } from '../../../src/services/main-agent/handler';
+import type { IMessageGateway } from '../../../src/services/agents/message-gateway';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../src/constants/thinking';
 
 type Handler = (req: Request, res: Response) => void;
@@ -182,7 +182,7 @@ describe('createChatHandler', () => {
   });
 
   it('returns 400 when message is missing', async () => {
-    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+    const mockHandler = { handle: mockAgentHandle } as unknown as IMessageGateway;
 
     const { createChatHandler } = await loadWebModule();
     const handler = createChatHandler(mockHandler) as AsyncHandler;
@@ -202,7 +202,7 @@ describe('createChatHandler', () => {
       return 'done';
     });
 
-    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+    const mockHandler = { handle: mockAgentHandle } as unknown as IMessageGateway;
 
     const { createChatHandler } = await loadWebModule();
     const handler = createChatHandler(mockHandler) as AsyncHandler;
@@ -235,7 +235,7 @@ describe('createChatHandler', () => {
       })();
     });
 
-    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+    const mockHandler = { handle: mockAgentHandle } as unknown as IMessageGateway;
 
     const { createChatHandler } = await loadWebModule();
     const handler = createChatHandler(mockHandler) as AsyncHandler;
@@ -259,7 +259,7 @@ describe('createChatHandler', () => {
     const { AIServiceError } = await import('../../../src/services/ai-completion-service');
     mockAgentHandle.mockRejectedValue(new AIServiceError('rate_limited', 'The AI provider is rate limited. Try again shortly.', undefined, 429));
 
-    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+    const mockHandler = { handle: mockAgentHandle } as unknown as IMessageGateway;
 
     const handler = createChatHandler(mockHandler) as AsyncHandler;
     const req = makeRequest('127.0.0.1');
@@ -279,7 +279,7 @@ describe('createChatHandler', () => {
   it('emits an unknown error event for generic thrown errors', async () => {
     mockAgentHandle.mockRejectedValue(new Error('something exploded'));
 
-    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+    const mockHandler = { handle: mockAgentHandle } as unknown as IMessageGateway;
 
     const { createChatHandler } = await loadWebModule();
     const handler = createChatHandler(mockHandler) as AsyncHandler;
@@ -299,7 +299,7 @@ describe('createChatHandler', () => {
   it('keeps the agent running to completion when the client disconnects mid-request', async () => {
     mockAgentHandle.mockResolvedValue('done');
 
-    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+    const mockHandler = { handle: mockAgentHandle } as unknown as IMessageGateway;
 
     const { createChatHandler } = await loadWebModule();
     const handler = createChatHandler(mockHandler) as AsyncHandler;
@@ -330,7 +330,7 @@ describe('createChatHandler', () => {
     const { createChatHandler } = await loadWebModule();
     const { activeRunsRegistry } = await import('../../../src/dashboard/active-runs');
 
-    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+    const mockHandler = { handle: mockAgentHandle } as unknown as IMessageGateway;
     const handler = createChatHandler(mockHandler) as AsyncHandler;
     const req = makeRequest('127.0.0.1');
     req.body = { message: 'hello', sessionId: 'sess-1' } as Request['body'];
@@ -354,7 +354,7 @@ describe('createChatHandler', () => {
     const { createChatHandler } = await loadWebModule();
     const { activeRunsRegistry } = await import('../../../src/dashboard/active-runs');
 
-    const mockHandler = { handle: mockAgentHandle } as unknown as IAgentHandler;
+    const mockHandler = { handle: mockAgentHandle } as unknown as IMessageGateway;
     const handler = createChatHandler(mockHandler) as AsyncHandler;
     const req = makeRequest('127.0.0.1');
     req.body = { message: 'hello' } as Request['body'];

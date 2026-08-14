@@ -7,7 +7,7 @@ if (process.argv.includes('tui') || process.argv.includes('--tui')) {
 
 import { startTUI } from './tui';
 import { LoggerFactory, ILogger } from './infrastructure/logger';
-import { AgentFactory, IAgent } from './services/agents/agent';
+import { MessageGatewayFactory, IMessageGateway } from './services/agents/message-gateway';
 import { IHeartbeatRunner, HeartbeatSingleton } from './services/agents/sub-agents/heartbeat/runner';
 import { ChannelsSingleton, ADAPTERS, type IChannelsManager } from './channels';
 import { SHUTDOWN_SIGNALS } from './constants/tui';
@@ -25,7 +25,7 @@ type Mode = typeof MODES[number];
 type RuntimeModes = Record<Mode, boolean>;
 
 interface IRuntime {
-  agent: IAgent;
+  gateway: IMessageGateway;
   channels: IChannelsManager;
   heartbeat: IHeartbeatRunner;
   webServer: WebServerHandle | null;
@@ -54,9 +54,9 @@ class Application implements IApplication {
   private async createCliRuntime(): Promise<IRuntime> {
     const db = DatabaseServiceFactory.create();
     const sessionManager = new SessionManager(db);
-    const agent = AgentFactory.create(this.logger, this.source, db, sessionManager);
+    const gateway = MessageGatewayFactory.create(this.logger, this.source, db, sessionManager);
     const registry = buildRegistry(createPlugins());
-    const channels = ChannelsSingleton.getInstance(this.logger, agent, registry.collect(ADAPTERS));
+    const channels = ChannelsSingleton.getInstance(this.logger, gateway, registry.collect(ADAPTERS));
     const heartbeat = HeartbeatSingleton.getInstance(this.logger, HeartbeatRepositoryFactory.create(db), channels);
 
     channels.startAll();
@@ -64,10 +64,10 @@ class Application implements IApplication {
 
     try {
       const webServer = this.modes.web
-        ? await DashboardServerFactory.create(this.logger, agent, db).start()
+        ? await DashboardServerFactory.create(this.logger, gateway, db).start()
         : null;
 
-      return { agent, channels, heartbeat, webServer };
+      return { gateway, channels, heartbeat, webServer };
     } catch (error) {
       channels.stopAll();
       heartbeat.stop();
@@ -80,13 +80,13 @@ class Application implements IApplication {
       return;
     }
 
-    const { agent } = this.runtime;
+    const { gateway } = this.runtime;
 
     startTUI({
       title: 'koris-agent',
       showHints: false,
       placeholder: 'Type /help for commands.',
-      onInput: async (input: string) => agent.handle(input, 'tui'),
+      onInput: async (input: string) => gateway.handle(input, 'tui'),
     });
   }
 

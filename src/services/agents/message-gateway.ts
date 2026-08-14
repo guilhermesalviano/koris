@@ -7,7 +7,7 @@ import { MessageServiceFactory } from '../message-service';
 import { ConversationWorkerFactory } from '../workers/conversation-worker';
 import { SummarizerFactory } from './sub-agents/summarizer/sub-agent';
 import { IMemoryService, MemoryServiceFactory } from '../memory-service';
-import { IManager, ManagerFactory } from './manager';
+import { IMainAgent, MainAgentFactory } from './main-agent';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import { IWorker } from '../../types/workers';
 import { ISubAgent } from '../../types/agents';
@@ -15,18 +15,18 @@ import { config } from '../../config';
 import { ISessionService } from '../session-service';
 import { generateId } from '../../utils/generate-id';
 
-interface IAgent {
+interface IMessageGateway {
   handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage>;
 }
 
-class Agent implements IAgent {
+class MessageGateway implements IMessageGateway {
   constructor(
     private logger: ILogger,
     private db: IDatabaseService,
     private sessionManager: ISessionManager,
     private conversationWorker: IWorker,
     private summarizerWorker: ISubAgent,
-    private manager: IManager,
+    private mainAgent: IMainAgent,
     private channel: string,
   ) { }
 
@@ -45,7 +45,7 @@ class Agent implements IAgent {
       return response;
     }
 
-    const response = await this.manager.run({
+    const response = await this.mainAgent.run({
       userMessage: safeMessage,
       channel: this.channel,
       message: messageService,
@@ -102,22 +102,22 @@ class Agent implements IAgent {
   }
 }
 
-class AgentFactory {
-  static create(logger: ILogger, channel: string, db: IDatabaseService, sessionManager: ISessionManager): Agent {
+class MessageGatewayFactory {
+  static create(logger: ILogger, channel: string, db: IDatabaseService, sessionManager: ISessionManager): MessageGateway {
     const conversationWorker = ConversationWorkerFactory.create(logger, db, sessionManager);
     const summarizerWorker = SummarizerFactory.create(logger);
-    const manager = ManagerFactory.create(logger);
+    const mainAgent = MainAgentFactory.create(logger);
 
-    return new Agent(
+    return new MessageGateway(
       logger,
       db,
       sessionManager,
       conversationWorker,
       summarizerWorker,
-      manager,
+      mainAgent,
       channel,
     );
   }
 }
 
-export { IAgent, Agent, AgentFactory }
+export { IMessageGateway, MessageGateway, MessageGatewayFactory }
