@@ -1,5 +1,5 @@
 import { handleCommand, isCommand } from '../../commands';
-import { previewMessage, toSafeMessage } from './helpers';
+import { previewMessage, toSafeMessage } from '../../../utils/message';
 import { ILogger } from '../../../infrastructure/logger';
 import { IDatabaseService } from '../../../infrastructure/db-sqlite';
 import { ISessionManager } from '../../session-manager';

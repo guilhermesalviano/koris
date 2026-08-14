@@ -18,8 +18,8 @@ import { AgnosticExecutionToolFactory } from "../../../tools";
 import { IChannelsManager } from "../../../../channels";
 import { getLastWhitelistedJid } from "../../../../../plugins/whatsapp";
 import type { IWorker } from "../../../../types/workers";
-import { TaskQueue, sharedSubAgentQueue } from "../queue/task-queue";
-import { subAgentQueuesRegistry } from "../queue/sub-agent-queue-registry";
+import { TaskQueue, sharedSubAgentQueue } from "../../../sub-agents-queue/task-queue";
+import { subAgentQueuesRegistry } from "../../../sub-agents-queue/sub-agent-queue-registry";
 
 class Heartbeat implements ISubAgent<Date> {
   constructor(
