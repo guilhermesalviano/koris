@@ -9,6 +9,7 @@ import { parseSummarizerResponse } from "../../../../utils/summarizer-response";
 import { ISubAgent } from "../../../../types/agents";
 import { config } from "../../../../config";
 import { TaskQueue, sharedSubAgentQueue } from "../../../../utils/task-queue";
+import { subAgentQueuesRegistry } from "../../../../utils/sub-agent-queue-registry";
 
 export interface SummarizerWorkerProps {
   sessionId: string,
@@ -26,6 +27,7 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
     private readonly completionService: IAICompletionService,
   ) {
     this.queue = config.AI.SUBAGENTS_PARALLEL ? new TaskQueue(1) : sharedSubAgentQueue;
+    subAgentQueuesRegistry.register('summarizer', this.queue);
   }
 
   async handler(

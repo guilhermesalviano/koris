@@ -400,5 +400,32 @@ describe('Heartbeat', () => {
 
       expect((heartbeat as unknown as { queue: unknown }).queue).not.toBe(sharedSubAgentQueue);
     });
+
+    it('exposes queue state via snapshot', async () => {
+      (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
+      const now = localDate(9, 0);
+      const release: Array<() => void> = [];
+      const gated = () => new Promise((resolve) => release.push(() => resolve({ kind: 'message', text: 'ok' })));
+      const { heartbeat, completionService } = makeHeartbeat({
+        beats: [
+          { id: 'a', beat: 'first beat', cronExpression: '0 9 * * *', type: 'report' },
+          { id: 'b', beat: 'second beat', cronExpression: '0 9 * * *', type: 'report' },
+        ],
+      });
+      completionService.complete.mockImplementation(gated);
+
+      const run = heartbeat.handler(now);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const queue = (heartbeat as unknown as { queue: { snapshot(): unknown } }).queue;
+      expect(queue.snapshot()).toEqual({ queued: 1, active: 1, concurrency: 1 });
+
+      release[0]();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      release[1]();
+      await run;
+
+      expect(queue.snapshot()).toEqual({ queued: 0, active: 0, concurrency: 1 });
+    });
   });
 });

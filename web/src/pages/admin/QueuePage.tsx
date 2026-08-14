@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PageShell, Card, EmptyState, StatCard } from '../../components/AdminUI';
 import { apiRequest } from '../../lib/api';
-import type { QueueResponse, QueueTaskInfo } from '../../lib/types';
+import type { QueueResponse, QueueTaskInfo, SubAgentQueueState } from '../../lib/types';
 
 const POLL_INTERVAL_MS = 1500;
 
@@ -42,7 +42,7 @@ function Processor({ running }: { running: QueueTaskInfo[] }) {
       {running.map((task, index) => {
         const prio = priorityInfo(task.priority);
         return (
-          <div key={`${task.label}-${index}`} className="flex h-14 items-center gap-3 rounded-card border border-accent/50 bg-accent-muted p-4">
+          <div key={`${task.label}-${index}`} className="flex h-18 items-center gap-3 rounded-card border border-accent/50 bg-accent-muted p-4">
             <span className="h-3 w-3 flex-shrink-0 animate-pulse rounded-full bg-accent" />
             <div className="min-w-0 flex-1">
               <div className="truncate font-mono text-sm text-txt">{task.label || 'unnamed'}</div>
@@ -54,6 +54,49 @@ function Processor({ running }: { running: QueueTaskInfo[] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function subAgentStatus(queue: SubAgentQueueState): { label: string; className: string } {
+  if (queue.active > 0) {
+    return {
+      label: `${queue.active} running`,
+      className: 'border-green-500/40 bg-green-500/10 text-green-300',
+    };
+  }
+  if (queue.queued > 0) {
+    return {
+      label: `${queue.queued} waiting`,
+      className: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
+    };
+  }
+  return {
+    label: 'idle',
+    className: 'border-subtle bg-bg-2 text-txt-3',
+  };
+}
+
+function SubAgentCard({ queue, sharedQueue }: { queue: SubAgentQueueState; sharedQueue: boolean }) {
+  const status = subAgentStatus(queue);
+  return (
+    <div className="rounded-card border border-strong bg-bg-3 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate font-mono text-sm text-txt">{queue.names.join(' + ')}</span>
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          <span className="rounded-full border border-subtle bg-bg px-2 py-0.5 font-mono text-[10px] text-txt-3">
+            {queue.queued} queued
+          </span>
+          <span className={`rounded-full border px-2 py-0.5 font-mono text-[10px] ${status.className}`}>
+            {status.label}
+          </span>
+        </div>
+      </div>
+      <p className="mt-2 font-mono text-[11px] leading-relaxed text-txt-3">
+        {sharedQueue
+          ? 'Shares one queue with the other sub-agent — they never run at the same time.'
+          : 'Own queue (concurrency 1) — may run at the same time as the other sub-agent.'}
+      </p>
     </div>
   );
 }
@@ -98,20 +141,20 @@ export default function QueuePage() {
       {!error && data && (
         <>
           <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <StatCard label="Mode" value={data.parallel ? 'Parallel' : 'Serialized'} />
-            <StatCard label="Running" value={data.running.length} />
-            <StatCard label="Waiting" value={data.queued.length} />
+            <StatCard label="Provider mode" value={data.parallel ? 'Parallel' : 'Serialized'} />
+            <StatCard label="LLM running" value={data.running.length} />
+            <StatCard label="LLM waiting" value={data.queued.length} />
             <StatCard label="Grace period" value={`${data.backgroundGraceMs / 1000}s`} />
           </div>
 
-          {data.parallel ? (
+          {/* {data.parallel ? (
             <div className="mb-4">
               <Card>
                 <div className="flex items-center gap-2 text-sm">
                   <span className="h-2 w-2 rounded-full bg-green-500" />
                   <span>
-                    <span className="font-mono">ai.parallel</span> is enabled — LLM calls run concurrently and nothing
-                    waits. Background subagents (summarizer, heartbeat) still show up here while they work.
+                    <span className="font-mono">ai.parallel</span> is on — LLM calls run concurrently, so nothing queues
+                    here. The Processor panel below shows all in-flight activity.
                   </span>
                 </div>
               </Card>
@@ -122,56 +165,74 @@ export default function QueuePage() {
                 <div className="flex items-center gap-2 text-sm">
                   <span className="h-2 w-2 rounded-full bg-amber-500" />
                   <span>
-                    <span className="font-mono">ai.parallel</span> is off — only one LLM request runs at a time.
-                    Interactive calls jump ahead of background work.
-                  </span>
-                </div>
+                    <span className="font-mono">ai.parallel</span> is off — only one LLM call runs at a time.
+                    Interactive calls (manager, executor) jump ahead of background work (summarizer, heartbeat).
+                  </span>                </div>
               </Card>
             </div>
-          )}
+          )} */}
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className={`grid grid-cols-1 gap-4 ${data.parallel ? '' : 'lg:grid-cols-2'}`}>
             <Card>
               <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">
-                Processor ({data.running.length})
+                Processor — LLM calls in flight ({data.running.length})
               </div>
               <Processor running={data.running} />
             </Card>
 
-            <Card>
-              <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">
-                Waiting ({data.queued.length})
+            {!data.parallel && (
+              <Card>
+                <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">
+                  Waiting — LLM calls queued ({data.queued.length})
+                </div>
+                {data.queued.length === 0 ? (
+                  <EmptyState text="Nothing waiting" />
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {data.queued.map((task, index) => (
+                      <TaskChip key={`${task.label}-${index}`} task={task} />
+                    ))}
+                  </div>
+                )}
+              </Card>
+            )}
+          </div>
+
+          {data.subAgents.length > 0 && (
+            <div className="mt-6">
+              <div className="mb-2 flex items-center gap-2">
+                <h2 className="font-mono text-sm font-semibold text-txt">Sub-agents {data.subagentsParallel ? 'separate queues' : 'shared queue'}</h2>
               </div>
-              {data.queued.length === 0 ? (
-                <EmptyState text="Nothing queued" />
+              <p className="mb-3 font-mono text-[11px] text-txt-3">
+                {data.subagentsParallel
+                  ? 'Each sub-agent has its own concurrency-1 queue: they may run at the same time, but never concurrently within themselves.'
+                  : 'Heartbeat and summarizer share one queue: they never run at the same time.'}
+              </p>
+              {data.subAgents.every((agent) => subAgentStatus(agent).label === 'idle') ? (
+                <EmptyState text="No sub-agent queues registered yet" />
               ) : (
-                <div className="flex flex-wrap gap-2">
-                  {data.queued.map((task, index) => (
-                    <TaskChip key={`${task.label}-${index}`} task={task} />
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {data.subAgents.map((queue) => (
+                    <SubAgentCard key={queue.names.join('-')} queue={queue} sharedQueue={!data.subagentsParallel} />
                   ))}
                 </div>
               )}
-            </Card>
-          </div>
+            </div>
+          )}
 
           <div className="mt-4">
             <Card>
-              <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">How it works</div>
+              <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">How queueing works</div>
               <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-txt-2">
                 <li>
-                  Interactive calls (<span className="font-mono">manager</span> and executor workers) run with high
-                  priority and always jump ahead of queued work.
+                  <span className="font-mono">ai.parallel</span> controls the provider queue (Processor/Waiting above).
+                  Off: one LLM call at a time. On: calls run concurrently.
                 </li>
                 <li>
-                  Background calls (<span className="font-mono">worker:background</span> — summarizer, heartbeat) wait
-                  until the queue has been idle for the grace period so they never stall your next message.
+                  <span className="font-mono">ai.subagents_parallel</span> controls the sub-agent queues. Off: heartbeat
+                  and summarizer share one queue. On: each has its own.
                 </li>
-                <li>In parallel mode the same view shows all in-flight subagent activity without serializing it.</li>
-                <li>
-                  <span className="font-mono">ai.subagents_parallel</span> is {data.subagentsParallel ? 'on' : 'off'} — when
-                  off, heartbeat and summarizer share one queue so they never run at the same time; when on, each keeps its
-                  own queue and may run together.
-                </li>
+                <li>Sub-agents never run their own tasks concurrently — at most one task per queue at a time.</li>
               </ul>
             </Card>
           </div>

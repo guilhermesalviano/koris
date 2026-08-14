@@ -15,15 +15,23 @@ class SerialAIProvider implements AIProvider {
   }
 
   complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
-    return this.queue.run(() => this.inner.complete(request, options), this.priority, this.label);
+    return this.queue.run(
+      () => this.inner.complete(request, options),
+      this.priority,
+      options?.audit?.agentName ?? this.label,
+    );
   }
 
   chat(request: AIChatRequest, options?: AIChatOptions): Promise<string> {
-    return this.queue.run(() => this.inner.chat(request, options), this.priority, this.label);
+    return this.queue.run(
+      () => this.inner.chat(request, options),
+      this.priority,
+      options?.audit?.agentName ?? this.label,
+    );
   }
 
   async *chatStream(request: AIChatRequest, options?: AIChatOptions): AsyncGenerator<string> {
-    const release = await this.queue.acquire(this.priority, this.label);
+    const release = await this.queue.acquire(this.priority, options?.audit?.agentName ?? this.label);
     try {
       for await (const chunk of this.inner.chatStream(request, options)) {
         yield chunk;
