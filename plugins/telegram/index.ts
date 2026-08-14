@@ -3,7 +3,7 @@ import type { ChannelDefinition } from '../../src/channels';
 import { ADAPTERS } from '../../src/channels';
 import type { ILogger } from '../../src/infrastructure/logger';
 import type { Plugin, PluginRegistry } from '../registry';
-import type { IAgent } from '../../src/services/agents/main-agent/agent';
+import type { IAgent } from '../../src/services/agents/agent';
 import { stripInternalStreamMarkers } from '../../src/utils/stream-markers';
 import { config } from '../../src/config';
 

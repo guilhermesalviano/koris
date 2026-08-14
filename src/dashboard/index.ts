@@ -7,7 +7,7 @@ import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../constants/thinking';
 import { ILogger } from '../infrastructure/logger';
 import { healthCheck } from '../services/provider-health-service';
 import { AIServiceError } from '../services/ai-completion-service';
-import { IAgent } from '../services/agents/main-agent/agent';
+import { IAgent } from '../services/agents/agent';
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { AdminRouterFactory } from './admin';

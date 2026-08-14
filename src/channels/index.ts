@@ -1,6 +1,6 @@
 import { ExtensionPoint } from '../../plugins/registry';
 import type { ILogger } from '../infrastructure/logger';
-import type { IAgent } from '../services/agents/main-agent/agent';
+import type { IAgent } from '../services/agents/agent';
 
 export type StopFn = () => void;
 
