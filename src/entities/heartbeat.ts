@@ -6,6 +6,8 @@ export class Heartbeat {
   public readonly beat: string;
   public readonly type: BeatType;
   public readonly cronExpression: string;
+  public channel?: string;
+  public target?: string;
   public lastRun?: Date;
   public readonly createdAt: Date;
 
@@ -14,6 +16,8 @@ export class Heartbeat {
     beat: string;
     type: BeatType;
     cronExpression: string;
+    channel?: string;
+    target?: string;
     lastRun?: Date;
     createdAt?: Date;
   }) {
@@ -21,6 +25,8 @@ export class Heartbeat {
     this.beat = data.beat;
     this.type = data.type as BeatType;
     this.cronExpression = data.cronExpression;
+    this.channel = data.channel;
+    this.target = data.target;
     this.lastRun = data.lastRun;
     this.createdAt = data.createdAt || new Date();
   }

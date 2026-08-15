@@ -31,7 +31,7 @@ class MemoryService implements IMemoryService {
     const session = this.sessionService.getSession();
     const memory = new Memory({
       sessionId: session.id,
-      source: session.source,
+      source: session.entryChannel,
       type: props.type,
       content: props.content,
       embedding: props.embedding,
@@ -51,7 +51,7 @@ class MemoryService implements IMemoryService {
       const updatedMemory = new Memory({
         id: existing.id,
         sessionId: existing.sessionId,
-        source: session.source,
+        source: session.entryChannel,
         type: props.type,
         content: this.mergeContent(existing.content, props.content),
         embedding: props.embedding ?? existing.embedding,

@@ -39,7 +39,7 @@ class BackgroundDispatcher implements IBackgroundDispatcher {
   }
 
   summarizeConversation(props: SummarizeConversationProps): void {
-    if (!config.AI.SUMMARIZER.ENABLED) return;
+    if (!config.AI.SUMMARIZER) return;
 
     this.summarizerWorker.handler(props)
       .catch((err: unknown) =>

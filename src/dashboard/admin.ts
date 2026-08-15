@@ -7,6 +7,8 @@ import { SessionRepositoryFactory } from '../repositories/session';
 import { MessageRepositoryFactory } from '../repositories/message';
 import { MemoryRepositoryFactory } from '../repositories/memory';
 import { HeartbeatRepositoryFactory } from '../repositories/heartbeat';
+import { ChannelRepositoryFactory } from '../repositories/channel';
+import { CHANNEL_TYPES, ChannelType } from '../entities/channel';
 import { LearnedSkillsRepositoryFactory } from '../repositories/learned-skills';
 import { SkillsRepositoryFactory } from '../repositories/skills';
 import { AuditLogRepositoryFactory, AuditLogRow } from '../repositories/audit-log';
@@ -16,7 +18,8 @@ import { AuditKind, AuditStatus } from '../entities/audit-log';
 import { Session } from '../entities/session';
 import { BEAT_TYPES, BeatType } from '../types/beat';
 import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
-import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../utils/heartbeat';
+import { hasSpecificHour, isEveryMinute, isValidCronExpression, nextCronFire } from '../utils/heartbeat';
+import { formatISO } from '../utils/date';
 import { activeRunsRegistry } from './active-runs';
 import { sharedSerialQueue } from '../services/providers/serial-queue';
 import { subAgentQueuesRegistry } from '../services/sub-agents-queue/sub-agent-queue-registry';
@@ -97,6 +100,7 @@ class AdminRouterFactory {
     const messageRepo = MessageRepositoryFactory.create(db);
     const memoryRepo = MemoryRepositoryFactory.create(db);
     const heartbeatRepo = HeartbeatRepositoryFactory.create(db);
+    const channelRepo = ChannelRepositoryFactory.create(db);
     const learnedSkillsRepo = LearnedSkillsRepositoryFactory.create(db);
     const skillsRepo = SkillsRepositoryFactory.create(logger);
     const auditRepo = AuditLogRepositoryFactory.create(db);
@@ -126,7 +130,7 @@ class AdminRouterFactory {
         offset,
         items: sessions.map((session) => ({
           id: session.id,
-          source: session.source,
+          entryChannel: session.entryChannel,
           startedAt: session.startedAt,
           endedAt: session.endedAt,
           messageCount: session.messageCount,
@@ -137,11 +141,11 @@ class AdminRouterFactory {
     });
 
     router.post('/sessions', (_req: Request, res: Response) => {
-      const session = new Session({ source: 'web' });
+      const session = new Session({ entryChannel: 'web' });
       sessionRepo.save(session);
       res.status(201).json({
         id: session.id,
-        source: session.source,
+        entryChannel: session.entryChannel,
         startedAt: session.startedAt,
         endedAt: session.endedAt,
         messageCount: session.messageCount,
@@ -162,7 +166,7 @@ class AdminRouterFactory {
       res.json({
         session: {
           id: session.id,
-          source: session.source,
+          entryChannel: session.entryChannel,
           startedAt: session.startedAt,
           endedAt: session.endedAt,
           messageCount: session.messageCount,
@@ -294,7 +298,7 @@ class AdminRouterFactory {
     });
 
     router.get('/chat/history', (_req: Request, res: Response) => {
-      const session = sessionRepo.findLatestOpenBySource('web');
+      const session = sessionRepo.findLatestOpenByEntryChannel('web');
       if (!session) {
         res.json({ sessionId: null, messages: [] });
         return;
@@ -313,11 +317,43 @@ class AdminRouterFactory {
     });
 
     router.get('/heartbeats', (_req: Request, res: Response) => {
-      res.json({ items: heartbeatRepo.getAll() });
+      const now = new Date();
+      res.json({
+        items: heartbeatRepo.getAll().map((beat) => {
+          const since = beat.lastRun ?? beat.createdAt;
+          const from = since > now ? since : now;
+          const next = nextCronFire(beat.cronExpression, from);
+          return {
+            id: beat.id,
+            beat: beat.beat,
+            type: beat.type,
+            cron_expression: beat.cronExpression,
+            channel: beat.channel ?? null,
+            target: beat.target ?? null,
+            last_run: beat.lastRun ? formatISO(beat.lastRun) : null,
+            created_at: formatISO(beat.createdAt),
+            next_run: next ? formatISO(next) : null,
+          };
+        }),
+      });
+    });
+
+    router.get('/channels', (_req: Request, res: Response) => {
+      res.json({ items: channelRepo.getAll() });
+    });
+
+    router.patch('/channels/:id/principal', (req: Request, res: Response) => {
+      const updated = channelRepo.setPrincipal(String(req.params.id));
+      if (!updated) {
+        res.status(404).json({ error: 'Channel not found' });
+        return;
+      }
+
+      res.json(updated);
     });
 
     router.post('/heartbeats', (req: Request, res: Response) => {
-      const { beat, type = 'reminder', cronExpression } = req.body ?? {};
+      const { beat, type = 'reminder', cronExpression, channel, target } = req.body ?? {};
 
       if (typeof beat !== 'string' || !beat.trim()) {
         res.status(400).json({ error: 'beat is required' });
@@ -334,6 +370,16 @@ class AdminRouterFactory {
         return;
       }
 
+      if (channel !== undefined && !CHANNEL_TYPES.includes(channel)) {
+        res.status(400).json({ error: `Invalid channel. Must be one of: ${CHANNEL_TYPES.join(', ')}.` });
+        return;
+      }
+
+      if ((channel !== undefined && !target) || (channel === undefined && target !== undefined)) {
+        res.status(400).json({ error: 'channel and target must be provided together.' });
+        return;
+      }
+
       if (isEveryMinute(cronExpression)) {
         res.status(400).json({ error: 'Beats that run every minute are not allowed.' });
         return;
@@ -344,7 +390,13 @@ class AdminRouterFactory {
         return;
       }
 
-      const heartbeat = new Heartbeat({ beat: beat.trim(), type: type as BeatType, cronExpression: cronExpression.trim() });
+      const heartbeat = new Heartbeat({
+        beat: beat.trim(),
+        type: type as BeatType,
+        cronExpression: cronExpression.trim(),
+        channel: channel as ChannelType | undefined,
+        target: target as string | undefined,
+      });
       heartbeatRepo.save(heartbeat);
       HeartbeatSingleton.getExistingInstance()?.reschedule();
 
@@ -357,7 +409,7 @@ class AdminRouterFactory {
         return;
       }
 
-      const { beat, type, cronExpression } = req.body ?? {};
+      const { beat, type, cronExpression, channel, target } = req.body ?? {};
 
       if (cronExpression !== undefined && !isValidCronExpression(cronExpression)) {
         res.status(400).json({ error: 'Invalid cron_expression.' });
@@ -369,10 +421,22 @@ class AdminRouterFactory {
         return;
       }
 
+      if (channel !== undefined && channel !== null && !CHANNEL_TYPES.includes(channel)) {
+        res.status(400).json({ error: `Invalid channel. Must be one of: ${CHANNEL_TYPES.join(', ')}.` });
+        return;
+      }
+
+      if ((channel !== undefined && channel !== null && !target) || ((channel === undefined || channel === null) && target !== undefined)) {
+        res.status(400).json({ error: 'channel and target must be provided together.' });
+        return;
+      }
+
       const updated = heartbeatRepo.update(String(req.params.id), {
         beat,
         type,
-        cronExpression: cronExpression?.trim(),
+        cronExpression: typeof cronExpression === 'string' ? cronExpression.trim() : cronExpression,
+        channel: channel === undefined ? undefined : channel,
+        target: target === undefined ? undefined : target,
       });
       HeartbeatSingleton.getExistingInstance()?.reschedule();
 

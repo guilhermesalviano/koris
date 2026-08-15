@@ -10,7 +10,7 @@ describe('SessionRepository', () => {
   it('save inserts the session with JSON-encoded metadata', () => {
     const db = makeDb();
     const repository = new SessionRepository(db as never);
-    const session = new Session({ id: 's1', source: 'tui', metadata: { foo: 1 } });
+    const session = new Session({ id: 's1', entryChannel: 'tui', metadata: { foo: 1 } });
 
     repository.save(session);
 
@@ -23,10 +23,10 @@ describe('SessionRepository', () => {
     const db = makeDb();
     const repository = new SessionRepository(db as never);
 
-    repository.update('s1', { messageCount: 5, metadata: { k: 'v' }, source: 'web' });
+    repository.update('s1', { messageCount: 5, metadata: { k: 'v' }, entryChannel: 'web' });
 
     const [sql, values] = db.run.mock.calls[0];
-    expect(sql).toBe('UPDATE sessions SET message_count = ?, metadata = ?, source = ? WHERE id = ?');
+    expect(sql).toBe('UPDATE sessions SET message_count = ?, metadata = ?, entry_channel = ? WHERE id = ?');
     expect(values).toEqual([5, '{"k":"v"}', 'web', 's1']);
   });
 
@@ -43,7 +43,7 @@ describe('SessionRepository', () => {
     const db = makeDb();
     db.get.mockReturnValue({
       id: 's1',
-      source: 'tui',
+      entry_channel: 'tui',
       started_at: '2026-01-01',
       metadata: '{"k":"v"}',
     });
@@ -53,7 +53,7 @@ describe('SessionRepository', () => {
 
     expect(session).not.toBeNull();
     expect(session?.id).toBe('s1');
-    expect(session?.source).toBe('tui');
+    expect(session?.entryChannel).toBe('tui');
     expect(session?.metadata).toEqual({ k: 'v' });
   });
 
@@ -67,7 +67,7 @@ describe('SessionRepository', () => {
 
   it('findById tolerates invalid JSON metadata', () => {
     const db = makeDb();
-    db.get.mockReturnValue({ id: 's1', source: 'tui', metadata: 'not-json' });
+    db.get.mockReturnValue({ id: 's1', entry_channel: 'tui', metadata: 'not-json' });
     const repository = new SessionRepository(db as never);
 
     const session = repository.findById('s1');
@@ -77,7 +77,7 @@ describe('SessionRepository', () => {
 
   it('findById keeps metadata empty when the row has none', () => {
     const db = makeDb();
-    db.get.mockReturnValue({ id: 's1', source: 'tui' });
+    db.get.mockReturnValue({ id: 's1', entry_channel: 'tui' });
     const repository = new SessionRepository(db as never);
 
     const session = repository.findById('s1');
@@ -87,7 +87,7 @@ describe('SessionRepository', () => {
 
   it('findById keeps metadata empty when the row metadata is null', () => {
     const db = makeDb();
-    db.get.mockReturnValue({ id: 's1', source: 'tui', metadata: null });
+    db.get.mockReturnValue({ id: 's1', entry_channel: 'tui', metadata: null });
     const repository = new SessionRepository(db as never);
 
     const session = repository.findById('s1');
@@ -95,12 +95,12 @@ describe('SessionRepository', () => {
     expect(session?.metadata).toEqual({});
   });
 
-  it('findLatestOpenBySource queries for open sessions most recent first', () => {
+  it('findLatestOpenByEntryChannel queries for open sessions most recent first', () => {
     const db = makeDb();
-    db.get.mockReturnValue({ id: 's1', source: 'tui' });
+    db.get.mockReturnValue({ id: 's1', entry_channel: 'tui' });
     const repository = new SessionRepository(db as never);
 
-    repository.findLatestOpenBySource('tui');
+    repository.findLatestOpenByEntryChannel('tui');
 
     const [sql, params] = db.get.mock.calls[0];
     expect(sql).toContain('ended_at IS NULL');
@@ -109,20 +109,20 @@ describe('SessionRepository', () => {
     expect(params).toEqual(['tui']);
   });
 
-  it('findLatestOpenBySource returns null when no row is found', () => {
+  it('findLatestOpenByEntryChannel returns null when no row is found', () => {
     const db = makeDb();
     db.get.mockReturnValue(undefined);
     const repository = new SessionRepository(db as never);
 
-    expect(repository.findLatestOpenBySource('tui')).toBeNull();
+    expect(repository.findLatestOpenByEntryChannel('tui')).toBeNull();
   });
 
-  it('findLatestOpenBySource returns the mapped session when a row is found', () => {
+  it('findLatestOpenByEntryChannel returns the mapped session when a row is found', () => {
     const db = makeDb();
-    db.get.mockReturnValue({ id: 's1', source: 'tui', metadata: '{"k":"v"}' });
+    db.get.mockReturnValue({ id: 's1', entry_channel: 'tui', metadata: '{"k":"v"}' });
     const repository = new SessionRepository(db as never);
 
-    const session = repository.findLatestOpenBySource('tui');
+    const session = repository.findLatestOpenByEntryChannel('tui');
 
     expect(session).not.toBeNull();
     expect(session?.id).toBe('s1');

@@ -1,30 +1,22 @@
 {
-  "temp_folder": "./temp",
   "web_port": 3000,
   "timezone": "America/Sao_Paulo",
-  "learned_skills_limit": 10,
-  "log": {
-    "level": "debug"
-  },
+  "log_level": "debug",
   "gateway_host": "http://localhost:3000",
   "allowed_domains": [],
-  "heartbeat": {
-    "enabled": false,
-    "interval_ms": 1800000
-  },
+  "learned_skills_limit": 10,
+  "heartbeat": false,
   "channels": {
     "telegram": {
       "enabled": true,
-      "use_polling": true,
       "bot_token": "YOUR_BOT_TOKEN",
-      "chat_id": "YOUR_CHAT_ID"
+      "whitelist": ""
     },
     "whatsapp": {
       "enabled": false,
+      "auth_folder": "./.whatsapp_auth",
       "whitelist": "NUMBER1,NUMBER2",
-      "target_jid": "YOUR_PHONE_NUMBER@s.whatsapp.net",
-      "mention_id": "THE_BOT_MENTION_ID",
-      "auth_folder": "./.whatsapp_auth"
+      "mention_id": "THE_BOT_MENTION_ID"
     }
   },
   "ai": {
@@ -46,6 +38,8 @@
       "embed_model": "nomic-embed-text"
     },
     "search_api_key": "SERPAPI_KEY",
+    "retry_attempts": 2,
+    "retry_backoff_ms": 1000,
     "summarizer": true,
     "prompt_sanitizer": false,
     "timeouts": {

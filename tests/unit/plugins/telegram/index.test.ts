@@ -3,6 +3,7 @@ import type { TelegramMessage } from '@guilhermesalviano/telegram-bot';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../../src/constants/thinking';
 import {
   _setBotUsernameForTesting,
+  _setTelegramWhitelistForTesting,
   create,
   handleMessage,
   sendCode,
@@ -25,6 +26,7 @@ const configMock = vi.hoisted(() => ({
       TELEGRAM: {
         ENABLED: false,
         BOT_TOKEN: 'test-token',
+        WHITELIST: '',
       },
     },
   },
@@ -41,8 +43,14 @@ function createMessage(
   text: string,
   chatType: string = 'private',
   entities: TelegramMessage['entities'] = [],
+  fromId: number = 123,
 ): TelegramMessage {
-  return { chat: { id: 123, type: chatType }, text, entities } as TelegramMessage;
+  return {
+    chat: { id: 123, type: chatType },
+    from: { id: fromId, is_bot: false, first_name: 'Test' },
+    text,
+    entities,
+  } as TelegramMessage;
 }
 
 function mentionEntity(text: string, username: string): TelegramMessage['entities'] {
@@ -66,6 +74,7 @@ describe('channels/telegram', () => {
     bot.sendChatAction.mockResolvedValue(undefined);
     bot.sendMessage.mockResolvedValue(undefined);
     _setBotUsernameForTesting(null);
+    _setTelegramWhitelistForTesting([123]);
   });
 
   it('removes think output before sending the Telegram reply', async () => {
@@ -91,7 +100,7 @@ describe('channels/telegram', () => {
 
     await handleMessage(agent, createMessage(text, 'group', mentionEntity(text, BOT_USERNAME)));
 
-    expect(agent.handle).toHaveBeenCalledWith(text, '123');
+    expect(agent.handle).toHaveBeenCalledWith(text, '123', { channel: 'telegram' });
     expect(bot.sendMessage).toHaveBeenCalled();
   });
 
@@ -141,6 +150,62 @@ describe('channels/telegram', () => {
     await handleMessage(agent, { chat: { id: 123, type: 'private' }, text: undefined } as never);
 
     expect(agent.handle).not.toHaveBeenCalled();
+  });
+
+  it('ignores private messages from a non-whitelisted sender', async () => {
+    _setTelegramWhitelistForTesting([123]);
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn() };
+
+    await handleMessage(agent, createMessage('hello', 'private', [], 999));
+
+    expect(agent.handle).not.toHaveBeenCalled();
+    expect(bot.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('processes private messages from a whitelisted sender', async () => {
+    _setTelegramWhitelistForTesting([123]);
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    await handleMessage(agent, createMessage('hello', 'private', [], 123));
+
+    expect(agent.handle).toHaveBeenCalledWith('hello', '123', { channel: 'telegram' });
+    expect(bot.sendMessage).toHaveBeenCalled();
+  });
+
+  it('denies everyone when the whitelist is empty and replies with the default message', async () => {
+    _setTelegramWhitelistForTesting([]);
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn() };
+
+    await handleMessage(agent, createMessage('hello', 'private', [], 999));
+
+    expect(agent.handle).not.toHaveBeenCalled();
+    expect(bot.sendMessage).toHaveBeenCalledWith(
+      123,
+      'You need to allow this number to send messages on the server.',
+    );
+  });
+
+  it('ignores group messages from a non-whitelisted sender even when mentioned', async () => {
+    _setTelegramWhitelistForTesting([123]);
+    _setBotUsernameForTesting(BOT_USERNAME);
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn() };
+    const text = `hey @${BOT_USERNAME} help me`;
+
+    await handleMessage(agent, createMessage(text, 'group', mentionEntity(text, BOT_USERNAME), 999));
+
+    expect(agent.handle).not.toHaveBeenCalled();
+    expect(bot.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not send the deny message for unmentioned group messages when the whitelist is empty', async () => {
+    _setTelegramWhitelistForTesting([]);
+    _setBotUsernameForTesting(BOT_USERNAME);
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn() };
+
+    await handleMessage(agent, createMessage('random chat', 'group', [], 999));
+
+    expect(agent.handle).not.toHaveBeenCalled();
+    expect(bot.sendMessage).not.toHaveBeenCalled();
   });
 
   it('coerces non-string non-stream responses with String()', async () => {

@@ -92,7 +92,7 @@ class PromptRepository implements IPromptRepository {
   }
 
   private sanitizePromptIfEnabled(userMessage: string, history: Message[]): { userMessage: string; history: Message[] } {
-    if (!config.AI.PROMPT_SANITIZER.ENABLED) {
+    if (!config.AI.PROMPT_SANITIZER) {
       return { userMessage, history };
     }
 
