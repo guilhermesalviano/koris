@@ -24,7 +24,7 @@ class HeartbeatRunner implements IHeartbeatRunner {
   ) {}
 
   start(): void {
-    if (!config.HEARTBEAT.ENABLED) {
+    if (!config.HEARTBEAT) {
       this.logger.info('Heartbeat disabled by configuration.');
       return;
     }
@@ -48,7 +48,7 @@ class HeartbeatRunner implements IHeartbeatRunner {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    if (config.HEARTBEAT.ENABLED) {
+    if (config.HEARTBEAT) {
       this.scheduleNext();
     }
   }
