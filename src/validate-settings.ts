@@ -150,17 +150,6 @@ async function main() {
     String(config.AI.BACKGROUND_GRACE_MS),
   );
 
-  check(
-    Number.isInteger(config.AI.RETRY_ATTEMPTS) && config.AI.RETRY_ATTEMPTS >= 0,
-    'ai.retry_attempts is a non-negative integer',
-    `Got: ${config.AI.RETRY_ATTEMPTS}`,
-  );
-
-  check(
-    config.AI.RETRY_BACKOFF_MS > 0,
-    'ai.retry_backoff_ms is positive',
-    `Got: ${config.AI.RETRY_BACKOFF_MS} ms`,
-  );
 
   check(
     supportedProviders.includes(config.AI.MANAGER.PROVIDER),

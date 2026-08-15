@@ -38,8 +38,6 @@
       "embed_model": "nomic-embed-text"
     },
     "search_api_key": "SERPAPI_KEY",
-    "retry_attempts": 2,
-    "retry_backoff_ms": 1000,
     "summarizer": true,
     "prompt_sanitizer": false,
     "timeouts": {

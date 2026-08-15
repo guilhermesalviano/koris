@@ -45,8 +45,6 @@ export const config = {
     PARALLEL: get('ai.parallel', 'true') === 'true',
     SUBAGENTS_PARALLEL: get('ai.subagents_parallel', 'false') === 'true',
     BACKGROUND_GRACE_MS: Number(get('ai.background_grace_ms', '5000')),
-    RETRY_ATTEMPTS: Number(get('ai.retry_attempts', '2')),
-    RETRY_BACKOFF_MS: Number(get('ai.retry_backoff_ms', '1000')),
     MANAGER: {
       PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.manager.provider', 'ollama'),
       BASE_URL: get('ai.manager.base_url', 'http://localhost:11434'),
