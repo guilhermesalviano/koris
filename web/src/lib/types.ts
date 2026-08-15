@@ -63,6 +63,7 @@ export interface HeartbeatItem {
   channel?: string | null;
   target?: string | null;
   last_run?: string | null;
+  next_run?: string | null;
   created_at: string;
 }
 

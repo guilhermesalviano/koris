@@ -91,6 +91,20 @@ class DatabaseService implements IDatabaseService {
       `);
 
       this.db.exec(`
+        CREATE TABLE IF NOT EXISTS heartbeat_runs (
+          id TEXT PRIMARY KEY,
+          run_at DATETIME NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('success', 'error')),
+          error_message TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_heartbeat_runs_run_at ON heartbeat_runs(run_at);
+      `);
+
+      this.db.exec(`
         CREATE TABLE IF NOT EXISTS channels (
           id TEXT PRIMARY KEY,
           channel TEXT NOT NULL CHECK(channel IN ('telegram', 'whatsapp')),

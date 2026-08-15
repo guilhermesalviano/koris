@@ -18,7 +18,8 @@ import { AuditKind, AuditStatus } from '../entities/audit-log';
 import { Session } from '../entities/session';
 import { BEAT_TYPES, BeatType } from '../types/beat';
 import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
-import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../utils/heartbeat';
+import { hasSpecificHour, isEveryMinute, isValidCronExpression, nextCronFire } from '../utils/heartbeat';
+import { formatISO } from '../utils/date';
 import { activeRunsRegistry } from './active-runs';
 import { sharedSerialQueue } from '../services/providers/serial-queue';
 import { subAgentQueuesRegistry } from '../services/sub-agents-queue/sub-agent-queue-registry';
@@ -316,7 +317,25 @@ class AdminRouterFactory {
     });
 
     router.get('/heartbeats', (_req: Request, res: Response) => {
-      res.json({ items: heartbeatRepo.getAll() });
+      const now = new Date();
+      res.json({
+        items: heartbeatRepo.getAll().map((beat) => {
+          const since = beat.lastRun ?? beat.createdAt;
+          const from = since > now ? since : now;
+          const next = nextCronFire(beat.cronExpression, from);
+          return {
+            id: beat.id,
+            beat: beat.beat,
+            type: beat.type,
+            cron_expression: beat.cronExpression,
+            channel: beat.channel ?? null,
+            target: beat.target ?? null,
+            last_run: beat.lastRun ? formatISO(beat.lastRun) : null,
+            created_at: formatISO(beat.createdAt),
+            next_run: next ? formatISO(next) : null,
+          };
+        }),
+      });
     });
 
     router.get('/channels', (_req: Request, res: Response) => {

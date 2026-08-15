@@ -26,6 +26,10 @@ function makeRepo(tasks: unknown[] = []) {
   return { getAll: vi.fn().mockReturnValue(tasks) };
 }
 
+function makeRunRepo() {
+  return { recordRun: vi.fn(), getLastRun: vi.fn() };
+}
+
 function resetSingleton(): void {
   (HeartbeatSingleton as unknown as { instance: undefined }).instance = undefined;
 }
@@ -57,7 +61,7 @@ describe('HeartbeatSingleton', () => {
 
     const logger = makeLogger();
     const repo = makeRepo([{ id: 't1', cronExpression: '0 9 * * *', lastRun: undefined, createdAt: new Date() }]);
-    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, makeRunRepo() as never);
     runner.start();
 
     expect(nextCronFire).not.toHaveBeenCalled();
@@ -67,7 +71,7 @@ describe('HeartbeatSingleton', () => {
   it('schedules next heartbeat based on earliest cron fire time', async () => {
     const logger = makeLogger();
     const repo = makeRepo([{ id: 't1', cronExpression: '0 9 * * *', lastRun: undefined, createdAt: new Date() }]);
-    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, makeRunRepo() as never);
 
     runner.start();
 
@@ -78,7 +82,7 @@ describe('HeartbeatSingleton', () => {
   it('runs the heartbeat agent when the scheduled time arrives', async () => {
     const logger = makeLogger();
     const repo = makeRepo([{ id: 't1', cronExpression: '0 9 * * *', lastRun: undefined, createdAt: new Date() }]);
-    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, makeRunRepo() as never);
 
     runner.start();
     await vi.advanceTimersByTimeAsync(5000);
@@ -91,7 +95,7 @@ describe('HeartbeatSingleton', () => {
   it('reschedules after runOnce completes', async () => {
     const logger = makeLogger();
     const repo = makeRepo([{ id: 't1', cronExpression: '0 9 * * *', lastRun: undefined, createdAt: new Date() }]);
-    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, makeRunRepo() as never);
 
     runner.start();
     await vi.advanceTimersByTimeAsync(5000);
@@ -103,7 +107,7 @@ describe('HeartbeatSingleton', () => {
   it('does not create a second timer when start is called twice', () => {
     const logger = makeLogger();
     const repo = makeRepo([{ id: 't1', cronExpression: '0 9 * * *', lastRun: undefined, createdAt: new Date() }]);
-    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, makeRunRepo() as never);
 
     runner.start();
     runner.start();
@@ -114,7 +118,7 @@ describe('HeartbeatSingleton', () => {
   it('stops scheduling after stop is called', async () => {
     const logger = makeLogger();
     const repo = makeRepo([{ id: 't1', cronExpression: '0 9 * * *', lastRun: undefined, createdAt: new Date() }]);
-    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, makeRunRepo() as never);
 
     runner.start();
     runner.stop();
@@ -131,7 +135,7 @@ describe('HeartbeatSingleton', () => {
     );
 
     const repo = makeRepo([{ id: 't1', cronExpression: '0 9 * * *', lastRun: undefined, createdAt: new Date() }]);
-    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, makeRunRepo() as never);
 
     runner.start();
     await vi.advanceTimersByTimeAsync(5000);
@@ -150,7 +154,7 @@ describe('HeartbeatSingleton', () => {
     heartbeatHandler.mockRejectedValue(new Error('boom'));
 
     const repo = makeRepo([{ id: 't1', cronExpression: '0 9 * * *', lastRun: undefined, createdAt: new Date() }]);
-    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, makeRunRepo() as never);
 
     runner.start();
     await vi.advanceTimersByTimeAsync(5000);
@@ -163,10 +167,47 @@ describe('HeartbeatSingleton', () => {
     expect(nextCronFire).toHaveBeenCalledTimes(2);
   });
 
+  it('records a successful heartbeat run after runOnce completes', async () => {
+    const logger = makeLogger();
+    const runRepo = makeRunRepo();
+
+    const repo = makeRepo([{ id: 't1', cronExpression: '0 9 * * *', lastRun: undefined, createdAt: new Date() }]);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, runRepo as never);
+
+    runner.start();
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(runRepo.recordRun).toHaveBeenCalledTimes(1);
+    expect(runRepo.recordRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'success',
+        runAt: expect.any(Date),
+        errorMessage: undefined,
+      }),
+    );
+  });
+
+  it('records a failed heartbeat run with the error message', async () => {
+    const logger = makeLogger();
+    const runRepo = makeRunRepo();
+    heartbeatHandler.mockRejectedValue(new Error('boom'));
+
+    const repo = makeRepo([{ id: 't1', cronExpression: '0 9 * * *', lastRun: undefined, createdAt: new Date() }]);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, runRepo as never);
+
+    runner.start();
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(runRepo.recordRun).toHaveBeenCalledTimes(1);
+    expect(runRepo.recordRun).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'error', errorMessage: 'boom' }),
+    );
+  });
+
   it('logs when there are no tasks and does not schedule a timeout', () => {
     const logger = makeLogger();
     const repo = makeRepo([]);
-    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, makeRunRepo() as never);
 
     runner.start();
 
@@ -179,7 +220,7 @@ describe('HeartbeatSingleton', () => {
   it('reschedule method cancels existing timer and schedules again', () => {
     const logger = makeLogger();
     const repo = makeRepo([{ id: 't1', cronExpression: '0 9 * * *', lastRun: undefined, createdAt: new Date() }]);
-    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, makeRunRepo() as never);
 
     runner.start();
     expect(nextCronFire).toHaveBeenCalledTimes(1);
@@ -193,7 +234,7 @@ describe('HeartbeatSingleton', () => {
 
     const logger = makeLogger();
     const repo = makeRepo([{ id: 't1', cronExpression: '0 9 * * *', lastRun: undefined, createdAt: new Date() }]);
-    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, makeRunRepo() as never);
 
     runner.reschedule();
 
@@ -204,8 +245,8 @@ describe('HeartbeatSingleton', () => {
     const logger = makeLogger();
     const channelsManager = { sendMessage: vi.fn() } as never;
     const repo = makeRepo();
-    const first = HeartbeatSingleton.getInstance(logger, repo as never, channelsManager);
-    const second = HeartbeatSingleton.getInstance(makeLogger(), repo as never, channelsManager);
+    const first = HeartbeatSingleton.getInstance(logger, repo as never, channelsManager, makeRunRepo() as never);
+    const second = HeartbeatSingleton.getInstance(makeLogger(), repo as never, channelsManager, makeRunRepo() as never);
 
     expect(second).toBe(first);
   });
