@@ -68,7 +68,6 @@ export const config = {
   CHANNELS: {
     TELEGRAM: {
       ENABLED:     get('channels.telegram.enabled', 'false') === 'true',
-      USE_POLLING: get('channels.telegram.use_polling', 'true') === 'true',
       BOT_TOKEN:   get('channels.telegram.bot_token', ''),
     },
     WHATSAPP: {

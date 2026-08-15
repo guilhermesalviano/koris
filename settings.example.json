@@ -15,7 +15,6 @@
   "channels": {
     "telegram": {
       "enabled": true,
-      "use_polling": true,
       "bot_token": "YOUR_BOT_TOKEN"
     },
     "whatsapp": {
