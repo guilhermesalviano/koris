@@ -6,7 +6,7 @@ import { getLastActivityAt, isSessionExpired } from "../utils/session";
 import { Session } from "../entities/session";
 
 export interface ISessionManager {
-  getSessionService(source: string): ISessionService;
+  getSessionService(entryChannel: string): ISessionService;
   getSessionServiceById(sessionId: string): ISessionService;
 }
 
@@ -16,24 +16,24 @@ export class SessionManager implements ISessionManager {
 
   constructor(private db: IDatabaseService) {}
 
-  getSessionService(source: string): ISessionService {
-    if (this.cache.has(source)) {
-      return this.cache.get(source)!;
+  getSessionService(entryChannel: string): ISessionService {
+    if (this.cache.has(entryChannel)) {
+      return this.cache.get(entryChannel)!;
     }
 
     const sessionRepository = SessionRepositoryFactory.create(this.db);
-    const existing = sessionRepository.findLatestOpenBySource(source);
+    const existing = sessionRepository.findLatestOpenByEntryChannel(entryChannel);
 
     let sessionService: ISessionService;
 
     if (existing && !isSessionExpired(getLastActivityAt(existing), config.SESSION.TTL_MS)) {
       sessionService = new SessionService(sessionRepository, existing, { persistOnConstruct: false });
     } else {
-      const session = new Session({ source });
+      const session = new Session({ entryChannel });
       sessionService = new SessionService(sessionRepository, session);
     }
 
-    this.cache.set(source, sessionService);
+    this.cache.set(entryChannel, sessionService);
     return sessionService;
   }
 

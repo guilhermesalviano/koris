@@ -1373,7 +1373,6 @@ export function buildOnboardingSettings(
 
   telegram.enabled = usesTelegram;
   telegram.bot_token = usesTelegram ? (answers.telegramToken ?? '') : '';
-  telegram.use_polling = true;
 
   if (answers.channels.includes('discord')) {
     const discord = getOrCreateRecord(channels, 'discord');

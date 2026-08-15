@@ -28,7 +28,7 @@ describe('SessionContextResolver', () => {
     vi.clearAllMocks();
   });
 
-  it('resolves the source session when no session id is provided', () => {
+  it('resolves the initiated channel session when no session id is provided', () => {
     const { resolver, sessionManager, sessionService } = makeResolver();
 
     const context = resolver.resolve('origin-1');
@@ -49,7 +49,7 @@ describe('SessionContextResolver', () => {
     expect(context.sessionService).toBe(byIdService);
   });
 
-  it('falls back to the source session when the session id is unknown', () => {
+  it('falls back to the initiated channel session when the session id is unknown', () => {
     const { resolver, logger, sessionManager, sessionService } = makeResolver({
       getSessionServiceById: vi.fn(() => {
         throw new Error('Session not found: missing');
@@ -62,7 +62,7 @@ describe('SessionContextResolver', () => {
     expect(sessionManager.getSessionService).toHaveBeenCalledWith('origin-1');
     expect(context.sessionService).toBe(sessionService);
     expect(logger.warn).toHaveBeenCalledWith(
-      'Session "missing" not found, falling back to source session',
+      'Session "missing" not found, falling back to initiated channel session',
       expect.objectContaining({ originId: 'origin-1' }),
     );
   });

@@ -5,6 +5,7 @@ export type ProcessOptions = {
   onProgress?: (summary: string) => void;
   sessionId?: string;
   runId?: string;
+  channel?: string;
 };
 
 export interface IAgent<TInput, TOutput> {

@@ -148,8 +148,6 @@ describe('Onboard footer progress', () => {
         telegram: {
           ENABLED: true,
           BOT_TOKEN: 'YOUR_BOT_TOKEN',
-          USE_POLLING: true,
-          CHAT_ID: 'YOUR_CHAT_ID',
         },
       },
       ai: {
@@ -219,13 +217,10 @@ describe('onboarding settings draft', () => {
       },
     }, {
       baseSettings: {
-        temp_folder: './temp',
         channels: {
           telegram: {
             enabled: true,
             bot_token: 'YOUR_BOT_TOKEN',
-            use_polling: true,
-            chat_id: 'YOUR_CHAT_ID',
           },
         },
         ai: {
@@ -251,12 +246,9 @@ describe('onboarding settings draft', () => {
         },
       },
     })).toEqual({
-      temp_folder: './temp',
       channels: {
         telegram: {
           enabled: true,
-          chat_id: 'YOUR_CHAT_ID',
-          use_polling: true,
           bot_token: 'YOUR_BOT_TOKEN',
         },
         discord: {
@@ -306,16 +298,11 @@ describe('onboarding settings draft', () => {
     mkdirSync(appRoot, { recursive: true });
     writeFileSync(join(appRoot, 'settings.json'), '{}');
     writeFileSync(join(appRoot, 'settings.example.json'), JSON.stringify({
-      temp_folder: './temp',
-      heartbeat: {
-        enabled: true,
-      },
+      heartbeat: true,
       channels: {
         telegram: {
           enabled: true,
           bot_token: 'YOUR_BOT_TOKEN',
-          use_polling: true,
-          chat_id: 'YOUR_CHAT_ID',
         },
       },
       ai: {
@@ -353,15 +340,10 @@ describe('onboarding settings draft', () => {
 
     expect(destination).toBe(join(appRoot, SETTINGS_FILENAME));
     expect(JSON.parse(readFileSync(destination, 'utf-8'))).toEqual({
-      temp_folder: './temp',
-      heartbeat: {
-        enabled: true,
-      },
+      heartbeat: true,
       channels: {
         telegram: {
           enabled: true,
-          chat_id: 'YOUR_CHAT_ID',
-          use_polling: true,
           bot_token: 'YOUR_BOT_TOKEN',
         },
       },

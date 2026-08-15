@@ -123,16 +123,9 @@ async function main() {
   const validLogLevels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
   check(
     validLogLevels.includes(config.LOG_LEVEL),
-    'log.level is valid',
+    'log_level is valid',
     `Got: "${config.LOG_LEVEL}". Must be one of: ${validLogLevels.join(', ')}.`,
     config.LOG_LEVEL,
-  );
-
-  check(
-    config.HEARTBEAT.INTERVAL_MS > 0,
-    'heartbeat.interval_ms is positive',
-    `Got: ${config.HEARTBEAT.INTERVAL_MS}`,
-    `${config.HEARTBEAT.INTERVAL_MS} ms`,
   );
 
   // ── 3. AI Provider ───────────────────────────────────────────────────────
@@ -289,6 +282,12 @@ async function main() {
       'Set channels.telegram.bot_token in settings.json',
     );
 
+    advisory(
+      config.CHANNELS.TELEGRAM.WHITELIST.trim().length > 0,
+      'channels.telegram.whitelist is set',
+      'channels.telegram.whitelist is empty — anyone can chat with the bot',
+    );
+
     if (config.CHANNELS.TELEGRAM.BOT_TOKEN.trim().length > 0) {
       // Telegram bot tokens follow the pattern <numeric_id>:<alphanumeric>
       const tokenPattern = /^\d+:[A-Za-z0-9_-]{35,}$/;
@@ -325,12 +324,6 @@ async function main() {
         errors++;
       }
     }
-
-    advisory(
-      config.CHANNELS.TELEGRAM.CHAT_ID.trim().length > 0,
-      'channels.telegram.chat_id is set',
-      'Set channels.telegram.chat_id to restrict to a specific chat',
-    );
   } else {
     pass('Telegram channel', 'disabled — skipping');
   }

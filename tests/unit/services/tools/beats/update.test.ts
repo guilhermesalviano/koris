@@ -93,6 +93,27 @@ describe('updateBeat', () => {
     expect(result.success).toBe(true);
   });
 
+  it('returns error for invalid channel', async () => {
+    const result = await updateBeat(logger, { id: 'hb-1', channel: 'slack', target: 'x' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid channel');
+  });
+
+  it('returns error when only one of channel or target is provided', async () => {
+    const result = await updateBeat(logger, { id: 'hb-1', channel: 'telegram' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('together');
+  });
+
+  it('returns success when updating channel and target', async () => {
+    const result = await updateBeat(logger, { id: 'hb-1', channel: 'whatsapp', target: '5511@s.whatsapp.net' });
+    expect(result.success).toBe(true);
+    expect(mockRepo.update).toHaveBeenCalledWith(
+      'hb-1',
+      expect.objectContaining({ channel: 'whatsapp', target: '5511@s.whatsapp.net' }),
+    );
+  });
+
   it('returns error when repo throws', async () => {
     mockRepo.getById.mockImplementationOnce(() => { throw new Error('db fail'); });
     const result = await updateBeat(logger, { id: 'hb-1', beat: 'x' });

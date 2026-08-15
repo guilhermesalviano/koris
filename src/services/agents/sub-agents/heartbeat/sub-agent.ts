@@ -12,11 +12,9 @@ import type { ILogger } from "../../../../infrastructure/logger";
 import { IToolsQueue, ToolsQueue } from "../../../tools-queue";
 import { ChatServiceFactory } from "../../../chat/chat-service";
 import { ISubAgent } from "../../../../types/agents";
-import { mkdirSync, writeFileSync } from "fs";
-import { join, resolve } from "path";
 import { AgnosticExecutionToolFactory } from "../../../tools";
 import { IChannelsManager } from "../../../../channels";
-import { getLastWhitelistedJid } from "../../../../../plugins/whatsapp";
+import { IChannelService, ChannelServiceFactory } from "../../../channel-service";
 import { IToolCallPipeline, ToolCallPipelineFactory } from "../../tool-call-pipeline";
 import { TaskQueue, sharedSubAgentQueue } from "../../../sub-agents-queue/task-queue";
 import { subAgentQueuesRegistry } from "../../../sub-agents-queue/sub-agent-queue-registry";
@@ -30,6 +28,7 @@ class Heartbeat implements ISubAgent<Date> {
     private channelsManager: IChannelsManager,
     private completionService: IAICompletionService,
     private pipeline: IToolCallPipeline,
+    private channelService: IChannelService,
   ) {
     this.queue = config.AI.SUBAGENTS_PARALLEL ? new TaskQueue(1) : sharedSubAgentQueue;
     subAgentQueuesRegistry.register('heartbeat', this.queue);
@@ -107,50 +106,20 @@ class Heartbeat implements ISubAgent<Date> {
           },
         );
       }
-      this.saveBeatResult({ beatId: beat.id, date, result });
-
       this.logger.info(`Heartbeat: Beat "${beat.id}" executed. Result: ${result}`);
 
-      // Hardcoded for tests
-      if (config.CHANNELS.TELEGRAM.ENABLED) {
-        this.channelsManager.sendMessage('telegram', config.CHANNELS.TELEGRAM.CHAT_ID, result).catch(err => {
-          this.logger.error(`Failed to send heartbeat result to Telegram for beat "${beat.id}".`, { err });
+      const destination = this.channelService.resolveDelivery(beat);
+      if (destination) {
+        this.channelsManager.sendMessage(destination.channel, destination.target, result).catch(err => {
+          this.logger.error(`Failed to send heartbeat result to ${destination.channel} (${destination.target}) for beat "${beat.id}".`, { err });
         });
-      }
-
-      if (config.CHANNELS.WHATSAPP.ENABLED) {
-        const whatsappTarget = getLastWhitelistedJid() ?? config.CHANNELS.WHATSAPP.TARGET_JID;
-        if (whatsappTarget) {
-          this.channelsManager.sendMessage('whatsapp', whatsappTarget, result).catch(err => {
-            this.logger.error(`Failed to send heartbeat result to WhatsApp for beat "${beat.id}".`, { err });
-          });
-        }
+      } else {
+        this.logger.info(`Heartbeat: No delivery channel recorded for beat "${beat.id}". Result not sent.`);
       }
 
       this.logger.info(`Heartbeat: Beat "${beat.id}" completed successfully.`);
     } catch (err) {
       this.logger.error(`Heartbeat: Beat "${beat.id}" failed.`, { err });
-    }
-  }
-
-
-  formatDateStamp(date: Date): string {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${date.getFullYear()}_${pad(date.getMonth() + 1)}_${pad(date.getDate())}_${pad(date.getHours())}_${pad(date.getMinutes())}`;
-  }
-
-  saveBeatResult(props: { beatId: string; date: Date; result: string }): void {
-    const { beatId, date, result } = props;
-    const tempDir = resolve(config.BASE_DIR, config.TEMP_FOLDER);
-    const filename = `${beatId}_${this.formatDateStamp(date)}.md`;
-    const filePath = join(tempDir, filename);
-
-    try {
-      mkdirSync(tempDir, { recursive: true });
-      writeFileSync(filePath, result, 'utf-8');
-      this.logger.info(`Heartbeat: Beat result saved to ${filePath}`);
-    } catch (err) {
-      this.logger.error(`Heartbeat: Failed to save beat result to ${filePath}`, { err });
     }
   }
 }
@@ -167,7 +136,8 @@ class HeartbeatFactory {
     const completionService = new AICompletionService(aiProvider, logger, { role: 'worker', agentName: 'heartbeat' });
     const chatService = ChatServiceFactory.create(logger, 'worker', 'heartbeat');
     const pipeline = ToolCallPipelineFactory.create(logger, chatService);
-    return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, channelsManager, completionService, pipeline);
+    const channelService = ChannelServiceFactory.create(db);
+    return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, channelsManager, completionService, pipeline, channelService);
   }
 }
 

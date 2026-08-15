@@ -12,7 +12,7 @@ export interface OverviewResponse {
 
 export interface SessionSummary {
   id: string;
-  source: string;
+  entryChannel: string;
   startedAt?: string;
   endedAt?: string;
   messageCount: number;
@@ -60,12 +60,28 @@ export interface HeartbeatItem {
   beat: string;
   type: string;
   cron_expression: string;
+  channel?: string | null;
+  target?: string | null;
   last_run?: string | null;
+  next_run?: string | null;
   created_at: string;
 }
 
 export interface HeartbeatsResponse {
   items: HeartbeatItem[];
+}
+
+export interface ChannelItem {
+  id: string;
+  channel: 'telegram' | 'whatsapp';
+  target: string;
+  isPrincipal: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChannelsResponse {
+  items: ChannelItem[];
 }
 
 export interface Skill {

@@ -1,27 +1,18 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, readFileSync, rmSync } from 'fs';
-import { join } from 'path';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Heartbeat } from '../../../../../../src/services/agents/sub-agents/heartbeat/sub-agent';
 import { config } from '../../../../../../src/config';
-import { applyTestConfigDefaults } from '../../../../../helpers/test-config';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
-import { getLastWhitelistedJid } from '../../../../../../plugins/whatsapp';
 import { sharedSubAgentQueue } from '../../../../../../src/services/sub-agents-queue/task-queue';
-
-vi.mock('../../../../../../plugins/whatsapp', () => ({
-  getLastWhitelistedJid: vi.fn(() => null),
-}));
-
-const mockedGetLastWhitelistedJid = vi.mocked(getLastWhitelistedJid);
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
 }
 
 function makeHeartbeat(overrides: Partial<{
-  beats: Array<{ id: string; beat: string; cronExpression: string; type: string; lastRun?: Date }>;
+  beats: Array<{ id: string; beat: string; cronExpression: string; type: string; channel?: string; target?: string; lastRun?: Date }>;
   completionResponse: unknown;
   pipelineResult: string;
+  deliveryTarget: { channel: string; target: string } | null;
 }> = {}) {
   const logger = makeLogger();
   const heartbeatRepository = {
@@ -42,6 +33,13 @@ function makeHeartbeat(overrides: Partial<{
   const channelsManager = {
     sendMessage: vi.fn().mockResolvedValue(undefined),
   };
+  const channelService = {
+    resolveDelivery: vi.fn().mockReturnValue(
+      overrides.deliveryTarget === undefined
+        ? { channel: 'telegram', target: '987654321' }
+        : overrides.deliveryTarget,
+    ),
+  };
 
   const heartbeat = new Heartbeat(
     logger,
@@ -51,6 +49,7 @@ function makeHeartbeat(overrides: Partial<{
     channelsManager as never,
     completionService as never,
     pipeline as never,
+    channelService as never,
   );
 
   return {
@@ -61,6 +60,7 @@ function makeHeartbeat(overrides: Partial<{
     completionService,
     pipeline,
     channelsManager,
+    channelService,
   };
 }
 
@@ -73,39 +73,6 @@ function localDate(hours: number, minutes = 0): Date {
 describe('Heartbeat', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  describe('formatDateStamp', () => {
-    it('formats dates as YYYY_MM_DD_HH_mm', () => {
-      const { heartbeat } = makeHeartbeat();
-      const date = new Date(2024, 5, 3, 9, 7, 0);
-
-      expect(heartbeat.formatDateStamp(date)).toBe('2024_06_03_09_07');
-    });
-  });
-
-  describe('saveBeatResult', () => {
-    const tempDir = join(config.BASE_DIR, config.TEMP_FOLDER, 'heartbeat-tests');
-
-    beforeEach(() => {
-      mkdirSync(tempDir, { recursive: true });
-    });
-
-    afterEach(() => {
-      rmSync(tempDir, { recursive: true, force: true });
-    });
-
-    it('writes the beat result to a timestamped markdown file', () => {
-      applyTestConfigDefaults({ tempFolder: join('temp', 'heartbeat-tests') });
-      const { heartbeat, logger } = makeHeartbeat();
-      const date = new Date(2024, 0, 15, 10, 30, 0);
-
-      heartbeat.saveBeatResult({ beatId: 'daily-check', date, result: '# report\nall good' });
-
-      const filePath = join(config.BASE_DIR, config.TEMP_FOLDER, 'daily-check_2024_01_15_10_30.md');
-      expect(readFileSync(filePath, 'utf-8')).toBe('# report\nall good');
-      expect(logger.info).toHaveBeenCalledWith(`Heartbeat: Beat result saved to ${filePath}`);
-    });
   });
 
   describe('handler', () => {
@@ -136,9 +103,9 @@ describe('Heartbeat', () => {
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('not due yet'));
     });
 
-    it('executes due beats and sends the result to Telegram', async () => {
+    it('executes due beats and delivers the result via the resolved channel', async () => {
       const now = localDate(9, 0);
-      const { heartbeat, completionService, channelsManager, heartbeatRepository, logger } = makeHeartbeat({
+      const { heartbeat, completionService, channelsManager, channelService, heartbeatRepository, logger } = makeHeartbeat({
         beats: [{
           id: 'morning',
           beat: 'send status',
@@ -146,16 +113,14 @@ describe('Heartbeat', () => {
           type: 'report',
         }],
         completionResponse: { kind: 'message', text: 'status ok' },
+        deliveryTarget: { channel: 'telegram', target: '987654321' },
       });
 
       await heartbeat.handler(now);
 
       expect(completionService.complete).toHaveBeenCalled();
-      expect(channelsManager.sendMessage).toHaveBeenCalledWith(
-        'telegram',
-        config.CHANNELS.TELEGRAM.CHAT_ID,
-        'status ok',
-      );
+      expect(channelService.resolveDelivery).toHaveBeenCalledWith(expect.objectContaining({ id: 'morning' }));
+      expect(channelsManager.sendMessage).toHaveBeenCalledWith('telegram', '987654321', 'status ok');
       expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('morning', now);
       expect(logger.info).toHaveBeenCalledWith('Heartbeat: Beat "morning" completed successfully.');
     });
@@ -172,6 +137,7 @@ describe('Heartbeat', () => {
         }],
         completionResponse: { kind: 'tool_calls', calls: toolCalls },
         pipelineResult: 'hi',
+        deliveryTarget: { channel: 'telegram', target: '987654321' },
       });
 
       await heartbeat.handler(now);
@@ -185,11 +151,7 @@ describe('Heartbeat', () => {
           options: expect.objectContaining({ runId: 'tool-beat' }),
         }),
       );
-      expect(channelsManager.sendMessage).toHaveBeenCalledWith(
-        'telegram',
-        config.CHANNELS.TELEGRAM.CHAT_ID,
-        'hi',
-      );
+      expect(channelsManager.sendMessage).toHaveBeenCalledWith('telegram', '987654321', 'hi');
     });
 
     it('continues executing remaining beats when one beat fails', async () => {
@@ -209,6 +171,7 @@ describe('Heartbeat', () => {
             type: 'report',
           },
         ],
+        deliveryTarget: { channel: 'telegram', target: '987654321' },
       });
       completionService.complete
         .mockRejectedValueOnce(new Error('model failed'))
@@ -222,26 +185,26 @@ describe('Heartbeat', () => {
         expect.objectContaining({ err: expect.any(Error) }),
       );
       expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('success', now);
-      expect(channelsManager.sendMessage).toHaveBeenCalledWith(
-        'telegram',
-        config.CHANNELS.TELEGRAM.CHAT_ID,
-        'all good',
-      );
+      expect(channelsManager.sendMessage).toHaveBeenCalledWith('telegram', '987654321', 'all good');
       expect(logger.info).toHaveBeenCalledWith('Heartbeat: Beat "success" completed successfully.');
     });
 
-    it('sends the result to the whitelisted sender remoteJid on WhatsApp', async () => {
-      applyTestConfigDefaults({ whatsappEnabled: true });
-      mockedGetLastWhitelistedJid.mockReturnValue('5511948449969@s.whatsapp.net');
+    it('delivers to the beat channel and target when specified', async () => {
       const now = localDate(9, 0);
-      const { heartbeat, channelsManager } = makeHeartbeat({
+      const { heartbeat, channelsManager, channelService } = makeHeartbeat({
         beats: [{
-          id: 'morning',
-          beat: 'send status',
+          id: 'group-beat',
+          beat: 'daily report',
           cronExpression: '0 9 * * *',
           type: 'report',
+          channel: 'whatsapp',
+          target: '5511948449969@s.whatsapp.net',
         }],
-        completionResponse: { kind: 'message', text: 'status ok' },
+        completionResponse: { kind: 'message', text: 'group report' },
+      });
+      (channelService.resolveDelivery as ReturnType<typeof vi.fn>).mockReturnValue({
+        channel: 'whatsapp',
+        target: '5511948449969@s.whatsapp.net',
       });
 
       await heartbeat.handler(now);
@@ -249,14 +212,13 @@ describe('Heartbeat', () => {
       expect(channelsManager.sendMessage).toHaveBeenCalledWith(
         'whatsapp',
         '5511948449969@s.whatsapp.net',
-        'status ok',
+        'group report',
       );
     });
 
-    it('does not send to Telegram when the channel is disabled', async () => {
-      applyTestConfigDefaults({ telegramEnabled: false });
+    it('does not send when no delivery channel is resolved', async () => {
       const now = localDate(9, 0);
-      const { heartbeat, channelsManager } = makeHeartbeat({
+      const { heartbeat, channelsManager, logger } = makeHeartbeat({
         beats: [{
           id: 'morning',
           beat: 'send status',
@@ -264,37 +226,14 @@ describe('Heartbeat', () => {
           type: 'report',
         }],
         completionResponse: { kind: 'message', text: 'status ok' },
+        deliveryTarget: null,
       });
 
       await heartbeat.handler(now);
 
-      expect(channelsManager.sendMessage).not.toHaveBeenCalledWith(
-        'telegram',
-        config.CHANNELS.TELEGRAM.CHAT_ID,
-        'status ok',
-      );
-    });
-
-    it('falls back to configured target_jid when no whitelisted sender is known', async () => {
-      applyTestConfigDefaults({ whatsappEnabled: true });
-      mockedGetLastWhitelistedJid.mockReturnValue(null);
-      const now = localDate(9, 0);
-      const { heartbeat, channelsManager } = makeHeartbeat({
-        beats: [{
-          id: 'morning',
-          beat: 'send status',
-          cronExpression: '0 9 * * *',
-          type: 'report',
-        }],
-        completionResponse: { kind: 'message', text: 'status ok' },
-      });
-
-      await heartbeat.handler(now);
-
-      expect(channelsManager.sendMessage).toHaveBeenCalledWith(
-        'whatsapp',
-        config.CHANNELS.WHATSAPP.TARGET_JID,
-        'status ok',
+      expect(channelsManager.sendMessage).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('No delivery channel recorded'),
       );
     });
 
@@ -360,6 +299,7 @@ describe('Heartbeat', () => {
             type: 'report',
           },
         ],
+        deliveryTarget: { channel: 'telegram', target: '987654321' },
       });
       completionService.complete.mockImplementation(gated);
 
@@ -378,13 +318,13 @@ describe('Heartbeat', () => {
       expect(channelsManager.sendMessage).toHaveBeenNthCalledWith(
         1,
         'telegram',
-        config.CHANNELS.TELEGRAM.CHAT_ID,
+        '987654321',
         'beat done',
       );
       expect(channelsManager.sendMessage).toHaveBeenNthCalledWith(
         2,
         'telegram',
-        config.CHANNELS.TELEGRAM.CHAT_ID,
+        '987654321',
         'beat done',
       );
     });

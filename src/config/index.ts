@@ -12,10 +12,9 @@ function get(path: string, fallback: string): string {
 }
 
 export const config = {
-  LOG_LEVEL:   get('log.level', 'info'),
+  LOG_LEVEL:   get('log_level', 'info'),
   TIMEZONE:    get('timezone', 'America/Sao_Paulo'),
   ENVIRONMENT: get('environment', 'development'),
-  TEMP_FOLDER: get('temp_folder', './temp'),
   WEB_PORT:    Number(get('web_port', '3000')),
   BASE_DIR:    process.cwd(),
   GATEWAY_HOST: get('gateway_host', 'http://localhost:3000'),
@@ -27,10 +26,7 @@ export const config = {
   SESSION: {
     TTL_MS: Number(get('session.ttl_ms', String(30 * 60 * 1000))),
   },
-  HEARTBEAT: {
-    ENABLED: get('heartbeat.enabled', 'true') === 'true',
-    INTERVAL_MS: Number(get('heartbeat.interval_ms', (30 * 60 * 1000).toString())),
-  },
+  HEARTBEAT: get('heartbeat', 'true') === 'true',
   AI: {
     PARALLEL: get('ai.parallel', 'true') === 'true',
     SUBAGENTS_PARALLEL: get('ai.subagents_parallel', 'false') === 'true',
@@ -58,26 +54,20 @@ export const config = {
       HARD_MS:   Number(get('ai.timeouts.hard_ms', String(20 * 60_000))),
       HEALTH_MS: Number(get('ai.timeouts.health_ms', String(5_000))),
     },
-    SUMMARIZER: {
-      ENABLED: get('ai.summarizer', 'true') === 'true',
-    },
-    PROMPT_SANITIZER: {
-      ENABLED: get('ai.prompt_sanitizer', 'false') === 'true',
-    },
+    SUMMARIZER: get('ai.summarizer', 'true') === 'true',
+    PROMPT_SANITIZER: get('ai.prompt_sanitizer', 'false') === 'true',
   },
   CHANNELS: {
     TELEGRAM: {
-      ENABLED:     get('channels.telegram.enabled', 'false') === 'true',
-      USE_POLLING: get('channels.telegram.use_polling', 'true') === 'true',
-      BOT_TOKEN:   get('channels.telegram.bot_token', ''),
-      CHAT_ID:     get('channels.telegram.chat_id', ''),
+      ENABLED:    get('channels.telegram.enabled', 'false') === 'true',
+      BOT_TOKEN:  get('channels.telegram.bot_token', ''),
+      WHITELIST:  get('channels.telegram.whitelist', ''),
     },
     WHATSAPP: {
       ENABLED:     get('channels.whatsapp.enabled', 'false') === 'true',
       AUTH_FOLDER: get('channels.whatsapp.auth_folder', './.whatsapp_auth'),
-      MENTION_ID:  get('channels.whatsapp.mention_id', ''),
       WHITELIST:   get('channels.whatsapp.whitelist', ''),
-      TARGET_JID:  get('channels.whatsapp.target_jid', ''),
+      MENTION_ID:  get('channels.whatsapp.mention_id', ''),
     },
   },
   PERSONAL_INFORMATION: {

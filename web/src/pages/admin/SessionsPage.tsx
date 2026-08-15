@@ -65,7 +65,7 @@ export default function SessionsPage() {
               <thead>
                 <tr className="border-b border-subtle text-left font-mono text-[11px] uppercase tracking-wide text-txt-3">
                   <th className="px-3 py-2">ID</th>
-                  <th className="px-3 py-2">Source</th>
+                  <th className="px-3 py-2">Initiated channel</th>
                   <th className="px-3 py-2">Started</th>
                   <th className="px-3 py-2">Ended</th>
                   <th className="px-3 py-2">Msgs</th>
@@ -76,7 +76,7 @@ export default function SessionsPage() {
                 {data.items.map((s) => (
                   <tr key={s.id} className="border-b border-subtle/60 cursor-pointer hover:bg-bg-3/60" onClick={() => loadDetail(s.id)}>
                     <td className="px-3 py-2 font-mono text-xs text-txt-2">{s.id.slice(0, 12)}…</td>
-                    <td className="px-3 py-2 text-sm">{s.source}</td>
+                    <td className="px-3 py-2 text-sm">{s.entryChannel}</td>
                     <td className="px-3 py-2 font-mono text-xs text-txt-2">{formatDate(s.startedAt)}</td>
                     <td className="px-3 py-2 font-mono text-xs text-txt-2">
                       {s.endedAt ? formatDate(s.endedAt) : <span className="text-green-400">open</span>}

@@ -6,6 +6,8 @@ interface UpdateHeartbeatInput {
   beat?: string;
   type?: 'reminder' | 'scheduled_beat';
   cronExpression?: string;
+  channel?: string | null;
+  target?: string | null;
 }
 
 interface IHeartbeatRepository {
@@ -23,13 +25,15 @@ class HeartbeatRepository implements IHeartbeatRepository {
 
   save(heartbeat: Heartbeat): void {
     this.db.run(
-      `INSERT INTO heartbeat (id, beat, type, cron_expression, last_run, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO heartbeat (id, beat, type, cron_expression, last_run, channel, target, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         heartbeat.id,
         heartbeat.beat,
         heartbeat.type,
         heartbeat.cronExpression,
         heartbeat.lastRun ? formatISO(heartbeat.lastRun) : null,
+        heartbeat.channel ?? null,
+        heartbeat.target ?? null,
         formatISO(heartbeat.createdAt),
       ],
     );
@@ -64,6 +68,16 @@ class HeartbeatRepository implements IHeartbeatRepository {
       params.push(input.cronExpression);
     }
 
+    if (input.channel !== undefined) {
+      fields.push('channel = ?');
+      params.push(input.channel);
+    }
+
+    if (input.target !== undefined) {
+      fields.push('target = ?');
+      params.push(input.target);
+    }
+
     if (fields.length === 0) return this.getById(id);
 
     params.push(id);
@@ -92,6 +106,8 @@ class HeartbeatRepository implements IHeartbeatRepository {
       beat: row.beat,
       type: row.type,
       cronExpression: row.cron_expression,
+      channel: row.channel ?? undefined,
+      target: row.target ?? undefined,
       lastRun: row.last_run ? new Date(row.last_run) : undefined,
       createdAt: new Date(row.created_at),
     });

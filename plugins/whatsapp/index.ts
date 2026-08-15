@@ -194,7 +194,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
     try {
       // In testing... To remember old version: `Message from ${name}: ${text}`;
       const prompt = `${name} says: ${text}`;
-      const response = await gateway.handle(prompt, jid);
+      const response = await gateway.handle(prompt, jid, { channel: 'whatsapp' });
       const resolved = await this.resolveResponse(response);
       await this.sendText(jid, resolved);
     } catch (err) {
