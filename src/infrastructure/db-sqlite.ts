@@ -111,7 +111,7 @@ class DatabaseService implements IDatabaseService {
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (
           id TEXT PRIMARY KEY,
-          source TEXT NOT NULL,
+          entry_channel TEXT NOT NULL,
           started_at DATETIME,
           ended_at DATETIME,
           message_count INTEGER DEFAULT 0,

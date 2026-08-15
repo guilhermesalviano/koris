@@ -3,7 +3,7 @@ import { nowISO } from "../utils/date";
 
 export interface SessionProps {
   id?: string;
-  source: string;
+  entryChannel: string;
   startedAt?: string;
   endedAt?: string;
   messageCount?: number;
@@ -12,7 +12,7 @@ export interface SessionProps {
 
 export class Session {
   public readonly id: string;
-  public readonly source: string;
+  public readonly entryChannel: string;
   public readonly startedAt?: string;
   public readonly endedAt?: string;
   public readonly messageCount: number;
@@ -20,7 +20,7 @@ export class Session {
 
   constructor(props: SessionProps) {
     this.id = props.id || generateId();
-    this.source = props.source;
+    this.entryChannel = props.entryChannel;
     this.startedAt = props.startedAt || nowISO();
     this.endedAt = props.endedAt;
     this.messageCount = props.messageCount || 0;

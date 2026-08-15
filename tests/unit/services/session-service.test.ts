@@ -18,7 +18,7 @@ function makeRepo() {
     save: vi.fn(),
     update: vi.fn(),
     findById: vi.fn(),
-    findLatestOpenBySource: vi.fn().mockReturnValue(null),
+    findLatestOpenByEntryChannel: vi.fn().mockReturnValue(null),
   };
 }
 
@@ -29,28 +29,28 @@ describe('SessionService', () => {
 
   it('persists the session on construction by default', () => {
     const repo = makeRepo();
-    const session = new Session({ source: 'tui' });
+    const session = new Session({ entryChannel: 'tui' });
     new SessionService(repo as any, session);
     expect(repo.save).toHaveBeenCalledWith(session);
   });
 
   it('does not persist when persistOnConstruct is false', () => {
     const repo = makeRepo();
-    const session = new Session({ id: 'existing', source: 'tui' });
+    const session = new Session({ id: 'existing', entryChannel: 'tui' });
     new SessionService(repo as any, session, { persistOnConstruct: false });
     expect(repo.save).not.toHaveBeenCalled();
   });
 
   it('getSession returns the initial session', () => {
     const repo = makeRepo();
-    const session = new Session({ source: 'tui' });
+    const session = new Session({ entryChannel: 'tui' });
     const svc = new SessionService(repo as any, session);
     expect(svc.getSession()).toBe(session);
   });
 
   it('updateCount increments messageCount by 1', () => {
     const repo = makeRepo();
-    const session = new Session({ source: 'tui', messageCount: 2 });
+    const session = new Session({ entryChannel: 'tui', messageCount: 2 });
     const svc = new SessionService(repo as any, session);
     svc.updateCount();
     expect(svc.getSession().messageCount).toBe(3);
@@ -58,7 +58,7 @@ describe('SessionService', () => {
 
   it('updateCount persists the updated session via repo.update', () => {
     const repo = makeRepo();
-    const session = new Session({ source: 'tui' });
+    const session = new Session({ entryChannel: 'tui' });
     const svc = new SessionService(repo as any, session);
     svc.updateCount();
     expect(repo.update).toHaveBeenCalledTimes(1);
@@ -70,7 +70,7 @@ describe('SessionService', () => {
     vi.setSystemTime(new Date('2024-06-01T12:00:00.000Z'));
 
     const repo = makeRepo();
-    const session = new Session({ source: 'tui' });
+    const session = new Session({ entryChannel: 'tui' });
     const svc = new SessionService(repo as any, session);
     svc.updateCount();
 
@@ -79,7 +79,7 @@ describe('SessionService', () => {
 
   it('updateCount passes original id to repo.update', () => {
     const repo = makeRepo();
-    const session = new Session({ source: 'tui' });
+    const session = new Session({ entryChannel: 'tui' });
     const svc = new SessionService(repo as any, session);
     svc.updateCount();
     expect(repo.update.mock.calls[0][0]).toBe(session.id);
@@ -87,7 +87,7 @@ describe('SessionService', () => {
 
   it('multiple updateCount calls accumulate correctly', () => {
     const repo = makeRepo();
-    const session = new Session({ source: 'tui' });
+    const session = new Session({ entryChannel: 'tui' });
     const svc = new SessionService(repo as any, session);
     svc.updateCount();
     svc.updateCount();
@@ -96,12 +96,12 @@ describe('SessionService', () => {
     expect(repo.update).toHaveBeenCalledTimes(3);
   });
 
-  it('preserves session source after updateCount', () => {
+  it('preserves session entryChannel after updateCount', () => {
     const repo = makeRepo();
-    const session = new Session({ source: 'telegram' });
+    const session = new Session({ entryChannel: 'telegram' });
     const svc = new SessionService(repo as any, session);
     svc.updateCount();
-    expect(svc.getSession().source).toBe('telegram');
+    expect(svc.getSession().entryChannel).toBe('telegram');
   });
 
   describe('ensureActiveSession', () => {
@@ -111,7 +111,7 @@ describe('SessionService', () => {
 
       const repo = makeRepo();
       const session = new Session({
-        source: 'tui',
+        entryChannel: 'tui',
         startedAt: '2024-06-01T11:50:00.000Z',
         metadata: { lastActivityAt: '2024-06-01T11:50:00.000Z' },
       });
@@ -131,7 +131,7 @@ describe('SessionService', () => {
       const repo = makeRepo();
       const session = new Session({
         id: 'old-session',
-        source: 'tui',
+        entryChannel: 'tui',
         startedAt: '2024-06-01T10:00:00.000Z',
         metadata: { lastActivityAt: '2024-06-01T10:00:00.000Z' },
       });
@@ -144,7 +144,7 @@ describe('SessionService', () => {
       }));
       expect(repo.save).toHaveBeenCalledTimes(1);
       expect(result.id).not.toBe('old-session');
-      expect(result.source).toBe('tui');
+      expect(result.entryChannel).toBe('tui');
     });
 
     it('returns the same session even when expired when rotateOnExpire is false', () => {
@@ -154,7 +154,7 @@ describe('SessionService', () => {
       const repo = makeRepo();
       const session = new Session({
         id: 'old-session',
-        source: 'tui',
+        entryChannel: 'tui',
         startedAt: '2024-06-01T10:00:00.000Z',
         metadata: { lastActivityAt: '2024-06-01T10:00:00.000Z' },
       });
@@ -183,13 +183,13 @@ describe('SessionServiceFactory', () => {
 
     const existing = new Session({
       id: 'resumed',
-      source: 'web',
+      entryChannel: 'web',
       startedAt: '2024-06-01T11:50:00.000Z',
       metadata: { lastActivityAt: '2024-06-01T11:50:00.000Z' },
     });
 
     const repo = makeRepo();
-    repo.findLatestOpenBySource.mockReturnValue(existing);
+    repo.findLatestOpenByEntryChannel.mockReturnValue(existing);
     vi.mocked(SessionRepositoryFactory.create).mockReturnValue(repo as any);
 
     const svc = SessionServiceFactory.create({} as any, 'web');
@@ -205,7 +205,7 @@ describe('SessionServiceFactory', () => {
     const svc = SessionServiceFactory.create({} as any, 'tui');
 
     expect(repo.save).toHaveBeenCalledTimes(1);
-    expect(svc.getSession().source).toBe('tui');
+    expect(svc.getSession().entryChannel).toBe('tui');
   });
 
   it('creates a new session when the open session is expired', () => {
@@ -214,13 +214,13 @@ describe('SessionServiceFactory', () => {
 
     const expired = new Session({
       id: 'expired',
-      source: 'tui',
+      entryChannel: 'tui',
       startedAt: '2024-06-01T09:00:00.000Z',
       metadata: { lastActivityAt: '2024-06-01T09:00:00.000Z' },
     });
 
     const repo = makeRepo();
-    repo.findLatestOpenBySource.mockReturnValue(expired);
+    repo.findLatestOpenByEntryChannel.mockReturnValue(expired);
     vi.mocked(SessionRepositoryFactory.create).mockReturnValue(repo as any);
 
     const svc = SessionServiceFactory.create({} as any, 'tui');

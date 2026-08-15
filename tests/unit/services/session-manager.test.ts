@@ -19,14 +19,14 @@ function makeRepo() {
     save: vi.fn(),
     update: vi.fn(),
     findById: vi.fn(),
-    findLatestOpenBySource: vi.fn().mockReturnValue(null),
+    findLatestOpenByEntryChannel: vi.fn().mockReturnValue(null),
   };
 }
 
 describe('SessionManager', () => {
   it('binds getSessionServiceById to the exact session', () => {
     const repo = makeRepo();
-    const session = new Session({ id: 'exact-session', source: 'web' });
+    const session = new Session({ id: 'exact-session', entryChannel: 'web' });
     repo.findById.mockReturnValue(session);
     vi.mocked(SessionRepositoryFactory.create).mockReturnValue(repo as any);
 
@@ -41,7 +41,7 @@ describe('SessionManager', () => {
 
   it('caches session services by session id', () => {
     const repo = makeRepo();
-    const session = new Session({ id: 'cached-session', source: 'web' });
+    const session = new Session({ id: 'cached-session', entryChannel: 'web' });
     repo.findById.mockReturnValue(session);
     vi.mocked(SessionRepositoryFactory.create).mockReturnValue(repo as any);
 
@@ -62,7 +62,7 @@ describe('SessionManager', () => {
     const repo = makeRepo();
     const session = new Session({
       id: 'stale-session',
-      source: 'web',
+      entryChannel: 'web',
       startedAt: '2024-06-01T10:00:00.000Z',
       metadata: { lastActivityAt: '2024-06-01T10:00:00.000Z' },
     });

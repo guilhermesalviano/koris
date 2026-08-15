@@ -14,7 +14,7 @@ interface ISessionService {
 class SessionService implements ISessionService {
   private sessionRepository: ISessionRepository;
   private session: Session;
-  private readonly source: string;
+  private readonly entryChannel: string;
   private readonly persistOnConstruct: boolean;
   private readonly rotateOnExpire: boolean;
 
@@ -24,7 +24,7 @@ class SessionService implements ISessionService {
     options: { persistOnConstruct?: boolean; rotateOnExpire?: boolean } = {},
   ) {
     this.sessionRepository = sessionRepository;
-    this.source = session.source;
+    this.entryChannel = session.entryChannel;
     this.persistOnConstruct = options.persistOnConstruct ?? true;
     this.rotateOnExpire = options.rotateOnExpire ?? true;
 
@@ -49,7 +49,7 @@ class SessionService implements ISessionService {
     }
 
     this.endSession(this.session);
-    this.session = this.startNewSession(this.source);
+    this.session = this.startNewSession(this.entryChannel);
     return this.session;
   }
 
@@ -79,23 +79,23 @@ class SessionService implements ISessionService {
     this.sessionRepository.update(session.id, { endedAt });
   }
 
-  private startNewSession(source: string): Session {
-    const session = new Session({ source });
+  private startNewSession(entryChannel: string): Session {
+    const session = new Session({ entryChannel });
     this.sessionRepository.save(session);
     return session;
   }
 }
 
 class SessionServiceFactory {
-  public static create(db: IDatabaseService, source: string): SessionService {
+  public static create(db: IDatabaseService, entryChannel: string): SessionService {
     const sessionRepository = SessionRepositoryFactory.create(db);
-    const existing = sessionRepository.findLatestOpenBySource(source);
+    const existing = sessionRepository.findLatestOpenByEntryChannel(entryChannel);
 
     if (existing && !isSessionExpired(getLastActivityAt(existing), config.SESSION.TTL_MS)) {
       return new SessionService(sessionRepository, existing, { persistOnConstruct: false });
     }
 
-    const session = new Session({ source });
+    const session = new Session({ entryChannel });
     return new SessionService(sessionRepository, session);
   }
 }

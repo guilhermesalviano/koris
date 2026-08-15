@@ -129,7 +129,7 @@ class AdminRouterFactory {
         offset,
         items: sessions.map((session) => ({
           id: session.id,
-          source: session.source,
+          entryChannel: session.entryChannel,
           startedAt: session.startedAt,
           endedAt: session.endedAt,
           messageCount: session.messageCount,
@@ -140,11 +140,11 @@ class AdminRouterFactory {
     });
 
     router.post('/sessions', (_req: Request, res: Response) => {
-      const session = new Session({ source: 'web' });
+      const session = new Session({ entryChannel: 'web' });
       sessionRepo.save(session);
       res.status(201).json({
         id: session.id,
-        source: session.source,
+        entryChannel: session.entryChannel,
         startedAt: session.startedAt,
         endedAt: session.endedAt,
         messageCount: session.messageCount,
@@ -165,7 +165,7 @@ class AdminRouterFactory {
       res.json({
         session: {
           id: session.id,
-          source: session.source,
+          entryChannel: session.entryChannel,
           startedAt: session.startedAt,
           endedAt: session.endedAt,
           messageCount: session.messageCount,
@@ -297,7 +297,7 @@ class AdminRouterFactory {
     });
 
     router.get('/chat/history', (_req: Request, res: Response) => {
-      const session = sessionRepo.findLatestOpenBySource('web');
+      const session = sessionRepo.findLatestOpenByentryChannel('web');
       if (!session) {
         res.json({ sessionId: null, messages: [] });
         return;
