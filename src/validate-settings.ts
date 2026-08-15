@@ -123,16 +123,9 @@ async function main() {
   const validLogLevels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
   check(
     validLogLevels.includes(config.LOG_LEVEL),
-    'log.level is valid',
+    'log_level is valid',
     `Got: "${config.LOG_LEVEL}". Must be one of: ${validLogLevels.join(', ')}.`,
     config.LOG_LEVEL,
-  );
-
-  check(
-    config.HEARTBEAT.INTERVAL_MS > 0,
-    'heartbeat.interval_ms is positive',
-    `Got: ${config.HEARTBEAT.INTERVAL_MS}`,
-    `${config.HEARTBEAT.INTERVAL_MS} ms`,
   );
 
   // ── 3. AI Provider ───────────────────────────────────────────────────────

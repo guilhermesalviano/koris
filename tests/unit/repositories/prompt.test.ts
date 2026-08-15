@@ -142,15 +142,15 @@ describe('PromptRepository buildMemoryContext', () => {
 });
 
 describe('PromptRepository prompt sanitizer', () => {
-  const originalEnabled = config.AI.PROMPT_SANITIZER.ENABLED;
+  const originalEnabled = config.AI.PROMPT_SANITIZER;
 
   beforeEach(() => {
-    (config.AI.PROMPT_SANITIZER as { ENABLED: boolean }).ENABLED = true;
+    (config.AI.PROMPT_SANITIZER as boolean) = true;
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    (config.AI.PROMPT_SANITIZER as { ENABLED: boolean }).ENABLED = originalEnabled;
+    (config.AI.PROMPT_SANITIZER as boolean) = originalEnabled;
   });
 
   it('sanitizes the user message and history and logs aggregate stats when enabled', async () => {
@@ -181,7 +181,7 @@ describe('PromptRepository prompt sanitizer', () => {
   });
 
   it('leaves messages untouched and skips logging when disabled', async () => {
-    (config.AI.PROMPT_SANITIZER as { ENABLED: boolean }).ENABLED = false;
+    (config.AI.PROMPT_SANITIZER as boolean) = false;
     const logger = makeLogger();
     const repository = makeRepository({ logger });
 

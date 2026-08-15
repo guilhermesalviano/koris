@@ -2,16 +2,11 @@
   "temp_folder": "./temp",
   "web_port": 3000,
   "timezone": "America/Sao_Paulo",
-  "learned_skills_limit": 10,
-  "log": {
-    "level": "debug"
-  },
+  "log_level": "debug",
   "gateway_host": "http://localhost:3000",
   "allowed_domains": [],
-  "heartbeat": {
-    "enabled": false,
-    "interval_ms": 1800000
-  },
+  "learned_skills_limit": 10,
+  "heartbeat": false,
   "channels": {
     "telegram": {
       "enabled": true,

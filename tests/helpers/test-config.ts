@@ -21,13 +21,13 @@ const DEFAULTS: Required<TestConfigPatch> = {
 export function applyTestConfigDefaults(patch: TestConfigPatch = {}): void {
   const values = { ...DEFAULTS, ...patch };
 
-  Object.defineProperty(config.HEARTBEAT, 'ENABLED', {
+  Object.defineProperty(config, 'HEARTBEAT', {
     value: values.heartbeatEnabled,
     configurable: true,
     writable: true,
   });
 
-  Object.defineProperty(config.AI.SUMMARIZER, 'ENABLED', {
+  Object.defineProperty(config.AI, 'SUMMARIZER', {
     value: values.summarizerEnabled,
     configurable: true,
     writable: true,
