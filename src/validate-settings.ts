@@ -325,12 +325,6 @@ async function main() {
         errors++;
       }
     }
-
-    advisory(
-      config.CHANNELS.TELEGRAM.CHAT_ID.trim().length > 0,
-      'channels.telegram.chat_id is set',
-      'Set channels.telegram.chat_id to restrict to a specific chat',
-    );
   } else {
     pass('Telegram channel', 'disabled — skipping');
   }

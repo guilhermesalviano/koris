@@ -39,7 +39,7 @@ function makeHeartbeat(overrides: Partial<{
   const channelService = {
     resolveDelivery: vi.fn().mockReturnValue(
       overrides.deliveryTarget === undefined
-        ? { channel: 'telegram', target: config.CHANNELS.TELEGRAM.CHAT_ID }
+        ? { channel: 'telegram', target: '987654321' }
         : overrides.deliveryTarget,
     ),
   };
