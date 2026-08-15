@@ -1,5 +1,4 @@
 {
-  "temp_folder": "./temp",
   "web_port": 3000,
   "timezone": "America/Sao_Paulo",
   "log_level": "debug",

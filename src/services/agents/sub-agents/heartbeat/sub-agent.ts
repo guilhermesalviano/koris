@@ -12,8 +12,6 @@ import type { ILogger } from "../../../../infrastructure/logger";
 import { IToolsQueue, ToolsQueue } from "../../../tools-queue";
 import { ChatServiceFactory } from "../../../chat/chat-service";
 import { ISubAgent } from "../../../../types/agents";
-import { mkdirSync, writeFileSync } from "fs";
-import { join, resolve } from "path";
 import { AgnosticExecutionToolFactory } from "../../../tools";
 import { IChannelsManager } from "../../../../channels";
 import { IChannelService, ChannelServiceFactory } from "../../../channel-service";
@@ -108,8 +106,6 @@ class Heartbeat implements ISubAgent<Date> {
           },
         );
       }
-      this.saveBeatResult({ beatId: beat.id, date, result });
-
       this.logger.info(`Heartbeat: Beat "${beat.id}" executed. Result: ${result}`);
 
       const destination = this.channelService.resolveDelivery(beat);
@@ -124,27 +120,6 @@ class Heartbeat implements ISubAgent<Date> {
       this.logger.info(`Heartbeat: Beat "${beat.id}" completed successfully.`);
     } catch (err) {
       this.logger.error(`Heartbeat: Beat "${beat.id}" failed.`, { err });
-    }
-  }
-
-
-  formatDateStamp(date: Date): string {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${date.getFullYear()}_${pad(date.getMonth() + 1)}_${pad(date.getDate())}_${pad(date.getHours())}_${pad(date.getMinutes())}`;
-  }
-
-  saveBeatResult(props: { beatId: string; date: Date; result: string }): void {
-    const { beatId, date, result } = props;
-    const tempDir = resolve(config.BASE_DIR, config.TEMP_FOLDER);
-    const filename = `${beatId}_${this.formatDateStamp(date)}.md`;
-    const filePath = join(tempDir, filename);
-
-    try {
-      mkdirSync(tempDir, { recursive: true });
-      writeFileSync(filePath, result, 'utf-8');
-      this.logger.info(`Heartbeat: Beat result saved to ${filePath}`);
-    } catch (err) {
-      this.logger.error(`Heartbeat: Failed to save beat result to ${filePath}`, { err });
     }
   }
 }
