@@ -148,7 +148,6 @@ describe('Onboard footer progress', () => {
         telegram: {
           ENABLED: true,
           BOT_TOKEN: 'YOUR_BOT_TOKEN',
-          USE_POLLING: true,
         },
       },
       ai: {
@@ -223,7 +222,6 @@ describe('onboarding settings draft', () => {
           telegram: {
             enabled: true,
             bot_token: 'YOUR_BOT_TOKEN',
-            use_polling: true,
           },
         },
         ai: {
@@ -253,7 +251,6 @@ describe('onboarding settings draft', () => {
       channels: {
         telegram: {
           enabled: true,
-          use_polling: true,
           bot_token: 'YOUR_BOT_TOKEN',
         },
         discord: {
@@ -311,7 +308,6 @@ describe('onboarding settings draft', () => {
         telegram: {
           enabled: true,
           bot_token: 'YOUR_BOT_TOKEN',
-          use_polling: true,
         },
       },
       ai: {
@@ -356,7 +352,6 @@ describe('onboarding settings draft', () => {
       channels: {
         telegram: {
           enabled: true,
-          use_polling: true,
           bot_token: 'YOUR_BOT_TOKEN',
         },
       },
