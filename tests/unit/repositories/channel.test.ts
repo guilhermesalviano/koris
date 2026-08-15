@@ -1,13 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ChannelRepository, ChannelRepositoryFactory } from '../../../src/repositories/channel';
 
-function makeDb(overrides: { row?: Record<string, unknown>; principalRow?: Record<string, unknown>; rows?: unknown[] } = {}) {
+function makeDb(overrides: { row?: Record<string, unknown>; principalRow?: Record<string, unknown>; byIdRow?: Record<string, unknown>; rows?: unknown[] } = {}) {
   return {
     run: vi.fn(),
     transaction: vi.fn((fn: () => unknown) => fn()),
     query: vi.fn().mockReturnValue(overrides.rows ?? []),
     get: vi.fn((sql: string) => {
       if (sql.includes('is_principal = 1')) return overrides.principalRow;
+      if (sql.includes('WHERE id = ?')) return overrides.byIdRow;
       if (sql.includes('WHERE channel = ? AND target = ?')) return overrides.row;
       return undefined;
     }),
@@ -118,6 +119,34 @@ describe('ChannelRepository', () => {
 
     expect(db.query).toHaveBeenCalledWith('SELECT * FROM channels ORDER BY created_at ASC');
     expect(items).toHaveLength(2);
+  });
+
+  it('setPrincipal demotes all other channels and marks the target as principal', () => {
+    const db = makeDb({ byIdRow: makeRow() });
+    const repository = new ChannelRepository(db as never);
+
+    const updated = repository.setPrincipal('c1');
+
+    expect(db.run).toHaveBeenNthCalledWith(
+      1,
+      'UPDATE channels SET is_principal = 0, updated_at = CURRENT_TIMESTAMP WHERE id != ?',
+      ['c1'],
+    );
+    expect(db.run).toHaveBeenNthCalledWith(
+      2,
+      'UPDATE channels SET is_principal = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      ['c1'],
+    );
+    expect(updated?.id).toBe('c1');
+    expect(updated?.isPrincipal).toBe(true);
+  });
+
+  it('setPrincipal returns null when the channel does not exist', () => {
+    const db = makeDb({ row: undefined });
+    const repository = new ChannelRepository(db as never);
+
+    expect(repository.setPrincipal('missing')).toBeNull();
+    expect(db.run).not.toHaveBeenCalled();
   });
 
   it('factory create returns a ChannelRepository', () => {

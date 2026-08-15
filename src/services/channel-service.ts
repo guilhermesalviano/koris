@@ -10,6 +10,7 @@ export interface DeliveryTarget {
 
 interface IChannelService {
   record(channel: string, target: string): void;
+  setPrincipal(id: string): Channel | null;
   getPrincipal(): Channel | null;
   getByChannel(channel: ChannelType): Channel[];
   getAll(): Channel[];
@@ -28,6 +29,10 @@ class ChannelService implements IChannelService {
       return;
     }
     this.channelRepository.upsert(channel, target);
+  }
+
+  setPrincipal(id: string): Channel | null {
+    return this.channelRepository.setPrincipal(id);
   }
 
   getPrincipal(): Channel | null {
