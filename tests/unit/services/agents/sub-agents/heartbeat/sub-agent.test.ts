@@ -6,6 +6,7 @@ import { config } from '../../../../../../src/config';
 import { applyTestConfigDefaults } from '../../../../../helpers/test-config';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
 import { getLastWhitelistedJid } from '../../../../../../plugins/whatsapp';
+import { sharedSubAgentQueue } from '../../../../../../src/services/sub-agents-queue/task-queue';
 
 vi.mock('../../../../../../plugins/whatsapp', () => ({
   getLastWhitelistedJid: vi.fn(() => null),
@@ -20,7 +21,7 @@ function makeLogger(): ILogger {
 function makeHeartbeat(overrides: Partial<{
   beats: Array<{ id: string; beat: string; cronExpression: string; type: string; lastRun?: Date }>;
   completionResponse: unknown;
-  executorResult: string;
+  pipelineResult: string;
 }> = {}) {
   const logger = makeLogger();
   const heartbeatRepository = {
@@ -35,8 +36,8 @@ function makeHeartbeat(overrides: Partial<{
       overrides.completionResponse ?? { kind: 'message', text: 'beat done' },
     ),
   };
-  const executorWorker = {
-    run: vi.fn().mockResolvedValue(overrides.executorResult ?? 'executed'),
+  const pipeline = {
+    execute: vi.fn().mockResolvedValue(overrides.pipelineResult ?? 'executed'),
   };
   const channelsManager = {
     sendMessage: vi.fn().mockResolvedValue(undefined),
@@ -49,7 +50,7 @@ function makeHeartbeat(overrides: Partial<{
     { enqueue: vi.fn() } as never,
     channelsManager as never,
     completionService as never,
-    executorWorker as never,
+    pipeline as never,
   );
 
   return {
@@ -58,7 +59,7 @@ function makeHeartbeat(overrides: Partial<{
     heartbeatRepository,
     promptRepository,
     completionService,
-    executorWorker,
+    pipeline,
     channelsManager,
   };
 }
@@ -159,10 +160,10 @@ describe('Heartbeat', () => {
       expect(logger.info).toHaveBeenCalledWith('Heartbeat: Beat "morning" completed successfully.');
     });
 
-    it('routes tool-call responses through the executor worker', async () => {
+    it('routes tool-call responses through the tool-call pipeline', async () => {
       const now = localDate(9, 0);
       const toolCalls = [{ name: 'execute_command', arguments: { command: 'echo hi' } }];
-      const { heartbeat, executorWorker, channelsManager } = makeHeartbeat({
+      const { heartbeat, pipeline, channelsManager } = makeHeartbeat({
         beats: [{
           id: 'tool-beat',
           beat: 'run command',
@@ -170,16 +171,18 @@ describe('Heartbeat', () => {
           type: 'automation',
         }],
         completionResponse: { kind: 'tool_calls', calls: toolCalls },
-        executorResult: 'hi',
+        pipelineResult: 'hi',
       });
 
       await heartbeat.handler(now);
 
-      expect(executorWorker.run).toHaveBeenCalledWith(
+      expect(pipeline.execute).toHaveBeenCalledWith(
+        toolCalls,
+        'run command',
+        [],
         expect.objectContaining({
-          toolCalls,
-          userMessage: 'run command',
-          messageHistory: [],
+          channel: 'background',
+          options: expect.objectContaining({ runId: 'tool-beat' }),
         }),
       );
       expect(channelsManager.sendMessage).toHaveBeenCalledWith(
@@ -334,6 +337,97 @@ describe('Heartbeat', () => {
         'Heartbeat: Beat "failing" failed.',
         expect.objectContaining({ err: expect.any(Error) }),
       );
+    });
+
+    it('executes due beats serially through the internal queue when subagents_parallel is false', async () => {
+      (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
+      const now = localDate(9, 0);
+      const release: Array<() => void> = [];
+      const gated = () => new Promise((resolve) => release.push(() => resolve({ kind: 'message', text: 'beat done' })));
+
+      const { heartbeat, completionService, channelsManager } = makeHeartbeat({
+        beats: [
+          {
+            id: 'beat-a',
+            beat: 'first beat',
+            cronExpression: '0 9 * * *',
+            type: 'report',
+          },
+          {
+            id: 'beat-b',
+            beat: 'second beat',
+            cronExpression: '0 9 * * *',
+            type: 'report',
+          },
+        ],
+      });
+      completionService.complete.mockImplementation(gated);
+
+      const run = heartbeat.handler(now);
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(completionService.complete).toHaveBeenCalledTimes(1);
+
+      release[0]();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(completionService.complete).toHaveBeenCalledTimes(2);
+
+      release[1]();
+      await run;
+
+      expect(channelsManager.sendMessage).toHaveBeenNthCalledWith(
+        1,
+        'telegram',
+        config.CHANNELS.TELEGRAM.CHAT_ID,
+        'beat done',
+      );
+      expect(channelsManager.sendMessage).toHaveBeenNthCalledWith(
+        2,
+        'telegram',
+        config.CHANNELS.TELEGRAM.CHAT_ID,
+        'beat done',
+      );
+    });
+
+    it('uses the shared sub-agent queue when subagents_parallel is false', async () => {
+      (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = false;
+      const { heartbeat } = makeHeartbeat();
+
+      expect((heartbeat as unknown as { queue: unknown }).queue).toBe(sharedSubAgentQueue);
+    });
+
+    it('uses its own queue when subagents_parallel is true', async () => {
+      (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
+      const { heartbeat } = makeHeartbeat();
+
+      expect((heartbeat as unknown as { queue: unknown }).queue).not.toBe(sharedSubAgentQueue);
+    });
+
+    it('exposes queue state via snapshot', async () => {
+      (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
+      const now = localDate(9, 0);
+      const release: Array<() => void> = [];
+      const gated = () => new Promise((resolve) => release.push(() => resolve({ kind: 'message', text: 'ok' })));
+      const { heartbeat, completionService } = makeHeartbeat({
+        beats: [
+          { id: 'a', beat: 'first beat', cronExpression: '0 9 * * *', type: 'report' },
+          { id: 'b', beat: 'second beat', cronExpression: '0 9 * * *', type: 'report' },
+        ],
+      });
+      completionService.complete.mockImplementation(gated);
+
+      const run = heartbeat.handler(now);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const queue = (heartbeat as unknown as { queue: { snapshot(): unknown } }).queue;
+      expect(queue.snapshot()).toEqual({ queued: 1, active: 1, concurrency: 1, queuedLabels: ['heartbeat: b'], activeLabels: ['heartbeat: a'] });
+
+      release[0]();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      release[1]();
+      await run;
+
+      expect(queue.snapshot()).toEqual({ queued: 0, active: 0, concurrency: 1, queuedLabels: [], activeLabels: [] });
     });
   });
 });

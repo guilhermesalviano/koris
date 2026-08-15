@@ -11,7 +11,7 @@ interface ConversationWorkerProps {
   channel: string,
 }
 
-class ConversationWorker implements IWorker {
+class ConversationWorker implements IWorker<ConversationWorkerProps, void> {
   constructor(
     private logger: ILogger,
     public name: string = 'conversationWorker',
@@ -39,9 +39,9 @@ class ConversationWorker implements IWorker {
 }
 
 class ConversationWorkerFactory {
-  static create(logger: ILogger, db: IDatabaseService, sessionManager: ISessionManager): IWorker {
+  static create(logger: ILogger, db: IDatabaseService, sessionManager: ISessionManager): IWorker<ConversationWorkerProps, void> {
     return new ConversationWorker(logger, 'conversationWorker', db, sessionManager);
   }
 }
 
-export { ConversationWorkerFactory };
+export { ConversationWorkerProps, ConversationWorkerFactory };

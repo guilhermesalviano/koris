@@ -28,6 +28,7 @@ class OllamaAIProvider implements AIProvider {
   private readonly defaultModel: string;
   private readonly embeddingModel: string;
   private readonly embeddingEnabled: boolean;
+  private readonly numCtx: number;
 
   constructor(private readonly logger: ILogger, opts?: AIProviderOptions) {
     const resolvedBaseUrl = (opts?.baseUrl ?? config.AI.MANAGER.BASE_URL).replace(/\/+$/, '');
@@ -35,6 +36,7 @@ class OllamaAIProvider implements AIProvider {
     this.defaultModel = opts?.model ?? config.AI.MANAGER.MODEL;
     this.embeddingModel = opts?.embeddingModel ?? config.AI.WORKERS.EMBED_MODEL;
     this.embeddingEnabled = opts?.embeddingEnabled ?? config.AI.WORKERS.EMBEDDING_ENABLED;
+    this.numCtx = opts?.numCtx ?? config.AI.WORKERS.NUM_CTX;
   }
 
   async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
@@ -58,7 +60,10 @@ class OllamaAIProvider implements AIProvider {
       options?.onUsage?.({ inputTokens: promptEvalCount, outputTokens: evalCount });
       return content;
     } catch (err) {
-      this.logger.error('Ollama chat error', { error: err instanceof Error ? err.message : String(err) });
+      this.logger.error('Ollama chat error', {
+        error: err instanceof Error ? err.message : String(err),
+        cause: err instanceof Error ? (err as { cause?: unknown }).cause : undefined,
+      });
       if (this.isAbortError(err)) {
         throw new Error(options?.signal?.aborted ? 'Ollama request aborted' : 'Ollama request timed out during non-stream /api/chat request');
       }
@@ -189,6 +194,7 @@ class OllamaAIProvider implements AIProvider {
     } catch (err) {
       this.logger.error('Ollama chatStream error', {
         error: err instanceof Error ? err.message : String(err),
+        cause: err instanceof Error ? (err as { cause?: unknown }).cause : undefined,
         chunksReceived: totalChunksReceived,
         charsYielded: totalCharsYielded,
       });
@@ -352,7 +358,7 @@ class OllamaAIProvider implements AIProvider {
       tools: request.tools,
       keep_alive: '15m',
       options: {
-        num_ctx: 32768
+        num_ctx: this.numCtx
       },
       stream
     });

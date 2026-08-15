@@ -18,7 +18,7 @@ interface ExecutorWorkerArgs {
   maxIterations?: number;
 }
 
-class ExecutorWorker implements IWorker {
+class ExecutorWorker implements IWorker<ExecutorWorkerArgs, ProcessedMessage> {
   constructor(
     private logger: ILogger,
     public name: string,
@@ -45,7 +45,7 @@ class ExecutorWorker implements IWorker {
       ctx.signal,
       {
         channel: ctx.channel,
-        sessionId: ctx.message.getSessionId(),
+        sessionId: ctx.message?.getSessionId(),
         runId: ctx.options?.runId,
         agentName: 'executorWorker',
       },
@@ -65,7 +65,8 @@ class ExecutorWorker implements IWorker {
       synthesisPrompt,
       ctx.channel,
       ctx.options,
-      messageHistory
+      messageHistory,
+      ctx.message?.getSessionId(),
     );
 
     if (response.kind === 'message') return response.text;
@@ -88,10 +89,10 @@ class ExecutorWorker implements IWorker {
 }
 
 class ExecutorWorkerFactory {
-  static create(logger: ILogger): IWorker {
+  static create(logger: ILogger): IWorker<ExecutorWorkerArgs, ProcessedMessage> {
     const ChatService = ChatServiceFactory.create(logger, 'worker', 'executorWorker');
     return new ExecutorWorker(logger, 'executorWorker', ChatService);
   }
 }
 
-export { ExecutorWorkerFactory };
+export { ExecutorWorkerArgs, ExecutorWorkerFactory };

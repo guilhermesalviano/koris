@@ -1,0 +1,76 @@
+import { handleCommand, isCommand } from '../commands';
+import { previewMessage, toSafeMessage } from '../../utils/message';
+import { ILogger } from '../../infrastructure/logger';
+import { IDatabaseService } from '../../infrastructure/db-sqlite';
+import { ISessionManager } from '../session-manager';
+import { IMainAgent, MainAgentFactory } from './main-agent';
+import { ProcessedMessage, ProcessOptions } from '../../types/agents';
+import { generateId } from '../../utils/generate-id';
+import { ISessionContextFactory, SessionContextFactory } from './session-context';
+import { IBackgroundDispatcher, BackgroundDispatcherFactory } from './background-dispatcher';
+
+interface IMessageGateway {
+  handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage>;
+}
+
+class MessageGateway implements IMessageGateway {
+  constructor(
+    private logger: ILogger,
+    private channel: string,
+    private sessionContextFactory: ISessionContextFactory,
+    private backgroundDispatcher: IBackgroundDispatcher,
+    private mainAgent: IMainAgent,
+  ) {}
+
+  async handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage> {
+    const safeMessage = toSafeMessage(message);
+
+    this.logger.info(`Processing message from ${this.channel} (origin: ${originId}): "${previewMessage(safeMessage)}"`);
+
+    const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(originId, options?.sessionId);
+
+    if (isCommand(safeMessage)) {
+      const response = handleCommand(safeMessage, { source: this.channel }).response || '';
+      this.backgroundDispatcher.persistConversation({
+        sessionId: sessionService.getSession().id,
+        ask: safeMessage,
+        answer: response,
+        channel: this.channel,
+      });
+      return response;
+    }
+
+    const response = await this.mainAgent.run({
+      userMessage: safeMessage,
+      channel: this.channel,
+      message: messageService,
+      options: { ...options, runId: options?.runId ?? generateId() },
+    });
+
+    this.logger.info(`Processed message from ${this.channel}: "${previewMessage(safeMessage)}" => "${previewMessage(response)}"`);
+
+    const sessionId = messageService.getSessionId();
+    this.backgroundDispatcher.persistConversation({ sessionId, ask: safeMessage, answer: response, channel: this.channel });
+    this.backgroundDispatcher.summarizeConversation({
+      sessionId,
+      ask: safeMessage,
+      answer: response,
+      channel: this.channel,
+      memoryService,
+    });
+
+    return response;
+  }
+}
+
+class MessageGatewayFactory {
+  static create(logger: ILogger, channel: string, db: IDatabaseService, sessionManager: ISessionManager): MessageGateway {
+    const sessionContextFactory = SessionContextFactory.create(logger, db, sessionManager);
+    const backgroundDispatcher = BackgroundDispatcherFactory.create(logger, db, sessionManager);
+    const mainAgent = MainAgentFactory.create(logger);
+
+    return new MessageGateway(logger, channel, sessionContextFactory, backgroundDispatcher, mainAgent);
+  }
+}
+
+export { IMessageGateway, MessageGateway, MessageGatewayFactory }

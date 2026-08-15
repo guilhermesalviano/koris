@@ -28,6 +28,7 @@ export interface AIChatOptions {
     runId?: string;
     sessionId?: string;
     channel?: string;
+    agentName?: string;
   };
   onUsage?: (usage: { inputTokens?: number; outputTokens?: number }) => void;
 }
@@ -38,6 +39,7 @@ export interface AIProviderOptions {
   apiToken?: string;
   embeddingModel?: string;
   embeddingEnabled?: boolean;
+  numCtx?: number;
 }
 
 export type AIFinishReason = 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'unknown';

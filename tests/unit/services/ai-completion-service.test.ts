@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AICompletionService, AIServiceError } from '../../../src/services/ai-completion-service';
 import type { AIProvider, AIResponse } from '../../../src/types/chat';
 import type { ILogger } from '../../../src/infrastructure/logger';
@@ -20,18 +20,26 @@ function providerWith(complete: AIProvider['complete']): AIProvider {
   } as AIProvider;
 }
 
-function makeService(complete: AIProvider['complete'], options?: { role?: 'manager' | 'worker'; agentName?: string }) {
+function makeService(complete: AIProvider['complete'], options?: { role?: 'manager' | 'worker'; agentName?: string; retryAttempts?: number; retryBackoffMs?: number }) {
   const auditService = { record: vi.fn() };
   const service = new AICompletionService(providerWith(complete), logger, {
     role: options?.role,
     agentName: options?.agentName,
     auditService,
+    retry: {
+      attempts: options?.retryAttempts ?? 0,
+      backoffMs: options?.retryBackoffMs ?? 1,
+    },
   });
   return { service, auditService };
 }
 
 describe('AICompletionService', () => {
   const request = { messages: [{ role: 'user' as const, content: 'hello' }] };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it('returns the typed provider response unchanged', async () => {
     const expected: AIResponse = { kind: 'message', text: 'world', finishReason: 'stop' };
@@ -193,5 +201,53 @@ describe('AICompletionService', () => {
     const { service } = makeService(vi.fn().mockRejectedValue(original));
 
     await expect(service.complete(request)).rejects.toBe(original);
+  });
+
+  it('retries a transient unavailable error and succeeds', async () => {
+    const expected: AIResponse = { kind: 'message', text: 'world', finishReason: 'stop' };
+    const complete = vi.fn()
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockResolvedValueOnce(expected);
+    const { service, auditService } = makeService(complete, { retryAttempts: 2, retryBackoffMs: 1 });
+
+    await expect(service.complete(request)).resolves.toBe(expected);
+
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith('AI provider transient error, retrying', expect.objectContaining({ attempt: 1 }));
+    expect(auditService.record).toHaveBeenCalledTimes(1);
+    expect(auditService.record.mock.calls[0][0]).toMatchObject({ status: 'success' });
+  });
+
+  it('exhausts retries before throwing the mapped error', async () => {
+    const complete = vi.fn().mockRejectedValue(new Error('fetch failed'));
+    const { service, auditService } = makeService(complete, { retryAttempts: 2, retryBackoffMs: 1 });
+
+    await expect(service.complete(request)).rejects.toMatchObject({ code: 'unavailable' });
+
+    expect(complete).toHaveBeenCalledTimes(3);
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    expect(auditService.record).toHaveBeenCalledTimes(1);
+    expect(auditService.record.mock.calls[0][0]).toMatchObject({ status: 'error', errorCode: 'unavailable' });
+  });
+
+  it('does not retry non-transient errors', async () => {
+    const complete = vi.fn().mockRejectedValue(new Error('HTTP 429 rate limit'));
+    const { service } = makeService(complete, { retryAttempts: 2, retryBackoffMs: 1 });
+
+    await expect(service.complete(request)).rejects.toMatchObject({ code: 'rate_limited' });
+
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry when the request was aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const complete = vi.fn().mockRejectedValue(new Error('fetch failed'));
+    const { service } = makeService(complete, { retryAttempts: 2, retryBackoffMs: 1 });
+
+    await expect(service.complete(request, { signal: controller.signal }))
+      .rejects.toMatchObject({ code: 'aborted' });
+
+    expect(complete).toHaveBeenCalledTimes(1);
   });
 });

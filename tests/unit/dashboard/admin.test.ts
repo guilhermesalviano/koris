@@ -205,6 +205,28 @@ describe('AdminRouterFactory /audit', () => {
   });
 });
 
+describe('AdminRouterFactory /queue', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns the serial queue state', () => {
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/queue'), res);
+
+    expect(res.json).toHaveBeenCalledTimes(1);
+    const body = res.json.mock.calls[0][0];
+    expect(typeof body.parallel).toBe('boolean');
+    expect(typeof body.subagentsParallel).toBe('boolean');
+    expect(typeof body.backgroundGraceMs).toBe('number');
+    expect(Array.isArray(body.subAgents)).toBe(true);
+    expect(Array.isArray(body.running)).toBe(true);
+    expect(body.running).toEqual([]);
+    expect(body.queued).toEqual([]);
+  });
+});
+
 describe('AdminRouterFactory /usage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
