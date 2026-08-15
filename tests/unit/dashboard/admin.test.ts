@@ -35,6 +35,10 @@ vi.mock('../../../src/repositories/heartbeat', () => ({
   HeartbeatRepositoryFactory: { create: () => ({}) },
 }));
 
+vi.mock('../../../src/repositories/channel', () => ({
+  ChannelRepositoryFactory: { create: () => ({}) },
+}));
+
 vi.mock('../../../src/repositories/learned-skills', () => ({
   LearnedSkillsRepositoryFactory: { create: () => ({}) },
 }));

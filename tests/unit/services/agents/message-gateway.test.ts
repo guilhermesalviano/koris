@@ -21,6 +21,7 @@ function makeDeps() {
       summarizeConversation: vi.fn(),
     },
     mainAgent: { run: vi.fn().mockResolvedValue('assistant reply') },
+    channelService: { record: vi.fn() },
     sessionService,
     messageService,
     memoryService,
@@ -37,6 +38,7 @@ function makeGateway(channel = 'tui') {
     deps.sessionContextFactory as never,
     deps.backgroundDispatcher as never,
     deps.mainAgent as never,
+    deps.channelService as never,
   );
 
   return { gateway, logger, deps };
@@ -144,5 +146,21 @@ describe('MessageGateway', () => {
     expect(deps.mainAgent.run).toHaveBeenCalledWith(
       expect.objectContaining({ userMessage: '' }),
     );
+  });
+
+  it('records the channel and origin target via the channel service', async () => {
+    const { gateway, deps } = makeGateway('web');
+
+    await gateway.handle('hello', 'origin-1', { channel: 'telegram' });
+
+    expect(deps.channelService.record).toHaveBeenCalledWith('telegram', 'origin-1');
+  });
+
+  it('records the runtime channel when no channel option is provided', async () => {
+    const { gateway, deps } = makeGateway('tui');
+
+    await gateway.handle('hello', 'origin-1');
+
+    expect(deps.channelService.record).toHaveBeenCalledWith('tui', 'origin-1');
   });
 });

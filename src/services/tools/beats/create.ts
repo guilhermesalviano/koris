@@ -7,11 +7,14 @@ import type { ToolResult } from '../../../types/tools';
 import { getRequiredStringArg, getOptionalStringArg, isAllowedValue } from '../runtime';
 import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../../../utils/heartbeat';
 import { BEAT_TYPES, BeatType } from '../../../types/beat';
+import { CHANNEL_TYPES } from '../../../entities/channel';
 
 export async function setBeat(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const beat = getRequiredStringArg(args, 'beat');
   const cronExpression = getRequiredStringArg(args, 'cron_expression');
   const rawType = getOptionalStringArg(args, 'type') ?? 'reminder';
+  const rawChannel = getOptionalStringArg(args, 'channel');
+  const rawTarget = getOptionalStringArg(args, 'target');
 
   if (!beat) {
     return { toolName: 'set_beat', success: false, error: 'Missing required parameter: beat' };
@@ -26,6 +29,22 @@ export async function setBeat(logger: ILogger, args: Record<string, unknown>): P
       toolName: 'set_beat',
       success: false,
       error: `Invalid parameter: type. Must be one of: ${BEAT_TYPES.join(', ')}.`,
+    };
+  }
+
+  if (rawChannel && !isAllowedValue(rawChannel, CHANNEL_TYPES)) {
+    return {
+      toolName: 'set_beat',
+      success: false,
+      error: `Invalid parameter: channel. Must be one of: ${CHANNEL_TYPES.join(', ')}.`,
+    };
+  }
+
+  if ((rawChannel && !rawTarget) || (!rawChannel && rawTarget)) {
+    return {
+      toolName: 'set_beat',
+      success: false,
+      error: 'Parameters "channel" and "target" must be provided together.',
     };
   }
 
@@ -55,11 +74,17 @@ export async function setBeat(logger: ILogger, args: Record<string, unknown>): P
 
   try {
     const repo = HeartbeatRepositoryFactory.create(DatabaseServiceFactory.create());
-    const heartbeat = new Heartbeat({ beat, type: rawType as BeatType, cronExpression: cronExpression.trim() });
+    const heartbeat = new Heartbeat({
+      beat,
+      type: rawType as BeatType,
+      cronExpression: cronExpression.trim(),
+      channel: rawChannel ?? undefined,
+      target: rawTarget ?? undefined,
+    });
     repo.save(heartbeat);
     HeartbeatSingleton.getExistingInstance()?.reschedule();
 
-    logger.info('Beat saved', { id: heartbeat.id, beat, type: rawType, cronExpression });
+    logger.info('Beat saved', { id: heartbeat.id, beat, type: rawType, cronExpression, channel: rawChannel, target: rawTarget });
 
     return {
       toolName: 'set_beat',

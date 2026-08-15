@@ -34,8 +34,31 @@ describe('HeartbeatRepository', () => {
       'scheduled_beat',
       '0 9 * * *',
       formatISO(heartbeat.lastRun as Date),
+      null,
+      null,
       formatISO(heartbeat.createdAt),
     ]);
+  });
+
+  it('save stores the beat channel and target', () => {
+    const db = makeDb();
+    const repository = new HeartbeatRepository(db as never);
+    const heartbeat = new Heartbeat({
+      id: 'h1',
+      beat: 'send report',
+      type: 'scheduled_beat',
+      cronExpression: '0 9 * * *',
+      channel: 'telegram',
+      target: '987654321',
+      createdAt: new Date('2025-12-01T00:00:00Z'),
+    });
+
+    repository.save(heartbeat);
+
+    const [sql, params] = db.run.mock.calls[0];
+    expect(sql).toContain('INSERT INTO heartbeat');
+    expect(params[5]).toBe('telegram');
+    expect(params[6]).toBe('987654321');
   });
 
   it('save stores null last_run when not provided', () => {
@@ -189,6 +212,44 @@ describe('HeartbeatRepository', () => {
     const [sql, params] = db.run.mock.calls[0];
     expect(sql).toBe('UPDATE heartbeat SET type = ? WHERE id = ?');
     expect(params).toEqual(['reminder', 'h1']);
+  });
+
+  it('update maps channel and target fields', () => {
+    const db = makeDb();
+    db.get.mockReturnValue({
+      id: 'h1',
+      beat: 't',
+      type: 'reminder',
+      cron_expression: '0 9 * * *',
+    });
+    const repository = new HeartbeatRepository(db as never);
+
+    repository.update('h1', { channel: 'whatsapp', target: '5511@s.whatsapp.net' });
+
+    const [sql, params] = db.run.mock.calls[0];
+    expect(sql).toBe('UPDATE heartbeat SET channel = ?, target = ? WHERE id = ?');
+    expect(params).toEqual(['whatsapp', '5511@s.whatsapp.net', 'h1']);
+  });
+
+  it('getAll maps rows including channel and target into Heartbeat entities', () => {
+    const db = makeDb([
+      {
+        id: 'h1',
+        beat: 't',
+        type: 'scheduled_beat',
+        cron_expression: '0 9 * * *',
+        channel: 'telegram',
+        target: '987654321',
+        last_run: '2026-01-01T00:00:00.000Z',
+        created_at: '2025-12-01T00:00:00.000Z',
+      },
+    ]);
+    const repository = new HeartbeatRepository(db as never);
+
+    const items = repository.getAll();
+
+    expect(items[0].channel).toBe('telegram');
+    expect(items[0].target).toBe('987654321');
   });
 
   it('factory getInstance throws before create is called', () => {

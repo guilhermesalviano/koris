@@ -84,8 +84,27 @@ class DatabaseService implements IDatabaseService {
           type TEXT NOT NULL CHECK(type IN ('reminder', 'scheduled_beat')),
           cron_expression TEXT NOT NULL,
           last_run DATETIME,
+          channel TEXT,
+          target TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+      `);
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS channels (
+          id TEXT PRIMARY KEY,
+          channel TEXT NOT NULL CHECK(channel IN ('telegram', 'whatsapp')),
+          target TEXT NOT NULL,
+          is_principal INTEGER NOT NULL DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(channel, target)
+        );
+      `);
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_channels_is_principal ON channels(is_principal);
+        CREATE INDEX IF NOT EXISTS idx_channels_channel ON channels(channel);
       `);
 
       // TODO: add topic and update after first message
@@ -187,14 +206,6 @@ class DatabaseService implements IDatabaseService {
           FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
         );
       `);
-
-      const auditColumns = this.query<any>(`PRAGMA table_info(audit_logs)`).map((c) => c.name);
-      if (!auditColumns.includes('input_tokens')) {
-        this.db.exec(`ALTER TABLE audit_logs ADD COLUMN input_tokens INTEGER`);
-      }
-      if (!auditColumns.includes('output_tokens')) {
-        this.db.exec(`ALTER TABLE audit_logs ADD COLUMN output_tokens INTEGER`);
-      }
 
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);

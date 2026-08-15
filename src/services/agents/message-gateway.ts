@@ -8,6 +8,7 @@ import { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import { generateId } from '../../utils/generate-id';
 import { ISessionContextFactory, SessionContextFactory } from './session-context';
 import { IBackgroundDispatcher, BackgroundDispatcherFactory } from './background-dispatcher';
+import { IChannelService, ChannelServiceFactory } from '../channel-service';
 
 interface IMessageGateway {
   handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage>;
@@ -20,6 +21,7 @@ class MessageGateway implements IMessageGateway {
     private sessionContextFactory: ISessionContextFactory,
     private backgroundDispatcher: IBackgroundDispatcher,
     private mainAgent: IMainAgent,
+    private channelService: IChannelService,
   ) {}
 
   async handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage> {
@@ -28,6 +30,8 @@ class MessageGateway implements IMessageGateway {
     this.logger.info(`Processing message from ${this.channel} (origin: ${originId}): "${previewMessage(safeMessage)}"`);
 
     const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(originId, options?.sessionId);
+
+    this.channelService.record(options?.channel ?? this.channel, originId);
 
     if (isCommand(safeMessage)) {
       const response = handleCommand(safeMessage, { source: this.channel }).response || '';
@@ -68,8 +72,9 @@ class MessageGatewayFactory {
     const sessionContextFactory = SessionContextFactory.create(logger, db, sessionManager);
     const backgroundDispatcher = BackgroundDispatcherFactory.create(logger, db, sessionManager);
     const mainAgent = MainAgentFactory.create(logger);
+    const channelService = ChannelServiceFactory.create(db);
 
-    return new MessageGateway(logger, channel, sessionContextFactory, backgroundDispatcher, mainAgent);
+    return new MessageGateway(logger, channel, sessionContextFactory, backgroundDispatcher, mainAgent, channelService);
   }
 }
 

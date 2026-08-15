@@ -7,6 +7,8 @@ import { SessionRepositoryFactory } from '../repositories/session';
 import { MessageRepositoryFactory } from '../repositories/message';
 import { MemoryRepositoryFactory } from '../repositories/memory';
 import { HeartbeatRepositoryFactory } from '../repositories/heartbeat';
+import { ChannelRepositoryFactory } from '../repositories/channel';
+import { CHANNEL_TYPES, ChannelType } from '../entities/channel';
 import { LearnedSkillsRepositoryFactory } from '../repositories/learned-skills';
 import { SkillsRepositoryFactory } from '../repositories/skills';
 import { AuditLogRepositoryFactory, AuditLogRow } from '../repositories/audit-log';
@@ -97,6 +99,7 @@ class AdminRouterFactory {
     const messageRepo = MessageRepositoryFactory.create(db);
     const memoryRepo = MemoryRepositoryFactory.create(db);
     const heartbeatRepo = HeartbeatRepositoryFactory.create(db);
+    const channelRepo = ChannelRepositoryFactory.create(db);
     const learnedSkillsRepo = LearnedSkillsRepositoryFactory.create(db);
     const skillsRepo = SkillsRepositoryFactory.create(logger);
     const auditRepo = AuditLogRepositoryFactory.create(db);
@@ -316,8 +319,12 @@ class AdminRouterFactory {
       res.json({ items: heartbeatRepo.getAll() });
     });
 
+    router.get('/channels', (_req: Request, res: Response) => {
+      res.json({ items: channelRepo.getAll() });
+    });
+
     router.post('/heartbeats', (req: Request, res: Response) => {
-      const { beat, type = 'reminder', cronExpression } = req.body ?? {};
+      const { beat, type = 'reminder', cronExpression, channel, target } = req.body ?? {};
 
       if (typeof beat !== 'string' || !beat.trim()) {
         res.status(400).json({ error: 'beat is required' });
@@ -334,6 +341,16 @@ class AdminRouterFactory {
         return;
       }
 
+      if (channel !== undefined && !CHANNEL_TYPES.includes(channel)) {
+        res.status(400).json({ error: `Invalid channel. Must be one of: ${CHANNEL_TYPES.join(', ')}.` });
+        return;
+      }
+
+      if ((channel !== undefined && !target) || (channel === undefined && target !== undefined)) {
+        res.status(400).json({ error: 'channel and target must be provided together.' });
+        return;
+      }
+
       if (isEveryMinute(cronExpression)) {
         res.status(400).json({ error: 'Beats that run every minute are not allowed.' });
         return;
@@ -344,7 +361,13 @@ class AdminRouterFactory {
         return;
       }
 
-      const heartbeat = new Heartbeat({ beat: beat.trim(), type: type as BeatType, cronExpression: cronExpression.trim() });
+      const heartbeat = new Heartbeat({
+        beat: beat.trim(),
+        type: type as BeatType,
+        cronExpression: cronExpression.trim(),
+        channel: channel as ChannelType | undefined,
+        target: target as string | undefined,
+      });
       heartbeatRepo.save(heartbeat);
       HeartbeatSingleton.getExistingInstance()?.reschedule();
 
@@ -357,7 +380,7 @@ class AdminRouterFactory {
         return;
       }
 
-      const { beat, type, cronExpression } = req.body ?? {};
+      const { beat, type, cronExpression, channel, target } = req.body ?? {};
 
       if (cronExpression !== undefined && !isValidCronExpression(cronExpression)) {
         res.status(400).json({ error: 'Invalid cron_expression.' });
@@ -369,10 +392,22 @@ class AdminRouterFactory {
         return;
       }
 
+      if (channel !== undefined && channel !== null && !CHANNEL_TYPES.includes(channel)) {
+        res.status(400).json({ error: `Invalid channel. Must be one of: ${CHANNEL_TYPES.join(', ')}.` });
+        return;
+      }
+
+      if ((channel !== undefined && channel !== null && !target) || ((channel === undefined || channel === null) && target !== undefined)) {
+        res.status(400).json({ error: 'channel and target must be provided together.' });
+        return;
+      }
+
       const updated = heartbeatRepo.update(String(req.params.id), {
         beat,
         type,
-        cronExpression: cronExpression?.trim(),
+        cronExpression: typeof cronExpression === 'string' ? cronExpression.trim() : cronExpression,
+        channel: channel === undefined ? undefined : channel,
+        target: target === undefined ? undefined : target,
       });
       HeartbeatSingleton.getExistingInstance()?.reschedule();
 
