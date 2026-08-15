@@ -39,6 +39,7 @@ export interface AIProviderOptions {
   apiToken?: string;
   embeddingModel?: string;
   embeddingEnabled?: boolean;
+  numCtx?: number;
 }
 
 export type AIFinishReason = 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'unknown';

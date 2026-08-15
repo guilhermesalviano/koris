@@ -51,12 +51,18 @@ export interface AICompletionServiceOptions {
   role?: AIProviderRole;
   agentName?: string;
   auditService?: IAuditService;
+  retry?: {
+    attempts?: number;
+    backoffMs?: number;
+  };
 }
 
 export class AICompletionService implements IAICompletionService {
   private readonly role: AIProviderRole;
   private readonly agentName?: string;
   private readonly auditService: IAuditService;
+  private readonly retryAttempts: number;
+  private readonly retryBackoffMs: number;
 
   constructor(
     private readonly provider: AIProvider,
@@ -66,33 +72,60 @@ export class AICompletionService implements IAICompletionService {
     this.role = options?.role ?? 'manager';
     this.agentName = options?.agentName;
     this.auditService = options?.auditService ?? AuditServiceFactory.create(logger);
+    this.retryAttempts = options?.retry?.attempts ?? config.AI.RETRY_ATTEMPTS;
+    this.retryBackoffMs = options?.retry?.backoffMs ?? config.AI.RETRY_BACKOFF_MS;
   }
 
   async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
     const startedAt = Date.now();
-    let usage: { inputTokens?: number; outputTokens?: number } | undefined;
+    let attempt = 0;
 
-    const providerOptions: AIChatOptions = {
-      ...options,
-      audit: { ...(options?.audit ?? {}), agentName: this.agentName },
-      onUsage: (u) => { usage = u; },
-    };
+    while (true) {
+      attempt++;
+      let usage: { inputTokens?: number; outputTokens?: number } | undefined;
 
-    try {
-      const response = await this.provider.complete(request, providerOptions);
-      this.recordAudit(request, options, Date.now() - startedAt, response, undefined, usage);
-      return response;
-    } catch (error) {
-      const mapped = this.mapError(error, options?.signal);
-      this.recordAudit(request, options, Date.now() - startedAt, undefined, mapped, usage);
-      this.logger.error('AI completion failed', {
-        provider: this.provider.name,
-        code: mapped.code,
-        statusCode: mapped.statusCode,
-        error: mapped.message,
-      });
-      throw mapped;
+      const providerOptions: AIChatOptions = {
+        ...options,
+        audit: { ...(options?.audit ?? {}), agentName: this.agentName },
+        onUsage: (u) => { usage = u; },
+      };
+
+      try {
+        const response = await this.provider.complete(request, providerOptions);
+        this.recordAudit(request, options, Date.now() - startedAt, response, undefined, usage);
+        return response;
+      } catch (error) {
+        const mapped = this.mapError(error, options?.signal);
+        const canRetry = !options?.signal?.aborted
+          && mapped.code === 'unavailable'
+          && attempt <= this.retryAttempts;
+
+        if (canRetry) {
+          const backoff = this.retryBackoffMs * (2 ** (attempt - 1));
+          this.logger.warn('AI provider transient error, retrying', {
+            provider: this.provider.name,
+            attempt,
+            retriesLeft: this.retryAttempts - attempt,
+            error: mapped.message,
+          });
+          await this.sleep(backoff);
+          continue;
+        }
+
+        this.recordAudit(request, options, Date.now() - startedAt, undefined, mapped, usage);
+        this.logger.error('AI completion failed', {
+          provider: this.provider.name,
+          code: mapped.code,
+          statusCode: mapped.statusCode,
+          error: mapped.message,
+        });
+        throw mapped;
+      }
     }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private recordAudit(
