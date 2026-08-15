@@ -15,7 +15,6 @@ export const config = {
   LOG_LEVEL:   get('log_level', 'info'),
   TIMEZONE:    get('timezone', 'America/Sao_Paulo'),
   ENVIRONMENT: get('environment', 'development'),
-  TEMP_FOLDER: get('temp_folder', './temp'),
   WEB_PORT:    Number(get('web_port', '3000')),
   BASE_DIR:    process.cwd(),
   GATEWAY_HOST: get('gateway_host', 'http://localhost:3000'),

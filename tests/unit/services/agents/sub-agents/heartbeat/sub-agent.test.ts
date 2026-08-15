@@ -1,9 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, readFileSync, rmSync } from 'fs';
-import { join } from 'path';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Heartbeat } from '../../../../../../src/services/agents/sub-agents/heartbeat/sub-agent';
 import { config } from '../../../../../../src/config';
-import { applyTestConfigDefaults } from '../../../../../helpers/test-config';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
 import { sharedSubAgentQueue } from '../../../../../../src/services/sub-agents-queue/task-queue';
 
@@ -76,39 +73,6 @@ function localDate(hours: number, minutes = 0): Date {
 describe('Heartbeat', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  describe('formatDateStamp', () => {
-    it('formats dates as YYYY_MM_DD_HH_mm', () => {
-      const { heartbeat } = makeHeartbeat();
-      const date = new Date(2024, 5, 3, 9, 7, 0);
-
-      expect(heartbeat.formatDateStamp(date)).toBe('2024_06_03_09_07');
-    });
-  });
-
-  describe('saveBeatResult', () => {
-    const tempDir = join(config.BASE_DIR, config.TEMP_FOLDER, 'heartbeat-tests');
-
-    beforeEach(() => {
-      mkdirSync(tempDir, { recursive: true });
-    });
-
-    afterEach(() => {
-      rmSync(tempDir, { recursive: true, force: true });
-    });
-
-    it('writes the beat result to a timestamped markdown file', () => {
-      applyTestConfigDefaults({ tempFolder: join('temp', 'heartbeat-tests') });
-      const { heartbeat, logger } = makeHeartbeat();
-      const date = new Date(2024, 0, 15, 10, 30, 0);
-
-      heartbeat.saveBeatResult({ beatId: 'daily-check', date, result: '# report\nall good' });
-
-      const filePath = join(config.BASE_DIR, config.TEMP_FOLDER, 'daily-check_2024_01_15_10_30.md');
-      expect(readFileSync(filePath, 'utf-8')).toBe('# report\nall good');
-      expect(logger.info).toHaveBeenCalledWith(`Heartbeat: Beat result saved to ${filePath}`);
-    });
   });
 
   describe('handler', () => {

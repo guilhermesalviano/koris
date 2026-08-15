@@ -217,7 +217,6 @@ describe('onboarding settings draft', () => {
       },
     }, {
       baseSettings: {
-        temp_folder: './temp',
         channels: {
           telegram: {
             enabled: true,
@@ -247,7 +246,6 @@ describe('onboarding settings draft', () => {
         },
       },
     })).toEqual({
-      temp_folder: './temp',
       channels: {
         telegram: {
           enabled: true,
@@ -300,10 +298,7 @@ describe('onboarding settings draft', () => {
     mkdirSync(appRoot, { recursive: true });
     writeFileSync(join(appRoot, 'settings.json'), '{}');
     writeFileSync(join(appRoot, 'settings.example.json'), JSON.stringify({
-      temp_folder: './temp',
-      heartbeat: {
-        enabled: true,
-      },
+      heartbeat: true,
       channels: {
         telegram: {
           enabled: true,
@@ -345,10 +340,7 @@ describe('onboarding settings draft', () => {
 
     expect(destination).toBe(join(appRoot, SETTINGS_FILENAME));
     expect(JSON.parse(readFileSync(destination, 'utf-8'))).toEqual({
-      temp_folder: './temp',
-      heartbeat: {
-        enabled: true,
-      },
+      heartbeat: true,
       channels: {
         telegram: {
           enabled: true,

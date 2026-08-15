@@ -3,7 +3,6 @@ import { config } from '../../src/config';
 export interface TestConfigPatch {
   heartbeatEnabled?: boolean;
   summarizerEnabled?: boolean;
-  tempFolder?: string;
   telegramEnabled?: boolean;
   whatsappEnabled?: boolean;
   subagentsParallel?: boolean;
@@ -12,7 +11,6 @@ export interface TestConfigPatch {
 const DEFAULTS: Required<TestConfigPatch> = {
   heartbeatEnabled: true,
   summarizerEnabled: true,
-  tempFolder: './temp',
   telegramEnabled: true,
   whatsappEnabled: false,
   subagentsParallel: false,
@@ -47,12 +45,6 @@ export function applyTestConfigDefaults(patch: TestConfigPatch = {}): void {
 
   Object.defineProperty(config.CHANNELS.WHATSAPP, 'ENABLED', {
     value: values.whatsappEnabled,
-    configurable: true,
-    writable: true,
-  });
-
-  Object.defineProperty(config, 'TEMP_FOLDER', {
-    value: values.tempFolder,
     configurable: true,
     writable: true,
   });
