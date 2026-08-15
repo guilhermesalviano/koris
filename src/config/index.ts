@@ -35,6 +35,8 @@ export const config = {
     PARALLEL: get('ai.parallel', 'true') === 'true',
     SUBAGENTS_PARALLEL: get('ai.subagents_parallel', 'false') === 'true',
     BACKGROUND_GRACE_MS: Number(get('ai.background_grace_ms', '5000')),
+    RETRY_ATTEMPTS: Number(get('ai.retry_attempts', '2')),
+    RETRY_BACKOFF_MS: Number(get('ai.retry_backoff_ms', '1000')),
     MANAGER: {
       PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.manager.provider', 'ollama'),
       BASE_URL: get('ai.manager.base_url', 'http://localhost:11434'),
@@ -48,6 +50,7 @@ export const config = {
       MODEL:   get('ai.workers.model', 'qwen:3.5:2b'),
       EMBEDDING_ENABLED: get('ai.workers.embedding', 'false') === 'true',
       EMBED_MODEL: get('ai.workers.embed_model', 'nomic-embed-text'),
+      NUM_CTX: Number(get('ai.workers.num_ctx', '8192')),
     },
     SEARCH_API_KEY: get('ai.search_api_key', ''),
     TIMEOUTS: {

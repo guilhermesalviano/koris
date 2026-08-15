@@ -162,6 +162,18 @@ async function main() {
   );
 
   check(
+    Number.isInteger(config.AI.RETRY_ATTEMPTS) && config.AI.RETRY_ATTEMPTS >= 0,
+    'ai.retry_attempts is a non-negative integer',
+    `Got: ${config.AI.RETRY_ATTEMPTS}`,
+  );
+
+  check(
+    config.AI.RETRY_BACKOFF_MS > 0,
+    'ai.retry_backoff_ms is positive',
+    `Got: ${config.AI.RETRY_BACKOFF_MS} ms`,
+  );
+
+  check(
     supportedProviders.includes(config.AI.MANAGER.PROVIDER),
     'ai.manager.provider is supported',
     `Got: "${config.AI.MANAGER.PROVIDER}". Supported: ${supportedProviders.join(', ')}.`,
@@ -201,6 +213,13 @@ async function main() {
     'ai.workers.model is not empty',
     'Set ai.workers.model in settings.json',
     config.AI.WORKERS.MODEL,
+  );
+
+  check(
+    Number.isInteger(config.AI.WORKERS.NUM_CTX) && config.AI.WORKERS.NUM_CTX >= 512 && config.AI.WORKERS.NUM_CTX <= 131072,
+    'ai.workers.num_ctx is a valid context size',
+    `Got: ${config.AI.WORKERS.NUM_CTX}. Expected an integer between 512 and 131072.`,
+    `${config.AI.WORKERS.NUM_CTX} tokens`,
   );
 
   check(

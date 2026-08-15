@@ -107,6 +107,7 @@ export function createAIProvider(logger: ILogger, role: AIProviderRole = 'manage
     apiToken: profile.API_TOKEN,
     embeddingEnabled: config.AI.WORKERS.EMBEDDING_ENABLED,
     embeddingModel: config.AI.WORKERS.EMBED_MODEL,
+    numCtx: config.AI.WORKERS.NUM_CTX,
   };
 
   logger.info(`Initializing AI provider: ${providerType} (${role})`);
