@@ -23,6 +23,7 @@ function mapRowToChannel(row: ChannelRow): Channel {
 
 interface IChannelRepository {
   upsert(channel: ChannelType, target: string): Channel;
+  setPrincipal(id: string): Channel | null;
   getPrincipal(): Channel | null;
   getByChannel(channel: ChannelType): Channel[];
   getAll(): Channel[];
@@ -57,6 +58,26 @@ class ChannelRepository implements IChannelRepository {
       }
 
       return mapRowToChannel(row);
+    });
+  }
+
+  setPrincipal(id: string): Channel | null {
+    return this.db.transaction(() => {
+      const row = this.db.get<any>(`SELECT * FROM channels WHERE id = ?`, [id]);
+      if (!row) {
+        return null;
+      }
+
+      this.db.run(
+        `UPDATE channels SET is_principal = 0, updated_at = CURRENT_TIMESTAMP WHERE id != ?`,
+        [id],
+      );
+      this.db.run(
+        `UPDATE channels SET is_principal = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [id],
+      );
+
+      return mapRowToChannel({ ...row, is_principal: 1 });
     });
   }
 

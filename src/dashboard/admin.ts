@@ -323,6 +323,16 @@ class AdminRouterFactory {
       res.json({ items: channelRepo.getAll() });
     });
 
+    router.patch('/channels/:id/principal', (req: Request, res: Response) => {
+      const updated = channelRepo.setPrincipal(String(req.params.id));
+      if (!updated) {
+        res.status(404).json({ error: 'Channel not found' });
+        return;
+      }
+
+      res.json(updated);
+    });
+
     router.post('/heartbeats', (req: Request, res: Response) => {
       const { beat, type = 'reminder', cronExpression, channel, target } = req.body ?? {};
 

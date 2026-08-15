@@ -15,6 +15,7 @@ function makeChannel(overrides: Partial<ConstructorParameters<typeof Channel>[0]
 function makeRepo(overrides: Record<string, unknown> = {}) {
   return {
     upsert: vi.fn(),
+    setPrincipal: vi.fn().mockReturnValue(overrides.setPrincipal ?? null),
     getPrincipal: vi.fn().mockReturnValue(overrides.principal ?? null),
     getByChannel: vi.fn().mockReturnValue(overrides.byChannel ?? []),
     getAll: vi.fn().mockReturnValue(overrides.all ?? []),
@@ -73,6 +74,15 @@ describe('ChannelService', () => {
     const service = new ChannelService(repo as never);
 
     expect(service.getAll()).toEqual(channels);
+  });
+
+  it('setPrincipal delegates to the repository', () => {
+    const principal = makeChannel({ channel: 'whatsapp', target: '5511@s.whatsapp.net', isPrincipal: true });
+    const repo = makeRepo({ setPrincipal: principal });
+    const service = new ChannelService(repo as never);
+
+    expect(service.setPrincipal('c1')).toBe(principal);
+    expect(repo.setPrincipal).toHaveBeenCalledWith('c1');
   });
 
   it('resolveDelivery uses the beat channel and target when specified', () => {
