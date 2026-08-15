@@ -297,7 +297,7 @@ class AdminRouterFactory {
     });
 
     router.get('/chat/history', (_req: Request, res: Response) => {
-      const session = sessionRepo.findLatestOpenByentryChannel('web');
+      const session = sessionRepo.findLatestOpenByEntryChannel('web');
       if (!session) {
         res.json({ sessionId: null, messages: [] });
         return;

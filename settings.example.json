@@ -16,13 +16,11 @@
     "telegram": {
       "enabled": true,
       "use_polling": true,
-      "bot_token": "YOUR_BOT_TOKEN",
-      "chat_id": "YOUR_CHAT_ID"
+      "bot_token": "YOUR_BOT_TOKEN"
     },
     "whatsapp": {
       "enabled": false,
       "whitelist": "NUMBER1,NUMBER2",
-      "target_jid": "YOUR_PHONE_NUMBER@s.whatsapp.net",
       "mention_id": "THE_BOT_MENTION_ID",
       "auth_folder": "./.whatsapp_auth"
     }

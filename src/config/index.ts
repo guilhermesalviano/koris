@@ -70,14 +70,12 @@ export const config = {
       ENABLED:     get('channels.telegram.enabled', 'false') === 'true',
       USE_POLLING: get('channels.telegram.use_polling', 'true') === 'true',
       BOT_TOKEN:   get('channels.telegram.bot_token', ''),
-      CHAT_ID:     get('channels.telegram.chat_id', ''),
     },
     WHATSAPP: {
       ENABLED:     get('channels.whatsapp.enabled', 'false') === 'true',
       AUTH_FOLDER: get('channels.whatsapp.auth_folder', './.whatsapp_auth'),
       MENTION_ID:  get('channels.whatsapp.mention_id', ''),
       WHITELIST:   get('channels.whatsapp.whitelist', ''),
-      TARGET_JID:  get('channels.whatsapp.target_jid', ''),
     },
   },
   PERSONAL_INFORMATION: {
