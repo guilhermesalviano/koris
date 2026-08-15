@@ -15,6 +15,7 @@ import { hasFlag, logError } from './utils/runtime';
 import { SessionManager } from './services/session-manager';
 import { DatabaseServiceFactory } from './infrastructure/db-sqlite';
 import { HeartbeatRepositoryFactory } from './repositories/heartbeat';
+import { HeartbeatRunRepositoryFactory } from './repositories/heartbeat-run';
 import { DashboardServerFactory, WebServerHandle } from './dashboard';
 import { createPlugins, buildRegistry } from '../plugins';
 
@@ -57,7 +58,12 @@ class Application implements IApplication {
     const gateway = MessageGatewayFactory.create(this.logger, this.source, db, sessionManager);
     const registry = buildRegistry(createPlugins());
     const channels = ChannelsSingleton.getInstance(this.logger, gateway, registry.collect(ADAPTERS));
-    const heartbeat = HeartbeatSingleton.getInstance(this.logger, HeartbeatRepositoryFactory.create(db), channels);
+    const heartbeat = HeartbeatSingleton.getInstance(
+      this.logger,
+      HeartbeatRepositoryFactory.create(db),
+      channels,
+      HeartbeatRunRepositoryFactory.create(db),
+    );
 
     channels.startAll();
     heartbeat.start();

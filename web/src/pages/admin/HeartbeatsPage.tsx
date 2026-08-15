@@ -12,7 +12,6 @@ export default function HeartbeatsPage() {
   const [channel, setChannel] = useState<'telegram' | 'whatsapp' | ''>('');
   const [target, setTarget] = useState('');
   const [toastMsg, showToast, isError] = useToast();
-
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -119,24 +118,33 @@ export default function HeartbeatsPage() {
         {!error && data && data.items.length > 0 && (
           <Card>
             {data.items.map((h) => (
-              <div key={h.id} className="mb-2 flex items-start justify-between gap-3 rounded-lg border border-subtle bg-bg-3 px-3 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <div className="font-mono text-[10px] uppercase text-txt-3">
-                    {h.type} · <code>{h.cron_expression}</code> · last run {formatDate(h.last_run)}
-                    {h.channel && h.target && (
-                      <>
-                        {' '}· {h.channel}: <code>{h.target}</code>
-                      </>
-                    )}
+              <div key={h.id} className="mb-2 rounded-lg border border-subtle bg-bg-3 px-3 py-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] uppercase tracking-wide text-txt-3">
+                      <span>{h.type}</span>
+                      <code>{h.cron_expression}</code>
+                      <span>id: <code>{h.id}</code></span>
+                    </div>
+                    <div className="mt-1 whitespace-pre-wrap text-sm">{h.beat}</div>
+                    <div className="mt-2 grid grid-cols-1 gap-1 font-mono text-[11px] text-txt-2 sm:grid-cols-2">
+                      <div>Last run: <span className="text-txt">{formatDate(h.last_run)}</span></div>
+                      <div>Next run: <span className="text-txt">{formatDate(h.next_run)}</span></div>
+                      <div>Created: <span className="text-txt">{formatDate(h.created_at)}</span></div>
+                      {h.channel && h.target && (
+                        <div>
+                          Delivery: <span className="text-txt">{h.channel}: <code>{h.target}</code></span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-1 whitespace-pre-wrap text-sm">{h.beat}</div>
+                  <button
+                    onClick={() => deleteBeat(h.id)}
+                    className="flex-shrink-0 rounded-md border border-subtle px-2 py-1 font-mono text-[11px] text-txt-3 hover:border-red-500/40 hover:text-red-400"
+                  >
+                    Delete
+                  </button>
                 </div>
-                <button
-                  onClick={() => deleteBeat(h.id)}
-                  className="flex-shrink-0 rounded-md border border-subtle px-2 py-1 font-mono text-[11px] text-txt-3 hover:border-red-500/40 hover:text-red-400"
-                >
-                  Delete
-                </button>
               </div>
             ))}
           </Card>
