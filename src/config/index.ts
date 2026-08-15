@@ -67,14 +67,15 @@ export const config = {
   },
   CHANNELS: {
     TELEGRAM: {
-      ENABLED:     get('channels.telegram.enabled', 'false') === 'true',
-      BOT_TOKEN:   get('channels.telegram.bot_token', ''),
+      ENABLED:    get('channels.telegram.enabled', 'false') === 'true',
+      BOT_TOKEN:  get('channels.telegram.bot_token', ''),
+      WHITELIST:  get('channels.telegram.whitelist', ''),
     },
     WHATSAPP: {
       ENABLED:     get('channels.whatsapp.enabled', 'false') === 'true',
       AUTH_FOLDER: get('channels.whatsapp.auth_folder', './.whatsapp_auth'),
-      MENTION_ID:  get('channels.whatsapp.mention_id', ''),
       WHITELIST:   get('channels.whatsapp.whitelist', ''),
+      MENTION_ID:  get('channels.whatsapp.mention_id', ''),
     },
   },
   PERSONAL_INFORMATION: {

@@ -15,13 +15,14 @@
   "channels": {
     "telegram": {
       "enabled": true,
-      "bot_token": "YOUR_BOT_TOKEN"
+      "bot_token": "YOUR_BOT_TOKEN",
+      "whitelist": ""
     },
     "whatsapp": {
       "enabled": false,
+      "auth_folder": "./.whatsapp_auth",
       "whitelist": "NUMBER1,NUMBER2",
-      "mention_id": "THE_BOT_MENTION_ID",
-      "auth_folder": "./.whatsapp_auth"
+      "mention_id": "THE_BOT_MENTION_ID"
     }
   },
   "ai": {
