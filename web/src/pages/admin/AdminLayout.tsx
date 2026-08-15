@@ -174,17 +174,8 @@ function Header({
           <span className="hidden sm:inline">{statusLabel}</span>
         </div>
         <div className="ml-1 flex items-center gap-2.5">
-          <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-lg bg-accent">
-            <svg className="h-4 w-4 fill-none stroke-white" style={{ strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-              <circle cx="8" cy="6.5" r="3" />
-              <circle cx="16" cy="6.5" r="3" />
-              <circle cx="12" cy="12" r="7" />
-              <circle cx="8" cy="6.5" r="1.5" fill="white" stroke="none" />
-              <circle cx="16" cy="6.5" r="1.5" fill="white" stroke="none" />
-              <ellipse cx="12" cy="13.4" rx="1.9" ry="2.3" fill="white" stroke="none" />
-              <circle cx="9.2" cy="10.6" r="0.9" fill="white" stroke="none" />
-              <circle cx="14.8" cy="10.6" r="0.9" fill="white" stroke="none" />
-            </svg>
+          <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-accent">
+            <img src="/logo.png" alt="koris-agent" className="h-full w-full object-cover" />
           </div>
           <div className="hidden sm:block">
             <div className="text-[13px] font-medium">koris-agent</div>
