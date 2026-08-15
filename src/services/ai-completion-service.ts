@@ -97,7 +97,7 @@ export class AICompletionService implements IAICompletionService {
       } catch (error) {
         const mapped = this.mapError(error, options?.signal);
         const canRetry = !options?.signal?.aborted
-          && mapped.code === 'unavailable'
+          && (mapped.code === 'unavailable' || mapped.code === 'rate_limited')
           && attempt <= this.retryAttempts;
 
         if (canRetry) {

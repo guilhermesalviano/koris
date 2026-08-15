@@ -230,11 +230,38 @@ describe('AICompletionService', () => {
     expect(auditService.record.mock.calls[0][0]).toMatchObject({ status: 'error', errorCode: 'unavailable' });
   });
 
-  it('does not retry non-transient errors', async () => {
-    const complete = vi.fn().mockRejectedValue(new Error('HTTP 429 rate limit'));
-    const { service } = makeService(complete, { retryAttempts: 2, retryBackoffMs: 1 });
+  it('retries a transient 429 (rate_limited) error and succeeds', async () => {
+    const expected: AIResponse = { kind: 'message', text: 'world', finishReason: 'stop' };
+    const complete = vi.fn()
+      .mockRejectedValueOnce(new Error('NVIDIA /chat/completions failed (429): rate limit'))
+      .mockResolvedValueOnce(expected);
+    const { service, auditService } = makeService(complete, { retryAttempts: 2, retryBackoffMs: 1 });
+
+    await expect(service.complete(request)).resolves.toBe(expected);
+
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith('AI provider transient error, retrying', expect.objectContaining({ attempt: 1 }));
+    expect(auditService.record).toHaveBeenCalledTimes(1);
+    expect(auditService.record.mock.calls[0][0]).toMatchObject({ status: 'success' });
+  });
+
+  it('exhausts retries on a persistent 429 before throwing rate_limited', async () => {
+    const complete = vi.fn().mockRejectedValue(new Error('NVIDIA /chat/completions failed (429): rate limit'));
+    const { service, auditService } = makeService(complete, { retryAttempts: 2, retryBackoffMs: 1 });
 
     await expect(service.complete(request)).rejects.toMatchObject({ code: 'rate_limited' });
+
+    expect(complete).toHaveBeenCalledTimes(3);
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    expect(auditService.record).toHaveBeenCalledTimes(1);
+    expect(auditService.record.mock.calls[0][0]).toMatchObject({ status: 'error', errorCode: 'rate_limited' });
+  });
+
+  it('does not retry non-transient errors', async () => {
+    const complete = vi.fn().mockRejectedValue(new Error('response missing content'));
+    const { service } = makeService(complete, { retryAttempts: 2, retryBackoffMs: 1 });
+
+    await expect(service.complete(request)).rejects.toMatchObject({ code: 'malformed_response' });
 
     expect(complete).toHaveBeenCalledTimes(1);
   });
