@@ -289,6 +289,12 @@ async function main() {
       'Set channels.telegram.bot_token in settings.json',
     );
 
+    advisory(
+      config.CHANNELS.TELEGRAM.WHITELIST.trim().length > 0,
+      'channels.telegram.whitelist is set',
+      'channels.telegram.whitelist is empty — anyone can chat with the bot',
+    );
+
     if (config.CHANNELS.TELEGRAM.BOT_TOKEN.trim().length > 0) {
       // Telegram bot tokens follow the pattern <numeric_id>:<alphanumeric>
       const tokenPattern = /^\d+:[A-Za-z0-9_-]{35,}$/;

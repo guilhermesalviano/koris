@@ -9,8 +9,16 @@ import { config } from '../../src/config';
 
 const TYPING_INTERVAL_MS = 5_000;
 const TELEGRAM_MESSAGE_LIMIT = 4_000;
+const TELEGRAM_DENY_MESSAGE = 'You need to allow this number to send messages on the server.';
 
 let botUsername: string | null = null;
+
+const TELEGRAM_WHITELIST = new Set<number>(
+  config.CHANNELS.TELEGRAM.WHITELIST.split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .map(Number),
+);
 
 interface ITelegramChannel {
   handleMessage(gateway: IMessageGateway, msg: TelegramMessage): Promise<void>;
@@ -43,6 +51,15 @@ class TelegramChannel implements ITelegramChannel {
 
     const isGroup = chatType === 'group' || chatType === 'supergroup';
     if (isGroup && !isBotMentioned(text, entities ?? [], botUsername)) {
+      return;
+    }
+
+    if (TELEGRAM_WHITELIST.size === 0) {
+      await this.sendDenyMessage(chatId);
+      return;
+    }
+
+    if (!(msg.from?.id && TELEGRAM_WHITELIST.has(msg.from.id))) {
       return;
     }
 
@@ -80,6 +97,14 @@ class TelegramChannel implements ITelegramChannel {
       parse_mode: 'Markdown',
       reply_markup: keyboard,
     });
+  }
+
+  private async sendDenyMessage(chatId: number): Promise<void> {
+    try {
+      await (await this.getBotClient()).sendMessage(chatId, TELEGRAM_DENY_MESSAGE);
+    } catch (err) {
+      console.error('Error sending deny message:', err);
+    }
   }
 
   private async processAndReply(gateway: IMessageGateway, chatId: number, text: string): Promise<void> {
@@ -290,6 +315,12 @@ export {
 /** @internal — only for use in tests */
 export function _setBotUsernameForTesting(username: string | null): void {
   botUsername = username;
+}
+
+/** @internal — only for use in tests */
+export function _setTelegramWhitelistForTesting(ids: number[]): void {
+  TELEGRAM_WHITELIST.clear();
+  ids.forEach((id) => TELEGRAM_WHITELIST.add(id));
 }
 
 export function create(): Plugin | null {
