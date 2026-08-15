@@ -4,11 +4,12 @@ import { ContextRepository, ContextRepositoryFactory } from '../../../src/reposi
 const configMock = vi.hoisted(() => ({
   config: {
     PERSONAL_INFORMATION: {
-      NAME: 'Test User',
-      GENDER: 'female',
-      BIRTHDAY: '1990-01-01',
-      LOCATION: 'SP',
-      OCCUPATION: 'Engineer',
+      name: 'Test User',
+      gender: 'female',
+      birthday: '1990-01-01',
+      location: 'SP',
+      occupation: 'Engineer',
+      favorite_food: 'Pizza',
     },
   },
 }));
@@ -26,22 +27,24 @@ describe('ContextRepository', () => {
     expect(result).toContain('2. Channel Source: telegram');
     expect(result).toContain('3. Platform:');
     expect(result).toContain('4. Main Human Information:');
-    expect(result).toContain('Name: Test User, gender: female, birthday: 1990-01-01');
-    expect(result).toContain('location: SP');
-    expect(result).toContain('occupation: Engineer');
+    expect(result).toContain('- name: Test User');
+    expect(result).toContain('- gender: female');
+    expect(result).toContain('- location: SP');
+    expect(result).toContain('- occupation: Engineer');
+    expect(result).toContain('- favorite_food: Pizza');
     expect(result.split('\n').length).toBeGreaterThan(3);
   });
 
-  it('omits optional personal fields that are empty', () => {
-    configMock.config.PERSONAL_INFORMATION.GENDER = '';
-    configMock.config.PERSONAL_INFORMATION.BIRTHDAY = '';
-    configMock.config.PERSONAL_INFORMATION.LOCATION = '';
-    configMock.config.PERSONAL_INFORMATION.OCCUPATION = '';
+  it('omits personal fields that are empty', () => {
+    configMock.config.PERSONAL_INFORMATION.gender = '';
+    configMock.config.PERSONAL_INFORMATION.birthday = '';
+    configMock.config.PERSONAL_INFORMATION.location = '';
+    configMock.config.PERSONAL_INFORMATION.occupation = '';
     const repository = new ContextRepository();
 
     const result = repository.get({ channel: 'tui' });
 
-    expect(result).toContain('Name: Test User');
+    expect(result).toContain('- name: Test User');
     expect(result).not.toContain('gender:');
     expect(result).not.toContain('location:');
     expect(result).not.toContain('occupation:');
