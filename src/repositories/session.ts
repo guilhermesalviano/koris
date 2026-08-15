@@ -5,7 +5,7 @@ import { nowISO } from '../utils/date';
 
 interface SessionRow {
   id: string;
-  source: string;
+  entry_channel: string;
   started_at?: string;
   ended_at?: string;
   message_count?: number;
@@ -16,7 +16,7 @@ interface ISessionRepository {
   save(session: Session): void;
   update(id: string, updates: Partial<SessionProps>): void;
   findById(id: string): Session | null;
-  findLatestOpenBySource(source: string): Session | null;
+  findLatestOpenByEntryChannel(channel: string): Session | null;
   findAll(limit?: number, offset?: number): Session[];
   count(): number;
   deleteExpired(): void;
@@ -36,7 +36,7 @@ function mapRowToSession(row: SessionRow): Session {
 
   return new Session({
     id: row.id,
-    source: row.source,
+    entryChannel: row.entry_channel,
     startedAt: row.started_at,
     endedAt: row.ended_at,
     messageCount: row.message_count,
@@ -49,11 +49,11 @@ class SessionRepository implements ISessionRepository {
 
   save(session: Session): void {
     this.db.run(
-      `INSERT INTO sessions (id, source, started_at, ended_at, message_count, metadata)
+      `INSERT INTO sessions (id, entry_channel, started_at, ended_at, message_count, metadata)
       VALUES (?, ?, ?, ?, ?, ?)`,
       [
         session.id,
-        session.source,
+        session.entryChannel,
         session.startedAt,
         session.endedAt,
         session.messageCount,
@@ -89,13 +89,13 @@ class SessionRepository implements ISessionRepository {
     return mapRowToSession(row);
   }
 
-  findLatestOpenBySource(source: string): Session | null {
+  findLatestOpenByEntryChannel(channel: string): Session | null {
     const row = this.db.get(
       `SELECT * FROM sessions
-       WHERE source = ? AND ended_at IS NULL
+       WHERE entry_channel = ? AND ended_at IS NULL
        ORDER BY started_at DESC
        LIMIT 1`,
-      [source],
+      [channel],
     ) as SessionRow | undefined;
 
     if (!row) return null;

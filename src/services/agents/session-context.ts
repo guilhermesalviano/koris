@@ -39,7 +39,7 @@ class SessionContextResolver implements ISessionContextFactory {
     try {
       return this.sessionManager.getSessionServiceById(sessionId);
     } catch (err) {
-      this.logger.warn(`Session "${sessionId}" not found, falling back to source session`, { originId, err });
+      this.logger.warn(`Session "${sessionId}" not found, falling back to initiated channel session`, { originId, err });
       return this.sessionManager.getSessionService(originId);
     }
   }
