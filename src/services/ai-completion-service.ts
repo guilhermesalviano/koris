@@ -9,6 +9,9 @@ import { HTTP_ERROR_MESSAGES } from '../constants';
 
 export type AIErrorCode = 'aborted' | 'timeout' | 'authentication' | 'rate_limited' | 'unavailable' | 'malformed_response' | 'unknown';
 
+const DEFAULT_RETRY_ATTEMPTS = 2;
+const DEFAULT_RETRY_BACKOFF_MS = 1000;
+
 const HTTP_ERROR_CODES: Partial<Record<number, AIErrorCode>> = {
   400: 'malformed_response',
   401: 'authentication',
@@ -72,8 +75,8 @@ export class AICompletionService implements IAICompletionService {
     this.role = options?.role ?? 'manager';
     this.agentName = options?.agentName;
     this.auditService = options?.auditService ?? AuditServiceFactory.create(logger);
-    this.retryAttempts = options?.retry?.attempts ?? config.AI.RETRY_ATTEMPTS;
-    this.retryBackoffMs = options?.retry?.backoffMs ?? config.AI.RETRY_BACKOFF_MS;
+    this.retryAttempts = options?.retry?.attempts ?? DEFAULT_RETRY_ATTEMPTS;
+    this.retryBackoffMs = options?.retry?.backoffMs ?? DEFAULT_RETRY_BACKOFF_MS;
   }
 
   async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
