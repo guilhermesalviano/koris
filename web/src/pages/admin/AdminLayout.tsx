@@ -10,6 +10,7 @@ import SkillsPage from './SkillsPage';
 import SettingsPage from './SettingsPage';
 import AuditPage from './AuditPage';
 import UsagePage from './UsagePage';
+import QueuePage from './QueuePage';
 import { ChatProvider, useChat } from '../../lib/chat-context';
 
 function Icon({ path }: { path: string }) {
@@ -32,6 +33,7 @@ const ICONS = {
   heartbeats: 'M22 12h-4l-3 9L9 3l-3 9H2',
   skills: 'M12 2l3 6 6.5 1-4.7 4.6 1.1 6.4-5.9-3-5.9 3 1.1-6.4L2.5 9l6.5-1z',
   audit: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  queue: 'M12 3v18M3 7l9-4 9 4M3 17l9 4 9-4M3 7v10M21 7v10M3 12h18',
   settings:
     'M10.3 2h3.4l.4 2.5a8 8 0 0 1 2 .8l2.1-1.4 2.4 2.4-1.4 2.1a8 8 0 0 1 .8 2l2.5.4v3.4l-2.5.4a8 8 0 0 1-.8 2l1.4 2.1-2.4 2.4-2.1-1.4a8 8 0 0 1-2 .8l-.4 2.5h-3.4l-.4-2.5a8 8 0 0 1-2-.8l-2.1 1.4-2.4-2.4 1.4-2.1a8 8 0 0 1-.8-2L2 13.7v-3.4l2.5-.4a8 8 0 0 1 .8-2L3.9 5.8l2.4-2.4 2.1 1.4a8 8 0 0 1 2-.8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   menu: 'M3 6h18M3 12h18M3 18h18',
@@ -46,6 +48,7 @@ const MANAGE_ITEMS: { to: string; label: string; icon: keyof typeof ICONS }[] = 
   { to: '/admin/skills', label: 'Skills', icon: 'skills' },
   { to: '/admin/audit', label: 'Audit', icon: 'audit' },
   { to: '/admin/usage', label: 'Usage', icon: 'overview' },
+  { to: '/admin/queue', label: 'Queue', icon: 'queue' },
   { to: '/admin/settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -326,6 +329,7 @@ export default function AdminLayout() {
               <Route path="skills" element={<SkillsPage />} />
               <Route path="audit" element={<AuditPage />} />
               <Route path="usage" element={<UsagePage />} />
+              <Route path="queue" element={<QueuePage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Routes>
           </main>

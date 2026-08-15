@@ -10,43 +10,16 @@ import { AICompletionService, IAICompletionService } from "../../../ai-completio
 import { HEARTBEAT_PROMPT } from "../../../../constants";
 import type { ILogger } from "../../../../infrastructure/logger";
 import { IToolsQueue, ToolsQueue } from "../../../tools-queue";
-import { ExecutorWorkerFactory } from "../../../workers/executor-worker";
+import { ChatServiceFactory } from "../../../chat/chat-service";
 import { ISubAgent } from "../../../../types/agents";
 import { mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { AgnosticExecutionToolFactory } from "../../../tools";
 import { IChannelsManager } from "../../../../channels";
 import { getLastWhitelistedJid } from "../../../../../plugins/whatsapp";
-import type { IWorker } from "../../../../types/workers";
-
-class TaskQueue {
-  private queue: Array<() => Promise<void>> = [];
-  private active = 0;
-
-  constructor(private concurrency: number) {}
-
-  add(task: () => Promise<void>): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.queue.push(() =>
-        Promise.resolve()
-          .then(task)
-          .then(resolve, reject),
-      );
-      this.pump();
-    });
-  }
-
-  private pump(): void {
-    while (this.active < this.concurrency && this.queue.length > 0) {
-      const task = this.queue.shift()!;
-      this.active += 1;
-      task().finally(() => {
-        this.active -= 1;
-        this.pump();
-      });
-    }
-  }
-}
+import { IToolCallPipeline, ToolCallPipelineFactory } from "../../tool-call-pipeline";
+import { TaskQueue, sharedSubAgentQueue } from "../../../sub-agents-queue/task-queue";
+import { subAgentQueuesRegistry } from "../../../sub-agents-queue/sub-agent-queue-registry";
 
 class Heartbeat implements ISubAgent<Date> {
   constructor(
@@ -56,9 +29,10 @@ class Heartbeat implements ISubAgent<Date> {
     private toolsQueue: IToolsQueue, 
     private channelsManager: IChannelsManager,
     private completionService: IAICompletionService,
-    private executorWorker: IWorker,
+    private pipeline: IToolCallPipeline,
   ) {
-    this.queue = new TaskQueue(2);
+    this.queue = config.AI.SUBAGENTS_PARALLEL ? new TaskQueue(1) : sharedSubAgentQueue;
+    subAgentQueuesRegistry.register('heartbeat', this.queue);
   }
 
   private queue: TaskQueue;
@@ -90,7 +64,7 @@ class Heartbeat implements ISubAgent<Date> {
     }
 
     const promises = dueBeats.map((beat) =>
-      this.queue.add(() => this.executeBeat(beat, date)),
+      this.queue.add(() => this.executeBeat(beat, date), `heartbeat: ${beat.id}`),
     );
 
     await Promise.all(promises);
@@ -103,7 +77,6 @@ class Heartbeat implements ISubAgent<Date> {
     const prompt = replacePlaceholders(HEARTBEAT_PROMPT, { v1: `${beat.type}`, v2: `beat: ${beat.beat}` });
 
     try {
-      // refactor - usar um novo tipo de manager para heartbeat beats, que não precisa de message history, channel, etc. Talvez só passar o texto do beat e um contexto com logger.
       const payload = await this.promptRepository
         .build({
           userMessage: prompt,
@@ -113,8 +86,6 @@ class Heartbeat implements ISubAgent<Date> {
           includeBeatTools: false
         });
 
-      // this.logger.debug(`heartbeat prompt value ${JSON.stringify(payload)}`);
-    
       const response = await this.completionService.complete(
         payload,
         { audit: { channel: 'background', runId: beat.id } },
@@ -123,18 +94,18 @@ class Heartbeat implements ISubAgent<Date> {
       if (response.kind === 'message') {
         result = response.text;
       } else {
-        result = await this.executorWorker.run({
-          toolCalls: response.calls,
-          userMessage: beat.beat,
-          messageHistory: [],
-          ctx: {
+        result = await this.pipeline.execute(
+          response.calls,
+          beat.beat,
+          [],
+          {
             channel: 'background',
             toolsQueue: this.toolsQueue,
             signal: new AbortController().signal,
             onProgress: (progress: string) => this.logger.info(progress),
             options: { toolsEnabled: true, runId: beat.id },
           },
-        });
+        );
       }
       this.saveBeatResult({ beatId: beat.id, date, result });
 
@@ -187,15 +158,16 @@ class Heartbeat implements ISubAgent<Date> {
 class HeartbeatFactory {
   static create(logger: ILogger, channelsManager: IChannelsManager): Heartbeat {
     const db = DatabaseServiceFactory.create();
-    const aiProvider = getAIProvider(logger, 'worker');
+    const aiProvider = getAIProvider(logger, 'worker', { background: true });
     const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
     const heartbeatRepository = HeartbeatRepositoryFactory.create(db);
     const agnosticExecutionTool = AgnosticExecutionToolFactory.create();
     const toolsQueue = new ToolsQueue(logger, agnosticExecutionTool);
 
     const completionService = new AICompletionService(aiProvider, logger, { role: 'worker', agentName: 'heartbeat' });
-    const executorWorker = ExecutorWorkerFactory.create(logger);
-    return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, channelsManager, completionService, executorWorker);
+    const chatService = ChatServiceFactory.create(logger, 'worker', 'heartbeat');
+    const pipeline = ToolCallPipelineFactory.create(logger, chatService);
+    return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, channelsManager, completionService, pipeline);
   }
 }
 

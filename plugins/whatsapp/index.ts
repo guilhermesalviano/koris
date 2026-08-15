@@ -2,7 +2,7 @@ import type { ChannelDefinition } from '../../src/channels';
 import { ADAPTERS } from '../../src/channels';
 import type { ILogger } from '../../src/infrastructure/logger';
 import type { Plugin, PluginRegistry } from '../registry';
-import type { IAgent } from '../../src/services/agents/main-agent/agent';
+import type { IMessageGateway } from '../../src/services/agents/message-gateway';
 import { stripInternalStreamMarkers } from '../../src/utils/stream-markers';
 import { config } from '../../src/config';
 
@@ -17,7 +17,7 @@ const whitelist = whatsappConfig?.WHITELIST
 interface WhatsAppChannelStartOptions {
   authFolder: string;
   mentionId: string;
-  agent: IAgent;
+  gateway: IMessageGateway;
   logger: ILogger;
 }
 
@@ -28,7 +28,7 @@ interface WhatsAppPluginOptions {
 }
 
 interface IWhatsAppChannel {
-  handleMessage(agent: IAgent, jid: string, name: string, text: string): Promise<void>;
+  handleMessage(gateway: IMessageGateway, jid: string, name: string, text: string): Promise<void>;
   sendText(jid: string, text: string): Promise<void>;
 }
 
@@ -120,14 +120,14 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
          const cleanedText = mentionId ? rawText.replace(`@${mentionId}`, '').trim() : rawText;
 
          const channel = new WhatsAppChannel(sock);
-         void channel.handleMessage(options.agent, jid, senderName, cleanedText).catch((err: Error) => {
+         void channel.handleMessage(options.gateway, jid, senderName, cleanedText).catch((err: Error) => {
            options.logger.warn(`WhatsApp message handling error: ${err.message}`);
          });
        } else if (!jid.endsWith('@g.us')) {
          const cleanedText = mentionId ? rawText.replace(`@${mentionId}`, '').trim() : rawText;
 
          const channel = new WhatsAppChannel(sock);
-         void channel.handleMessage(options.agent, jid, senderName, cleanedText).catch((err: Error) => {
+         void channel.handleMessage(options.gateway, jid, senderName, cleanedText).catch((err: Error) => {
            options.logger.warn(`WhatsApp message handling error: ${err.message}`);
          });
        }
@@ -190,11 +190,11 @@ class WhatsAppChannel implements IWhatsAppChannel {
     private readonly sock?: SocketLike
   ) {}
 
-  async handleMessage(agent: IAgent, jid: string, name: string, text: string): Promise<void> {
+  async handleMessage(gateway: IMessageGateway, jid: string, name: string, text: string): Promise<void> {
     try {
       // In testing... To remember old version: `Message from ${name}: ${text}`;
       const prompt = `${name} says: ${text}`;
-      const response = await agent.handle(prompt, jid);
+      const response = await gateway.handle(prompt, jid);
       const resolved = await this.resolveResponse(response);
       await this.sendText(jid, resolved);
     } catch (err) {
@@ -269,8 +269,8 @@ class WhatsAppChannelFactory {
 
 const whatsappChannel = WhatsAppChannelFactory.create();
 
-async function handleMessage(agent: IAgent, jid: string, name: string, text: string): Promise<void> {
-  await whatsappChannel.handleMessage(agent, jid, name, text);
+async function handleMessage(gateway: IMessageGateway, jid: string, name: string, text: string): Promise<void> {
+  await whatsappChannel.handleMessage(gateway, jid, name, text);
 }
 
 async function sendText(jid: string, text: string): Promise<void> {
@@ -281,10 +281,10 @@ function createWhatsAppAdapter(options: WhatsAppPluginOptions): ChannelDefinitio
   return {
     name: 'whatsapp',
     enabled: () => options.enabled,
-    start: (logger: ILogger, agent: IAgent) => {
+    start: (logger: ILogger, gateway: IMessageGateway) => {
       let stopFn: (() => void) | null = null;
 
-      WhatsAppChannelFactory.start({ authFolder: options.authFolder, mentionId: options.mentionId, agent, logger })
+      WhatsAppChannelFactory.start({ authFolder: options.authFolder, mentionId: options.mentionId, gateway, logger })
         .then(({ stop }) => { stopFn = stop; })
         .catch((err: Error) => logger.warn(`Failed to start WhatsApp: ${err.message}`));
 

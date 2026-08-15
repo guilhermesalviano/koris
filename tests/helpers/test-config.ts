@@ -6,6 +6,7 @@ export interface TestConfigPatch {
   tempFolder?: string;
   telegramEnabled?: boolean;
   whatsappEnabled?: boolean;
+  subagentsParallel?: boolean;
 }
 
 const DEFAULTS: Required<TestConfigPatch> = {
@@ -14,6 +15,7 @@ const DEFAULTS: Required<TestConfigPatch> = {
   tempFolder: './temp',
   telegramEnabled: true,
   whatsappEnabled: false,
+  subagentsParallel: false,
 };
 
 export function applyTestConfigDefaults(patch: TestConfigPatch = {}): void {
@@ -27,6 +29,12 @@ export function applyTestConfigDefaults(patch: TestConfigPatch = {}): void {
 
   Object.defineProperty(config.AI.SUMMARIZER, 'ENABLED', {
     value: values.summarizerEnabled,
+    configurable: true,
+    writable: true,
+  });
+
+  Object.defineProperty(config.AI, 'SUBAGENTS_PARALLEL', {
+    value: values.subagentsParallel,
     configurable: true,
     writable: true,
   });

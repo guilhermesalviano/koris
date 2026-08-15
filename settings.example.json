@@ -28,6 +28,9 @@
     }
   },
   "ai": {
+    "parallel": false,
+    "background_grace_ms": 5000,
+    "subagents_parallel": false,
     "manager": {
       "provider": "ollama",
       "base_url": "http://localhost:11434",

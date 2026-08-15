@@ -3,6 +3,7 @@ import { Summarizer } from '../../../../../../src/services/agents/sub-agents/sum
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
 import * as providerRegistry from '../../../../../../src/services/providers';
 import { config } from '../../../../../../src/config';
+import { sharedSubAgentQueue } from '../../../../../../src/services/sub-agents-queue/task-queue';
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
@@ -149,5 +150,83 @@ describe('Summarizer', () => {
       'Failed to summarize for session session-1',
       expect.objectContaining({ error: expect.any(Error) }),
     );
+  });
+
+  it('queues concurrent runs so they execute serially when subagents_parallel is false', async () => {
+    (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
+    const release: Array<() => void> = [];
+    const gated = () => new Promise<unknown>((resolve) => release.push(() => resolve({ kind: 'message', text: '{"type":"fact","content":"queued"}' })));
+
+    const logger = makeLogger();
+    const completionService = {
+      complete: vi.fn().mockImplementation(gated),
+    };
+    const summarizer = new Summarizer(logger, completionService as never);
+    const propsA = makeProps({ sessionId: 'session-a' });
+    const propsB = makeProps({ sessionId: 'session-b' });
+
+    const first = summarizer.handler(propsA);
+    const second = summarizer.handler(propsB);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(completionService.complete).toHaveBeenCalledTimes(1);
+
+    release[0]();
+    await first;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(completionService.complete).toHaveBeenCalledTimes(2);
+
+    release[1]();
+    await second;
+
+    expect(propsA.memoryService.save).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'queued' }),
+    );
+    expect(propsB.memoryService.save).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'queued' }),
+    );
+  });
+
+  it('uses the shared sub-agent queue when subagents_parallel is false', async () => {
+    (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = false;
+    const logger = makeLogger();
+    const summarizer = new Summarizer(logger, { complete: vi.fn() } as never);
+
+    expect((summarizer as unknown as { queue: unknown }).queue).toBe(sharedSubAgentQueue);
+  });
+
+  it('uses its own queue when subagents_parallel is true', async () => {
+    (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
+    const logger = makeLogger();
+    const summarizer = new Summarizer(logger, { complete: vi.fn() } as never);
+
+    expect((summarizer as unknown as { queue: unknown }).queue).not.toBe(sharedSubAgentQueue);
+  });
+
+  it('exposes queue state via snapshot', async () => {
+    (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
+    const originalEmbeddingEnabled = config.AI.WORKERS.EMBEDDING_ENABLED;
+    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
+
+    const release: Array<() => void> = [];
+    const gated = () => new Promise<unknown>((resolve) => release.push(() => resolve({ kind: 'message', text: '{"type":"fact","content":"x"}' })));
+    const summarizer = new Summarizer(makeLogger(), { complete: vi.fn().mockImplementation(gated) } as never);
+
+    const first = summarizer.handler(makeProps({ sessionId: 'session-a' }));
+    const second = summarizer.handler(makeProps({ sessionId: 'session-b' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const queue = (summarizer as unknown as { queue: { snapshot(): unknown } }).queue;
+    expect(queue.snapshot()).toEqual({ queued: 1, active: 1, concurrency: 1, queuedLabels: ['summarizer'], activeLabels: ['summarizer'] });
+
+    release[0]();
+    await first;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release[1]();
+    await second;
+
+    expect(queue.snapshot()).toEqual({ queued: 0, active: 0, concurrency: 1, queuedLabels: [], activeLabels: [] });
+
+    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = originalEmbeddingEnabled;
   });
 });

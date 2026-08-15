@@ -4,7 +4,7 @@ import type { IToolsQueue } from "../services/tools-queue";
 
 export interface LoopContext {
   channel: string;
-  message: IMessageService;
+  message?: IMessageService;
   toolsQueue: IToolsQueue;
   signal: AbortSignal;
   onProgress: (msg: string) => void;

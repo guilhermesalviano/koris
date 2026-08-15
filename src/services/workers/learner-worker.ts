@@ -18,7 +18,7 @@ interface LearnerWorkerArgs {
   maxIterations?: number;
 }
 
-class LearnerWorker implements IWorker {
+class LearnerWorker implements IWorker<LearnerWorkerArgs, boolean> {
   constructor(
     private logger: ILogger,
     public name: string = 'learnerWorker',
@@ -46,7 +46,7 @@ class LearnerWorker implements IWorker {
         ctx.signal,
         {
           channel: ctx.channel,
-          sessionId: ctx.message.getSessionId(),
+          sessionId: ctx.message?.getSessionId(),
           runId: ctx.options?.runId,
           agentName: 'learnerWorker',
         },
@@ -79,11 +79,11 @@ class LearnerWorker implements IWorker {
 }
 
 class LearnerWorkerFactory {
-  static create(logger: ILogger): IWorker {
+  static create(logger: ILogger): IWorker<LearnerWorkerArgs, boolean> {
     const db = DatabaseServiceFactory.create();
     const skillsRepo = LearnedSkillsRepositoryFactory.create(db);
     return new LearnerWorker(logger, 'learnerWorker', skillsRepo);
   }
 }
 
-export { LearnerWorkerFactory };
+export { LearnerWorkerArgs, LearnerWorkerFactory };

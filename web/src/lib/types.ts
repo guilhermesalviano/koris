@@ -98,6 +98,30 @@ export interface ActiveRunsResponse {
   items: ActiveRun[];
 }
 
+export interface QueueTaskInfo {
+  label: string;
+  priority: number;
+  eligible: boolean;
+}
+
+export interface SubAgentQueueState {
+  names: string[];
+  queued: number;
+  active: number;
+  concurrency: number;
+  queuedLabels: string[];
+  activeLabels: string[];
+}
+
+export interface QueueResponse {
+  parallel: boolean;
+  subagentsParallel: boolean;
+  backgroundGraceMs: number;
+  subAgents: SubAgentQueueState[];
+  running: QueueTaskInfo[];
+  queued: QueueTaskInfo[];
+}
+
 export interface AuditItem {
   id: string;
   runId?: string;
