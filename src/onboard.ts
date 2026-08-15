@@ -18,17 +18,9 @@ const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 const BOOLEAN_OPTIONS = ['true', 'false'] as const;
 const EXAMPLE_SETTINGS_FILENAME = 'settings.example.json';
 export const SETTINGS_FILENAME = 'settings.json';
-const PERSONAL_DETAIL_STEP_KEYS = new Set<StepKey>([
-  'personalName',
-  'personalGender',
-  'personalBirthday',
-  'personalLocation',
-  'personalOccupation',
-]);
 
 type OnboardingScreenMode = 'plain' | 'tui';
 type TimelineState = 'complete' | 'active' | 'pending';
-type PersonalInfoKey = 'name' | 'gender' | 'birthday' | 'location' | 'occupation';
 
 export type OnboardingChannel = typeof SUPPORTED_CHANNELS[number];
 export type OnboardingProvider = typeof SUPPORTED_PROVIDERS[number];
@@ -40,11 +32,7 @@ export type OnboardingStep =
   | 'providerUrl'
   | 'providerApiToken'
   | 'personalInformation'
-  | 'personalName'
-  | 'personalGender'
-  | 'personalBirthday'
-  | 'personalLocation'
-  | 'personalOccupation'
+  | 'personalDetails'
   | 'complete';
 
 type StepKey = Exclude<OnboardingStep, 'complete'>;
@@ -58,11 +46,8 @@ export interface OnboardingAnswers {
   providerApiToken?: string;
   personalInfo?: {
     enabled?: boolean;
-    name?: string;
-    gender?: string;
-    birthday?: string;
-    location?: string;
-    occupation?: string;
+    details?: Record<string, string>;
+    done?: boolean;
   };
 }
 
@@ -169,44 +154,12 @@ const STEP_DEFINITIONS: readonly StepDefinition[] = [
     getValue: (answers, skippedSteps) => getPersonalInformationEnabledValue(answers, skippedSteps),
   },
   {
-    key: 'personalName',
-    label: 'Your name',
-    description: 'Store the human name used in agent context.',
-    placeholder: 'Joe doe',
+    key: 'personalDetails',
+    label: 'Personal details',
+    description: 'Add any "key: value" detail, then type "done" to finish.',
+    placeholder: 'name: Joe Doe',
     optional: true,
-    getValue: (answers, skippedSteps) => getPersonalInfoValue('name', answers, skippedSteps),
-  },
-  {
-    key: 'personalGender',
-    label: 'Gender',
-    description: 'Store the gender field used by the prompt context.',
-    placeholder: 'male',
-    optional: true,
-    getValue: (answers, skippedSteps) => getPersonalInfoValue('gender', answers, skippedSteps),
-  },
-  {
-    key: 'personalBirthday',
-    label: 'Birthday',
-    description: 'Store the birthday used in personal context.',
-    placeholder: '1985-03-01',
-    optional: true,
-    getValue: (answers, skippedSteps) => getPersonalInfoValue('birthday', answers, skippedSteps),
-  },
-  {
-    key: 'personalLocation',
-    label: 'Location',
-    description: 'Store the location used in personal context.',
-    placeholder: 'New York, United States',
-    optional: true,
-    getValue: (answers, skippedSteps) => getPersonalInfoValue('location', answers, skippedSteps),
-  },
-  {
-    key: 'personalOccupation',
-    label: 'Occupation',
-    description: 'Store the occupation used in personal context.',
-    placeholder: 'Software Engineer',
-    optional: true,
-    getValue: (answers, skippedSteps) => getPersonalInfoValue('occupation', answers, skippedSteps),
+    getValue: (answers, skippedSteps) => getPersonalDetailsValue(answers, skippedSteps),
   },
 ];
 
@@ -262,17 +215,9 @@ export function buildOnboardingSummary(answers: OnboardingAnswers): string {
     `Settings draft: ${SETTINGS_FILENAME}`,
   ];
 
-  const personalLines = [
-    ['Personal name', answers.personalInfo?.name],
-    ['Gender', answers.personalInfo?.gender],
-    ['Birthday', answers.personalInfo?.birthday],
-    ['Location', answers.personalInfo?.location],
-    ['Occupation', answers.personalInfo?.occupation],
-  ] as const;
-
-  for (const [label, value] of personalLines) {
+  for (const [key, value] of Object.entries(answers.personalInfo?.details ?? {})) {
     if (value) {
-      lines.push(`${label}: ${value}`);
+      lines.push(`${key}: ${value}`);
     }
   }
 
@@ -521,33 +466,15 @@ export class Onboard {
         this.pickerStep = undefined;
         break;
 
-      case 'personalName':
-        this.setPersonalInfo('name', normalized);
-        this.notice = 'Captured personal name.';
-        this.skippedSteps.delete(step);
-        break;
-
-      case 'personalGender':
-        this.setPersonalInfo('gender', normalized);
-        this.notice = 'Captured gender.';
-        this.skippedSteps.delete(step);
-        break;
-
-      case 'personalBirthday':
-        this.setPersonalInfo('birthday', normalized);
-        this.notice = 'Captured birthday.';
-        this.skippedSteps.delete(step);
-        break;
-
-      case 'personalLocation':
-        this.setPersonalInfo('location', normalized);
-        this.notice = 'Captured location.';
-        this.skippedSteps.delete(step);
-        break;
-
-      case 'personalOccupation':
-        this.setPersonalInfo('occupation', normalized);
-        this.notice = 'Captured occupation.';
+      case 'personalDetails':
+        if (normalized.toLowerCase() === 'done') {
+          this.finishPersonalDetails();
+          this.notice = 'Personal details saved.';
+        } else {
+          const pair = parsePersonalDetailPair(normalized);
+          this.addPersonalDetail(pair.key, pair.value);
+          this.notice = `Added "${pair.key}" (${Object.keys(this.answers.personalInfo?.details ?? {}).length} detail(s)). Type "done" to finish.`;
+        }
         this.skippedSteps.delete(step);
         break;
     }
@@ -648,20 +575,8 @@ export class Onboard {
       case 'personalInformation':
         delete this.answers.personalInfo;
         break;
-      case 'personalName':
-        this.clearPersonalInfo('name');
-        break;
-      case 'personalGender':
-        this.clearPersonalInfo('gender');
-        break;
-      case 'personalBirthday':
-        this.clearPersonalInfo('birthday');
-        break;
-      case 'personalLocation':
-        this.clearPersonalInfo('location');
-        break;
-      case 'personalOccupation':
-        this.clearPersonalInfo('occupation');
+      case 'personalDetails':
+        this.clearPersonalDetails();
         break;
       case 'channels':
         this.selectedChannels.clear();
@@ -671,11 +586,22 @@ export class Onboard {
     }
   }
 
-  private setPersonalInfo(key: PersonalInfoKey, value: string): void {
+  private addPersonalDetail(key: string, value: string): void {
     this.answers.personalInfo = {
       ...this.answers.personalInfo,
       enabled: true,
-      [key]: value,
+      details: {
+        ...this.answers.personalInfo?.details,
+        [key]: value,
+      },
+    };
+  }
+
+  private finishPersonalDetails(): void {
+    this.answers.personalInfo = {
+      ...this.answers.personalInfo,
+      enabled: true,
+      done: true,
     };
   }
 
@@ -691,12 +617,13 @@ export class Onboard {
     };
   }
 
-  private clearPersonalInfo(key: PersonalInfoKey): void {
+  private clearPersonalDetails(): void {
     if (!this.answers.personalInfo) {
       return;
     }
 
-    delete this.answers.personalInfo[key];
+    delete this.answers.personalInfo.details;
+    delete this.answers.personalInfo.done;
 
     if (Object.keys(this.answers.personalInfo).length === 0) {
       delete this.answers.personalInfo;
@@ -907,11 +834,7 @@ export class Onboard {
       case 'providerApiToken':
       case 'providerModel':
       case 'telegramToken':
-      case 'personalName':
-      case 'personalGender':
-      case 'personalBirthday':
-      case 'personalLocation':
-      case 'personalOccupation':
+      case 'personalDetails':
         return;
     }
   }
@@ -939,38 +862,18 @@ function getTimelineEntries(
 
 function getTimelineDisplayNumbers(definitions: readonly StepDefinition[]): Map<StepKey, string> {
   const displayNumbers = new Map<StepKey, string>();
-  let topLevelIndex = 0;
-  let personalParentIndex: number | undefined;
-  let personalDetailIndex = 0;
+  let index = 0;
 
   for (const definition of definitions) {
-    if (definition.key === 'personalInformation') {
-      topLevelIndex += 1;
-      personalParentIndex = topLevelIndex;
-      personalDetailIndex = 0;
-      displayNumbers.set(definition.key, String(topLevelIndex));
-      continue;
-    }
-
-    if (PERSONAL_DETAIL_STEP_KEYS.has(definition.key) && personalParentIndex !== undefined) {
-      personalDetailIndex += 1;
-      displayNumbers.set(definition.key, `${personalParentIndex}.${personalDetailIndex}`);
-      continue;
-    }
-
-    topLevelIndex += 1;
-    displayNumbers.set(definition.key, String(topLevelIndex));
+    index += 1;
+    displayNumbers.set(definition.key, String(index));
   }
 
   return displayNumbers;
 }
 
 function getTopLevelStepDefinitions(answers: Partial<OnboardingAnswers>): StepDefinition[] {
-  return getEnabledStepDefinitions(answers).filter((definition) => !PERSONAL_DETAIL_STEP_KEYS.has(definition.key));
-}
-
-function getTopLevelStepKey(step: StepKey): StepKey {
-  return PERSONAL_DETAIL_STEP_KEYS.has(step) ? 'personalInformation' : step;
+  return getEnabledStepDefinitions(answers);
 }
 
 function getFooterProgress(
@@ -983,8 +886,7 @@ function getFooterProgress(
   }
 
   const topLevelDefinitions = getTopLevelStepDefinitions(answers);
-  const currentTopLevelKey = getTopLevelStepKey(currentStep);
-  const currentIndex = topLevelDefinitions.findIndex((definition) => definition.key === currentTopLevelKey);
+  const currentIndex = topLevelDefinitions.findIndex((definition) => definition.key === currentStep);
 
   return {
     current: currentIndex >= 0 ? currentIndex + 1 : topLevelDefinitions.length,
@@ -1035,17 +937,20 @@ function isComplete(
   return getCurrentStepFromState(answers, skippedSteps) === 'complete';
 }
 
-function getPersonalInfoValue(
-  key: PersonalInfoKey,
+function getPersonalDetailsValue(
   answers: Partial<OnboardingAnswers>,
   skippedSteps: ReadonlySet<StepKey>,
 ): string | undefined {
-  const skipKey = personalInfoKeyToStep(key);
-  if (skippedSteps.has(skipKey)) {
+  if (skippedSteps.has('personalDetails')) {
     return 'skipped';
   }
 
-  return answers.personalInfo?.[key];
+  if (!answers.personalInfo?.done) {
+    return undefined;
+  }
+
+  const detailCount = Object.keys(answers.personalInfo.details ?? {}).length;
+  return detailCount > 0 ? `${detailCount} detail(s)` : 'set';
 }
 
 function getPersonalInformationEnabledValue(
@@ -1063,19 +968,24 @@ function getPersonalInformationEnabledValue(
   return String(answers.personalInfo.enabled);
 }
 
-function personalInfoKeyToStep(key: PersonalInfoKey): Extract<StepKey, `personal${string}`> {
-  switch (key) {
-    case 'name':
-      return 'personalName';
-    case 'gender':
-      return 'personalGender';
-    case 'birthday':
-      return 'personalBirthday';
-    case 'location':
-      return 'personalLocation';
-    case 'occupation':
-      return 'personalOccupation';
+function parsePersonalDetailPair(input: string): { key: string; value: string } {
+  const separatorIndex = input.indexOf(':');
+  if (separatorIndex === -1) {
+    throw new Error('Expected "key: value" format.');
   }
+
+  const key = input.slice(0, separatorIndex).trim();
+  const value = input.slice(separatorIndex + 1).trim();
+
+  if (!key) {
+    throw new Error('Detail key must not be empty.');
+  }
+
+  if (!value) {
+    throw new Error('Detail value must not be empty.');
+  }
+
+  return { key, value };
 }
 
 function parseProvider(input: string): OnboardingProvider {
@@ -1110,11 +1020,11 @@ function getEnabledStepDefinitions(answers: Partial<OnboardingAnswers>): StepDef
       return usesTelegramChannel(answers);
     }
 
-    if (!PERSONAL_DETAIL_STEP_KEYS.has(definition.key)) {
-      return true;
+    if (definition.key === 'personalDetails') {
+      return answers.personalInfo?.enabled === true;
     }
 
-    return answers.personalInfo?.enabled === true;
+    return true;
   });
 }
 
@@ -1400,13 +1310,7 @@ export function buildOnboardingSettings(
   }
 
   payload.personal_information = answers.personalInfo?.enabled
-    ? {
-      ...(answers.personalInfo.name ? { name: answers.personalInfo.name } : {}),
-      ...(answers.personalInfo.gender ? { gender: answers.personalInfo.gender } : {}),
-      ...(answers.personalInfo.birthday ? { birthday: answers.personalInfo.birthday } : {}),
-      ...(answers.personalInfo.location ? { location: answers.personalInfo.location } : {}),
-      ...(answers.personalInfo.occupation ? { occupation: answers.personalInfo.occupation } : {}),
-    }
+    ? { ...answers.personalInfo.details }
     : {};
 
   return payload;

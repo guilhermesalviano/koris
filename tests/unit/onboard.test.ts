@@ -93,7 +93,7 @@ describe('buildOnboardingScreen', () => {
     expect(screen).toContain('5. Model');
   });
 
-  it('renders personal detail steps as substeps of personal information', () => {
+  it('renders personal details as a top-level step after personal information', () => {
     const screen = buildOnboardingScreen(
       {
         answers: {
@@ -103,7 +103,7 @@ describe('buildOnboardingScreen', () => {
           providerApiToken: 'YOUR_CHAT_ID',
           providerModel: 'z-ai/glm-5.1',
           providerUrl: 'http://localhost:11434',
-          personalInfo: { enabled: true, name: 'Joe Doe' },
+          personalInfo: { enabled: true, details: { name: 'Joe Doe' }, done: true },
         },
       },
       72,
@@ -111,14 +111,13 @@ describe('buildOnboardingScreen', () => {
     );
 
     expect(screen).toContain('7. Your Information ─ true');
-    expect(screen).toContain('7.1. Your name ─ Joe Doe');
-    expect(screen).toContain('7.2. Gender');
-    expect(screen).not.toContain('8. Your name');
+    expect(screen).toContain('8. Personal details ─ 1 detail(s)');
+    expect(screen).not.toContain('Your name ─ Joe Doe');
   });
 });
 
 describe('Onboard footer progress', () => {
-  it('keeps personal substeps under step 6 in the footer', () => {
+  it('counts the personal details step as a top-level step in the footer', () => {
     const onboard = new Onboard() as any;
     onboard.answers = {
       channels: ['telegram'],
@@ -127,11 +126,11 @@ describe('Onboard footer progress', () => {
       providerApiToken: 'YOUR_CHAT_ID',
       providerModel: 'z-ai/glm-5.1',
       providerUrl: 'http://localhost:11434',
-      personalInfo: { enabled: true, name: 'Joe Doe' },
+      personalInfo: { enabled: true },
     };
     onboard.skippedSteps = new Set();
 
-    expect(onboard.getFooterText()).toBe('step 7/7');
+    expect(onboard.getFooterText()).toBe('step 8/8');
   });
 
   it('creates the temp settings draft when onboarding completes from a false picker selection', () => {
@@ -212,8 +211,11 @@ describe('onboarding settings draft', () => {
       providerApiToken: 'YOUR_CHAT_ID',
       personalInfo: {
         enabled: true,
-        name: 'Joe Doe',
-        gender: 'male',
+        details: {
+          name: 'Joe Doe',
+          gender: 'male',
+        },
+        done: true,
       },
     }, {
       baseSettings: {

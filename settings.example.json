@@ -51,9 +51,7 @@
   "personal_information": {
     "name": "John Doe",
     "gender": "male",
-    "birthday": "1990-01-01",
-    "location": "New York, USA",
-    "occupation": "Software Engineer"
+    "location": "New York, USA"
   }
 }
 
