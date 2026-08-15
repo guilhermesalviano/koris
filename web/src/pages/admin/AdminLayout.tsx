@@ -6,6 +6,7 @@ import OverviewPage from './OverviewPage';
 import SessionsPage from './SessionsPage';
 import MemoriesPage from './MemoriesPage';
 import HeartbeatsPage from './HeartbeatsPage';
+import ChannelsPage from './ChannelsPage';
 import SkillsPage from './SkillsPage';
 import SettingsPage from './SettingsPage';
 import AuditPage from './AuditPage';
@@ -31,6 +32,7 @@ const ICONS = {
   sessions: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
   memories: 'M12 2a7 7 0 0 0-7 7c0 2.4 1.2 4.1 2.5 5.3.8.7 1.5 1.7 1.5 2.7v1h6v-1c0-1 .7-2 1.5-2.7C17.8 13.1 19 11.4 19 9a7 7 0 0 0-7-7zM9 21h6',
   heartbeats: 'M22 12h-4l-3 9L9 3l-3 9H2',
+  channels: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7',
   skills: 'M12 2l3 6 6.5 1-4.7 4.6 1.1 6.4-5.9-3-5.9 3 1.1-6.4L2.5 9l6.5-1z',
   audit: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   queue: 'M12 3v18M3 7l9-4 9 4M3 17l9 4 9-4M3 7v10M21 7v10M3 12h18',
@@ -45,6 +47,7 @@ const MANAGE_ITEMS: { to: string; label: string; icon: keyof typeof ICONS }[] = 
   { to: '/admin/sessions', label: 'Sessions', icon: 'sessions' },
   { to: '/admin/memories', label: 'Memories', icon: 'memories' },
   { to: '/admin/heartbeats', label: 'Beats', icon: 'heartbeats' },
+  { to: '/admin/channels', label: 'Channels', icon: 'channels' },
   { to: '/admin/skills', label: 'Skills', icon: 'skills' },
   { to: '/admin/audit', label: 'Audit', icon: 'audit' },
   { to: '/admin/usage', label: 'Usage', icon: 'overview' },
@@ -326,6 +329,7 @@ export default function AdminLayout() {
               <Route path="sessions" element={<SessionsPage />} />
               <Route path="memories" element={<MemoriesPage />} />
               <Route path="heartbeats" element={<HeartbeatsPage />} />
+              <Route path="channels" element={<ChannelsPage />} />
               <Route path="skills" element={<SkillsPage />} />
               <Route path="audit" element={<AuditPage />} />
               <Route path="usage" element={<UsagePage />} />

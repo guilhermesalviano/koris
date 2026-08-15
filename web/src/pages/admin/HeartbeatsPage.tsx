@@ -9,6 +9,8 @@ export default function HeartbeatsPage() {
   const [beat, setBeat] = useState('');
   const [cronExpression, setCronExpression] = useState('');
   const [type, setType] = useState<'reminder' | 'scheduled_beat'>('reminder');
+  const [channel, setChannel] = useState<'telegram' | 'whatsapp' | ''>('');
+  const [target, setTarget] = useState('');
   const [toastMsg, showToast, isError] = useToast();
 
   const load = useCallback(async () => {
@@ -30,12 +32,20 @@ export default function HeartbeatsPage() {
     try {
       await apiRequest('/heartbeats', {
         method: 'POST',
-        body: JSON.stringify({ beat, cronExpression, type }),
+        body: JSON.stringify({
+          beat,
+          cronExpression,
+          type,
+          channel: channel || undefined,
+          target: target || undefined,
+        }),
       });
       showToast('Beat created');
       setBeat('');
       setCronExpression('');
       setType('reminder');
+      setChannel('');
+      setTarget('');
       load();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Create failed', true);
@@ -79,6 +89,23 @@ export default function HeartbeatsPage() {
             <option value="reminder">reminder</option>
             <option value="scheduled_beat">scheduled_beat</option>
           </select>
+          <div className="flex gap-2 md:col-span-2">
+            <select
+              value={channel}
+              onChange={(e) => setChannel(e.target.value as 'telegram' | 'whatsapp' | '')}
+              className="w-1/3 rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent"
+            >
+              <option value="">channel</option>
+              <option value="telegram">telegram</option>
+              <option value="whatsapp">whatsapp</option>
+            </select>
+            <input
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              placeholder="chat id / jid (optional)"
+              className="flex-1 rounded-lg border border-strong bg-bg-3 px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+            />
+          </div>
           <button type="submit" className="rounded-lg bg-accent px-3 py-2 text-sm font-medium hover:opacity-90 md:col-span-4">
             Create beat
           </button>
@@ -96,6 +123,11 @@ export default function HeartbeatsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="font-mono text-[10px] uppercase text-txt-3">
                     {h.type} · <code>{h.cron_expression}</code> · last run {formatDate(h.last_run)}
+                    {h.channel && h.target && (
+                      <>
+                        {' '}· {h.channel}: <code>{h.target}</code>
+                      </>
+                    )}
                   </div>
                   <div className="mt-1 whitespace-pre-wrap text-sm">{h.beat}</div>
                 </div>

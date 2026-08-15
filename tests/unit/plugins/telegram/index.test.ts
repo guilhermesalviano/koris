@@ -91,7 +91,7 @@ describe('channels/telegram', () => {
 
     await handleMessage(agent, createMessage(text, 'group', mentionEntity(text, BOT_USERNAME)));
 
-    expect(agent.handle).toHaveBeenCalledWith(text, '123');
+    expect(agent.handle).toHaveBeenCalledWith(text, '123', { channel: 'telegram' });
     expect(bot.sendMessage).toHaveBeenCalled();
   });
 

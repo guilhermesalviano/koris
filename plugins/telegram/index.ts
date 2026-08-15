@@ -85,7 +85,7 @@ class TelegramChannel implements ITelegramChannel {
   private async processAndReply(gateway: IMessageGateway, chatId: number, text: string): Promise<void> {
     try {
       await this.withTypingIndicator(chatId, async () => {
-        const response = await gateway.handle(text, String(chatId));
+        const response = await gateway.handle(text, String(chatId), { channel: 'telegram' });
         const resolved = await this.resolveResponse(response);
         await this.sendText(chatId, resolved);
       });

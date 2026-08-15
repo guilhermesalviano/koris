@@ -6,6 +6,13 @@ import type { ToolResult } from '../../../types/tools';
 import { getOptionalStringArg, getRequiredStringArg, isAllowedValue } from '../runtime';
 import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../../../utils/heartbeat';
 import { BEAT_TYPES } from '../../../types/beat';
+import { CHANNEL_TYPES } from '../../../entities/channel';
+
+function normalizeOptional(args: Record<string, unknown>, key: string): string | null | undefined {
+  const value = getOptionalStringArg(args, key);
+  if (value === null) return undefined;
+  return value.length > 0 ? value : null;
+}
 
 export async function updateBeat(logger: ILogger, args: Record<string, unknown>): Promise<ToolResult> {
   const id = getRequiredStringArg(args, 'id');
@@ -17,12 +24,14 @@ export async function updateBeat(logger: ILogger, args: Record<string, unknown>)
   const beat = getOptionalStringArg(args, 'beat') ?? undefined;
   const cronExpression = getOptionalStringArg(args, 'cron_expression') ?? undefined;
   const rawType = getOptionalStringArg(args, 'type') ?? undefined;
+  const channel = normalizeOptional(args, 'channel');
+  const target = normalizeOptional(args, 'target');
 
-  if (!beat && !cronExpression && !rawType) {
+  if (!beat && !cronExpression && !rawType && channel === undefined && target === undefined) {
     return {
       toolName: 'update_beat',
       success: false,
-      error: 'At least one of "beat", "type", or "cron_expression" must be provided.',
+      error: 'At least one of "beat", "type", "cron_expression", "channel", or "target" must be provided.',
     };
   }
 
@@ -31,6 +40,22 @@ export async function updateBeat(logger: ILogger, args: Record<string, unknown>)
       toolName: 'update_beat',
       success: false,
       error: `Invalid type: "${rawType}". Must be one of: ${BEAT_TYPES.join(', ')}.`,
+    };
+  }
+
+  if (channel && !isAllowedValue(channel, CHANNEL_TYPES)) {
+    return {
+      toolName: 'update_beat',
+      success: false,
+      error: `Invalid channel: "${channel}". Must be one of: ${CHANNEL_TYPES.join(', ')}.`,
+    };
+  }
+
+  if ((channel && !target) || (!channel && target)) {
+    return {
+      toolName: 'update_beat',
+      success: false,
+      error: 'Parameters "channel" and "target" must be provided together.',
     };
   }
 
@@ -69,6 +94,8 @@ export async function updateBeat(logger: ILogger, args: Record<string, unknown>)
       beat,
       type: rawType as typeof BEAT_TYPES[number] | undefined,
       cronExpression: cronExpression?.trim(),
+      channel,
+      target,
     });
     HeartbeatSingleton.getExistingInstance()?.reschedule();
 
