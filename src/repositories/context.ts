@@ -2,13 +2,7 @@ import os from 'node:os';
 import { config } from '../config';
 import { nowISO } from '../utils/date';
 
-export interface PersonalInformation {
-  name?: string;
-  gender?: string;
-  birthday?: string;
-  location?: string;
-  occupation?: string;
-}
+export type PersonalInformation = Record<string, string>;
 
 export interface SystemInfo {
   source: string;
@@ -42,14 +36,13 @@ class ContextRepository implements IContextRepository {
     };
   }
 
-  private getPersonalInfo(params: any): PersonalInformation {
-    return {
-      name: params.NAME,
-      gender: params.GENDER,
-      birthday: params.BIRTHDAY,
-      location: params.LOCATION,
-      occupation: params.OCCUPATION,
-    };
+  private getPersonalInfo(params: Record<string, string>): PersonalInformation {
+    return Object.entries(params).reduce<Record<string, string>>((acc, [key, value]) => {
+      if (value) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
   }
 
   /**
@@ -57,16 +50,14 @@ class ContextRepository implements IContextRepository {
    * inactivated temporarily
    */
   private formatAsPrompt(system: SystemInfo, personal: PersonalInformation): string {
+    const personalLines = Object.entries(personal).map(([key, value]) => `- ${key}: ${value}`);
     return [
       "# Before responding, consider the following context information:",
       system.datetime ? `1. Datetime: ${system.datetime}` : null,
       system.source ? `2. Channel Source: ${system.source}` : null,
       system.platform ? `3. Platform: ${system.platform}` : null,
       `4. Main Human Information:`,
-      `- Name: ${personal.name}${personal.gender ? `, gender: ${personal.gender}` : null}${personal.birthday ? `, birthday: ${personal.birthday}` : null}`,
-      // To do: variable information... Refactor in future.
-      personal.location ? `- location: ${personal.location}` : null,
-      personal.occupation ? `- occupation: ${personal.occupation}` : null,
+      ...personalLines,
     ].join('\n');
   }
 }

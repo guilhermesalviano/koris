@@ -69,7 +69,7 @@ class PromptRepository implements IPromptRepository {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
 
     const injectedContent = InjectManager.getInjectedContent();
-    if (injectedContent) systemBlocks.push(injectedContent);
+    if (injectedContent) systemBlocks.push(`# Personality\n${injectedContent}`);
 
     const learnedSkills = this.buildLearnedSkills();
     if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
@@ -85,7 +85,7 @@ class PromptRepository implements IPromptRepository {
     const sanitized = this.sanitizePromptIfEnabled(userMessage, limitedHistory);
 
     return [
-      { role: 'system', content: systemBlocks.join('\n\n') },
+      { role: 'system', content: systemBlocks.join('\n') },
       ...sanitized.history,
       { role: 'user', content: sanitized.userMessage },
     ];
