@@ -10,7 +10,6 @@ import { AICompletionService, IAICompletionService } from "../../../ai-completio
 import { HEARTBEAT_PROMPT } from "../../../../constants";
 import type { ILogger } from "../../../../infrastructure/logger";
 import { IToolsQueue, ToolsQueue } from "../../../tools-queue";
-import { ChatServiceFactory } from "../../../chat/chat-service";
 import { ISubAgent } from "../../../../types/agents";
 import { AgnosticExecutionToolFactory } from "../../../tools";
 import { IChannelsManager } from "../../../../channels";
@@ -134,8 +133,7 @@ class HeartbeatFactory {
     const toolsQueue = new ToolsQueue(logger, agnosticExecutionTool);
 
     const completionService = new AICompletionService(aiProvider, logger, { role: 'worker', agentName: 'heartbeat' });
-    const chatService = ChatServiceFactory.create(logger, 'worker', 'heartbeat');
-    const pipeline = ToolCallPipelineFactory.create(logger, chatService);
+    const pipeline = ToolCallPipelineFactory.create(logger);
     const channelService = ChannelServiceFactory.create(db);
     return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, channelsManager, completionService, pipeline, channelService);
   }

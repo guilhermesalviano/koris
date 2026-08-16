@@ -126,7 +126,6 @@ export default function UsagePage() {
           </div>
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             <BreakdownTable title="By tool" rows={statRows(data.byTool)} />
-            <BreakdownTable title="By skill" rows={statRows(data.bySkill)} />
           </div>
         </>
       )}

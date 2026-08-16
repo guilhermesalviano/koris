@@ -1,5 +1,4 @@
 import type { AIToolDefinition } from '../types/chat';
-import { Skill } from '../types/skills';
 
 interface GetAllOptions {
   includeBeatTools?: boolean;
@@ -13,16 +12,13 @@ const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH'] as const;
 
 class ToolsRepository implements IToolsRepository {
 
-  constructor(private skills: Skill[]) {}
-
   getAll(options?: GetAllOptions): AIToolDefinition[] {
     const tools: AIToolDefinition[] = [];
     const includeBeatTools = options?.includeBeatTools ?? true;
 
     tools.push(this.curlTool());
     tools.push(this.searchTool());
-    if (this.skills?.length > 0) tools.push(this.getSkillTool(this.skills));
-    
+
     if (includeBeatTools) {
       tools.push(this.createBeatTool());
       tools.push(this.listBeatsTool());
@@ -31,29 +27,6 @@ class ToolsRepository implements IToolsRepository {
     }
 
     return tools;
-  }
-
-  private getSkillTool(skills: Skill[]): AIToolDefinition {
-    return {
-      type: 'function',
-      function: {
-        name: 'get_skill',
-        description: `Read the complete SKILL.md documentation for a skill before executing any task that skill covers.
-  Call this whenever you need implementation details, constraints, or required patterns for a task.
-  <available_skills>${skills.map(s => `<skill><skill_name>${s.name}</skill_name><skill_description>${s.description}</skill_description></skill>`).join('')}</available_skills>`,
-        parameters: {
-          type: 'object',
-          properties: {
-            skill_name: {
-              type: 'string',
-              enum: skills.map(s => s.name),
-              description: 'The skill to read documentation for.',
-            },
-          },
-          required: ['skill_name'],
-        },
-      },
-    };
   }
 
   private curlTool(): AIToolDefinition {
@@ -229,8 +202,8 @@ class ToolsRepository implements IToolsRepository {
 }
 
 class ToolsRepositoryFactory {
-  static create(skills: Skill[]): ToolsRepository {
-    return new ToolsRepository(skills);
+  static create(): ToolsRepository {
+    return new ToolsRepository();
   }
 }
 

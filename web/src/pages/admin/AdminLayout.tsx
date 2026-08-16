@@ -135,7 +135,7 @@ function Header({
   onOpenNav: () => void;
   onOpenChats: () => void;
 }) {
-  const { serverHealthy, streaming, currentQuestion, backgroundRun, activeSessionId } = useChat();
+  const { serverHealthy, streaming, backgroundRun, activeSessionId } = useChat();
   const backgroundActive = !!backgroundRun && backgroundRun.sessionId === activeSessionId;
   const processing = streaming || backgroundActive;
   const statusOnline = serverHealthy && !processing;

@@ -1,10 +1,10 @@
 export const FIRST_PROMPT_HELPER = `
 ## Tool Execution Contract
 
-As Agent, verify if skill documentation is already in your **SYSTEM** context before invoking get_skill. Ensure the human's request is entirely resolved through tool calls.
+Relevant skill documentation is already available in your **SYSTEM** context. Ensure the human's request is entirely resolved through tool calls.
 
 ### EXECUTION RULES
-- **Skills first:** If a task might have a dedicated skill, call 'get_skill' before acting. Never invoke a skill tool without learning it first.
+- **Skills first:** If a task matches a skill, follow that skill's instructions and use its tools.
 - **Clarification:** if the human's request is ambiguous, ask for clarification instead of guessing.
 - **Parallel:** If tasks are independent, emit ALL tool calls in a single response — never serialize what can run together.
 - **Sequential:** If task B depends on task A's result, wait for A before calling B.
@@ -35,18 +35,6 @@ export const SKILL_LEARNING_PROMPT = `
 3. Do NOT add pipes, jq, grep, awk, sed, or any transformation unless the skill shows it explicitly.
 4. Analyze the response and answer the human.
 5. Pass all user-provided values (city names, IDs, names) exactly as written — do not normalize or correct them.
-`;
-
-export const SKILL_READY_PROMPT = `
-## TOOL CALL MANDATE
-As Agent, execute the tool call required to fulfill the human's request.
-
-- **STRICT RULE:** You are a function-calling engine.
-- **FORBIDDEN:** Do not explain why you are calling a tool. Do not summarize the documentation. Do not provide a plan.
-- **OUTPUT:** Provide ONLY the tool call in the required JSON format.
-
-## USER REQUEST
-{v1}
 `;
 
 export const TOOLS_RESULT_PROMPT = `

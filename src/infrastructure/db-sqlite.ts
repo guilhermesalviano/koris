@@ -179,14 +179,18 @@ class DatabaseService implements IDatabaseService {
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS learned_skills (
           id TEXT PRIMARY KEY,
-          skill_name TEXT NOT NULL UNIQUE,
-          skill_content TEXT NOT NULL,
+          name TEXT NOT NULL UNIQUE,
+          description TEXT,
+          read_when TEXT,
+          content TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
           learned_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
 
       this.db.exec(`
-        CREATE INDEX IF NOT EXISTS idx_learned_skills_skill_name ON learned_skills(skill_name);
+        CREATE INDEX IF NOT EXISTS idx_learned_skills_name ON learned_skills(name);
+        CREATE INDEX IF NOT EXISTS idx_learned_skills_enabled ON learned_skills(enabled);
         CREATE INDEX IF NOT EXISTS idx_learned_skills_learned_at ON learned_skills(learned_at);
       `);
 

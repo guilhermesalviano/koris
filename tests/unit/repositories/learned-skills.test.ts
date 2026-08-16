@@ -5,34 +5,65 @@ function makeDb() {
   return { run: vi.fn(), get: vi.fn(), query: vi.fn() };
 }
 
+function makeRow(overrides: Partial<{
+  id: string;
+  name: string;
+  description: string | null;
+  read_when: string | null;
+  content: string;
+  enabled: number;
+  learned_at: string;
+}> = {}) {
+  return {
+    id: 'skill_1',
+    name: 'git',
+    description: 'Git workflow skill',
+    read_when: null,
+    content: 'use rebase',
+    enabled: 1,
+    learned_at: '2026-01-01 00:00:00',
+    ...overrides,
+  };
+}
+
 describe('LearnedSkillsRepository', () => {
-  it('save inserts a new skill and returns it', () => {
+  it('save inserts a new skill and returns the mapped row', () => {
     const db = makeDb();
-    const skill = { id: 'skill_1', skill_name: 'git', skill_content: 'use rebase', learned_at: 't' };
-    db.get.mockReturnValueOnce(undefined).mockReturnValue(skill);
+    const row = makeRow({ read_when: JSON.stringify(['when needed']) });
+    db.get.mockReturnValue(row);
     const repository = new LearnedSkillsRepository(db as never);
 
-    const result = repository.save({ skill_name: 'git', skill_content: 'use rebase' });
+    const result = repository.save({ name: 'git', description: 'Git workflow skill', read_when: ['when needed'], content: 'use rebase' });
 
     expect(db.run).toHaveBeenCalledTimes(1);
     const [sql, params] = db.run.mock.calls[0];
     expect(sql).toContain('INSERT INTO learned_skills');
+    expect(sql).toContain('ON CONFLICT(name) DO UPDATE');
     expect(params[0]).toMatch(/^skill_\d+_[a-z0-9]{9}$/);
     expect(params[1]).toBe('git');
-    expect(params[2]).toBe('use rebase');
-    expect(result).toEqual(skill);
+    expect(params[2]).toBe('Git workflow skill');
+    expect(params[3]).toBe(JSON.stringify(['when needed']));
+    expect(params[4]).toBe('use rebase');
+    expect(result).toEqual({
+      id: 'skill_1',
+      name: 'git',
+      description: 'Git workflow skill',
+      read_when: ['when needed'],
+      content: 'use rebase',
+      enabled: true,
+      learned_at: '2026-01-01 00:00:00',
+    });
   });
 
-  it('save skips inserting when the skill already exists', () => {
+  it('save serializes read_when only when present', () => {
     const db = makeDb();
-    const existing = { id: 'skill_existing', skill_name: 'git', skill_content: 'x', learned_at: 't' };
-    db.get.mockReturnValue(existing);
+    db.get.mockReturnValue(makeRow());
     const repository = new LearnedSkillsRepository(db as never);
 
-    const result = repository.save({ skill_name: 'git', skill_content: 'new' });
+    repository.save({ name: 'git', content: 'x' });
 
-    expect(db.run).not.toHaveBeenCalled();
-    expect(result).toEqual(existing);
+    const params = db.run.mock.calls[0][1] as unknown[];
+    expect(params[3]).toBeNull();
   });
 
   it('save throws when the inserted skill cannot be retrieved', () => {
@@ -40,34 +71,50 @@ describe('LearnedSkillsRepository', () => {
     db.get.mockReturnValue(undefined);
     const repository = new LearnedSkillsRepository(db as never);
 
-    expect(() => repository.save({ skill_name: 'git', skill_content: 'x' })).toThrow(
+    expect(() => repository.save({ name: 'git', content: 'x' })).toThrow(
       'Failed to retrieve saved skill',
     );
   });
 
-  it('getById returns the skill or null', () => {
+  it('getById returns the mapped skill or null', () => {
     const db = makeDb();
-    const skill = { id: 's1', skill_name: 'a', skill_content: 'c', learned_at: 't' };
-    db.get.mockReturnValueOnce(skill);
+    const row = makeRow({ id: 's1', enabled: 0 });
+    db.get.mockReturnValueOnce(row);
     const repository = new LearnedSkillsRepository(db as never);
 
-    expect(repository.getById('s1')).toEqual(skill);
+    expect(repository.getById('s1')).toEqual({
+      id: 's1',
+      name: 'git',
+      description: 'Git workflow skill',
+      read_when: null,
+      content: 'use rebase',
+      enabled: false,
+      learned_at: '2026-01-01 00:00:00',
+    });
     expect(db.get).toHaveBeenCalledWith('SELECT * FROM learned_skills WHERE id = ?', ['s1']);
 
     db.get.mockReturnValueOnce(undefined);
     expect(repository.getById('missing')).toBeNull();
   });
 
-  it('getByName returns the skill or null', () => {
+  it('getByName returns the mapped skill or null', () => {
     const db = makeDb();
     db.get.mockReturnValueOnce(undefined);
     const repository = new LearnedSkillsRepository(db as never);
 
     expect(repository.getByName('a')).toBeNull();
-    expect(db.get).toHaveBeenCalledWith('SELECT * FROM learned_skills WHERE skill_name = ?', ['a']);
+    expect(db.get).toHaveBeenCalledWith('SELECT * FROM learned_skills WHERE name = ?', ['a']);
 
-    db.get.mockReturnValueOnce({ id: 's1', skill_name: 'a', skill_content: 'c', learned_at: 't' });
-    expect(repository.getByName('a')?.id).toBe('s1');
+    db.get.mockReturnValueOnce(makeRow());
+    expect(repository.getByName('a')?.id).toBe('skill_1');
+  });
+
+  it('parses read_when stored as non-JSON text defensively', () => {
+    const db = makeDb();
+    db.get.mockReturnValueOnce(makeRow({ read_when: 'plain hint' }));
+    const repository = new LearnedSkillsRepository(db as never);
+
+    expect(repository.getByName('a')?.read_when).toEqual(['plain hint']);
   });
 
   it('exists returns true only when the count is greater than zero', () => {
@@ -76,7 +123,7 @@ describe('LearnedSkillsRepository', () => {
     const repository = new LearnedSkillsRepository(db as never);
 
     expect(repository.exists('a')).toBe(true);
-    expect(db.get).toHaveBeenCalledWith('SELECT COUNT(*) as count FROM learned_skills WHERE skill_name = ?', ['a']);
+    expect(db.get).toHaveBeenCalledWith('SELECT COUNT(*) as count FROM learned_skills WHERE name = ?', ['a']);
 
     db.get.mockReturnValueOnce({ count: 0 });
     expect(repository.exists('b')).toBe(false);
@@ -90,25 +137,87 @@ describe('LearnedSkillsRepository', () => {
     expect(repository.exists('a')).toBe(false);
   });
 
-  it('getAll returns all skills ordered by learned_at', () => {
+  it('getAll returns mapped rows ordered by learned_at', () => {
     const db = makeDb();
-    const skills = [{ id: 's1', skill_name: 'a', skill_content: 'c', learned_at: 't' }];
-    db.query.mockReturnValue(skills);
+    const rows = [makeRow()];
+    db.query.mockReturnValue(rows);
     const repository = new LearnedSkillsRepository(db as never);
 
-    expect(repository.getAll()).toEqual(skills);
+    expect(repository.getAll()).toEqual([{
+      id: 'skill_1',
+      name: 'git',
+      description: 'Git workflow skill',
+      read_when: null,
+      content: 'use rebase',
+      enabled: true,
+      learned_at: '2026-01-01 00:00:00',
+    }]);
     expect(db.query.mock.calls[0][0]).toContain('ORDER BY learned_at DESC');
   });
 
-  it('getRecent applies the limit', () => {
+  it('getRecent filters enabled skills and applies the limit', () => {
     const db = makeDb();
     db.query.mockReturnValue([]);
     const repository = new LearnedSkillsRepository(db as never);
 
     repository.getRecent(5);
 
+    expect(db.query.mock.calls[0][0]).toContain('WHERE enabled = 1');
     expect(db.query.mock.calls[0][0]).toContain('LIMIT ?');
     expect(db.query.mock.calls[0][1]).toEqual([5]);
+  });
+
+  it('count returns the number of learned skills', () => {
+    const db = makeDb();
+    db.get.mockReturnValueOnce({ count: 7 });
+    const repository = new LearnedSkillsRepository(db as never);
+
+    expect(repository.count()).toBe(7);
+    expect(db.get).toHaveBeenCalledWith('SELECT COUNT(*) as count FROM learned_skills');
+
+    db.get.mockReturnValueOnce(undefined);
+    expect(repository.count()).toBe(0);
+  });
+
+  it('updateByName updates fields and returns the refreshed skill', () => {
+    const db = makeDb();
+    db.get
+      .mockReturnValueOnce(makeRow())
+      .mockReturnValueOnce(makeRow({ description: 'updated', read_when: JSON.stringify(['later']) }));
+    const repository = new LearnedSkillsRepository(db as never);
+
+    const result = repository.updateByName('git', { description: 'updated', read_when: ['later'] });
+
+    expect(db.run).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE learned_skills'),
+      ['updated', JSON.stringify(['later']), 'use rebase', 'git'],
+    );
+    expect(result?.description).toBe('updated');
+    expect(result?.read_when).toEqual(['later']);
+  });
+
+  it('updateByName returns null when the skill does not exist', () => {
+    const db = makeDb();
+    db.get.mockReturnValue(undefined);
+    const repository = new LearnedSkillsRepository(db as never);
+
+    expect(repository.updateByName('git', {})).toBeNull();
+    expect(db.run).not.toHaveBeenCalled();
+  });
+
+  it('setEnabled updates the enabled column', () => {
+    const db = makeDb();
+    db.run.mockReturnValueOnce({ changes: 1 });
+    const repository = new LearnedSkillsRepository(db as never);
+
+    expect(repository.setEnabled('a', false)).toBe(true);
+    expect(db.run).toHaveBeenCalledWith(
+      expect.stringContaining('SET enabled = ?'),
+      [0, 'a'],
+    );
+
+    db.run.mockReturnValueOnce({ changes: 0 });
+    expect(repository.setEnabled('a', true)).toBe(false);
   });
 
   it('deleteByName returns true when rows changed', () => {
@@ -117,11 +226,10 @@ describe('LearnedSkillsRepository', () => {
     const repository = new LearnedSkillsRepository(db as never);
 
     expect(repository.deleteByName('a')).toBe(true);
-    expect(db.run).toHaveBeenCalledWith('DELETE FROM learned_skills WHERE skill_name = ?', ['a']);
+    expect(db.run).toHaveBeenCalledWith('DELETE FROM learned_skills WHERE name = ?', ['a']);
 
     db.run.mockReturnValueOnce({ changes: 0 });
     expect(repository.deleteByName('b')).toBe(false);
-    expect(db.run).toHaveBeenCalledWith('DELETE FROM learned_skills WHERE skill_name = ?', ['b']);
   });
 
   it('deleteAll returns the number of deleted rows', () => {
@@ -130,6 +238,29 @@ describe('LearnedSkillsRepository', () => {
     const repository = new LearnedSkillsRepository(db as never);
 
     expect(repository.deleteAll()).toBe(4);
+    expect(db.run).toHaveBeenCalledWith('DELETE FROM learned_skills');
+  });
+
+  it('deleteNotIn deletes skills not in the keep list', () => {
+    const db = makeDb();
+    db.run.mockReturnValue({ changes: 2 });
+    const repository = new LearnedSkillsRepository(db as never);
+
+    const result = repository.deleteNotIn(['git', 'docker']);
+
+    expect(result).toBe(2);
+    expect(db.run).toHaveBeenCalledWith(
+      'DELETE FROM learned_skills WHERE name NOT IN (?, ?)',
+      ['git', 'docker'],
+    );
+  });
+
+  it('deleteNotIn clears everything when the keep list is empty', () => {
+    const db = makeDb();
+    db.run.mockReturnValue({ changes: 5 });
+    const repository = new LearnedSkillsRepository(db as never);
+
+    expect(repository.deleteNotIn([])).toBe(5);
     expect(db.run).toHaveBeenCalledWith('DELETE FROM learned_skills');
   });
 
@@ -190,7 +321,7 @@ describe('LearnedSkillsRepository', () => {
     });
     const repository = new LearnedSkillsRepository(db as never);
 
-    expect(() => repository.save({ skill_name: 'git', skill_content: 'x' })).toThrow('insert failed');
+    expect(() => repository.save({ name: 'git', content: 'x' })).toThrow('insert failed');
   });
 
   it('rethrows when deleteByName fails', () => {

@@ -102,22 +102,18 @@ export interface ChannelsResponse {
   items: ChannelItem[];
 }
 
-export interface Skill {
+export interface SkillItem {
   name: string;
   description: string;
-  read_when?: string | null;
-}
-
-export interface LearnedSkill {
-  id: string;
-  skill_name: string;
-  skill_content: string;
-  learned_at: string;
+  read_when?: string[] | null;
+  content?: string | null;
+  enabled: boolean;
+  learned_at?: string | null;
 }
 
 export interface SkillsResponse {
-  available: Skill[];
-  learned: LearnedSkill[];
+  items: SkillItem[];
+  limit: number;
 }
 
 export interface ActiveRun {
@@ -206,5 +202,4 @@ export interface UsageReport {
   byAgent: Record<string, UsageStats>;
   byChannel: Record<string, UsageStats>;
   byTool: Record<string, UsageStats>;
-  bySkill: Record<string, UsageStats>;
 }
