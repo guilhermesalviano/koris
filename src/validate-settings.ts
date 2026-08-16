@@ -45,10 +45,6 @@ function isValidUrl(value: string): boolean {
   try { new URL(value); return true; } catch { return false; }
 }
 
-function isValidDateYYYYMMDD(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
 async function httpGet(url: string, timeoutMs = 5000, headers?: Record<string, string>): Promise<{ ok: boolean; status?: number; body?: string; error?: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -154,17 +150,6 @@ async function main() {
     String(config.AI.BACKGROUND_GRACE_MS),
   );
 
-  check(
-    Number.isInteger(config.AI.RETRY_ATTEMPTS) && config.AI.RETRY_ATTEMPTS >= 0,
-    'ai.retry_attempts is a non-negative integer',
-    `Got: ${config.AI.RETRY_ATTEMPTS}`,
-  );
-
-  check(
-    config.AI.RETRY_BACKOFF_MS > 0,
-    'ai.retry_backoff_ms is positive',
-    `Got: ${config.AI.RETRY_BACKOFF_MS} ms`,
-  );
 
   check(
     supportedProviders.includes(config.AI.MANAGER.PROVIDER),
@@ -326,32 +311,6 @@ async function main() {
     }
   } else {
     pass('Telegram channel', 'disabled — skipping');
-  }
-
-  // ── 5. Personal information ──────────────────────────────────────────────
-  section('Personal Information');
-
-  advisory(
-    config.PERSONAL_INFORMATION.NAME.trim().length > 0,
-    'personal_information.name is set',
-    'Used in system prompts — recommended',
-  );
-
-  advisory(
-    config.PERSONAL_INFORMATION.OCCUPATION.trim().length > 0,
-    'personal_information.occupation is set',
-    'Used in system prompts — recommended',
-  );
-
-  if (config.PERSONAL_INFORMATION.BIRTHDAY.trim().length > 0) {
-    check(
-      isValidDateYYYYMMDD(config.PERSONAL_INFORMATION.BIRTHDAY),
-      'personal_information.birthday is YYYY-MM-DD',
-      `Got: "${config.PERSONAL_INFORMATION.BIRTHDAY}"`,
-      config.PERSONAL_INFORMATION.BIRTHDAY,
-    );
-  } else {
-    pass('personal_information.birthday', 'not set');
   }
 
   // ── Summary ──────────────────────────────────────────────────────────────

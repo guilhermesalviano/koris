@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { getConfigValue, loadConfigFile } from './helpers';
+import { deepGet, getConfigValue, loadConfigFile } from './helpers';
 
 const isTest = process.env.NODE_ENV === 'test';
 
@@ -9,6 +9,20 @@ const fileConfig = loadConfigFile({
 
 function get(path: string, fallback: string): string {
   return getConfigValue(path, fallback, fileConfig);
+}
+
+function getPersonalInformation(): Record<string, string> {
+  const raw = deepGet(fileConfig, 'personal_information');
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+
+  return Object.entries(raw).reduce<Record<string, string>>((acc, [key, value]) => {
+    if (value !== undefined && value !== null) {
+      acc[key] = String(value);
+    }
+    return acc;
+  }, {});
 }
 
 export const config = {
@@ -31,8 +45,6 @@ export const config = {
     PARALLEL: get('ai.parallel', 'true') === 'true',
     SUBAGENTS_PARALLEL: get('ai.subagents_parallel', 'false') === 'true',
     BACKGROUND_GRACE_MS: Number(get('ai.background_grace_ms', '5000')),
-    RETRY_ATTEMPTS: Number(get('ai.retry_attempts', '2')),
-    RETRY_BACKOFF_MS: Number(get('ai.retry_backoff_ms', '1000')),
     MANAGER: {
       PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.manager.provider', 'ollama'),
       BASE_URL: get('ai.manager.base_url', 'http://localhost:11434'),
@@ -70,13 +82,7 @@ export const config = {
       MENTION_ID:  get('channels.whatsapp.mention_id', ''),
     },
   },
-  PERSONAL_INFORMATION: {
-    NAME:       get('personal_information.name', ''),
-    GENDER:     get('personal_information.gender', ''),
-    BIRTHDAY:   get('personal_information.birthday', ''),
-    LOCATION:   get('personal_information.location', ''),
-    OCCUPATION: get('personal_information.occupation',''),
-  },
+  PERSONAL_INFORMATION: getPersonalInformation(),
 } as const;
 
 const isTelegramMode = process.argv.includes('telegram') || process.argv.includes('--telegram');

@@ -38,8 +38,6 @@
       "embed_model": "nomic-embed-text"
     },
     "search_api_key": "SERPAPI_KEY",
-    "retry_attempts": 2,
-    "retry_backoff_ms": 1000,
     "summarizer": true,
     "prompt_sanitizer": false,
     "timeouts": {
@@ -51,9 +49,7 @@
   "personal_information": {
     "name": "John Doe",
     "gender": "male",
-    "birthday": "1990-01-01",
-    "location": "New York, USA",
-    "occupation": "Software Engineer"
+    "location": "New York, USA"
   }
 }
 
