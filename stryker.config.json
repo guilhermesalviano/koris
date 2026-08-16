@@ -6,7 +6,6 @@
   "coverageAnalysis": "perTest",
   "mutate": [
     "src/utils/fields.ts",
-    "src/utils/history.ts",
     "src/utils/prompt.ts",
     "src/utils/sanitize-log-text.ts",
     "src/utils/telegram.ts",

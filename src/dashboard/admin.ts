@@ -11,6 +11,7 @@ import { ChannelRepositoryFactory } from '../repositories/channel';
 import { CHANNEL_TYPES, ChannelType } from '../entities/channel';
 import { LearnedSkillsRepositoryFactory } from '../repositories/learned-skills';
 import { SkillsRepositoryFactory } from '../repositories/skills';
+import { SkillSyncSingleton } from '../services/skills/skill-sync';
 import { AuditLogRepositoryFactory, AuditLogRow } from '../repositories/audit-log';
 import { buildUsageReport, usageFrom } from '../services/usage/usage';
 import { Heartbeat } from '../entities/heartbeat';
@@ -137,7 +138,7 @@ class AdminRouterFactory {
         messages: messageRepo.count(),
         memories: memoryRepo.count(),
         heartbeats: beats.length,
-        learnedSkills: learnedSkillsRepo.getAll().length,
+        learnedSkills: learnedSkillsRepo.count(),
         learnedSkillsLimit: config.LEARNED_SKILLS_LIMIT,
         skills: skillsRepo.get().length,
         auditErrors: auditRepo.count({ status: 'error' }),
@@ -502,19 +503,47 @@ class AdminRouterFactory {
     });
 
     router.get('/skills', (_req: Request, res: Response) => {
-      res.json({
-        available: skillsRepo.get(),
-        learned: learnedSkillsRepo.getAll(),
+      const learnedByName = new Map(learnedSkillsRepo.getAll().map(skill => [skill.name, skill]));
+
+      const items = skillsRepo.get().map((skill) => {
+        const learned = learnedByName.get(skill.name);
+        return {
+          name: skill.name,
+          description: skill.description,
+          read_when: skill.read_when ?? null,
+          content: skill.content ?? null,
+          enabled: learned ? learned.enabled : true,
+          learned_at: learned ? learned.learned_at : null,
+        };
       });
+
+      res.json({ items, limit: config.LEARNED_SKILLS_LIMIT });
     });
 
-    router.delete('/skills/learned/:name', (req: Request, res: Response) => {
-      const deleted = learnedSkillsRepo.deleteByName(String(req.params.name));
-      if (!deleted) {
-        res.status(404).json({ error: 'Learned skill not found' });
+    router.patch('/skills/:name', (req: Request, res: Response) => {
+      const enabled = req.body?.enabled;
+      if (typeof enabled !== 'boolean') {
+        res.status(400).json({ error: 'enabled must be a boolean' });
         return;
       }
 
+      const updated = learnedSkillsRepo.setEnabled(String(req.params.name), enabled);
+      if (!updated) {
+        res.status(404).json({ error: 'Skill not found' });
+        return;
+      }
+
+      res.json({ success: true, skill: learnedSkillsRepo.getByName(String(req.params.name)) });
+    });
+
+    router.post('/skills/sync', (_req: Request, res: Response) => {
+      const sync = SkillSyncSingleton.getExistingInstance();
+      if (!sync) {
+        res.status(503).json({ error: 'Skill sync not initialized' });
+        return;
+      }
+
+      sync.sync();
       res.json({ success: true });
     });
 

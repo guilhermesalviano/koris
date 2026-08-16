@@ -11,6 +11,7 @@ const {
   channelRepo,
   learnedSkillsRepo,
   skillsRepo,
+  skillSync,
 } = vi.hoisted(() => ({
   auditRepo: {
     count: vi.fn(),
@@ -25,8 +26,9 @@ const {
   memoryRepo: { count: vi.fn() },
   heartbeatRepo: { getAll: vi.fn() },
   channelRepo: { getAll: vi.fn() },
-  learnedSkillsRepo: { getAll: vi.fn() },
+  learnedSkillsRepo: { count: vi.fn(), getAll: vi.fn(), getByName: vi.fn(), setEnabled: vi.fn() },
   skillsRepo: { get: vi.fn() },
+  skillSync: { sync: vi.fn(), getExistingInstance: vi.fn() },
 }));
 
 vi.mock('../../../src/repositories/audit-log', () => ({
@@ -61,7 +63,12 @@ vi.mock('../../../src/repositories/skills', () => ({
   SkillsRepositoryFactory: { create: () => skillsRepo },
 }));
 
+vi.mock('../../../src/services/skills/skill-sync', () => ({
+  SkillSyncSingleton: skillSync,
+}));
+
 import { AdminRouterFactory } from '../../../src/dashboard/admin';
+import { config } from '../../../src/config';
 
 function makeResponse(): Response {
   const res = {
@@ -128,7 +135,7 @@ describe('AdminRouterFactory /audit', () => {
         error_message: 'blocked',
         created_at: '2026-01-01T00:01:00.000Z',
       },
-      { id: 'a3', kind: 'tool', role: 'worker', agent_name: 'learnerWorker', tool_name: 'get-skill', duration_ms: 2, status: 'success', created_at: '2026-01-01T00:02:00.000Z' },
+      { id: 'a3', kind: 'tool', role: 'worker', agent_name: 'executorWorker', tool_name: 'search_engine', duration_ms: 2, status: 'success', created_at: '2026-01-01T00:02:00.000Z' },
     ] as never);
 
     const router = AdminRouterFactory.create(logger, {} as never);
@@ -307,7 +314,7 @@ describe('AdminRouterFactory /overview', () => {
       { lastRun: new Date('2026-01-02T10:00:00.000Z') },
       { lastRun: new Date('2026-01-03T10:00:00.000Z') },
     ] as never);
-    learnedSkillsRepo.getAll.mockReturnValue([{}, {}] as never);
+    learnedSkillsRepo.count.mockReturnValue(2);
     skillsRepo.get.mockReturnValue([{}, {}, {}] as never);
     channelRepo.getAll.mockReturnValue([
       { channel: 'telegram', target: '@me', isPrincipal: true },
@@ -383,5 +390,109 @@ describe('AdminRouterFactory /overview', () => {
       filters: { status: 'error' },
     });
     expect(auditRepo.usage).toHaveBeenCalledWith(expect.objectContaining({ from: expect.any(String) }));
+  });
+});
+
+describe('AdminRouterFactory /skills', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('GET /skills merges disk skills with learned state and the limit', () => {
+    skillsRepo.get.mockReturnValue([
+      { name: 'git', description: 'Git skill', read_when: ['when needed'], content: 'run rebase' },
+      { name: 'docker', description: 'Docker skill', read_when: null, content: 'run compose' },
+    ] as never);
+    learnedSkillsRepo.getAll.mockReturnValue([
+      { name: 'git', enabled: false, learned_at: '2026-01-01 00:00:00' },
+    ] as never);
+
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/skills'), res);
+
+    expect(res.json).toHaveBeenCalledWith({
+      items: [
+        {
+          name: 'git',
+          description: 'Git skill',
+          read_when: ['when needed'],
+          content: 'run rebase',
+          enabled: false,
+          learned_at: '2026-01-01 00:00:00',
+        },
+        {
+          name: 'docker',
+          description: 'Docker skill',
+          read_when: null,
+          content: 'run compose',
+          enabled: true,
+          learned_at: null,
+        },
+      ],
+      limit: config.LEARNED_SKILLS_LIMIT,
+    });
+  });
+
+  it('PATCH /skills/:name toggles the enabled flag', () => {
+    learnedSkillsRepo.setEnabled.mockReturnValue(true);
+    learnedSkillsRepo.getByName.mockReturnValue({ name: 'git', enabled: false });
+
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/skills/git');
+    req.body = { enabled: false };
+    callRoute(router, req, res);
+
+    expect(learnedSkillsRepo.setEnabled).toHaveBeenCalledWith('git', false);
+    expect(res.json).toHaveBeenCalledWith({ success: true, skill: { name: 'git', enabled: false } });
+  });
+
+  it('PATCH /skills/:name rejects a non-boolean enabled value', () => {
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/skills/git');
+    req.body = { enabled: 'yes' };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'enabled must be a boolean' });
+    expect(learnedSkillsRepo.setEnabled).not.toHaveBeenCalled();
+  });
+
+  it('PATCH /skills/:name returns 404 when the skill is unknown', () => {
+    learnedSkillsRepo.setEnabled.mockReturnValue(false);
+
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/skills/missing');
+    req.body = { enabled: true };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Skill not found' });
+  });
+
+  it('POST /skills/sync triggers a resync when initialized', () => {
+    skillSync.getExistingInstance.mockReturnValue(skillSync);
+
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/skills/sync'), res);
+
+    expect(skillSync.sync).toHaveBeenCalledTimes(1);
+    expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('POST /skills/sync returns 503 when sync is not initialized', () => {
+    skillSync.getExistingInstance.mockReturnValue(null);
+
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/skills/sync'), res);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Skill sync not initialized' });
+    expect(skillSync.sync).not.toHaveBeenCalled();
   });
 });

@@ -1,27 +1,8 @@
 import { ToolCall } from '../types/tools';
 import { ILogger } from '../infrastructure/logger';
-import { isSkillAlreadyLearned } from './history';
-import { Message } from '../entities/message';
 
 function normalizeResponse(response: unknown): string {
   return typeof response === 'string' ? response : JSON.stringify(response);
-}
-
-function shouldSkipToolCall(toolCall: ToolCall, messageHistory: Message[], logger?: ILogger): boolean {
-  if (toolCall.name !== 'get_skill') {
-    return false;
-  }
-
-  const args = toolCall.arguments;
-  const skillName = args.name ?? args.skill_name;
-
-  logger?.info(`Skill name: ${skillName}`);
-
-  if (!skillName || typeof skillName !== 'string') {
-    return false;
-  }
-
-  return isSkillAlreadyLearned(skillName, messageHistory);
 }
 
 /**
@@ -145,4 +126,4 @@ function parseToolCall(tc: any, index: number, logger?: ILogger): ToolCall {
   };
 }
 
-export { extractToolCalls, extractJson, looksLikeToolCallJson, normalizeResponse, shouldSkipToolCall };
+export { extractToolCalls, extractJson, looksLikeToolCallJson, normalizeResponse };

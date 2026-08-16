@@ -54,7 +54,7 @@ class MainAgentFactory {
   static create(logger: ILogger): IMainAgent {
     const ChatService = ChatServiceFactory.create(logger, 'manager', 'manager');
     const toolsQueue = ToolsQueueFactory.create(logger);
-    const pipeline = ToolCallPipelineFactory.create(logger, ChatService);
+    const pipeline = ToolCallPipelineFactory.create(logger);
     return new MainAgent(logger, ChatService, toolsQueue, pipeline);
   }
 }

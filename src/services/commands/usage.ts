@@ -65,10 +65,6 @@ function buildUsageText(report: UsageReport): string {
 
   lines.push('*By Tool*');
   pushBreakdown(lines, report.byTool, 'tool');
-  lines.push('');
-
-  lines.push('*By Skill*');
-  pushBreakdown(lines, report.bySkill, 'skill');
 
   return lines.join('\n');
 }

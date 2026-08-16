@@ -6,7 +6,6 @@ import { Memory } from '../entities/memory';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
 import { IMemoryRepository, MemoryRepositoryFactory } from './memory';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
-import { SkillsRepositoryFactory } from './skills';
 import { ILogger } from '../infrastructure/logger';
 import { InjectManager } from '../services/inject-manager';
 import { SYSTEM_PROMPT } from '../constants';
@@ -139,9 +138,13 @@ class PromptRepository implements IPromptRepository {
 
     return this.learnedSkillsRepository
       .getRecent(learnedSkillsLimit)
-      .map(skill => skill.skill_content?.trim())
-      .filter((content): content is string => Boolean(content))
-      .join('\n')
+      .map(skill => {
+        const header = `### Skill: ${skill.name}`;
+        const description = skill.description ? `\n${skill.description}` : '';
+        const readWhen = skill.read_when?.length ? `\nRead when: ${skill.read_when.join(', ')}` : '';
+        return `${header}${description}${readWhen}\n${skill.content ?? ''}`;
+      })
+      .join('\n\n')
       .slice(0, 15000);
   }
 
@@ -207,8 +210,7 @@ class PromptRepository implements IPromptRepository {
 class PromptRepositoryFactory {
   static create(db: IDatabaseService, logger: ILogger, aiProvider: AIProvider): PromptRepository {
     const contextRepository = ContextRepositoryFactory.create();
-    const skillsRepository = SkillsRepositoryFactory.create(logger);
-    const toolsRepository = ToolsRepositoryFactory.create(skillsRepository.get());
+    const toolsRepository = ToolsRepositoryFactory.create();
     const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
     const memoryRepository = MemoryRepositoryFactory.create(db);
     return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, memoryRepository, aiProvider, logger);

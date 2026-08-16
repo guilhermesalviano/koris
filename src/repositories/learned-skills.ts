@@ -1,27 +1,56 @@
 import { IDatabaseService } from '../infrastructure/db-sqlite';
+import { LearnedSkill, SaveSkillInput } from '../types/skills';
 
-interface LearnedSkill {
+interface LearnedSkillRow {
   id: string;
-  skill_name: string;
-  skill_content: string;
+  name: string;
+  description: string | null;
+  read_when: string | null;
+  content: string;
+  enabled: number;
   learned_at: string;
   [key: string]: unknown;
 }
 
-interface CreateLearnedSkillInput {
-  skill_name: string;
-  skill_content: string;
-}
-
 interface ILearnedSkillsRepository {
-  save(input: CreateLearnedSkillInput): LearnedSkill;
+  save(input: SaveSkillInput): LearnedSkill;
   getById(id: string): LearnedSkill | null;
-  getByName(skillName: string): LearnedSkill | null;
-  exists(skillName: string): boolean;
+  getByName(name: string): LearnedSkill | null;
+  exists(name: string): boolean;
   getAll(): LearnedSkill[];
   getRecent(limit?: number): LearnedSkill[];
-  deleteByName(skillName: string): boolean;
+  count(): number;
+  updateByName(name: string, input: Partial<SaveSkillInput>): LearnedSkill | null;
+  setEnabled(name: string, enabled: boolean): boolean;
+  deleteByName(name: string): boolean;
+  deleteNotIn(names: string[]): number;
   deleteAll(): number;
+}
+
+function serializeReadWhen(readWhen?: string[] | null): string | null {
+  return readWhen && readWhen.length > 0 ? JSON.stringify(readWhen) : null;
+}
+
+function parseReadWhen(raw: string | null): string[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(String) : [raw];
+  } catch {
+    return [raw];
+  }
+}
+
+function toLearnedSkill(row: LearnedSkillRow): LearnedSkill {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description ?? '',
+    read_when: parseReadWhen(row.read_when),
+    content: row.content,
+    enabled: row.enabled === 1,
+    learned_at: row.learned_at,
+  };
 }
 
 class LearnedSkillsRepository implements ILearnedSkillsRepository {
@@ -30,36 +59,37 @@ class LearnedSkillsRepository implements ILearnedSkillsRepository {
   ) {}
 
   /**
-   * Save a newly learned skill with learning context
+   * Insert a skill or refresh its metadata/content when it was learned before.
+   * On conflict the existing enabled flag and learned_at are preserved.
    */
-  save(input: CreateLearnedSkillInput): LearnedSkill {
+  save(input: SaveSkillInput): LearnedSkill {
     try {
-      if (this.getByName(input.skill_name)) {
-        // this.logger.info(`Skill "${input.skill_name}" already learned, skipping save`, { skillName: input.skill_name });
-        return this.getByName(input.skill_name) as LearnedSkill;
-      }
       const id = `skill_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
       this.db.run(
-        `INSERT INTO learned_skills 
-          (id, skill_name, skill_content, learned_at)
-        VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
-        [id, input.skill_name, input.skill_content]
+        `INSERT INTO learned_skills
+          (id, name, description, read_when, content, enabled, learned_at)
+        VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+        ON CONFLICT(name) DO UPDATE SET
+          description = excluded.description,
+          read_when = excluded.read_when,
+          content = excluded.content`,
+        [
+          id,
+          input.name,
+          input.description ?? '',
+          serializeReadWhen(input.read_when),
+          input.content,
+        ]
       );
 
-      // this.logger.info('Learned skill saved', { skillName: input.skill_name, id });
-
-      const skill = this.getById(id);
+      const skill = this.getByName(input.name);
       if (!skill) {
-        throw new Error(`Failed to retrieve saved skill: ${id}`);
+        throw new Error(`Failed to retrieve saved skill: ${input.name}`);
       }
 
       return skill;
     } catch (error) {
-      // this.logger.error('Failed to save learned skill', {
-      //   skillName: input.skill_name,
-      //   error: error instanceof Error ? error.message : String(error),
-      // });
       throw error;
     }
   }
@@ -69,13 +99,12 @@ class LearnedSkillsRepository implements ILearnedSkillsRepository {
    */
   getById(id: string): LearnedSkill | null {
     try {
-      const skill = this.db.get<LearnedSkill>(
+      const skill = this.db.get<LearnedSkillRow>(
         'SELECT * FROM learned_skills WHERE id = ?',
         [id]
       );
-      return skill || null;
+      return skill ? toLearnedSkill(skill) : null;
     } catch (error) {
-      // this.logger.error('Failed to get learned skill by ID', { id, error });
       throw error;
     }
   }
@@ -83,15 +112,14 @@ class LearnedSkillsRepository implements ILearnedSkillsRepository {
   /**
    * Get learned skill by name
    */
-  getByName(skillName: string): LearnedSkill | null {
+  getByName(name: string): LearnedSkill | null {
     try {
-      const skill = this.db.get<LearnedSkill>(
-        'SELECT * FROM learned_skills WHERE skill_name = ?',
-        [skillName]
+      const skill = this.db.get<LearnedSkillRow>(
+        'SELECT * FROM learned_skills WHERE name = ?',
+        [name]
       );
-      return skill || null;
+      return skill ? toLearnedSkill(skill) : null;
     } catch (error) {
-      // this.logger.error('Failed to get learned skill by name', { skillName, error });
       throw error;
     }
   }
@@ -99,15 +127,14 @@ class LearnedSkillsRepository implements ILearnedSkillsRepository {
   /**
    * Check if skill has been learned
    */
-  exists(skillName: string): boolean {
+  exists(name: string): boolean {
     try {
       const skill = this.db.get<{ count: number }>(
-        'SELECT COUNT(*) as count FROM learned_skills WHERE skill_name = ?',
-        [skillName]
+        'SELECT COUNT(*) as count FROM learned_skills WHERE name = ?',
+        [name]
       );
       return (skill?.count ?? 0) > 0;
     } catch (error) {
-      // this.logger.error('Failed to check if skill exists', { skillName, error });
       throw error;
     }
   }
@@ -117,26 +144,81 @@ class LearnedSkillsRepository implements ILearnedSkillsRepository {
    */
   getAll(): LearnedSkill[] {
     try {
-      return this.db.query<LearnedSkill>(
-        'SELECT * FROM learned_skills ORDER BY learned_at DESC'
-      );
+      return this.db
+        .query<LearnedSkillRow>('SELECT * FROM learned_skills ORDER BY learned_at DESC')
+        .map(toLearnedSkill);
     } catch (error) {
-      // this.logger.error('Failed to get all learned skills', { error });
       throw error;
     }
   }
 
   /**
-   * Get recently learned skills
+   * Get recently learned, enabled skills
    */
   getRecent(limit: number = 10): LearnedSkill[] {
     try {
-      return this.db.query<LearnedSkill>(
-        'SELECT * FROM learned_skills ORDER BY learned_at DESC LIMIT ?',
-        [limit]
-      );
+      return this.db
+        .query<LearnedSkillRow>(
+          'SELECT * FROM learned_skills WHERE enabled = 1 ORDER BY learned_at DESC LIMIT ?',
+          [limit]
+        )
+        .map(toLearnedSkill);
     } catch (error) {
-      // this.logger.error('Failed to get recent learned skills', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Count learned skills
+   */
+  count(): number {
+    try {
+      const row = this.db.get<{ count: number }>('SELECT COUNT(*) as count FROM learned_skills');
+      return row?.count ?? 0;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Update the description, read_when hints or content of a learned skill
+   */
+  updateByName(name: string, input: Partial<SaveSkillInput>): LearnedSkill | null {
+    try {
+      const existing = this.getByName(name);
+      if (!existing) return null;
+
+      this.db.run(
+        `UPDATE learned_skills
+         SET description = ?, read_when = ?, content = ?
+         WHERE name = ?`,
+        [
+          input.description ?? existing.description,
+          input.read_when !== undefined
+            ? serializeReadWhen(input.read_when)
+            : serializeReadWhen(existing.read_when),
+          input.content ?? existing.content,
+          name,
+        ]
+      );
+
+      return this.getByName(name);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Enable or disable a learned skill
+   */
+  setEnabled(name: string, enabled: boolean): boolean {
+    try {
+      const result = this.db.run(
+        'UPDATE learned_skills SET enabled = ? WHERE name = ?',
+        [enabled ? 1 : 0, name]
+      );
+      return result.changes > 0;
+    } catch (error) {
       throw error;
     }
   }
@@ -144,20 +226,38 @@ class LearnedSkillsRepository implements ILearnedSkillsRepository {
   /**
    * Delete learned skill by name
    */
-  deleteByName(skillName: string): boolean {
+  deleteByName(name: string): boolean {
     try {
       const result = this.db.run(
-        'DELETE FROM learned_skills WHERE skill_name = ?',
-        [skillName]
+        'DELETE FROM learned_skills WHERE name = ?',
+        [name]
       );
-      
+
       if (result.changes > 0) {
-        // this.logger.info('Learned skill deleted', { skillName });
         return true;
       }
       return false;
     } catch (error) {
-      // this.logger.error('Failed to delete learned skill', { skillName, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Delete all learned skills whose name is not in the given list
+   */
+  deleteNotIn(names: string[]): number {
+    try {
+      if (names.length === 0) {
+        return this.deleteAll();
+      }
+
+      const placeholders = names.map(() => '?').join(', ');
+      const result = this.db.run(
+        `DELETE FROM learned_skills WHERE name NOT IN (${placeholders})`,
+        names
+      );
+      return result.changes;
+    } catch (error) {
       throw error;
     }
   }
@@ -168,10 +268,8 @@ class LearnedSkillsRepository implements ILearnedSkillsRepository {
   deleteAll(): number {
     try {
       const result = this.db.run('DELETE FROM learned_skills');
-      // this.logger.info('All learned skills cleared', { count: result.changes });
       return result.changes;
     } catch (error) {
-      // this.logger.error('Failed to clear learned skills', { error });
       throw error;
     }
   }
