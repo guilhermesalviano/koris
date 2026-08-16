@@ -108,16 +108,63 @@ class AdminRouterFactory {
     router.get('/overview', async (_req: Request, res: Response) => {
       const health = await healthCheck(logger);
 
+      const beats = heartbeatRepo.getAll();
+      const lastHeartbeatRunAt = beats.reduce<Date | null>((latest, beat) => {
+        const run = beat.lastRun ?? null;
+        if (!latest || (run && run.getTime() > latest.getTime())) return run;
+        return latest;
+      }, null);
+
+      const registeredChannels = channelRepo.getAll().map((channel) => ({
+        type: channel.channel,
+        target: channel.target,
+        principal: channel.isPrincipal,
+      }));
+
+      const enabledChannels: { type: ChannelType; enabled: boolean }[] = [
+        { type: 'telegram', enabled: config.CHANNELS.TELEGRAM.ENABLED },
+        { type: 'whatsapp', enabled: config.CHANNELS.WHATSAPP.ENABLED },
+      ];
+
+      const recentErrors = auditRepo.findAll({
+        limit: 5,
+        filters: { status: 'error' },
+      }).map(toAuditJson);
+
       res.json({
         sessions: sessionRepo.count(),
-        heartbeats: heartbeatRepo.getAll().length,
+        openSessions: sessionRepo.countOpen(),
+        messages: messageRepo.count(),
+        memories: memoryRepo.count(),
+        heartbeats: beats.length,
         learnedSkills: learnedSkillsRepo.getAll().length,
+        learnedSkillsLimit: config.LEARNED_SKILLS_LIMIT,
         skills: skillsRepo.get().length,
         auditErrors: auditRepo.count({ status: 'error' }),
         provider: config.AI.MANAGER.PROVIDER,
         model: config.AI.MANAGER.MODEL,
+        workerProvider: config.AI.WORKERS.PROVIDER,
+        workerModel: config.AI.WORKERS.MODEL,
         environment: config.ENVIRONMENT,
+        timezone: config.TIMEZONE,
+        heartbeatEnabled: config.HEARTBEAT,
+        summarizerEnabled: config.AI.SUMMARIZER,
+        aiParallel: config.AI.PARALLEL,
+        aiSubagentsParallel: config.AI.SUBAGENTS_PARALLEL,
+        channels: enabledChannels,
+        registeredChannels,
+        lastHeartbeatRunAt: lastHeartbeatRunAt ? formatISO(lastHeartbeatRunAt) : null,
         health: { status: health.status, details: health.details },
+        activeRuns: activeRunsRegistry.list(),
+        queue: {
+          parallel: config.AI.PARALLEL,
+          subagentsParallel: config.AI.SUBAGENTS_PARALLEL,
+          backgroundGraceMs: config.AI.BACKGROUND_GRACE_MS,
+          subAgents: subAgentQueuesRegistry.getSnapshot(),
+          ...sharedSerialQueue.snapshot(),
+        },
+        usage: buildUsageReport(auditRepo.usage({ from: usageFrom(7) }), 7).total,
+        recentErrors,
       });
     });
 

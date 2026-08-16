@@ -19,6 +19,7 @@ interface ISessionRepository {
   findLatestOpenByEntryChannel(channel: string): Session | null;
   findAll(limit?: number, offset?: number): Session[];
   count(): number;
+  countOpen(): number;
   deleteExpired(): void;
   deleteById(id: string): void;
 }
@@ -114,6 +115,13 @@ class SessionRepository implements ISessionRepository {
 
   count(): number {
     const row = this.db.get('SELECT COUNT(*) as total FROM sessions') as { total: number } | undefined;
+    return row?.total ?? 0;
+  }
+
+  countOpen(): number {
+    const row = this.db.get(
+      'SELECT COUNT(*) as total FROM sessions WHERE ended_at IS NULL',
+    ) as { total: number } | undefined;
     return row?.total ?? 0;
   }
 
