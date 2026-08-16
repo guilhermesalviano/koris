@@ -1,13 +1,31 @@
 export interface OverviewResponse {
   sessions: number;
+  openSessions: number;
+  messages: number;
+  memories: number;
   heartbeats: number;
   learnedSkills: number;
+  learnedSkillsLimit: number;
   skills: number;
   auditErrors: number;
   provider: string;
   model: string;
+  workerProvider: string;
+  workerModel: string;
   environment: string;
+  timezone: string;
+  heartbeatEnabled: boolean;
+  summarizerEnabled: boolean;
+  aiParallel: boolean;
+  aiSubagentsParallel: boolean;
+  channels: { type: string; enabled: boolean }[];
+  registeredChannels: { type: string; target: string; principal: boolean }[];
+  lastHeartbeatRunAt?: string | null;
   health: { status: string; details?: unknown };
+  activeRuns: ActiveRun[];
+  queue: QueueResponse;
+  usage: UsageStats;
+  recentErrors: AuditItem[];
 }
 
 export interface SessionSummary {

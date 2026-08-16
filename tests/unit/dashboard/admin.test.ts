@@ -4,6 +4,13 @@ import type { ILogger } from '../../../src/infrastructure/logger';
 
 const {
   auditRepo,
+  sessionRepo,
+  messageRepo,
+  memoryRepo,
+  heartbeatRepo,
+  channelRepo,
+  learnedSkillsRepo,
+  skillsRepo,
 } = vi.hoisted(() => ({
   auditRepo: {
     count: vi.fn(),
@@ -13,6 +20,13 @@ const {
     deleteAll: vi.fn(),
     usage: vi.fn(),
   },
+  sessionRepo: { count: vi.fn(), countOpen: vi.fn() },
+  messageRepo: { count: vi.fn() },
+  memoryRepo: { count: vi.fn() },
+  heartbeatRepo: { getAll: vi.fn() },
+  channelRepo: { getAll: vi.fn() },
+  learnedSkillsRepo: { getAll: vi.fn() },
+  skillsRepo: { get: vi.fn() },
 }));
 
 vi.mock('../../../src/repositories/audit-log', () => ({
@@ -20,31 +34,31 @@ vi.mock('../../../src/repositories/audit-log', () => ({
 }));
 
 vi.mock('../../../src/repositories/session', () => ({
-  SessionRepositoryFactory: { create: () => ({}) },
+  SessionRepositoryFactory: { create: () => sessionRepo },
 }));
 
 vi.mock('../../../src/repositories/message', () => ({
-  MessageRepositoryFactory: { create: () => ({}) },
+  MessageRepositoryFactory: { create: () => messageRepo },
 }));
 
 vi.mock('../../../src/repositories/memory', () => ({
-  MemoryRepositoryFactory: { create: () => ({}) },
+  MemoryRepositoryFactory: { create: () => memoryRepo },
 }));
 
 vi.mock('../../../src/repositories/heartbeat', () => ({
-  HeartbeatRepositoryFactory: { create: () => ({}) },
+  HeartbeatRepositoryFactory: { create: () => heartbeatRepo },
 }));
 
 vi.mock('../../../src/repositories/channel', () => ({
-  ChannelRepositoryFactory: { create: () => ({}) },
+  ChannelRepositoryFactory: { create: () => channelRepo },
 }));
 
 vi.mock('../../../src/repositories/learned-skills', () => ({
-  LearnedSkillsRepositoryFactory: { create: () => ({}) },
+  LearnedSkillsRepositoryFactory: { create: () => learnedSkillsRepo },
 }));
 
 vi.mock('../../../src/repositories/skills', () => ({
-  SkillsRepositoryFactory: { create: () => ({}) },
+  SkillsRepositoryFactory: { create: () => skillsRepo },
 }));
 
 import { AdminRouterFactory } from '../../../src/dashboard/admin';
@@ -278,5 +292,96 @@ describe('AdminRouterFactory /usage', () => {
 
     expect(auditRepo.usage).toHaveBeenCalledWith({ from: undefined });
     expect(res.json.mock.calls[0][0].days).toBeNull();
+  });
+});
+
+describe('AdminRouterFactory /overview', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    sessionRepo.count.mockReturnValue(4);
+    sessionRepo.countOpen.mockReturnValue(1);
+    messageRepo.count.mockReturnValue(42);
+    memoryRepo.count.mockReturnValue(7);
+    heartbeatRepo.getAll.mockReturnValue([
+      { lastRun: new Date('2026-01-02T10:00:00.000Z') },
+      { lastRun: new Date('2026-01-03T10:00:00.000Z') },
+    ] as never);
+    learnedSkillsRepo.getAll.mockReturnValue([{}, {}] as never);
+    skillsRepo.get.mockReturnValue([{}, {}, {}] as never);
+    channelRepo.getAll.mockReturnValue([
+      { channel: 'telegram', target: '@me', isPrincipal: true },
+    ] as never);
+    auditRepo.count.mockReturnValue(2);
+    auditRepo.findAll.mockReturnValue([
+      {
+        id: 'e1',
+        kind: 'tool',
+        role: 'worker',
+        agent_name: 'executorWorker',
+        tool_name: 'curl-request',
+        duration_ms: 3,
+        status: 'error',
+        error_message: 'blocked',
+        created_at: '2026-01-03T09:00:00.000Z',
+      },
+    ] as never);
+    auditRepo.usage.mockReturnValue([
+      { id: 'u1', kind: 'llm', agent_name: 'manager', prompt_length: 40, response_length: 8, duration_ms: 10, created_at: '2026-01-01T00:00:00.000Z' },
+    ] as never);
+  });
+
+  it('returns aggregate counts, config, queue, usage and recent errors', async () => {
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    router.handle(makeRequest('GET', '/overview'), res, () => {});
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(res.json).toHaveBeenCalledTimes(1);
+    const body = res.json.mock.calls[0][0];
+
+    expect(body.sessions).toBe(4);
+    expect(body.openSessions).toBe(1);
+    expect(body.messages).toBe(42);
+    expect(body.memories).toBe(7);
+    expect(body.heartbeats).toBe(2);
+    expect(body.learnedSkills).toBe(2);
+    expect(body.skills).toBe(3);
+    expect(body.auditErrors).toBe(2);
+    expect(body.lastHeartbeatRunAt).toMatch(/^2026-01-03T/);
+
+    expect(body.workerProvider).toBeDefined();
+    expect(body.workerModel).toBeDefined();
+    expect(body.heartbeatEnabled).toBeTypeOf('boolean');
+    expect(body.summarizerEnabled).toBeTypeOf('boolean');
+    expect(body.aiParallel).toBeTypeOf('boolean');
+    expect(body.aiSubagentsParallel).toBeTypeOf('boolean');
+
+    expect(body.channels).toEqual([
+      { type: 'telegram', enabled: expect.any(Boolean) },
+      { type: 'whatsapp', enabled: expect.any(Boolean) },
+    ]);
+    expect(body.registeredChannels).toEqual([
+      { type: 'telegram', target: '@me', principal: true },
+    ]);
+
+    expect(body.health.status).toBe('ok');
+    expect(body.activeRuns).toEqual([]);
+    expect(body.queue).toMatchObject({
+      parallel: expect.any(Boolean),
+      subagentsParallel: expect.any(Boolean),
+      running: [],
+      queued: [],
+    });
+    expect(body.usage.totalTokens).toBeGreaterThan(0);
+    expect(body.recentErrors).toHaveLength(1);
+    expect(body.recentErrors[0]).toMatchObject({ id: 'e1', status: 'error' });
+
+    expect(auditRepo.count).toHaveBeenCalledWith({ status: 'error' });
+    expect(auditRepo.findAll).toHaveBeenCalledWith({
+      limit: 5,
+      filters: { status: 'error' },
+    });
+    expect(auditRepo.usage).toHaveBeenCalledWith(expect.objectContaining({ from: expect.any(String) }));
   });
 });
