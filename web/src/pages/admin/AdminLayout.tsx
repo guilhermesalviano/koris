@@ -163,12 +163,6 @@ function Header({
       </div>
 
       <div className="flex flex-shrink-0 items-center gap-2">
-        {processing && currentQuestion && (
-          <div className="hidden max-w-[280px] items-center gap-2 rounded-full border border-accent-muted bg-accent-muted px-3 py-1 lg:flex">
-            <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-accent" />
-            <span className="truncate text-[11px] text-accent-2">{currentQuestion}</span>
-          </div>
-        )}
         <div className="flex items-center gap-1.5 rounded-full border border-subtle bg-bg-3 px-2.5 py-1 font-mono text-[11px] text-txt-3">
           <div className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${statusOnline ? 'bg-green-500' : 'bg-red-500'}`} />
           <span className="hidden sm:inline">{statusLabel}</span>
