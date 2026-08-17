@@ -352,9 +352,15 @@ class OllamaAIProvider implements AIProvider {
   }
 
   private async post(request: AIChatRequest, signal: AbortSignal, stream: boolean): Promise<Response> {
+    const messages = request.messages.map((message) =>
+      message.images?.length
+        ? { ...message, images: message.images.map((image) => image.data) }
+        : message,
+    );
+
     const body = JSON.stringify({
       model: request.model ?? this.defaultModel,
-      messages: request.messages,
+      messages,
       tools: request.tools,
       keep_alive: '15m',
       options: {

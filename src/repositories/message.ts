@@ -14,13 +14,14 @@ class MessageRepository implements IMessageRepository {
 
   save(message: Message): void {
     this.db.run(
-      `INSERT INTO messages (id, session_id, role, content, created_at)
-      VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO messages (id, session_id, role, content, images, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)`,
       [
         message.id,
         message.sessionId,
         message.role,
         message.content,
+        message.images?.length ? JSON.stringify(message.images) : null,
         message.createdAt
       ]
     );
@@ -32,8 +33,8 @@ class MessageRepository implements IMessageRepository {
 
   getBySessionId(sessionId: string, limit = 15): Message[] {
     const rows = this.db.query<any>(
-      `SELECT id, session_id, role, content, created_at FROM (
-         SELECT id, session_id, role, content, created_at FROM messages
+      `SELECT id, session_id, role, content, images, created_at FROM (
+         SELECT id, session_id, role, content, images, created_at FROM messages
          WHERE session_id = ?
          ORDER BY created_at DESC
          LIMIT ?
@@ -47,6 +48,7 @@ class MessageRepository implements IMessageRepository {
       sessionId: row.session_id,
       role: row.role,
       content: row.content,
+      images: typeof row.images === 'string' ? JSON.parse(row.images) : undefined,
       createdAt: row.created_at
     }));
   }

@@ -3,10 +3,12 @@ import { IWorker } from "../../types/workers";
 import { MessageServiceFactory } from "../message-service";
 import { ISessionManager } from "../session-manager";
 import { IDatabaseService } from "../../infrastructure/db-sqlite";
+import { ImageAttachment } from "../../types/messages";
 
 interface ConversationWorkerProps {
   sessionId: string,
   ask: string,
+  askImages?: ImageAttachment[],
   answer: string,
   channel: string,
 }
@@ -22,14 +24,14 @@ class ConversationWorker implements IWorker<ConversationWorkerProps, void> {
   async run(
     props: ConversationWorkerProps
   ): Promise<void> {
-    const { sessionId, ask, answer, channel } = props;
+    const { sessionId, ask, askImages, answer, channel } = props;
     
     this.logger.info(`Conversation worker started for session ${sessionId} in ${channel}`);
 
     try {
       const sessionService = this.sessionManager.getSessionServiceById(sessionId);
       const messageService = MessageServiceFactory.create(this.db, sessionService);
-      messageService.save({ role: 'user', content: ask });
+      messageService.save({ role: 'user', content: ask, images: askImages });
       messageService.save({ role: 'assistant', content: answer });
       this.logger.info(`Conversation worker completed for session ${sessionId}`);
     } catch (error) {

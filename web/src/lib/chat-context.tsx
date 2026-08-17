@@ -1,11 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { checkHealth, streamChat, apiRequest } from './api';
-import type { ActiveRun, ActiveRunsResponse, SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
+import type { ActiveRun, ActiveRunsResponse, ImageAttachment, SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
 
 export interface ChatMessage {
   id: number;
   role: 'user' | 'assistant';
   content: string;
+  images?: ImageAttachment[];
   status?: string;
   pending?: boolean;
   timestamp: string;
@@ -14,13 +15,15 @@ export interface ChatMessage {
 
 interface ChatHistoryResponse {
   sessionId: string | null;
-  messages: { id: string; role: string; content: string; createdAt: string }[];
+  messages: { id: string; role: string; content: string; images?: ImageAttachment[]; createdAt: string }[];
 }
 
 interface ChatContextValue {
   messages: ChatMessage[];
   input: string;
   setInput: (value: string) => void;
+  attachments: ImageAttachment[];
+  setAttachments: Dispatch<SetStateAction<ImageAttachment[]>>;
   streaming: boolean;
   currentQuestion: string | null;
   backgroundRun: ActiveRun | null;
@@ -50,11 +53,12 @@ function timeStr(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function mapMessages(messages: { id: string; role: string; content: string; createdAt: string }[]): ChatMessage[] {
+function mapMessages(messages: { id: string; role: string; content: string; images?: ImageAttachment[]; createdAt: string }[]): ChatMessage[] {
   return messages.map((m) => ({
     id: nextId(),
     role: m.role === 'user' ? 'user' : 'assistant',
     content: m.content,
+    images: m.images,
     timestamp: timeStr(new Date(m.createdAt)),
   }));
 }
@@ -62,6 +66,7 @@ function mapMessages(messages: { id: string; role: string; content: string; crea
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [serverHealthy, setServerHealthy] = useState(true);
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -313,14 +318,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const submit = useCallback(async () => {
     const text = input.trim();
-    if (!text || streaming) return;
+    const images = attachments;
+    if ((!text && images.length === 0) || streaming) return;
 
     setStreaming(true);
     streamingRef.current = true;
-    const userMsg: ChatMessage = { id: nextId(), role: 'user', content: text, timestamp: timeStr(new Date()) };
+    const userMsg: ChatMessage = { id: nextId(), role: 'user', content: text, images, timestamp: timeStr(new Date()) };
     const assistantId = nextId();
     setMessages((prev) => [...prev, userMsg, { id: assistantId, role: 'assistant', content: '', pending: true, timestamp: '' }]);
     setInput('');
+    setAttachments([]);
 
     let accumulated = '';
 
@@ -339,6 +346,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       await streamChat(
         text,
         targetId,
+        images,
         (status) => {
           if (inFlightRef.current) inFlightRef.current.status = status;
           setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, status, pending: true } : m)));
@@ -367,12 +375,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setStreaming(false);
       loadSessions();
     }
-  }, [input, streaming, activeSessionId, loadSessions]);
+  }, [input, attachments, streaming, activeSessionId, loadSessions]);
 
   const value: ChatContextValue = {
     messages,
     input,
     setInput,
+    attachments,
+    setAttachments,
     streaming,
     currentQuestion,
     backgroundRun,

@@ -166,6 +166,7 @@ class DatabaseService implements IDatabaseService {
           session_id TEXT NOT NULL,
           role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system', 'tool')),
           content TEXT NOT NULL,
+          images TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
         );

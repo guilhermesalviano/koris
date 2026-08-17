@@ -82,6 +82,7 @@ class ExecutorWorker implements IWorker<ExecutorWorkerArgs, ProcessedMessage> {
       ctx.message?.getSessionId(),
       [EXECUTOR_SYNTHESIS_RULES],
       toolMessages,
+      ctx.images,
     );
 
     if (response.kind === 'message') return response.text;

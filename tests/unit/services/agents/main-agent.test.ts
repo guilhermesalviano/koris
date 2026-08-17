@@ -123,6 +123,8 @@ describe('MainAgent', () => {
       [],
       'session-1',
       [TOOL_EXECUTION_CONTRACT],
+      undefined,
+      undefined,
     );
   });
 });
