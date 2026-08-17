@@ -10,11 +10,16 @@ function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
 }
 
+function makeAuditService() {
+  return { record: vi.fn() };
+}
+
 function makeProps(overrides: Partial<{
   sessionId: string;
   ask: string;
   answer: string;
   channel: string;
+  memoryService: { save: ReturnType<typeof vi.fn> };
 }> = {}) {
   return {
     sessionId: 'session-1',
@@ -50,7 +55,7 @@ describe('Summarizer', () => {
         text: '{"type":"fact","content":"TS adds static typing."}',
       }),
     };
-    const summarizer = new Summarizer(logger, completionService as never);
+    const summarizer = new Summarizer(logger, completionService as never, makeAuditService());
     const props = makeProps();
 
     await summarizer.handler(props);
@@ -81,7 +86,7 @@ describe('Summarizer', () => {
     const completionService = {
       complete: vi.fn().mockResolvedValue({ kind: 'message', text: 'TS adds static typing.' }),
     };
-    const summarizer = new Summarizer(logger, completionService as never);
+    const summarizer = new Summarizer(logger, completionService as never, makeAuditService());
     const props = makeProps();
 
     await summarizer.handler(props);
@@ -105,7 +110,7 @@ describe('Summarizer', () => {
         text: '{"type":"fact","content":"TS adds static typing."}',
       }),
     };
-    const summarizer = new Summarizer(logger, completionService as never);
+    const summarizer = new Summarizer(logger, completionService as never, makeAuditService());
     const props = makeProps();
 
     await summarizer.handler(props);
@@ -127,7 +132,7 @@ describe('Summarizer', () => {
         calls: [{ name: 'noop', arguments: {} }],
       }),
     };
-    const summarizer = new Summarizer(logger, completionService as never);
+    const summarizer = new Summarizer(logger, completionService as never, makeAuditService());
     const props = makeProps();
 
     await summarizer.handler(props);
@@ -140,12 +145,13 @@ describe('Summarizer', () => {
     expect(logger.error).not.toHaveBeenCalled();
   });
 
-  it('logs an error when completion fails', async () => {
+it('logs an error when completion fails', async () => {
     const logger = makeLogger();
+    const auditService = makeAuditService();
     const completionService = {
       complete: vi.fn().mockRejectedValue(new Error('provider offline')),
     };
-    const summarizer = new Summarizer(logger, completionService as never);
+    const summarizer = new Summarizer(logger, completionService as never, auditService);
     const props = makeProps();
 
     await summarizer.handler(props);
@@ -155,6 +161,43 @@ describe('Summarizer', () => {
       'Failed to summarize for session session-1',
       expect.objectContaining({ error: expect.any(Error) }),
     );
+    const entry = auditService.record.mock.calls[0][0];
+    expect(entry).toMatchObject({
+      type: 'llm',
+      role: 'worker',
+      agentName: 'summarizer',
+      sessionId: 'session-1',
+      channel: 'tui',
+      status: 'error',
+      errorMessage: 'provider offline',
+    });
+  });
+
+  it('records a downstream error in the audit log', async () => {
+    const logger = makeLogger();
+    const auditService = makeAuditService();
+    const completionService = {
+      complete: vi.fn().mockResolvedValue({
+        kind: 'message',
+        text: '{"type":"fact","content":"TS adds static typing."}',
+      }),
+    };
+    const summarizer = new Summarizer(logger, completionService as never, auditService);
+    const props = makeProps({
+      memoryService: { save: vi.fn().mockImplementation(() => { throw new Error('db full'); }) },
+    });
+
+    await summarizer.handler(props);
+
+    expect(auditService.record).toHaveBeenCalledTimes(1);
+    const entry = auditService.record.mock.calls[0][0];
+    expect(entry).toMatchObject({
+      type: 'llm',
+      agentName: 'summarizer',
+      status: 'error',
+      sessionId: 'session-1',
+      errorMessage: 'db full',
+    });
   });
 
   it('queues concurrent runs so they execute serially when subagents_parallel is false', async () => {
@@ -166,7 +209,7 @@ describe('Summarizer', () => {
     const completionService = {
       complete: vi.fn().mockImplementation(gated),
     };
-    const summarizer = new Summarizer(logger, completionService as never);
+    const summarizer = new Summarizer(logger, completionService as never, makeAuditService());
     const propsA = makeProps({ sessionId: 'session-a' });
     const propsB = makeProps({ sessionId: 'session-b' });
 
@@ -195,7 +238,7 @@ describe('Summarizer', () => {
   it('uses the shared sub-agent queue when subagents_parallel is false', async () => {
     (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = false;
     const logger = makeLogger();
-    const summarizer = new Summarizer(logger, { complete: vi.fn() } as never);
+    const summarizer = new Summarizer(logger, { complete: vi.fn() } as never, makeAuditService());
 
     expect((summarizer as unknown as { queue: unknown }).queue).toBe(sharedSubAgentQueue);
   });
@@ -203,7 +246,7 @@ describe('Summarizer', () => {
   it('uses its own queue when subagents_parallel is true', async () => {
     (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
     const logger = makeLogger();
-    const summarizer = new Summarizer(logger, { complete: vi.fn() } as never);
+    const summarizer = new Summarizer(logger, { complete: vi.fn() } as never, makeAuditService());
 
     expect((summarizer as unknown as { queue: unknown }).queue).not.toBe(sharedSubAgentQueue);
   });
@@ -215,7 +258,7 @@ describe('Summarizer', () => {
 
     const release: Array<() => void> = [];
     const gated = () => new Promise<unknown>((resolve) => release.push(() => resolve({ kind: 'message', text: '{"type":"fact","content":"x"}' })));
-    const summarizer = new Summarizer(makeLogger(), { complete: vi.fn().mockImplementation(gated) } as never);
+    const summarizer = new Summarizer(makeLogger(), { complete: vi.fn().mockImplementation(gated) } as never, makeAuditService());
 
     const first = summarizer.handler(makeProps({ sessionId: 'session-a' }));
     const second = summarizer.handler(makeProps({ sessionId: 'session-b' }));

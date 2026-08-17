@@ -83,7 +83,7 @@ class ToolsQueue implements IToolsQueue {
   ): void {
     const entry: AuditLogTool = {
       id: generateId(),
-      kind: 'tool',
+      type: 'tool',
       role: 'worker',
       agentName: audit?.agentName,
       runId: audit?.runId,

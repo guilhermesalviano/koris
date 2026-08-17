@@ -200,7 +200,7 @@ class DatabaseService implements IDatabaseService {
           run_id TEXT,
           session_id TEXT,
           channel TEXT,
-          kind TEXT NOT NULL CHECK(kind IN ('llm', 'tool')),
+          type TEXT NOT NULL CHECK(type IN ('llm', 'tool')),
           role TEXT NOT NULL CHECK(role IN ('manager', 'worker')),
           agent_name TEXT,
           provider TEXT,
@@ -228,7 +228,7 @@ class DatabaseService implements IDatabaseService {
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
         CREATE INDEX IF NOT EXISTS idx_audit_logs_session_id ON audit_logs(session_id);
-        CREATE INDEX IF NOT EXISTS idx_audit_logs_kind ON audit_logs(kind);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_type ON audit_logs(type);
         CREATE INDEX IF NOT EXISTS idx_audit_logs_role ON audit_logs(role);
         CREATE INDEX IF NOT EXISTS idx_audit_logs_status ON audit_logs(status);
       `);

@@ -5,14 +5,14 @@ import type { AuditItem, AuditResponse } from '../../lib/types';
 
 const PAGE_SIZE = 50;
 
-function kindLabel(kind: string): string {
-  return kind === 'llm' ? 'LLM' : 'tool';
+function typeLabel(type: string): string {
+  return type === 'llm' ? 'LLM' : 'tool';
 }
 
 export default function AuditPage() {
   const [data, setData] = useState<AuditResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [kind, setKind] = useState('');
+  const [type, setType] = useState('');
   const [status, setStatus] = useState('');
   const [offset, setOffset] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -26,14 +26,14 @@ export default function AuditPage() {
       const params = new URLSearchParams();
       params.set('limit', String(PAGE_SIZE));
       if (offset) params.set('offset', String(offset));
-      if (kind) params.set('kind', kind);
+      if (type) params.set('type', type);
       if (status) params.set('status', status);
       const res = await apiRequest<AuditResponse>(`/audit?${params.toString()}`);
       setData(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load audit log');
     }
-  }, [kind, status, offset]);
+  }, [type, status, offset]);
 
   const loadDetail = useCallback(async (id: string) => {
     setSelectedId(id);
@@ -55,8 +55,8 @@ export default function AuditPage() {
     if (selectedId) loadDetail(selectedId);
   }, [selectedId, loadDetail]);
 
-  function applyFilters(nextKind: string, nextStatus: string) {
-    setKind(nextKind);
+  function applyFilters(nextType: string, nextStatus: string) {
+    setType(nextType);
     setStatus(nextStatus);
     setOffset(0);
     setSelectedId(null);
@@ -99,12 +99,12 @@ export default function AuditPage() {
   return (
     <PageShell title="Audit log" onRefresh={() => { load(); if (selectedId) loadDetail(selectedId); }}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <select value={kind} onChange={(e) => applyFilters(e.target.value, status)} className={selectClass}>
-          <option value="">all kinds</option>
+        <select value={type} onChange={(e) => applyFilters(e.target.value, status)} className={selectClass}>
+          <option value="">all types</option>
           <option value="llm">LLM</option>
           <option value="tool">tool</option>
         </select>
-        <select value={status} onChange={(e) => applyFilters(kind, e.target.value)} className={selectClass}>
+        <select value={status} onChange={(e) => applyFilters(type, e.target.value)} className={selectClass}>
           <option value="">all statuses</option>
           <option value="success">success</option>
           <option value="error">error</option>
@@ -123,7 +123,7 @@ export default function AuditPage() {
                 <thead>
                   <tr className="border-b border-subtle text-left font-mono text-[11px] uppercase tracking-wide text-txt-3">
                     <th className="px-3 py-2">Time</th>
-                    <th className="px-3 py-2">Kind</th>
+                    <th className="px-3 py-2">Type</th>
                     <th className="px-3 py-2">Role · Agent</th>
                     <th className="px-3 py-2">Provider / Model</th>
                     <th className="px-3 py-2">Prompt</th>
@@ -141,13 +141,13 @@ export default function AuditPage() {
                       onClick={() => loadDetail(item.id)}
                     >
                       <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-txt-2">{formatDate(item.createdAt)}</td>
-                      <td className="px-3 py-2 font-mono text-[11px]">{kindLabel(item.kind)}</td>
+                      <td className="px-3 py-2 font-mono text-[11px]">{typeLabel(item.type)}</td>
                       <td className="px-3 py-2 text-xs">
                         <span className="font-mono text-txt-2">{item.role}</span>
                         {item.agentName && <span className="text-txt-3"> · {item.agentName}</span>}
                       </td>
                       <td className="px-3 py-2 font-mono text-xs text-txt-2">
-                        {item.kind === 'llm' ? `${item.provider ?? '?'}${item.model ? ` / ${item.model}` : ''}` : item.toolName}
+                        {item.type === 'llm' ? `${item.provider ?? '?'}${item.model ? ` / ${item.model}` : ''}` : item.toolName}
                       </td>
                       <td className="max-w-[240px] truncate px-3 py-2 font-mono text-xs text-txt-2">
                         {item.promptPreview ?? item.toolArgs ?? ''}
@@ -225,7 +225,7 @@ export default function AuditPage() {
 
               <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 font-mono text-[11px] text-txt-2 md:grid-cols-4">
                 <div><span className="text-txt-3">time </span>{formatDate(detail.createdAt)}</div>
-                <div><span className="text-txt-3">kind </span>{kindLabel(detail.kind)}</div>
+                <div><span className="text-txt-3">type </span>{typeLabel(detail.type)}</div>
                 <div><span className="text-txt-3">role </span>{detail.role} {detail.agentName && `· ${detail.agentName}`}</div>
                 <div><span className="text-txt-3">channel </span>{detail.channel ?? '—'}</div>
                 <div><span className="text-txt-3">runId </span>{detail.runId ?? '—'}</div>
@@ -238,7 +238,7 @@ export default function AuditPage() {
                 {detail.errorMessage && <div className="col-span-3 break-all text-red-400">{detail.errorMessage}</div>}
               </div>
 
-              {detail.kind === 'llm' ? (
+              {detail.type === 'llm' ? (
                 <>
                   <div className="mt-4">
                     <div className="mb-1 font-mono text-[11px] uppercase tracking-wide text-txt-3">Prompt ({detail.promptLength ?? 0} chars)</div>

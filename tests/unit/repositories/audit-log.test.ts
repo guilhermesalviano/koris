@@ -14,7 +14,7 @@ function makeDb(rows: any[] = []) {
 function makeLlmEntry(): AuditLogLlm {
   return {
     id: 'a1',
-    kind: 'llm',
+    type: 'llm',
     role: 'manager',
     agentName: 'manager',
     provider: 'ollama',
@@ -34,7 +34,7 @@ function makeLlmEntry(): AuditLogLlm {
 function makeToolEntry(): AuditLogTool {
   return {
     id: 'a2',
-    kind: 'tool',
+    type: 'tool',
     role: 'worker',
     agentName: 'executorWorker',
     toolName: 'curl-request',
@@ -126,11 +126,11 @@ describe('AuditLogRepository', () => {
     repository.findAll({
       limit: 20,
       offset: 0,
-      filters: { kind: 'llm', role: 'manager', status: 'error', sessionId: 's1', agentName: 'manager' },
+      filters: { type: 'llm', role: 'manager', status: 'error', sessionId: 's1', agentName: 'manager' },
     });
 
     const [sql, params] = db.query.mock.calls[0];
-    expect(sql).toContain('kind = ?');
+    expect(sql).toContain('type = ?');
     expect(sql).toContain('role = ?');
     expect(sql).toContain('status = ?');
     expect(sql).toContain('session_id = ?');
@@ -143,7 +143,7 @@ describe('AuditLogRepository', () => {
     db.get.mockReturnValue({ total: 7 });
     const repository = new AuditLogRepository(db as never);
 
-    expect(repository.count({ kind: 'tool' })).toBe(7);
+    expect(repository.count({ type: 'tool' })).toBe(7);
     expect(db.get.mock.calls[0][0]).toContain('COUNT(*) AS total');
     expect(db.get.mock.calls[0][1]).toEqual(['tool']);
   });
@@ -169,14 +169,14 @@ describe('AuditLogRepository', () => {
     expect(params[1]).toBe(10000);
   });
 
-  it('usage applies kind and sessionId filters', () => {
+  it('usage applies type and sessionId filters', () => {
     const db = makeDb([]);
     const repository = new AuditLogRepository(db as never);
 
-    repository.usage({ kind: 'llm', sessionId: 's1' });
+    repository.usage({ type: 'llm', sessionId: 's1' });
 
     const [sql, params] = db.query.mock.calls[0];
-    expect(sql).toContain('kind = ?');
+    expect(sql).toContain('type = ?');
     expect(sql).toContain('session_id = ?');
     expect(params).toEqual(['llm', 's1', 10000]);
   });
