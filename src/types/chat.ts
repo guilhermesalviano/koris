@@ -74,7 +74,8 @@ export interface IChatService {
     channel: string,
     options?: ProcessOptions,
     messageHistory?: Message[],
-    sessionId?: string
+    sessionId?: string,
+    extraSystemBlocks?: string[]
   ): Promise<AIResponse>;
 
   handler(

@@ -32,6 +32,8 @@ interface BuildPromptParams {
   messageHistory?: Message[];
   includeBeatTools?: boolean;
   sessionId?: string;
+  /** Situation-specific contract/instruction blocks appended to the system prompt. */
+  extraSystemBlocks?: string[];
 }
 
 interface IPromptRepository {
@@ -64,8 +66,12 @@ class PromptRepository implements IPromptRepository {
     return { messages, tools };
   }
 
-  private async buildHistory({ channel, userMessage, messageHistory, sessionId }: BuildPromptParams): Promise<Message[]> {
+  private async buildHistory({ channel, userMessage, messageHistory, sessionId, extraSystemBlocks }: BuildPromptParams): Promise<Message[]> {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
+
+    for (const block of extraSystemBlocks ?? []) {
+      systemBlocks.push(block);
+    }
 
     const injectedContent = InjectManager.getInjectedContent();
     if (injectedContent) systemBlocks.push(`# Personality\n${injectedContent}`);

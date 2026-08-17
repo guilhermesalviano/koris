@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MainAgent } from '../../../../src/services/agents/main-agent';
+import { TOOL_EXECUTION_CONTRACT } from '../../../../src/constants';
 import type { ILogger } from '../../../../src/infrastructure/logger';
 import type { Message } from '../../../../src/entities/message';
 
@@ -115,11 +116,12 @@ describe('MainAgent', () => {
     });
 
     expect(chatComplete).toHaveBeenCalledWith(
-      expect.stringContaining('hello'),
+      'hello',
       'tui',
       expect.objectContaining({ runId: 'run-123' }),
       [],
       'session-1',
+      [TOOL_EXECUTION_CONTRACT],
     );
   });
 });

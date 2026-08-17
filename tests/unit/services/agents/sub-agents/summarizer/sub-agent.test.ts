@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Summarizer } from '../../../../../../src/services/agents/sub-agents/summarizer/sub-agent';
+import { SUMMARIZATION_INSTRUCTIONS } from '../../../../../../src/constants';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
 import * as providerRegistry from '../../../../../../src/services/providers';
 import { config } from '../../../../../../src/config';
@@ -56,7 +57,10 @@ describe('Summarizer', () => {
 
     expect(completionService.complete).toHaveBeenCalledWith(
       {
-        messages: [{ role: 'user', content: expect.stringContaining('What is TypeScript?') }],
+        messages: [
+          { role: 'system', content: SUMMARIZATION_INSTRUCTIONS },
+          { role: 'user', content: expect.stringContaining('What is TypeScript?') },
+        ],
       },
       { audit: { sessionId: 'session-1', channel: 'tui' } },
     );

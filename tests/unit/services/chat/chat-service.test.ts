@@ -40,6 +40,7 @@ describe('ChatService.complete', () => {
       toolsEnabled: true,
       messageHistory: [],
       sessionId: 'sess-1',
+      extraSystemBlocks: undefined,
     });
     expect(completionService.complete).toHaveBeenCalledWith(
       { messages: [{ role: 'user', content: 'hi' }] },
