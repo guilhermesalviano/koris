@@ -23,7 +23,7 @@ export const HEARTBEAT_DATA = `
 export const SUMMARIZATION_INSTRUCTIONS = `
 ## Summarization
 
-Analyze this interaction and store the most useful memory from it.
+Analyze this interaction and store the most useful memory from it. The memory will be re-read in future sessions without the original context, so keep it short, high-level, and free of distracting detail.
 
 ### Memory types (choose one based on context):
 - summary: general distillation of what happened (default when nothing else fits)
@@ -32,10 +32,11 @@ Analyze this interaction and store the most useful memory from it.
 - reminder: something the user should be reminded about later
 
 ### Rules:
-- Capture the user's intent and the assistant's resolution.
-- Preserve all IDs, names, codes, dates, and entities exactly as written.
+- Capture only the user's intent and the outcome; drop execution steps, intermediate values, and raw tool output.
+- Do not reproduce quotes, codes, numbers, URLs, or verbatim text unless they are essential to a \`fact\`.
 - Compress complex data into single descriptors (e.g. "rainy", "sunny").
-- Include who (which human) and where (which channel) when relevant.
+- Include who (which human) and where (which channel) only when it changes the meaning.
+- Never invent, extrapolate, or complete details that were not clearly stated.
 
 ### Output format:
 Respond with **only** a valid JSON object. No markdown fences, no explanation.
