@@ -102,7 +102,7 @@ describe('ExecutorWorker', () => {
     expect(managerComplete).not.toHaveBeenCalled();
   });
 
-  it('passes the synthesis data and rules to the selected chat service', async () => {
+  it('passes the user message and tool results to the selected chat service', async () => {
     const { executor, managerComplete } = makeWorker();
 
     await executor.run({
@@ -113,12 +113,13 @@ describe('ExecutorWorker', () => {
     });
 
     expect(managerComplete).toHaveBeenCalledWith(
-      expect.stringContaining('list files'),
+      'list files',
       'tui',
       undefined,
       [{ role: 'user', content: 'list files' }],
       undefined,
       [EXECUTOR_SYNTHESIS_RULES],
+      [{ role: 'tool', content: 'Tool: execute_command, Result: done' }],
     );
   });
 

@@ -1,5 +1,4 @@
-import { EXECUTOR_SYNTHESIS_RULES, EXECUTOR_SYNTHESIS_DATA } from "../../constants";
-import { replacePlaceholders } from "../../utils/prompt";
+import { EXECUTOR_SYNTHESIS_RULES } from "../../constants";
 import { ChatServiceFactory } from "../chat/chat-service";
 import { IWorker } from "../../types/workers";
 import { IChatService } from "../../types/chat";
@@ -7,7 +6,7 @@ import { ILogger } from "../../infrastructure/logger";
 import type { ToolCall } from "../../types/tools";
 import type { LoopContext } from "../../types/context";
 import type { ProcessedMessage } from "../../types/agents";
-import type { Message } from "../../entities/message";
+import type { Message } from "../../types/messages";
 
 interface ExecutorWorkerArgs {
   toolCalls: ToolCall[];
@@ -52,25 +51,24 @@ class ExecutorWorker implements IWorker<ExecutorWorkerArgs, ProcessedMessage> {
       },
     );
 
-    const toolResults = toolResultsArray
-      .map((r) =>
-        r.success
-          ? `Tool: ${r.toolName}, Result: ${r.result}`
-          : `Tool: ${r.toolName}, Success: ${r.success}, Error: ${r.error}`
-      )
-      .join('\n');
-    this.logger.info(`Tool results: ${toolResults}`);
+    const toolResults = toolResultsArray.map((r) => ({
+      role: 'tool' as const,
+      content: r.success
+        ? `Tool: ${r.toolName}, Result: ${r.result}`
+        : `Tool: ${r.toolName}, Success: ${r.success}, Error: ${r.error}`,
+    }));
+    this.logger.info(`Tool results: ${toolResults.map((r) => r.content).join('\n')}`);
 
-    const synthesisData = replacePlaceholders(EXECUTOR_SYNTHESIS_DATA, { v1: userMessage, v2: toolResults });
     const isBackground = ctx.initiatedBy === 'heartbeat' || ctx.initiatedBy === 'summarizer';
     const chatService = isBackground ? this.workerChatService : this.managerChatService;
     const response = await chatService.complete(
-      synthesisData,
+      userMessage,
       ctx.channel,
       ctx.options,
       messageHistory,
       ctx.message?.getSessionId(),
       [EXECUTOR_SYNTHESIS_RULES],
+      toolResults,
     );
 
     if (response.kind === 'message') return response.text;
