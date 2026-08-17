@@ -83,13 +83,40 @@ class ToolsRepository implements IToolsRepository {
       type: 'function',
       function: {
         name: 'search_engine',
-        description: 'Perform a web search using Google Search API.',
+        description:
+          'Perform a web search using Google Search API. Supports country, language, recency, pagination and search type context.',
         parameters: {
           type: 'object',
           properties: {
             query: {
               type: 'string',
               description: 'The search query string.',
+            },
+            num: {
+              type: 'number',
+              description: 'Number of results to return (default: 5, max: 100).',
+            },
+            start: {
+              type: 'number',
+              description: 'Pagination offset (0 = first page, 10 = second page). Use to fetch later results.',
+            },
+            gl: {
+              type: 'string',
+              description: 'Country code (ISO 3166-1 alpha-2) to localize results, e.g. "br", "us", "de".',
+            },
+            hl: {
+              type: 'string',
+              description: 'Language code to localize results, e.g. "pt-br", "en".',
+            },
+            time_period: {
+              type: 'string',
+              enum: ['past_hour', 'past_day', 'past_week', 'past_month', 'past_year'],
+              description: 'Recency filter to get only the latest results.',
+            },
+            search_type: {
+              type: 'string',
+              enum: ['web', 'news', 'images', 'video'],
+              description: 'Search type (default: "web").',
             },
           },
           required: ['query'],
