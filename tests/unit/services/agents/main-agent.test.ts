@@ -81,6 +81,7 @@ describe('MainAgent', () => {
         message,
         onProgress,
         signal: controller.signal,
+        initiatedBy: 'manager',
       }),
     );
     expect(result).toBe('listed files');

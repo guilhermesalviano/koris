@@ -22,7 +22,8 @@ class ExecutorWorker implements IWorker<ExecutorWorkerArgs, ProcessedMessage> {
   constructor(
     private logger: ILogger,
     public name: string,
-    private ChatService: IChatService
+    private workerChatService: IChatService,
+    private managerChatService: IChatService,
   ) { }
 
   async run(args: ExecutorWorkerArgs): Promise<ProcessedMessage> {
@@ -61,7 +62,9 @@ class ExecutorWorker implements IWorker<ExecutorWorkerArgs, ProcessedMessage> {
     this.logger.info(`Tool results: ${toolResults}`);
 
     const synthesisData = replacePlaceholders(EXECUTOR_SYNTHESIS_DATA, { v1: userMessage, v2: toolResults });
-    const response = await this.ChatService.complete(
+    const isBackground = ctx.initiatedBy === 'heartbeat' || ctx.initiatedBy === 'summarizer';
+    const chatService = isBackground ? this.workerChatService : this.managerChatService;
+    const response = await chatService.complete(
       synthesisData,
       ctx.channel,
       ctx.options,
@@ -91,9 +94,10 @@ class ExecutorWorker implements IWorker<ExecutorWorkerArgs, ProcessedMessage> {
 
 class ExecutorWorkerFactory {
   static create(logger: ILogger): IWorker<ExecutorWorkerArgs, ProcessedMessage> {
-    const ChatService = ChatServiceFactory.create(logger, 'worker', 'executorWorker');
-    return new ExecutorWorker(logger, 'executorWorker', ChatService);
+    const workerChatService = ChatServiceFactory.create(logger, 'worker', 'executorWorker');
+    const managerChatService = ChatServiceFactory.create(logger, 'manager', 'executorWorker');
+    return new ExecutorWorker(logger, 'executorWorker', workerChatService, managerChatService);
   }
 }
 
-export { ExecutorWorkerArgs, ExecutorWorkerFactory };
+export { ExecutorWorkerArgs, ExecutorWorker, ExecutorWorkerFactory };

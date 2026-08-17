@@ -149,6 +149,7 @@ describe('Heartbeat', () => {
         expect.objectContaining({
           channel: 'background',
           options: expect.objectContaining({ runId: 'tool-beat' }),
+          initiatedBy: 'heartbeat',
         }),
       );
       expect(channelsManager.sendMessage).toHaveBeenCalledWith('telegram', '987654321', 'hi');

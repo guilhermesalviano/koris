@@ -40,6 +40,7 @@ class MainAgent implements IMainAgent {
       signal: options?.signal ?? NEVER_ABORTED,
       onProgress: options?.onProgress ?? ((progress) => this.logger.info(progress)),
       options,
+      initiatedBy: 'manager',
     };
 
     const response = await this.ChatService.complete(userMessage, channel, options, messageHistory, message.getSessionId(), [TOOL_EXECUTION_CONTRACT]);
