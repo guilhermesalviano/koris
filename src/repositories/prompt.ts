@@ -34,6 +34,8 @@ interface BuildPromptParams {
   sessionId?: string;
   /** Situation-specific contract/instruction blocks appended to the system prompt. */
   extraSystemBlocks?: string[];
+  /** Tool execution results sent to the provider under the `tool` role. */
+  toolResults?: Message[];
 }
 
 interface IPromptRepository {
@@ -66,7 +68,7 @@ class PromptRepository implements IPromptRepository {
     return { messages, tools };
   }
 
-  private async buildHistory({ channel, userMessage, messageHistory, sessionId, extraSystemBlocks }: BuildPromptParams): Promise<Message[]> {
+  private async buildHistory({ channel, userMessage, messageHistory, sessionId, extraSystemBlocks, toolResults }: BuildPromptParams): Promise<Message[]> {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
 
     for (const block of extraSystemBlocks ?? []) {
@@ -89,10 +91,13 @@ class PromptRepository implements IPromptRepository {
 
     const sanitized = this.sanitizePromptIfEnabled(userMessage, limitedHistory);
 
+    const toolMessages = toolResults?.map((r) => ({ role: r.role, content: r.content })) ?? [];
+
     return [
       { role: 'system', content: systemBlocks.join('\n') },
       ...sanitized.history,
       { role: 'user', content: sanitized.userMessage },
+      ...toolMessages,
     ];
   }
 

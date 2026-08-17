@@ -49,11 +49,3 @@ Answer the human's request as Agent, using ONLY the data in TOOL RESULTS below.
 
 Respond strictly from the data above. If the data is insufficient, state exactly what is missing.
 `;
-
-export const EXECUTOR_SYNTHESIS_DATA = `
-## USER REQUEST
-{v1}
-
-## TOOL RESULTS
-{v2}
-`;

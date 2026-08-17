@@ -19,7 +19,8 @@ class ChatService implements IChatService {
     options?: ProcessOptions,
     messageHistory?: Message[],
     sessionId?: string,
-    extraSystemBlocks?: string[]
+    extraSystemBlocks?: string[],
+    toolResults?: Message[],
   ): Promise<AIResponse> {
     const messagesHistory = messageHistory?.map(m => ({ role: m.role, content: m.content }));
     const promptPayload = await this.promptRepository.build({
@@ -29,6 +30,7 @@ class ChatService implements IChatService {
       messageHistory: messagesHistory,
       sessionId,
       extraSystemBlocks,
+      toolResults,
     });
 
     return this.completionService.complete(promptPayload, {
