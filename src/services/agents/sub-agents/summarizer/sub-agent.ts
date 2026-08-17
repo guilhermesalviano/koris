@@ -47,7 +47,8 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
         { audit: { sessionId: props.sessionId, channel: props.channel } },
       );
       if (response.kind !== 'message') {
-        throw new Error('Summarizer received an unexpected tool-call response');
+        this.logger.warn('Summarizer received an unexpected tool-call response; skipping summarization', { sessionId: props.sessionId });
+        return;
       }
 
       const parsedMemory = parseSummarizerResponse(response.text);
