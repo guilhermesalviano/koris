@@ -50,6 +50,7 @@ class ToolsQueue implements IToolsQueue {
 
         try {
           const result = await this.agnosticExecutionTool.handle(this.logger, tool);
+          result.toolCallId = tool.id;
           this.recordToolAudit(tool, result, Date.now() - startedAt, audit);
           return result;
         } catch (err) {
@@ -59,6 +60,7 @@ class ToolsQueue implements IToolsQueue {
             toolName: tool.name,
             success: false,
             error: errorMsg,
+            toolCallId: tool.id,
           } as ToolResult;
           this.recordToolAudit(tool, result, Date.now() - startedAt, audit);
           return result;
