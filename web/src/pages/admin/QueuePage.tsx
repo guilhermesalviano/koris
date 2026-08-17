@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PageShell, Card, EmptyState, StatCard } from '../../components/AdminUI';
 import { apiRequest } from '../../lib/api';
-import type { QueueResponse, QueueTaskInfo, SubAgentQueueState } from '../../lib/types';
+import type { QueueResponse, QueueTaskInfo } from '../../lib/types';
 
 const POLL_INTERVAL_MS = 1500;
 
@@ -54,49 +54,6 @@ function Processor({ running }: { running: QueueTaskInfo[] }) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function subAgentStatus(queue: SubAgentQueueState): { label: string; className: string } {
-  if (queue.active > 0) {
-    return {
-      label: `${queue.active} running`,
-      className: 'border-green-500/40 bg-green-500/10 text-green-300',
-    };
-  }
-  if (queue.queued > 0) {
-    return {
-      label: `${queue.queued} waiting`,
-      className: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
-    };
-  }
-  return {
-    label: 'idle',
-    className: 'border-subtle bg-bg-2 text-txt-3',
-  };
-}
-
-function SubAgentCard({ queue, sharedQueue }: { queue: SubAgentQueueState; sharedQueue: boolean }) {
-  const status = subAgentStatus(queue);
-  return (
-    <div className="rounded-card border border-strong bg-bg-3 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate font-mono text-sm text-txt">{queue.names.join(' + ')}</span>
-        <div className="flex flex-shrink-0 items-center gap-1.5">
-          <span className="rounded-full border border-subtle bg-bg px-2 py-0.5 font-mono text-[10px] text-txt-3">
-            {queue.queued} queued
-          </span>
-          <span className={`rounded-full border px-2 py-0.5 font-mono text-[10px] ${status.className}`}>
-            {status.label}
-          </span>
-        </div>
-      </div>
-      <p className="mt-2 font-mono text-[11px] leading-relaxed text-txt-3">
-        {sharedQueue
-          ? 'Shares one queue with the other sub-agent — they never run at the same time.'
-          : 'Own queue (concurrency 1) — may run at the same time as the other sub-agent.'}
-      </p>
     </div>
   );
 }

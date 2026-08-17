@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { extractToolCalls, extractJson, looksLikeToolCallJson, normalizeResponse, shouldSkipToolCall } from '../../../src/utils/tool-calls';
+import { extractToolCalls, extractJson, looksLikeToolCallJson, normalizeResponse } from '../../../src/utils/tool-calls';
 import { Message } from '../../../src/entities/message';
 import { ILogger } from '../../../src/infrastructure/logger';
 
@@ -346,64 +346,5 @@ describe('extractToolCalls', () => {
       index: 0,
       type: 'object',
     });
-  });
-});
-
-describe('shouldSkipToolCall', () => {
-  it('returns false for non-get_skill tool calls', () => {
-    const tc = { name: 'execute_command', arguments: { command: 'ls' } };
-    expect(shouldSkipToolCall(tc, [])).toBe(false);
-  });
-
-  it('returns false for non-get_skill calls even when the skill is in history', () => {
-    const tc = { name: 'execute_command', arguments: { name: 'my-skill' } };
-    const history = [makeMessage('system', 'You have just learned how to use "my-skill" skill.')];
-    expect(shouldSkipToolCall(tc, history)).toBe(false);
-  });
-
-  it('logs the resolved skill name for get_skill calls', () => {
-    const tc = { name: 'get_skill', arguments: { skill_name: 'my-skill' } };
-    shouldSkipToolCall(tc, [], mockLogger);
-    expect(mockLogger.info).toHaveBeenCalledWith('Skill name: my-skill');
-  });
-
-  it('returns false when skillName is missing', () => {
-    const tc = { name: 'get_skill', arguments: {} };
-    expect(shouldSkipToolCall(tc, [])).toBe(false);
-  });
-
-  it('returns false when skill is not in history', () => {
-    const tc = { name: 'get_skill', arguments: { name: 'my-skill' } };
-    const history = [makeMessage('user', 'hello')];
-    expect(shouldSkipToolCall(tc, history)).toBe(false);
-  });
-
-  it('returns true when skill appears in a system message', () => {
-    const tc = { name: 'get_skill', arguments: { name: 'my-skill' } };
-    const history = [makeMessage('system', 'You have just learned how to use "my-skill" skill.')];
-    expect(shouldSkipToolCall(tc, history)).toBe(true);
-  });
-
-  it('supports skill_name argument alias', () => {
-    const tc = { name: 'get_skill', arguments: { skill_name: 'alias-skill' } };
-    const history = [makeMessage('system', 'alias-skill documentation here')];
-    expect(shouldSkipToolCall(tc, history)).toBe(true);
-  });
-
-  it('returns false when skillName is not a string', () => {
-    const tc = { name: 'get_skill', arguments: { name: 123 } };
-    expect(shouldSkipToolCall(tc, [])).toBe(false);
-  });
-
-  it('returns false for non-string skillName even when the history mentions the value', () => {
-    const tc = { name: 'get_skill', arguments: { name: 123 } };
-    const history = [makeMessage('system', 'You have just learned "123".')];
-    expect(shouldSkipToolCall(tc, history)).toBe(false);
-  });
-
-  it('does not match skill name in non-system messages', () => {
-    const tc = { name: 'get_skill', arguments: { name: 'my-skill' } };
-    const history = [makeMessage('user', 'I want to use my-skill')];
-    expect(shouldSkipToolCall(tc, history)).toBe(false);
   });
 });

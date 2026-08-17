@@ -6,7 +6,6 @@ import { Memory } from '../entities/memory';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
 import { IMemoryRepository, MemoryRepositoryFactory } from './memory';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
-import { SkillsRepositoryFactory } from './skills';
 import { ILogger } from '../infrastructure/logger';
 import { InjectManager } from '../services/inject-manager';
 import { SYSTEM_PROMPT } from '../constants';
@@ -33,6 +32,10 @@ interface BuildPromptParams {
   messageHistory?: Message[];
   includeBeatTools?: boolean;
   sessionId?: string;
+  /** Situation-specific contract/instruction blocks appended to the system prompt. */
+  extraSystemBlocks?: string[];
+  /** Tool execution results sent to the provider under the `tool` role. */
+  toolResults?: Message[];
 }
 
 interface IPromptRepository {
@@ -65,8 +68,12 @@ class PromptRepository implements IPromptRepository {
     return { messages, tools };
   }
 
-  private async buildHistory({ channel, userMessage, messageHistory, sessionId }: BuildPromptParams): Promise<Message[]> {
+  private async buildHistory({ channel, userMessage, messageHistory, sessionId, extraSystemBlocks, toolResults }: BuildPromptParams): Promise<Message[]> {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
+
+    for (const block of extraSystemBlocks ?? []) {
+      systemBlocks.push(block);
+    }
 
     const injectedContent = InjectManager.getInjectedContent();
     if (injectedContent) systemBlocks.push(`# Personality\n${injectedContent}`);
@@ -84,10 +91,18 @@ class PromptRepository implements IPromptRepository {
 
     const sanitized = this.sanitizePromptIfEnabled(userMessage, limitedHistory);
 
+    const toolMessages: Message[] = toolResults?.map((r) => {
+      const message: Message = { role: r.role, content: r.content };
+      if (r.tool_call_id) message.tool_call_id = r.tool_call_id;
+      if (r.tool_calls?.length) message.tool_calls = r.tool_calls;
+      return message;
+    }) ?? [];
+
     return [
       { role: 'system', content: systemBlocks.join('\n') },
       ...sanitized.history,
       { role: 'user', content: sanitized.userMessage },
+      ...toolMessages,
     ];
   }
 
@@ -139,9 +154,13 @@ class PromptRepository implements IPromptRepository {
 
     return this.learnedSkillsRepository
       .getRecent(learnedSkillsLimit)
-      .map(skill => skill.skill_content?.trim())
-      .filter((content): content is string => Boolean(content))
-      .join('\n')
+      .map(skill => {
+        const header = `### Skill: ${skill.name}`;
+        const description = skill.description ? `\n${skill.description}` : '';
+        const readWhen = skill.read_when?.length ? `\nRead when: ${skill.read_when.join(', ')}` : '';
+        return `${header}${description}${readWhen}\n${skill.content ?? ''}`;
+      })
+      .join('\n\n')
       .slice(0, 15000);
   }
 
@@ -207,8 +226,7 @@ class PromptRepository implements IPromptRepository {
 class PromptRepositoryFactory {
   static create(db: IDatabaseService, logger: ILogger, aiProvider: AIProvider): PromptRepository {
     const contextRepository = ContextRepositoryFactory.create();
-    const skillsRepository = SkillsRepositoryFactory.create(logger);
-    const toolsRepository = ToolsRepositoryFactory.create(skillsRepository.get());
+    const toolsRepository = ToolsRepositoryFactory.create();
     const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
     const memoryRepository = MemoryRepositoryFactory.create(db);
     return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, memoryRepository, aiProvider, logger);

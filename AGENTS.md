@@ -50,7 +50,7 @@ Guidance for AI coding agents working in this repository.
 - `src/tui/` — terminal UI wrapper.
 - `src/utils/` — pure helper functions (prompt replacement, curl, dates, telegram escaping, tool-call parsing, sanitize-log-text, etc.).
 - `plugins/` — the plugin system: `registry.ts` (ExtensionPoint/PluginRegistry) + one folder per channel plugin (`telegram/`, `whatsapp/`), each exposing `create()`.
-- `skills/` — markdown skill definitions, one folder per skill with a `SKILL.md` (front-matter `name`/`description` + body). Loaded at runtime by the `get_skill` tool.
+- `skills/` — markdown skill definitions, one folder per skill with a `SKILL.md` (front-matter `name`/`description` + body). Synced into the `learned_skills` table at startup and on file changes by `src/services/skills/skill-sync.ts`.
 - `memory/` — runtime SQLite database files (gitignored state).
 - `temp/` — runtime scratch dir for generated files (heartbeat reports, etc.).
 - `scripts/` — helper scripts (`init.ts`).
@@ -63,8 +63,8 @@ Guidance for AI coding agents working in this repository.
 
 1. A channel plugin (`plugins/telegram`, `plugins/whatsapp`, or `src/tui`) calls `MessageGateway.handle(message, originId)`.
 2. `src/services/agents/message-gateway.ts` resolves the session via `session-context.ts`, checks for commands (`/help` etc. via `src/services/commands/`), else delegates to the **MainAgent**. After the response, `background-dispatcher.ts` fires the persistence + summarization jobs.
-3. `src/services/agents/main-agent.ts` builds the first prompt (`FIRST_PROMPT_HELPER`), calls `ChatService.complete()` (`src/services/chat/chat-service.ts`), which builds the full prompt via `PromptRepository.build()` and calls the AI provider.
-4. If the LLM returns tool calls, MainAgent hands them to the **ToolCallPipeline** (`src/services/agents/tool-call-pipeline.ts`), which splits them: `get_skill` calls go to the **LearnerWorker** (`src/services/workers/learner-worker.ts`), everything else goes to the **ExecutorWorker** (`src/services/workers/executor-worker.ts`) which loops tool-call → tool result → next LLM call until a final message.
+3. `src/services/agents/main-agent.ts` passes the user message (the Tool Execution Contract lives in the system prompt via `TOOL_EXECUTION_CONTRACT`), calls `ChatService.complete()` (`src/services/chat/chat-service.ts`), which builds the full prompt via `PromptRepository.build()` and calls the AI provider.
+4. If the LLM returns tool calls, MainAgent hands them to the **ToolCallPipeline** (`src/services/agents/tool-call-pipeline.ts`), which sends them to the **ExecutorWorker** (`src/services/workers/executor-worker.ts`) which loops tool-call → tool result → next LLM call until a final message.
 5. `MessageGateway` (via `background-dispatcher.ts`) fires background jobs: `ConversationWorker` (`src/services/workers/conversation-worker.ts`) persists the exchange, and the **Summarizer** sub-agent (`src/services/agents/sub-agents/summarizer/`) may condense long context into memories.
 6. Sub-agent execution loop keeps firing until terminal message or max iterations. Abort via `AbortController` passed in `ProcessOptions`.
 
@@ -88,7 +88,7 @@ Two independent flags control how LLM calls are ordered:
 ## Tools
 
 - Tool registry: `src/services/tools/index.ts` — `AgnosticExecutionTool` dispatches tool name → handler via `COMMAND_MAP`.
-- Tools: `execute-command`, `curl-request` (respects `allowed_domains` in settings), `search` (SerpAPI), `get-skill` (loads `skills/<name>/SKILL.md`, path-traversal guarded), `beats/*` (create/list/update/delete recurring beats). Shared helper: `src/services/tools/runtime.ts`.
+- Tools: `execute-command`, `curl-request` (respects `allowed_domains` in settings), `search` (SerpAPI), `beats/*` (create/list/update/delete recurring beats). Shared helper: `src/services/tools/runtime.ts`.
 - `src/services/tools-queue/` — throttling/serialization of tool calls.
 
 ## Security
@@ -98,13 +98,14 @@ Two independent flags control how LLM calls are ordered:
 
 ## Workers & sub-agents
 
-- `src/services/workers/` — `conversation-worker.ts`, `executor-worker.ts`, `learner-worker.ts`. All implement the generic `IWorker<TArgs, TResult>` (`src/types/workers.ts`).
-- `src/services/agents/` — `message-gateway.ts` (channel entry facade), `session-context.ts` (session + per-session message/memory services), `background-dispatcher.ts` (fire-and-forget persistence + summarization), `main-agent.ts` (main LLM orchestrator), `tool-call-pipeline.ts` (learn → execute tool orchestration, shared with heartbeat), `sub-agents/` (`heartbeat/` scheduled beats: `runner.ts` schedules, `sub-agent.ts` runs the beat LLM; `summarizer/`).
+- `src/services/workers/` — `conversation-worker.ts`, `executor-worker.ts`. All implement the generic `IWorker<TArgs, TResult>` (`src/types/workers.ts`).
+- `src/services/agents/` — `message-gateway.ts` (channel entry facade), `session-context.ts` (session + per-session message/memory services), `background-dispatcher.ts` (fire-and-forget persistence + summarization), `main-agent.ts` (main LLM orchestrator), `tool-call-pipeline.ts` (executor orchestration, shared with heartbeat), `sub-agents/` (`heartbeat/` scheduled beats: `runner.ts` schedules, `sub-agent.ts` runs the beat LLM; `summarizer/`).
+- `src/services/skills/` — `skill-sync.ts` (`SkillSyncService` + `SkillSyncSingleton`): syncs `skills/` into `learned_skills` at startup and on file changes (fs.watch + 500ms debounce), pruning rows whose skill folder was removed.
 
 ## Plugins & skills (extension mechanisms)
 
 - **Plugins** (`plugins/`): a plugin is a folder exposing `create(): Plugin | null`. `createPlugins()` scans the dir, `buildRegistry()` calls each `setup(registry)`. Channel plugins extend `ADAPTERS` (from `src/channels`) with a `ChannelDefinition` (`name`, `enabled`, `start`, optional `sendMessage`). Add a new channel by adding a folder under `plugins/`.
-- **Skills** (`skills/`): markdown files loaded at runtime by the `get_skill` tool. When the LLM requests `get_skill`, the LearnerWorker stores them in the `learned_skills` table (subject to `learned_skills_limit`). To add a skill, add a `skills/<name>/SKILL.md` with front-matter + body.
+- **Skills** (`skills/`): markdown files synced into the `learned_skills` table at startup and on file changes by `SkillSyncService` (`src/services/skills/skill-sync.ts`), which wraps each `SKILL.md` body in `SKILL_LEARNING_PROMPT` (with `<GATEWAY_HOST>` resolved to `config.GATEWAY_HOST`) and prunes rows whose folder was removed. To add a skill, add a `skills/<name>/SKILL.md` with front-matter + body.
 
 ## Database schema (`src/infrastructure/db-sqlite.ts`)
 
@@ -116,7 +117,7 @@ Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/l
 - Trace path: `web/index.html` (`#root`) → `web/src/main.tsx` (BrowserRouter) → `web/src/App.tsx` (`/` redirects to `/admin`) → `web/src/pages/admin/AdminLayout.tsx` (sidebar + nested routes) → per-page components in `web/src/pages/admin/`. Shared UI lives in `web/src/components/AdminUI.tsx`.
 - `web/src/lib/api.ts` — `streamChat()` consumes the `/api/chat` SSE stream (`progress` status + `content_block_delta` text events); `apiRequest()` calls `/api/admin/*`; `checkHealth()` polls `/health`. `web/src/lib/markdown.ts` + `types.ts` handle rendering and response types.
 - `web/src/lib/chat-context.tsx` — `ChatProvider`/`useChat` hold conversation state, hydrate prior history from `/api/admin/chat/history`, stream replies, and poll server health every 5s. Chats are sessions; `POST /api/admin/sessions` creates a new one without ending the previous, `/api/chat` accepts an optional `sessionId` to route messages to a specific session (`gateway.handle(message, 'web', { sessionId })`, `src/dashboard/index.ts:104`).
-- Admin API: `src/dashboard/admin.ts` (`AdminRouterFactory`, mounted at `/api/admin`) — overview, sessions, memories, chat history, heartbeats (create/update/delete with cron validation), skills, settings. Settings are deep-masked for secrets (`BOT_TOKEN`, `API_TOKEN`, `SEARCH_API_KEY`).
+- Admin API: `src/dashboard/admin.ts` (`AdminRouterFactory`, mounted at `/api/admin`) — overview, sessions, memories, chat history, heartbeats (create/update/delete with cron validation), skills (list merged disk+learned, `PATCH /skills/:name` enable/disable, `POST /skills/sync`), settings. Settings are deep-masked for secrets (`BOT_TOKEN`, `API_TOKEN`, `SEARCH_API_KEY`).
 - Build `pnpm build:client` → `dist-web/` (root/outDir in `vite.config.mts`); dev `pnpm dev:client` on port 5173 proxies `/api` and `/health` to `localhost:3000`; type-check via `pnpm lint:client` (`web/tsconfig.json`).
 
 ## Conventions to follow

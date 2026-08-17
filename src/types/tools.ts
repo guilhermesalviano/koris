@@ -1,6 +1,7 @@
 import type { ILogger } from "../infrastructure/logger";
 
 export interface ToolCall {
+  id?: string;
   name: string;
   arguments: Record<string, unknown>;
 }
@@ -10,6 +11,7 @@ export interface ToolResult {
   success: boolean;
   result?: string;
   error?: string;
+  toolCallId?: string;
 }
 
 export type CommandFn = (logger: ILogger, args: Record<string, unknown>) => Promise<ToolResult>;

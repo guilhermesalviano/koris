@@ -83,6 +83,15 @@ describe('BackgroundDispatcher', () => {
     expect(summarizerWorker.handler).not.toHaveBeenCalled();
   });
 
+  it('does not summarize when the agent response is empty', () => {
+    applyTestConfigDefaults({ summarizerEnabled: true });
+    const { dispatcher, summarizerWorker } = makeDispatcher();
+
+    dispatcher.summarizeConversation({ ...persistProps, answer: '   ', memoryService: { upsert: vi.fn() } as never });
+
+    expect(summarizerWorker.handler).not.toHaveBeenCalled();
+  });
+
   it('logs when summarization fails', async () => {
     applyTestConfigDefaults({ summarizerEnabled: true });
     const { dispatcher, logger } = makeDispatcher({

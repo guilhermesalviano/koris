@@ -53,7 +53,7 @@ describe('SkillsRepository', () => {
     const skills = repository.get();
 
     expect(skills).toEqual([
-      { name: 'Git Helper', description: 'Git tips and commands', read_when: 'working with git' },
+      { name: 'Git Helper', description: 'Git tips and commands', read_when: ['working with git'], content: '\n# Git Helper\nUse `git rebase`.' },
     ]);
     expect(fsMock.readdirSync).toHaveBeenCalledWith('/base/skills', { withFileTypes: true });
     expect(fsMock.readFileSync).toHaveBeenCalledWith('/base/skills/git/SKILL.md', 'utf-8');
@@ -67,7 +67,7 @@ describe('SkillsRepository', () => {
 
     const skills = repository.get();
 
-    expect(skills).toEqual([{ name: 'git', description: '', read_when: null }]);
+    expect(skills).toEqual([{ name: 'git', description: '', read_when: null, content: '\ncontent' }]);
   });
 
   it('get skips folders without a SKILL.md file and warns', () => {
@@ -118,7 +118,7 @@ describe('SkillsRepository', () => {
     expect(skill).toMatchObject({
       name: 'Git Helper',
       description: 'Git tips and commands',
-      read_when: 'working with git',
+      read_when: ['working with git'],
     });
     expect(skill?.content).toContain('# Git Helper');
     expect(skill?.content).toContain('Use `git rebase`.');

@@ -11,10 +11,11 @@ import { ChannelRepositoryFactory } from '../repositories/channel';
 import { CHANNEL_TYPES, ChannelType } from '../entities/channel';
 import { LearnedSkillsRepositoryFactory } from '../repositories/learned-skills';
 import { SkillsRepositoryFactory } from '../repositories/skills';
+import { SkillSyncSingleton } from '../services/skills/skill-sync';
 import { AuditLogRepositoryFactory, AuditLogRow } from '../repositories/audit-log';
 import { buildUsageReport, usageFrom } from '../services/usage/usage';
 import { Heartbeat } from '../entities/heartbeat';
-import { AuditKind, AuditStatus } from '../entities/audit-log';
+import { AuditStatus, AuditType } from '../entities/audit-log';
 import { Session } from '../entities/session';
 import { BEAT_TYPES, BeatType } from '../types/beat';
 import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
@@ -68,7 +69,7 @@ function toAuditJson(row: AuditLogRow) {
     runId: row.run_id,
     sessionId: row.session_id,
     channel: row.channel,
-    kind: row.kind,
+    type: row.type,
     role: row.role,
     agentName: row.agent_name,
     provider: row.provider,
@@ -108,16 +109,63 @@ class AdminRouterFactory {
     router.get('/overview', async (_req: Request, res: Response) => {
       const health = await healthCheck(logger);
 
+      const beats = heartbeatRepo.getAll();
+      const lastHeartbeatRunAt = beats.reduce<Date | null>((latest, beat) => {
+        const run = beat.lastRun ?? null;
+        if (!latest || (run && run.getTime() > latest.getTime())) return run;
+        return latest;
+      }, null);
+
+      const registeredChannels = channelRepo.getAll().map((channel) => ({
+        type: channel.channel,
+        target: channel.target,
+        principal: channel.isPrincipal,
+      }));
+
+      const enabledChannels: { type: ChannelType; enabled: boolean }[] = [
+        { type: 'telegram', enabled: config.CHANNELS.TELEGRAM.ENABLED },
+        { type: 'whatsapp', enabled: config.CHANNELS.WHATSAPP.ENABLED },
+      ];
+
+      const recentErrors = auditRepo.findAll({
+        limit: 5,
+        filters: { status: 'error' },
+      }).map(toAuditJson);
+
       res.json({
         sessions: sessionRepo.count(),
-        heartbeats: heartbeatRepo.getAll().length,
-        learnedSkills: learnedSkillsRepo.getAll().length,
+        openSessions: sessionRepo.countOpen(),
+        messages: messageRepo.count(),
+        memories: memoryRepo.count(),
+        heartbeats: beats.length,
+        learnedSkills: learnedSkillsRepo.count(),
+        learnedSkillsLimit: config.LEARNED_SKILLS_LIMIT,
         skills: skillsRepo.get().length,
         auditErrors: auditRepo.count({ status: 'error' }),
         provider: config.AI.MANAGER.PROVIDER,
         model: config.AI.MANAGER.MODEL,
+        workerProvider: config.AI.WORKERS.PROVIDER,
+        workerModel: config.AI.WORKERS.MODEL,
         environment: config.ENVIRONMENT,
+        timezone: config.TIMEZONE,
+        heartbeatEnabled: config.HEARTBEAT,
+        summarizerEnabled: config.AI.SUMMARIZER,
+        aiParallel: config.AI.PARALLEL,
+        aiSubagentsParallel: config.AI.SUBAGENTS_PARALLEL,
+        channels: enabledChannels,
+        registeredChannels,
+        lastHeartbeatRunAt: lastHeartbeatRunAt ? formatISO(lastHeartbeatRunAt) : null,
         health: { status: health.status, details: health.details },
+        activeRuns: activeRunsRegistry.list(),
+        queue: {
+          parallel: config.AI.PARALLEL,
+          subagentsParallel: config.AI.SUBAGENTS_PARALLEL,
+          backgroundGraceMs: config.AI.BACKGROUND_GRACE_MS,
+          subAgents: subAgentQueuesRegistry.getSnapshot(),
+          ...sharedSerialQueue.snapshot(),
+        },
+        usage: buildUsageReport(auditRepo.usage({ from: usageFrom(7) }), 7).total,
+        recentErrors,
       });
     });
 
@@ -239,13 +287,13 @@ class AdminRouterFactory {
     router.get('/audit', (req: Request, res: Response) => {
       const { limit, offset } = parsePagination(req);
       const filters: {
-        kind?: AuditKind;
+        type?: AuditType;
         sessionId?: string;
         role?: 'manager' | 'worker';
         status?: AuditStatus;
         agentName?: string;
       } = {
-        kind: typeof req.query.kind === 'string' ? (req.query.kind as AuditKind) : undefined,
+        type: typeof req.query.type === 'string' ? (req.query.type as AuditType) : undefined,
         sessionId: typeof req.query.sessionId === 'string' ? req.query.sessionId : undefined,
         role: typeof req.query.role === 'string' ? (req.query.role as 'manager' | 'worker') : undefined,
         status: typeof req.query.status === 'string' ? (req.query.status as AuditStatus) : undefined,
@@ -455,19 +503,47 @@ class AdminRouterFactory {
     });
 
     router.get('/skills', (_req: Request, res: Response) => {
-      res.json({
-        available: skillsRepo.get(),
-        learned: learnedSkillsRepo.getAll(),
+      const learnedByName = new Map(learnedSkillsRepo.getAll().map(skill => [skill.name, skill]));
+
+      const items = skillsRepo.get().map((skill) => {
+        const learned = learnedByName.get(skill.name);
+        return {
+          name: skill.name,
+          description: skill.description,
+          read_when: skill.read_when ?? null,
+          content: skill.content ?? null,
+          enabled: learned ? learned.enabled : true,
+          learned_at: learned ? learned.learned_at : null,
+        };
       });
+
+      res.json({ items, limit: config.LEARNED_SKILLS_LIMIT });
     });
 
-    router.delete('/skills/learned/:name', (req: Request, res: Response) => {
-      const deleted = learnedSkillsRepo.deleteByName(String(req.params.name));
-      if (!deleted) {
-        res.status(404).json({ error: 'Learned skill not found' });
+    router.patch('/skills/:name', (req: Request, res: Response) => {
+      const enabled = req.body?.enabled;
+      if (typeof enabled !== 'boolean') {
+        res.status(400).json({ error: 'enabled must be a boolean' });
         return;
       }
 
+      const updated = learnedSkillsRepo.setEnabled(String(req.params.name), enabled);
+      if (!updated) {
+        res.status(404).json({ error: 'Skill not found' });
+        return;
+      }
+
+      res.json({ success: true, skill: learnedSkillsRepo.getByName(String(req.params.name)) });
+    });
+
+    router.post('/skills/sync', (_req: Request, res: Response) => {
+      const sync = SkillSyncSingleton.getExistingInstance();
+      if (!sync) {
+        res.status(503).json({ error: 'Skill sync not initialized' });
+        return;
+      }
+
+      sync.sync();
       res.json({ success: true });
     });
 

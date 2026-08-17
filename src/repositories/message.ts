@@ -6,6 +6,7 @@ interface IMessageRepository {
   deleteById(id: string): void;
   getBySessionId(sessionId: string, limit?: number): Message[];
   getPreviewBySessionId(sessionId: string): string | null;
+  count(): number;
 }
 
 class MessageRepository implements IMessageRepository {
@@ -60,6 +61,11 @@ class MessageRepository implements IMessageRepository {
     ) as { content?: string } | undefined;
 
     return row?.content ?? null;
+  }
+
+  count(): number {
+    const row = this.db.get('SELECT COUNT(*) AS total FROM messages') as { total?: number } | undefined;
+    return row?.total ?? 0;
   }
 }
 

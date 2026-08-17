@@ -10,11 +10,39 @@ interface ISkillsRepository {
   findByName(params: { name: string }): Skill | null;
 }
 
+function normalizeDescription(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function normalizeReadWhen(value: unknown): string[] | null {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === 'string' && value.trim()) {
+    return value.split(',').map(part => part.trim()).filter(Boolean);
+  }
+  return null;
+}
+
 class SkillsRepository {
   private readonly logger: ILogger;
 
   constructor(logger: ILogger) {
     this.logger = logger;
+  }
+
+  private parseSkill(entryName: string, skillFile: string): Skill | null {
+    if (!existsSync(skillFile)) {
+      return this.helperWarnAndReturn(this.logger, `Skill folder found but SKILL.md missing: ${entryName}`);
+    }
+
+    const raw = readFileSync(skillFile, 'utf-8');
+    const { data, content } = matter(raw);
+
+    return {
+      name: String(data.name ?? entryName),
+      description: normalizeDescription(data.description),
+      read_when: normalizeReadWhen(data.read_when),
+      content,
+    };
   }
 
   get(): Skill[] {
@@ -23,22 +51,7 @@ class SkillsRepository {
 
     return readdirSync(skillsPath, { withFileTypes: true })
       .filter(entry => entry.isDirectory())
-      .map(entry => {
-        const skillFile = join(skillsPath, entry.name, 'SKILL.md');
-
-        if (!existsSync(skillFile)) return this.helperWarnAndReturn(this.logger, `Skill folder found but SKILL.md missing: ${entry.name}`);
-
-        const raw = readFileSync(skillFile, 'utf-8');
-        const { data } = matter(raw);
-
-        const skill: Skill = {
-          name: data.name ?? entry.name,
-          description: data.description ?? '',
-          read_when: data.read_when ?? null,
-        };
-
-        return skill;
-      })
+      .map(entry => this.parseSkill(entry.name, join(skillsPath, entry.name, 'SKILL.md')))
       .filter((skill): skill is Skill => skill !== null);
   }
 
@@ -52,19 +65,7 @@ class SkillsRepository {
 
     if (!entry) return this.helperWarnAndReturn(this.logger, `Skill not found: ${params.name}`);
 
-    const skillFile = join(skillsPath, entry.name, 'SKILL.md');
-
-    if (!existsSync(skillFile)) return this.helperWarnAndReturn(this.logger, `Skill folder found but SKILL.md missing: ${params.name}`);
-
-    const raw = readFileSync(skillFile, 'utf-8');
-    const { data, content } = matter(raw);
-
-    return {
-      name: data.name ?? entry.name,
-      description: data.description ?? '',
-      read_when: data.read_when ?? null,
-      content,
-    };
+    return this.parseSkill(entry.name, join(skillsPath, entry.name, 'SKILL.md'));
   }
 
   helperWarnAndReturn(logger: ILogger, message: string) {
