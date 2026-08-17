@@ -63,7 +63,7 @@ Guidance for AI coding agents working in this repository.
 
 1. A channel plugin (`plugins/telegram`, `plugins/whatsapp`, or `src/tui`) calls `MessageGateway.handle(message, originId)`.
 2. `src/services/agents/message-gateway.ts` resolves the session via `session-context.ts`, checks for commands (`/help` etc. via `src/services/commands/`), else delegates to the **MainAgent**. After the response, `background-dispatcher.ts` fires the persistence + summarization jobs.
-3. `src/services/agents/main-agent.ts` builds the first prompt (`FIRST_PROMPT_HELPER`), calls `ChatService.complete()` (`src/services/chat/chat-service.ts`), which builds the full prompt via `PromptRepository.build()` and calls the AI provider.
+3. `src/services/agents/main-agent.ts` passes the user message (the Tool Execution Contract lives in the system prompt via `TOOL_EXECUTION_CONTRACT`), calls `ChatService.complete()` (`src/services/chat/chat-service.ts`), which builds the full prompt via `PromptRepository.build()` and calls the AI provider.
 4. If the LLM returns tool calls, MainAgent hands them to the **ToolCallPipeline** (`src/services/agents/tool-call-pipeline.ts`), which sends them to the **ExecutorWorker** (`src/services/workers/executor-worker.ts`) which loops tool-call → tool result → next LLM call until a final message.
 5. `MessageGateway` (via `background-dispatcher.ts`) fires background jobs: `ConversationWorker` (`src/services/workers/conversation-worker.ts`) persists the exchange, and the **Summarizer** sub-agent (`src/services/agents/sub-agents/summarizer/`) may condense long context into memories.
 6. Sub-agent execution loop keeps firing until terminal message or max iterations. Abort via `AbortController` passed in `ProcessOptions`.

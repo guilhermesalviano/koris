@@ -141,6 +141,33 @@ describe('PromptRepository buildMemoryContext', () => {
   });
 });
 
+describe('PromptRepository extraSystemBlocks', () => {
+  it('appends situation-specific contract blocks to the system prompt', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+      extraSystemBlocks: ['# Contract One', '# Contract Two'],
+    });
+
+    const systemContent = messages[0].content as string;
+    expect(systemContent).toContain('# Contract One');
+    expect(systemContent).toContain('# Contract Two');
+  });
+
+  it('omits extra blocks when none are provided', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+    });
+
+    expect(messages[0].content).not.toContain('# Contract One');
+  });
+});
+
 describe('PromptRepository prompt sanitizer', () => {
   const originalEnabled = config.AI.PROMPT_SANITIZER;
 

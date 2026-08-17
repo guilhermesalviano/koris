@@ -1,6 +1,5 @@
 import { IToolsQueue, ToolsQueueFactory } from '../tools-queue';
-import { FIRST_PROMPT_HELPER } from '../../constants';
-import { replacePlaceholders } from '../../utils/prompt';
+import { TOOL_EXECUTION_CONTRACT } from '../../constants';
 import type { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import type { IMessageService } from '../message-service';
 import type { ILogger } from '../../infrastructure/logger';
@@ -43,8 +42,7 @@ class MainAgent implements IMainAgent {
       options,
     };
 
-    const prompt = replacePlaceholders(FIRST_PROMPT_HELPER, { v1: userMessage });
-    const response = await this.ChatService.complete(prompt, channel, options, messageHistory, message.getSessionId());
+    const response = await this.ChatService.complete(userMessage, channel, options, messageHistory, message.getSessionId(), [TOOL_EXECUTION_CONTRACT]);
     if (response.kind === 'message') return response.text;
     return this.pipeline.execute(response.calls, userMessage, messageHistory, ctx);
   }

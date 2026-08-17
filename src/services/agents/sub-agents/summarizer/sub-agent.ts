@@ -2,7 +2,7 @@ import { IMemoryService } from "../../../memory-service";
 import type { ILogger } from "../../../../infrastructure/logger";
 import { getAIProvider } from "../../../providers";
 import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
-import { SUMMARIZATION_PROMPT } from "../../../../constants";
+import { SUMMARIZATION_INSTRUCTIONS, SUMMARIZATION_DATA } from "../../../../constants";
 import { replacePlaceholders } from "../../../../utils/prompt";
 import { beginFooterActivity } from "../../../../utils/footer-activity";
 import { parseSummarizerResponse } from "../../../../utils/summarizer-response";
@@ -39,11 +39,11 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
   private async run(props: SummarizerWorkerProps): Promise<void> {
     const endFooterActivity = beginFooterActivity('summarizer');
     this.logger.info(`Summarizer worker started for session ${props.sessionId} in ${props.channel}`);
-    const prompt = replacePlaceholders(SUMMARIZATION_PROMPT, { v1: props.ask, v2: props.answer });
+    const data = replacePlaceholders(SUMMARIZATION_DATA, { v1: props.ask, v2: props.answer });
 
     try {
       const response = await this.completionService.complete(
-        { messages: [{ role: "user", content: prompt }] },
+        { messages: [{ role: "system", content: SUMMARIZATION_INSTRUCTIONS }, { role: "user", content: data }] },
         { audit: { sessionId: props.sessionId, channel: props.channel } },
       );
       if (response.kind !== 'message') {

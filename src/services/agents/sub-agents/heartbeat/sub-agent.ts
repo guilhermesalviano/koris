@@ -7,7 +7,7 @@ import { IPromptRepository, PromptRepositoryFactory } from "../../../../reposito
 import { getAIProvider } from "../../../providers";
 import { replacePlaceholders } from "../../../../utils/prompt";
 import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
-import { HEARTBEAT_PROMPT } from "../../../../constants";
+import { HEARTBEAT_INSTRUCTIONS, HEARTBEAT_DATA } from "../../../../constants";
 import type { ILogger } from "../../../../infrastructure/logger";
 import { IToolsQueue, ToolsQueue } from "../../../tools-queue";
 import { ISubAgent } from "../../../../types/agents";
@@ -72,16 +72,18 @@ class Heartbeat implements ISubAgent<Date> {
     this.logger.info(`Heartbeat: Executing beat "${beat.id}" — ${beat.beat}`);
     this.heartbeatRepository.updateLastRun(beat.id, date);
 
-    const prompt = replacePlaceholders(HEARTBEAT_PROMPT, { v1: `${beat.type}`, v2: `beat: ${beat.beat}` });
+    const instructions = replacePlaceholders(HEARTBEAT_INSTRUCTIONS, { v1: `${beat.type}` });
+    const data = replacePlaceholders(HEARTBEAT_DATA, { v2: `beat: ${beat.beat}` });
 
     try {
       const payload = await this.promptRepository
         .build({
-          userMessage: prompt,
+          userMessage: data,
           channel: 'background',
           toolsEnabled: true,
           messageHistory: [],
-          includeBeatTools: false
+          includeBeatTools: false,
+          extraSystemBlocks: [instructions],
         });
 
       const response = await this.completionService.complete(

@@ -1,4 +1,4 @@
-import { TOOLS_RESULT_PROMPT } from "../../constants";
+import { EXECUTOR_SYNTHESIS_RULES, EXECUTOR_SYNTHESIS_DATA } from "../../constants";
 import { replacePlaceholders } from "../../utils/prompt";
 import { ChatServiceFactory } from "../chat/chat-service";
 import { IWorker } from "../../types/workers";
@@ -60,13 +60,14 @@ class ExecutorWorker implements IWorker<ExecutorWorkerArgs, ProcessedMessage> {
       .join('\n');
     this.logger.info(`Tool results: ${toolResults}`);
 
-    const synthesisPrompt = replacePlaceholders(TOOLS_RESULT_PROMPT, { v1: userMessage, v2: toolResults });
+    const synthesisData = replacePlaceholders(EXECUTOR_SYNTHESIS_DATA, { v1: userMessage, v2: toolResults });
     const response = await this.ChatService.complete(
-      synthesisPrompt,
+      synthesisData,
       ctx.channel,
       ctx.options,
       messageHistory,
       ctx.message?.getSessionId(),
+      [EXECUTOR_SYNTHESIS_RULES],
     );
 
     if (response.kind === 'message') return response.text;

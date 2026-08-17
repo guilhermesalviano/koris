@@ -1,5 +1,5 @@
-export const FIRST_PROMPT_HELPER = `
-## Tool Execution Contract
+export const TOOL_EXECUTION_CONTRACT = `
+# Tool Execution Contract
 
 Relevant skill documentation is already available in your **SYSTEM** context. Ensure the human's request is entirely resolved through tool calls.
 
@@ -16,9 +16,6 @@ Before responding to the human, answer internally:
 
 If **no** → call the missing tools.
 If **yes** → compose the final response using only the tool results.
-
-### USER REQUEST
-{v1}
 `;
 // ### DECOMPOSITION
 // Break the human's message into atomic tasks. Each task that can be answered or acted on by a tool MUST trigger one.
@@ -37,7 +34,7 @@ export const SKILL_LEARNING_PROMPT = `
 5. Pass all user-provided values (city names, IDs, names) exactly as written — do not normalize or correct them.
 `;
 
-export const TOOLS_RESULT_PROMPT = `
+export const EXECUTOR_SYNTHESIS_RULES = `
 Answer the human's request as Agent, using ONLY the data in TOOL RESULTS below.
 
 ## RULES
@@ -50,11 +47,13 @@ Answer the human's request as Agent, using ONLY the data in TOOL RESULTS below.
 - Do not mention tools, functions, or internal details in your response.
 - Do not repeat the human's question.
 
+Respond strictly from the data above. If the data is insufficient, state exactly what is missing.
+`;
+
+export const EXECUTOR_SYNTHESIS_DATA = `
 ## USER REQUEST
 {v1}
 
 ## TOOL RESULTS
 {v2}
-
-Respond strictly from the data above. If the data is insufficient, state exactly what is missing.
 `;
