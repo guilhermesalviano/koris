@@ -15,7 +15,7 @@ import { SkillSyncSingleton } from '../services/skills/skill-sync';
 import { AuditLogRepositoryFactory, AuditLogRow } from '../repositories/audit-log';
 import { buildUsageReport, usageFrom } from '../services/usage/usage';
 import { Heartbeat } from '../entities/heartbeat';
-import { AuditKind, AuditStatus } from '../entities/audit-log';
+import { AuditStatus, AuditType } from '../entities/audit-log';
 import { Session } from '../entities/session';
 import { BEAT_TYPES, BeatType } from '../types/beat';
 import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
@@ -69,7 +69,7 @@ function toAuditJson(row: AuditLogRow) {
     runId: row.run_id,
     sessionId: row.session_id,
     channel: row.channel,
-    kind: row.kind,
+    type: row.type,
     role: row.role,
     agentName: row.agent_name,
     provider: row.provider,
@@ -287,13 +287,13 @@ class AdminRouterFactory {
     router.get('/audit', (req: Request, res: Response) => {
       const { limit, offset } = parsePagination(req);
       const filters: {
-        kind?: AuditKind;
+        type?: AuditType;
         sessionId?: string;
         role?: 'manager' | 'worker';
         status?: AuditStatus;
         agentName?: string;
       } = {
-        kind: typeof req.query.kind === 'string' ? (req.query.kind as AuditKind) : undefined,
+        type: typeof req.query.type === 'string' ? (req.query.type as AuditType) : undefined,
         sessionId: typeof req.query.sessionId === 'string' ? req.query.sessionId : undefined,
         role: typeof req.query.role === 'string' ? (req.query.role as 'manager' | 'worker') : undefined,
         status: typeof req.query.status === 'string' ? (req.query.status as AuditStatus) : undefined,

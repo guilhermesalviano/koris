@@ -70,7 +70,7 @@ describe('AICompletionService', () => {
     expect(auditService.record).toHaveBeenCalledTimes(1);
     const entry = auditService.record.mock.calls[0][0];
     expect(entry).toMatchObject({
-      kind: 'llm',
+      type: 'llm',
       role: 'manager',
       provider: 'test',
       runId: 'r1',
@@ -124,7 +124,7 @@ describe('AICompletionService', () => {
 
     const entry = auditService.record.mock.calls[0][0];
     expect(entry).toMatchObject({
-      kind: 'llm',
+      type: 'llm',
       status: 'error',
       errorCode: 'rate_limited',
       errorMessage: expect.stringContaining('so many requests'),

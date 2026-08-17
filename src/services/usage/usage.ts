@@ -56,7 +56,7 @@ export function buildUsageReport(rows: UsageRow[], days: number | null = null): 
   const runTokens = new Map<string, { input: number; output: number; duration: number }>();
 
   for (const row of rows) {
-    if (row.kind === 'llm') {
+    if (row.type === 'llm') {
       const input = effectiveInputTokens(row);
       const output = effectiveOutputTokens(row);
 

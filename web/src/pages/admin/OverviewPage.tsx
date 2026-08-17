@@ -200,7 +200,7 @@ function RecentErrorsCard({ data }: { data: OverviewResponse }) {
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate font-mono text-xs text-red-300">
                   {error.agentName ?? 'unknown'}
-                  {error.kind && <span className="text-txt-3"> · {error.kind}</span>}
+                  {error.type && <span className="text-txt-3"> · {error.type}</span>}
                 </span>
                 <span className="flex-shrink-0 font-mono text-[10px] text-txt-3">{formatDate(error.createdAt)}</span>
               </div>

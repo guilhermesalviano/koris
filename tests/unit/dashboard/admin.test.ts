@@ -113,7 +113,7 @@ describe('AdminRouterFactory /audit', () => {
     auditRepo.findAll.mockReturnValue([
       {
         id: 'a1',
-        kind: 'llm',
+        type: 'llm',
         role: 'manager',
         agent_name: 'manager',
         provider: 'ollama',
@@ -126,7 +126,7 @@ describe('AdminRouterFactory /audit', () => {
       },
       {
         id: 'a2',
-        kind: 'tool',
+        type: 'tool',
         role: 'worker',
         agent_name: 'executorWorker',
         tool_name: 'curl-request',
@@ -135,12 +135,12 @@ describe('AdminRouterFactory /audit', () => {
         error_message: 'blocked',
         created_at: '2026-01-01T00:01:00.000Z',
       },
-      { id: 'a3', kind: 'tool', role: 'worker', agent_name: 'executorWorker', tool_name: 'search_engine', duration_ms: 2, status: 'success', created_at: '2026-01-01T00:02:00.000Z' },
+      { id: 'a3', type: 'tool', role: 'worker', agent_name: 'executorWorker', tool_name: 'search_engine', duration_ms: 2, status: 'success', created_at: '2026-01-01T00:02:00.000Z' },
     ] as never);
 
     const router = AdminRouterFactory.create(logger, {} as never);
     const res = makeResponse();
-    callRoute(router, makeRequest('GET', '/audit?kind=llm&limit=25', { kind: 'llm', limit: '25' }), res);
+    callRoute(router, makeRequest('GET', '/audit?type=llm&limit=25', { type: 'llm', limit: '25' }), res);
 
     expect(res.json).toHaveBeenCalledTimes(1);
     const body = res.json.mock.calls[0][0];
@@ -150,7 +150,7 @@ describe('AdminRouterFactory /audit', () => {
     expect(body.items).toHaveLength(3);
     expect(body.items[0]).toMatchObject({
       id: 'a1',
-      kind: 'llm',
+      type: 'llm',
       agentName: 'manager',
       promptPreview: expect.stringContaining('...'),
       responsePreview: 'hi there',
@@ -159,15 +159,15 @@ describe('AdminRouterFactory /audit', () => {
     expect(auditRepo.findAll).toHaveBeenCalledWith({
       limit: 25,
       offset: 0,
-      filters: expect.objectContaining({ kind: 'llm' }),
+      filters: expect.objectContaining({ type: 'llm' }),
     });
-    expect(auditRepo.count).toHaveBeenCalledWith(expect.objectContaining({ kind: 'llm' }));
+    expect(auditRepo.count).toHaveBeenCalledWith(expect.objectContaining({ type: 'llm' }));
   });
 
   it('returns a single audit entry by id', () => {
     auditRepo.findById.mockReturnValue({
       id: 'a1',
-      kind: 'llm',
+      type: 'llm',
       role: 'manager',
       agent_name: 'manager',
       provider: 'ollama',
@@ -184,7 +184,7 @@ describe('AdminRouterFactory /audit', () => {
     callRoute(router, makeRequest('GET', '/audit/a1'), res);
 
     expect(res.status).not.toHaveBeenCalled();
-    expect(res.json.mock.calls[0][0]).toMatchObject({ id: 'a1', kind: 'llm', status: 'success' });
+    expect(res.json.mock.calls[0][0]).toMatchObject({ id: 'a1', type: 'llm', status: 'success' });
   });
 
   it('returns 404 when the audit entry is not found', () => {
@@ -259,8 +259,8 @@ describe('AdminRouterFactory /usage', () => {
 
   it('returns a usage report for all-time', () => {
     auditRepo.usage.mockReturnValue([
-      { id: 'a1', run_id: 'r1', channel: 'telegram', kind: 'llm', role: 'manager', agent_name: 'manager', prompt_length: 40, response_length: 8, duration_ms: 10, created_at: '2026-01-01T00:00:00.000Z' },
-      { id: 'a2', run_id: 'r1', channel: 'telegram', kind: 'tool', role: 'worker', agent_name: 'executorWorker', tool_name: 'curl-request', duration_ms: 4, created_at: '2026-01-01T00:00:10.000Z' },
+      { id: 'a1', run_id: 'r1', channel: 'telegram', type: 'llm', role: 'manager', agent_name: 'manager', prompt_length: 40, response_length: 8, duration_ms: 10, created_at: '2026-01-01T00:00:00.000Z' },
+      { id: 'a2', run_id: 'r1', channel: 'telegram', type: 'tool', role: 'worker', agent_name: 'executorWorker', tool_name: 'curl-request', duration_ms: 4, created_at: '2026-01-01T00:00:10.000Z' },
     ] as never);
 
     const router = AdminRouterFactory.create(logger, {} as never);
@@ -323,7 +323,7 @@ describe('AdminRouterFactory /overview', () => {
     auditRepo.findAll.mockReturnValue([
       {
         id: 'e1',
-        kind: 'tool',
+        type: 'tool',
         role: 'worker',
         agent_name: 'executorWorker',
         tool_name: 'curl-request',
@@ -334,7 +334,7 @@ describe('AdminRouterFactory /overview', () => {
       },
     ] as never);
     auditRepo.usage.mockReturnValue([
-      { id: 'u1', kind: 'llm', agent_name: 'manager', prompt_length: 40, response_length: 8, duration_ms: 10, created_at: '2026-01-01T00:00:00.000Z' },
+      { id: 'u1', type: 'llm', agent_name: 'manager', prompt_length: 40, response_length: 8, duration_ms: 10, created_at: '2026-01-01T00:00:00.000Z' },
     ] as never);
   });
 

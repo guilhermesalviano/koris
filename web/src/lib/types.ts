@@ -157,7 +157,7 @@ export interface AuditItem {
   runId?: string;
   sessionId?: string;
   channel?: string;
-  kind: 'llm' | 'tool';
+  type: 'llm' | 'tool';
   role: 'manager' | 'worker';
   agentName?: string;
   provider?: string;

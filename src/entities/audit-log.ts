@@ -1,6 +1,6 @@
 import { AIFinishReason } from "../types/chat";
 
-export type AuditKind = 'llm' | 'tool';
+export type AuditType = 'llm' | 'tool';
 export type AuditStatus = 'success' | 'error';
 export type AuditRole = 'manager' | 'worker';
 
@@ -15,7 +15,7 @@ interface AuditLogBase {
 }
 
 export interface AuditLogLlm extends AuditLogBase {
-  kind: 'llm';
+  type: 'llm';
   provider: string;
   model?: string;
   prompt: string;
@@ -33,7 +33,7 @@ export interface AuditLogLlm extends AuditLogBase {
 }
 
 export interface AuditLogTool extends AuditLogBase {
-  kind: 'tool';
+  type: 'tool';
   toolName: string;
   toolArgs?: string;
   success: boolean;

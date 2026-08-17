@@ -1,5 +1,5 @@
 import { IDatabaseService } from '../infrastructure/db-sqlite';
-import { AuditLog, AuditKind, AuditStatus } from '../entities/audit-log';
+import { AuditLog, AuditStatus, AuditType } from '../entities/audit-log';
 import { formatISO } from '../utils/date';
 
 export interface AuditLogRow {
@@ -7,7 +7,7 @@ export interface AuditLogRow {
   run_id?: string;
   session_id?: string;
   channel?: string;
-  kind: AuditKind;
+  type: AuditType;
   role: 'manager' | 'worker';
   agent_name?: string;
   provider?: string;
@@ -34,7 +34,7 @@ export interface UsageRow {
   id: string;
   run_id?: string;
   channel?: string;
-  kind: AuditKind;
+  type: AuditType;
   role: 'manager' | 'worker';
   agent_name?: string;
   tool_name?: string;
@@ -49,13 +49,13 @@ export interface UsageRow {
 
 export interface UsageQuery {
   from?: string;
-  kind?: AuditKind;
+  type?: AuditType;
   sessionId?: string;
   limit?: number;
 }
 
 export interface AuditLogFilters {
-  kind?: AuditKind;
+  type?: AuditType;
   sessionId?: string;
   role?: 'manager' | 'worker';
   status?: AuditStatus;
@@ -84,9 +84,9 @@ function buildWhere(filters?: AuditLogFilters): { clause: string; params: unknow
   const conditions: string[] = [];
   const params: unknown[] = [];
 
-  if (filters.kind) {
-    conditions.push('kind = ?');
-    params.push(filters.kind);
+  if (filters.type) {
+    conditions.push('type = ?');
+    params.push(filters.type);
   }
 
   if (filters.sessionId) {
@@ -121,7 +121,7 @@ class AuditLogRepository implements IAuditLogRepository {
   save(entry: AuditLog): void {
     this.db.run(
       `INSERT INTO audit_logs (
-        id, run_id, session_id, channel, kind, role, agent_name, provider, model,
+        id, run_id, session_id, channel, type, role, agent_name, provider, model,
         prompt, prompt_length, response, response_length, finish_reason, tool_calls,
         tool_name, tool_args, success, duration_ms, status, error_code, error_message,
         input_tokens, output_tokens, created_at
@@ -131,26 +131,26 @@ class AuditLogRepository implements IAuditLogRepository {
         entry.runId ?? null,
         entry.sessionId ?? null,
         entry.channel ?? null,
-        entry.kind,
+        entry.type,
         entry.role,
         entry.agentName ?? null,
-        entry.kind === 'llm' ? entry.provider : null,
-        entry.kind === 'llm' ? (entry.model ?? null) : null,
-        entry.kind === 'llm' ? entry.prompt : null,
-        entry.kind === 'llm' ? (entry.promptLength ?? null) : null,
+        entry.type === 'llm' ? entry.provider : null,
+        entry.type === 'llm' ? (entry.model ?? null) : null,
+        entry.type === 'llm' ? entry.prompt : null,
+        entry.type === 'llm' ? (entry.promptLength ?? null) : null,
         entry.response ?? null,
-        entry.kind === 'llm' ? (entry.responseLength ?? null) : null,
-        entry.kind === 'llm' ? (entry.finishReason ?? null) : null,
-        entry.kind === 'llm' ? entry.toolCalls : 0,
-        entry.kind === 'tool' ? entry.toolName : null,
-        entry.kind === 'tool' ? (entry.toolArgs ?? null) : null,
-        entry.kind === 'tool' ? (entry.success ? 1 : 0) : null,
+        entry.type === 'llm' ? (entry.responseLength ?? null) : null,
+        entry.type === 'llm' ? (entry.finishReason ?? null) : null,
+        entry.type === 'llm' ? entry.toolCalls : 0,
+        entry.type === 'tool' ? entry.toolName : null,
+        entry.type === 'tool' ? (entry.toolArgs ?? null) : null,
+        entry.type === 'tool' ? (entry.success ? 1 : 0) : null,
         entry.durationMs,
         entry.status,
-        entry.kind === 'llm' ? (entry.errorCode ?? null) : null,
+        entry.type === 'llm' ? (entry.errorCode ?? null) : null,
         entry.errorMessage ?? null,
-        entry.kind === 'llm' ? (entry.inputTokens ?? null) : null,
-        entry.kind === 'llm' ? (entry.outputTokens ?? null) : null,
+        entry.type === 'llm' ? (entry.inputTokens ?? null) : null,
+        entry.type === 'llm' ? (entry.outputTokens ?? null) : null,
         formatISO(entry.createdAt),
       ],
     );
@@ -192,9 +192,9 @@ class AuditLogRepository implements IAuditLogRepository {
       params.push(query.from);
     }
 
-    if (query?.kind) {
-      conditions.push('kind = ?');
-      params.push(query.kind);
+    if (query?.type) {
+      conditions.push('type = ?');
+      params.push(query.type);
     }
 
     if (query?.sessionId) {
@@ -207,7 +207,7 @@ class AuditLogRepository implements IAuditLogRepository {
     params.push(limit);
 
     return this.db.query<any>(
-      `SELECT id, run_id, channel, kind, role, agent_name, tool_name, tool_args,
+      `SELECT id, run_id, channel, type, role, agent_name, tool_name, tool_args,
               prompt_length, response_length, input_tokens, output_tokens, duration_ms, created_at
        FROM audit_logs${clause} ORDER BY created_at ASC LIMIT ?`,
       params,
