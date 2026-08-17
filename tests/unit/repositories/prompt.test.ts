@@ -142,6 +142,66 @@ describe('PromptRepository buildMemoryContext', () => {
 });
 
 describe('PromptRepository tool results', () => {
+  it('attaches images to the user message and preserves images in history', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'describe this',
+      channel: 'whatsapp',
+      images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }],
+      messageHistory: [
+        { role: 'user', content: 'older photo', images: [{ data: 'b2xk', mimeType: 'image/jpeg' }] },
+      ],
+    });
+
+    expect(messages[messages.length - 1]).toEqual({
+      role: 'user',
+      content: 'describe this',
+      images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }],
+    });
+    expect(messages).toContainEqual({
+      role: 'user',
+      content: 'older photo',
+      images: [{ data: 'b2xk', mimeType: 'image/jpeg' }],
+    });
+  });
+
+  it('omits images from the user message when none are provided', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+    });
+
+    expect(messages[messages.length - 1]).toEqual({ role: 'user', content: 'Hello' });
+  });
+
+  it('injects the image analysis instruction when the current message has images', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'describe this',
+      channel: 'whatsapp',
+      images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }],
+    });
+
+    const systemContent = messages[0].content as string;
+    expect(systemContent).toContain('# Image Analysis Instructions');
+    expect(systemContent).toContain('do NOT call search_engine or curl_request');
+  });
+
+  it('omits the image analysis instruction when no images are provided', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+    });
+
+    expect(messages[0].content).not.toContain('# Image Analysis Instructions');
+  });
+
   it('appends tool results as tool-role messages after the user message', async () => {
     const repository = makeRepository();
 

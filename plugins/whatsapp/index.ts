@@ -3,6 +3,8 @@ import { ADAPTERS } from '../../src/channels';
 import type { ILogger } from '../../src/infrastructure/logger';
 import type { Plugin, PluginRegistry } from '../registry';
 import type { IMessageGateway } from '../../src/services/agents/message-gateway';
+import type { ImageAttachment } from '../../src/types/messages';
+import type { WAMessage } from '@whiskeysockets/baileys';
 import { stripInternalStreamMarkers } from '../../src/utils/stream-markers';
 import { config } from '../../src/config';
 
@@ -28,7 +30,7 @@ interface WhatsAppPluginOptions {
 }
 
 interface IWhatsAppChannel {
-  handleMessage(gateway: IMessageGateway, jid: string, name: string, text: string): Promise<void>;
+  handleMessage(gateway: IMessageGateway, jid: string, name: string, text: string, images?: ImageAttachment[]): Promise<void>;
   sendText(jid: string, text: string): Promise<void>;
 }
 
@@ -113,28 +115,20 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
 
       if (!jid || !senderName) continue;
 
-       const rawText = extractText(msg);
-       if (!rawText) continue;
+      const rawText = extractText(msg);
+      const image = extractImage(msg);
+      if (!rawText && !image) continue;
 
-       if (isGroupMessageAndMentioned(msg, rawText, mentionId)) {
-         const cleanedText = mentionId ? rawText.replace(`@${mentionId}`, '').trim() : rawText;
+      const text = image?.caption ?? rawText ?? '';
+      if (!shouldProcess(jid, text)) continue;
 
-         const channel = new WhatsAppChannel(sock);
-         void channel.handleMessage(options.gateway, jid, senderName, cleanedText).catch((err: Error) => {
-           options.logger.warn(`WhatsApp message handling error: ${err.message}`);
-         });
-       } else if (!jid.endsWith('@g.us')) {
-         const cleanedText = mentionId ? rawText.replace(`@${mentionId}`, '').trim() : rawText;
+      void handleInboundMessage(options, sock, jid, senderName, text, image).catch((err: Error) => {
+        options.logger.warn(`WhatsApp message handling error: ${err.message}`);
+      });
+    }
+  });
 
-         const channel = new WhatsAppChannel(sock);
-         void channel.handleMessage(options.gateway, jid, senderName, cleanedText).catch((err: Error) => {
-           options.logger.warn(`WhatsApp message handling error: ${err.message}`);
-         });
-       }
-     }
-   });
-
-   return sock;
+  return sock;
  }
 
  function extractText(msg: { message?: unknown }): string | null {
@@ -154,15 +148,65 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
    return null;
  }
 
- function isGroupMessageAndMentioned(msg: any, text: string, mentionId: string): boolean {
-   const jid = msg.key?.remoteJid;
-   if (!jid || !jid.endsWith('@g.us')) return false;
+interface ExtractedImage {
+  caption?: string;
+  mimetype?: string;
+  message: WAMessage;
+}
 
-   const mention = `@${mentionId}`;
-   return mentionId.length > 0 && text.includes(mention);
+function extractImage(msg: WAMessage): ExtractedImage | null {
+  if (!msg.message || typeof msg.message !== 'object') return null;
+
+   const content = msg.message as Record<string, unknown>;
+   const imageMessage = content['imageMessage'];
+   if (!imageMessage || typeof imageMessage !== 'object') return null;
+
+   const image = imageMessage as Record<string, unknown>;
+   return {
+     caption: typeof image['caption'] === 'string' ? image['caption'] : undefined,
+     mimetype: typeof image['mimetype'] === 'string' ? image['mimetype'] : undefined,
+     message: msg,
+   };
  }
 
-function formatBaileysLog(msg: unknown): string {
+ function shouldProcess(jid: string, text: string): boolean {
+   if (jid.endsWith('@g.us')) {
+     return mentionId.length > 0 && text.includes(`@${mentionId}`);
+   }
+   return true;
+ }
+
+ async function downloadImageBase64(image: ExtractedImage, logger: ILogger): Promise<ImageAttachment | null> {
+   try {
+     const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
+     const buffer = await downloadMediaMessage(image.message, 'buffer', {}) as Buffer;
+     return { data: buffer.toString('base64'), mimeType: image.mimetype };
+   } catch (err) {
+     logger.warn(`WhatsApp image download failed: ${err instanceof Error ? err.message : String(err)}`);
+     return null;
+   }
+ }
+
+ async function handleInboundMessage(
+   options: WhatsAppChannelStartOptions,
+   sock: SocketLike,
+   jid: string,
+   senderName: string,
+   text: string,
+   image: ExtractedImage | null,
+ ): Promise<void> {
+   const cleanedText = mentionId ? text.replace(`@${mentionId}`, '').trim() : text;
+   const images: ImageAttachment[] = [];
+   if (image) {
+     const attachment = await downloadImageBase64(image, options.logger);
+     if (attachment) images.push(attachment);
+   }
+
+   const channel = new WhatsAppChannel(sock);
+   await channel.handleMessage(options.gateway, jid, senderName, cleanedText, images);
+ }
+
+ function formatBaileysLog(msg: unknown): string {
   if (typeof msg === 'string') return msg;
   try {
     const serialized = JSON.stringify(msg);
@@ -190,11 +234,11 @@ class WhatsAppChannel implements IWhatsAppChannel {
     private readonly sock?: SocketLike
   ) {}
 
-  async handleMessage(gateway: IMessageGateway, jid: string, name: string, text: string): Promise<void> {
+  async handleMessage(gateway: IMessageGateway, jid: string, name: string, text: string, images?: ImageAttachment[]): Promise<void> {
     try {
       // In testing... To remember old version: `Message from ${name}: ${text}`;
       const prompt = `${name} says: ${text}`;
-      const response = await gateway.handle(prompt, jid, { channel: 'whatsapp' });
+      const response = await gateway.handle({ text: prompt, images }, jid, { channel: 'whatsapp' });
       const resolved = await this.resolveResponse(response);
       await this.sendText(jid, resolved);
     } catch (err) {
@@ -269,8 +313,8 @@ class WhatsAppChannelFactory {
 
 const whatsappChannel = WhatsAppChannelFactory.create();
 
-async function handleMessage(gateway: IMessageGateway, jid: string, name: string, text: string): Promise<void> {
-  await whatsappChannel.handleMessage(gateway, jid, name, text);
+async function handleMessage(gateway: IMessageGateway, jid: string, name: string, text: string, images?: ImageAttachment[]): Promise<void> {
+  await whatsappChannel.handleMessage(gateway, jid, name, text, images);
 }
 
 async function sendText(jid: string, text: string): Promise<void> {

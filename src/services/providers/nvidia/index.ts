@@ -1,12 +1,17 @@
 import type { AIChatOptions, AIChatRequest, AIProvider, AIProviderOptions, AIResponse } from '../../../types/chat';
+import type { Message } from '../../../types/messages';
 import { config } from '../../../config';
 import { ILogger } from '../../../infrastructure/logger';
 import { THINK_START, THINK_END } from '../../../constants/thinking';
 import { extractToolCalls } from '../../../utils/tool-calls';
 
+type OpenAIContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 type OpenAIMessage = {
   role: string;
-  content?: string | null;
+  content?: string | null | OpenAIContentBlock[];
   tool_calls?: OpenAIToolCall[];
 };
 
@@ -113,7 +118,7 @@ class NvidiaAIProvider implements AIProvider {
         return JSON.stringify({ tool_calls: msg.tool_calls });
       }
 
-      const content = msg?.content;
+      const content = typeof msg?.content === 'string' ? msg.content : null;
       if (!content) throw new Error('NVIDIA response missing content');
       return content;
     } catch (err) {
@@ -336,7 +341,7 @@ class NvidiaAIProvider implements AIProvider {
       return JSON.stringify({ tool_calls: msg.tool_calls });
     }
 
-    const content = msg?.content;
+    const content = typeof msg?.content === 'string' ? msg.content : null;
     if (!content) throw new Error('NVIDIA response missing content');
     return content;
   }
@@ -419,7 +424,7 @@ class NvidiaAIProvider implements AIProvider {
   private async post(request: AIChatRequest, signal: AbortSignal, stream: boolean): Promise<Response> {
     const body: Record<string, unknown> = {
       model: request.model ?? this.defaultModel,
-      messages: request.messages,
+      messages: request.messages.map((message) => this.toOpenAIMessage(message)),
       stream,
     };
 
@@ -456,6 +461,24 @@ class NvidiaAIProvider implements AIProvider {
 
   private isAbortError(err: unknown): boolean {
     return err instanceof Error && (err.name === 'AbortError' || /aborted/i.test(err.message));
+  }
+
+  private toOpenAIMessage(message: Message): OpenAIMessage {
+    if (!message.images?.length) {
+      return message as OpenAIMessage;
+    }
+
+    const content: OpenAIContentBlock[] = [
+      { type: 'text', text: message.content },
+      ...message.images.map((image) => ({
+        type: 'image_url' as const,
+        image_url: {
+          url: `data:${image.mimeType ?? 'image/png'};base64,${image.data}`,
+        },
+      })),
+    ];
+
+    return { role: message.role, content };
   }
 }
 

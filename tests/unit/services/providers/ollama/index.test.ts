@@ -113,6 +113,69 @@ describe('OllamaAIProvider', () => {
     expect(headers.get('content-type')).toBe('application/json');
   });
 
+  it('maps message images to base64 strings in the Ollama chat payload', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            message: { role: 'assistant', content: 'I see it' },
+            done: true,
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }
+        )
+      ) as unknown as typeof fetch;
+
+    globalThis.fetch = fetchMock;
+    const provider = new OllamaAIProvider(logger, { baseUrl: 'http://localhost:11434', model: 'test' });
+
+    await provider.chat({
+      messages: [
+        {
+          role: 'user',
+          content: 'describe this',
+          images: [
+            { data: 'aGVsbG8=', mimeType: 'image/png' },
+            { data: 'd29ybGQ=', mimeType: 'image/jpeg' },
+          ],
+        },
+      ],
+    });
+
+    const fetchArgs = (fetchMock as any).mock.calls[0]?.[1];
+    const body = typeof fetchArgs?.body === 'string' ? JSON.parse(fetchArgs.body) : undefined;
+    expect(body?.messages[0]?.images).toEqual(['aGVsbG8=', 'd29ybGQ=']);
+  });
+
+  it('leaves messages without images untouched in the Ollama chat payload', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            message: { role: 'assistant', content: 'ok' },
+            done: true,
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }
+        )
+      ) as unknown as typeof fetch;
+
+    globalThis.fetch = fetchMock;
+    const provider = new OllamaAIProvider(logger, { baseUrl: 'http://localhost:11434', model: 'test' });
+
+    await provider.chat({ messages: [{ role: 'user', content: 'hi' }] });
+
+    const fetchArgs = (fetchMock as any).mock.calls[0]?.[1];
+    const body = typeof fetchArgs?.body === 'string' ? JSON.parse(fetchArgs.body) : undefined;
+    expect(body?.messages[0]).toEqual({ role: 'user', content: 'hi' });
+  });
+
   it('arms idle timeout before the first stream chunk arrives', async () => {
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
 

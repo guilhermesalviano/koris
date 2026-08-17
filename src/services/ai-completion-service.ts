@@ -139,7 +139,12 @@ export class AICompletionService implements IAICompletionService {
     error?: AIServiceError,
     usage?: { inputTokens?: number; outputTokens?: number },
   ): void {
-    const prompt = JSON.stringify(request.messages);
+    const prompt = JSON.stringify(request.messages, (key, value) => {
+      if (key === 'images' && Array.isArray(value)) {
+        return value.map((image) => `[image:${image?.data?.length ?? 0} bytes]`);
+      }
+      return value;
+    });
     const responseText = response
       ? response.kind === 'message'
         ? response.text

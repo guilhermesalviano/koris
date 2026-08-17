@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { MessageRepository } from '../../../src/repositories/message';
+import { Message } from '../../../src/entities/message';
 
 function makeDb(rows: any[] = []) {
   return {
@@ -47,6 +48,56 @@ describe('MessageRepository', () => {
 
     const [, params] = db.query.mock.calls[0];
     expect(params).toEqual(['sess-1', 15]);
+  });
+
+  it('persists images as a JSON column', () => {
+    const db = makeDb([]);
+    const repository = new MessageRepository(db as any);
+
+    repository.save(new Message({
+      sessionId: 'sess-1',
+      role: 'user',
+      content: 'describe',
+      images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }],
+      id: 'm1',
+      createdAt: '2026-05-01T12:00:00.000Z',
+    }));
+
+    const [, params] = db.run.mock.calls[0];
+    expect(params[4]).toBe(JSON.stringify([{ data: 'aGVsbG8=', mimeType: 'image/png' }]));
+  });
+
+  it('stores null images when a message has no attachments', () => {
+    const db = makeDb([]);
+    const repository = new MessageRepository(db as any);
+
+    repository.save(new Message({
+      sessionId: 'sess-1',
+      role: 'user',
+      content: 'hi',
+      id: 'm1',
+      createdAt: '2026-05-01T12:00:00.000Z',
+    }));
+
+    const [, params] = db.run.mock.calls[0];
+    expect(params[4]).toBeNull();
+  });
+
+  it('parses images back from the JSON column when reading history', () => {
+    const db = makeDb([
+      {
+        id: 'm1',
+        session_id: 'sess-1',
+        role: 'user',
+        content: 'describe',
+        images: JSON.stringify([{ data: 'aGVsbG8=', mimeType: 'image/png' }]),
+        created_at: '2026-05-01T12:00:00.000Z',
+      },
+    ]);
+    const repository = new MessageRepository(db as any);
+
+    const [message] = repository.getBySessionId('sess-1', 1);
+    expect(message.images).toEqual([{ data: 'aGVsbG8=', mimeType: 'image/png' }]);
   });
 
   it('fetches the first user message as the session preview', () => {

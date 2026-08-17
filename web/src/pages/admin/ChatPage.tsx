@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
+import type { ImageAttachment } from '../../lib/types';
 
 const MAX_CHARS = 4000;
 
@@ -12,11 +13,16 @@ const PROMPTS = [
   'How do I center a div in CSS?',
 ];
 
+function imageSrc(image: ImageAttachment): string {
+  return `data:${image.mimeType ?? 'image/png'};base64,${image.data}`;
+}
+
 export default function ChatPage() {
   const { sessionId } = useParams();
-  const { messages, input, setInput, streaming, historyLoaded, toast, submit, fillPrompt, openSession } = useChat();
+  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, fillPrompt, openSession } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync the viewed session with the URL. `null` targets the live chat (latest
   // open web session, without creating one).
@@ -39,7 +45,7 @@ export default function ChatPage() {
     }
   }, [input]);
 
-  const canSend = !streaming && input.trim().length > 0;
+  const canSend = !streaming && (input.trim().length > 0 || attachments.length > 0);
 
   function handlePromptClick(text: string) {
     fillPrompt(text);
@@ -51,6 +57,37 @@ export default function ChatPage() {
       e.preventDefault();
       if (canSend) submit();
     }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (files.length === 0) return;
+    e.preventDefault();
+    addFiles(files);
+  }
+
+  function handleFiles(files: FileList | null) {
+    if (!files) return;
+    addFiles(Array.from(files));
+  }
+
+  function addFiles(files: File[]) {
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    if (images.length === 0) return;
+
+    for (const file of images) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        const base64 = result.includes(',') ? result.slice(result.indexOf(',') + 1) : result;
+        setAttachments((prev) => [...prev, { data: base64, mimeType: file.type }]);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function removeAttachment(index: number) {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
   }
 
   const showEmptyState = historyLoaded && messages.length === 0;
@@ -91,6 +128,13 @@ export default function ChatPage() {
             <div className={`bubble-col flex max-w-[calc(100%-44px)] flex-col gap-1 ${m.role === 'user' ? 'items-end' : ''}`}>
               {m.role === 'user' ? (
                 <div className="bubble relative break-words rounded-card rounded-br-[5px] bg-accent px-3.5 py-2.5 text-sm leading-relaxed text-white">
+                  {m.images && m.images.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {m.images.map((img, i) => (
+                        <img key={i} src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-20 max-w-[140px] rounded-md object-cover" />
+                      ))}
+                    </div>
+                  )}
                   {m.content}
                 </div>
               ) : m.pending && !m.content ? (
@@ -118,7 +162,50 @@ export default function ChatPage() {
       </div>
 
       <div className="flex-shrink-0 border-t border-subtle bg-bg/90 px-4 pb-4 pt-3 backdrop-blur-md">
+        {attachments.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {attachments.map((img, i) => (
+              <div key={i} className="relative">
+                <img src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-16 w-16 rounded-lg border border-strong object-cover" />
+                <button
+                  onClick={() => removeAttachment(i)}
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-strong bg-bg text-txt-2 hover:text-red-400"
+                  title="Remove image"
+                >
+                  <svg className="h-3 w-3 fill-none stroke-current" style={{ strokeWidth: 2 }} viewBox="0 0 24 24">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="flex items-start gap-2 rounded-card border border-strong bg-bg-3 px-4 py-2.5 pr-2.5 transition-colors duration-200 focus-within:border-accent">
+          <button
+            type="button"
+            disabled={streaming}
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach image"
+            className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[10px] border-none bg-transparent text-txt-3 transition-all duration-150 hover:bg-bg-2 hover:text-accent-2 disabled:opacity-35 disabled:cursor-default"
+          >
+            <svg className="h-[16px] w-[16px] fill-none stroke-current" style={{ strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              handleFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
           <textarea
             ref={textareaRef}
             rows={1}
@@ -128,6 +215,7 @@ export default function ChatPage() {
             maxLength={MAX_CHARS}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3"
           />
           <button

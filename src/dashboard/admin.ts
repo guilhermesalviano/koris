@@ -224,6 +224,7 @@ class AdminRouterFactory {
           id: m.id,
           role: m.role,
           content: m.content,
+          images: m.images,
           createdAt: m.createdAt,
         })),
         memories: memories.map((m) => ({
@@ -359,6 +360,7 @@ class AdminRouterFactory {
           id: m.id,
           role: m.role,
           content: m.content,
+          images: m.images,
           createdAt: m.createdAt,
         })),
       });

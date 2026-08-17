@@ -106,6 +106,73 @@ describe('NvidiaAIProvider', () => {
     expect(headers.get('authorization')).toBe('Bearer nvapi-secret');
   });
 
+  it('transforms message images into OpenAI content blocks in the NVIDIA payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { role: 'assistant', content: 'I see it' }, finish_reason: 'stop' }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    ) as unknown as typeof fetch;
+
+    globalThis.fetch = fetchMock;
+
+    const provider = new NvidiaAIProvider(logger, {
+      baseUrl: 'https://integrate.api.nvidia.com/v1',
+      model: 'test-model',
+    });
+
+    await provider.chat({
+      messages: [
+        {
+          role: 'user',
+          content: 'describe this',
+          images: [
+            { data: 'aGVsbG8=', mimeType: 'image/png' },
+            { data: 'd29ybGQ=' },
+          ],
+        },
+      ],
+    });
+
+    const fetchArgs = (fetchMock as any).mock.calls[0]?.[1];
+    const body = JSON.parse(fetchArgs.body);
+
+    expect(body.messages[0]).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'describe this' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,aGVsbG8=' } },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,d29ybGQ=' } },
+      ],
+    });
+  });
+
+  it('leaves messages without images untouched in the NVIDIA payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    ) as unknown as typeof fetch;
+
+    globalThis.fetch = fetchMock;
+
+    const provider = new NvidiaAIProvider(logger, {
+      baseUrl: 'https://integrate.api.nvidia.com/v1',
+      model: 'test-model',
+    });
+
+    await provider.chat({ messages: [{ role: 'user', content: 'hi' }] });
+
+    const fetchArgs = (fetchMock as any).mock.calls[0]?.[1];
+    const body = JSON.parse(fetchArgs.body);
+    expect(body.messages[0]).toEqual({ role: 'user', content: 'hi' });
+  });
+
   it('returns serialized tool_calls JSON when chat response contains tool calls', async () => {
     const toolCalls = [
       { id: 'call_1', type: 'function', function: { name: 'get_skill', arguments: '{"skill_name":"git"}' } },

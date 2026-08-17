@@ -8,6 +8,7 @@ import { ILogger } from '../infrastructure/logger';
 import { healthCheck } from '../services/provider-health-service';
 import { AIServiceError } from '../services/ai-completion-service';
 import { IMessageGateway } from '../services/agents/message-gateway';
+import type { ImageAttachment } from '../types/messages';
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { AdminRouterFactory } from './admin';
@@ -82,8 +83,13 @@ class ChatRouteHandler {
 
   readonly handle = async (req: Request, res: Response): Promise<void> => {
     const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
-    if (!message) {
+    const images = this.parseImages(req.body?.images);
+    if (!message && !images.length) {
       res.status(400).json({ error: 'message is required' });
+      return;
+    }
+    if (images.length > 10) {
+      res.status(400).json({ error: 'too many images (max 10)' });
       return;
     }
 
@@ -117,7 +123,7 @@ class ChatRouteHandler {
     this.setupSseHeaders(res);
 
     try {
-      const result = await this.gateway.handle(message, 'web', {
+      const result = await this.gateway.handle({ text: message, images }, 'web', {
         sessionId,
         onProgress: (summary: string) => {
           if (clientClosed) {
@@ -168,6 +174,28 @@ class ChatRouteHandler {
 
       res.write(`data: ${JSON.stringify(payload)}\n\n`);
     };
+  }
+
+  private parseImages(raw: unknown): ImageAttachment[] {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+
+    const images: ImageAttachment[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') {
+        continue;
+      }
+      const { data, mimeType } = item as { data?: unknown; mimeType?: unknown };
+      if (typeof data !== 'string' || !data) {
+        continue;
+      }
+      images.push({
+        data,
+        ...(typeof mimeType === 'string' && mimeType ? { mimeType } : {}),
+      });
+    }
+    return images;
   }
 
   private async writeResponse(
@@ -281,7 +309,7 @@ class DashboardServer implements WebServerHandle {
     const healthHandler = new HealthRouteHandler(this.logger);
     const adminRouter = AdminRouterFactory.create(this.logger, this.db);
 
-    app.use(express.json());
+    app.use(express.json({ limit: '25mb' }));
     app.use(express.static(publicDir));
     app.post('/api/chat', chatHandler.handle);
     app.use('/api/admin', adminRouter);
