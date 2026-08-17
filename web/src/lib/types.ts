@@ -1,13 +1,31 @@
 export interface OverviewResponse {
   sessions: number;
+  openSessions: number;
+  messages: number;
+  memories: number;
   heartbeats: number;
   learnedSkills: number;
+  learnedSkillsLimit: number;
   skills: number;
   auditErrors: number;
   provider: string;
   model: string;
+  workerProvider: string;
+  workerModel: string;
   environment: string;
+  timezone: string;
+  heartbeatEnabled: boolean;
+  summarizerEnabled: boolean;
+  aiParallel: boolean;
+  aiSubagentsParallel: boolean;
+  channels: { type: string; enabled: boolean }[];
+  registeredChannels: { type: string; target: string; principal: boolean }[];
+  lastHeartbeatRunAt?: string | null;
   health: { status: string; details?: unknown };
+  activeRuns: ActiveRun[];
+  queue: QueueResponse;
+  usage: UsageStats;
+  recentErrors: AuditItem[];
 }
 
 export interface SessionSummary {
@@ -84,22 +102,18 @@ export interface ChannelsResponse {
   items: ChannelItem[];
 }
 
-export interface Skill {
+export interface SkillItem {
   name: string;
   description: string;
-  read_when?: string | null;
-}
-
-export interface LearnedSkill {
-  id: string;
-  skill_name: string;
-  skill_content: string;
-  learned_at: string;
+  read_when?: string[] | null;
+  content?: string | null;
+  enabled: boolean;
+  learned_at?: string | null;
 }
 
 export interface SkillsResponse {
-  available: Skill[];
-  learned: LearnedSkill[];
+  items: SkillItem[];
+  limit: number;
 }
 
 export interface ActiveRun {
@@ -143,7 +157,7 @@ export interface AuditItem {
   runId?: string;
   sessionId?: string;
   channel?: string;
-  kind: 'llm' | 'tool';
+  type: 'llm' | 'tool';
   role: 'manager' | 'worker';
   agentName?: string;
   provider?: string;
@@ -188,5 +202,4 @@ export interface UsageReport {
   byAgent: Record<string, UsageStats>;
   byChannel: Record<string, UsageStats>;
   byTool: Record<string, UsageStats>;
-  bySkill: Record<string, UsageStats>;
 }

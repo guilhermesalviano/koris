@@ -18,7 +18,6 @@ export interface UsageReport {
   byAgent: Record<string, UsageStats>;
   byChannel: Record<string, UsageStats>;
   byTool: Record<string, UsageStats>;
-  bySkill: Record<string, UsageStats>;
 }
 
 export function estimateTokens(chars?: number | null): number {
@@ -53,13 +52,11 @@ export function buildUsageReport(rows: UsageRow[], days: number | null = null): 
   const byAgent: Record<string, UsageStats> = {};
   const byChannel: Record<string, UsageStats> = {};
   const byTool: Record<string, UsageStats> = {};
-  const bySkill: Record<string, UsageStats> = {};
   const toolByRun = new Map<string, Set<string>>();
-  const skillByRun = new Map<string, Set<string>>();
   const runTokens = new Map<string, { input: number; output: number; duration: number }>();
 
   for (const row of rows) {
-    if (row.kind === 'llm') {
+    if (row.type === 'llm') {
       const input = effectiveInputTokens(row);
       const output = effectiveOutputTokens(row);
 
@@ -101,18 +98,6 @@ export function buildUsageReport(rows: UsageRow[], days: number | null = null): 
         toolByRun.set(row.run_id, set);
       }
       set.add(tool);
-
-      if (tool === 'get_skill') {
-        const skillName = extractSkillName(row.tool_args);
-        if (skillName) {
-          let skills = skillByRun.get(row.run_id);
-          if (!skills) {
-            skills = new Set();
-            skillByRun.set(row.run_id, skills);
-          }
-          skills.add(skillName);
-        }
-      }
     }
   }
 
@@ -130,25 +115,9 @@ export function buildUsageReport(rows: UsageRow[], days: number | null = null): 
         stats.durationMs += durationShare;
       }
     }
-
-    const skillSet = skillByRun.get(runId);
-    if (skillSet && skillSet.size > 0) {
-      const inputShare = Math.round(tokens.input / skillSet.size);
-      const outputShare = Math.round(tokens.output / skillSet.size);
-      const durationShare = Math.round(tokens.duration / skillSet.size);
-      for (const skill of skillSet) {
-        const stats = bySkill[skill] ?? emptyStats();
-        stats.calls += 1;
-        stats.inputTokens += inputShare;
-        stats.outputTokens += outputShare;
-        stats.totalTokens += inputShare + outputShare;
-        stats.durationMs += durationShare;
-        bySkill[skill] = stats;
-      }
-    }
   }
 
-  return { days, total, byAgent, byChannel, byTool, bySkill };
+  return { days, total, byAgent, byChannel, byTool };
 }
 
 function emptyStats(): UsageStats {
@@ -176,15 +145,4 @@ function addTool(map: Record<string, UsageStats>, key: string, durationMs: numbe
   stats.toolCalls += 1;
   stats.durationMs += durationMs;
   map[key] = stats;
-}
-
-function extractSkillName(toolArgs?: string): string | undefined {
-  if (!toolArgs) return undefined;
-  try {
-    const args = JSON.parse(toolArgs) as Record<string, unknown>;
-    const name = args.skill_name ?? args.name;
-    return typeof name === 'string' && name ? name : undefined;
-  } catch {
-    return undefined;
-  }
 }

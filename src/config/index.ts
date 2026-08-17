@@ -58,7 +58,7 @@ export const config = {
       MODEL:   get('ai.workers.model', 'qwen:3.5:2b'),
       EMBEDDING_ENABLED: get('ai.workers.embedding', 'false') === 'true',
       EMBED_MODEL: get('ai.workers.embed_model', 'nomic-embed-text'),
-      NUM_CTX: Number(get('ai.workers.num_ctx', '8192')),
+      NUM_CTX: Number(get('ai.workers.num_ctx', '16384')),
     },
     SEARCH_API_KEY: get('ai.search_api_key', ''),
     TIMEOUTS: {

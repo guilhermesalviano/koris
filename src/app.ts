@@ -16,6 +16,9 @@ import { SessionManager } from './services/session-manager';
 import { DatabaseServiceFactory } from './infrastructure/db-sqlite';
 import { HeartbeatRepositoryFactory } from './repositories/heartbeat';
 import { HeartbeatRunRepositoryFactory } from './repositories/heartbeat-run';
+import { SkillsRepositoryFactory } from './repositories/skills';
+import { LearnedSkillsRepositoryFactory } from './repositories/learned-skills';
+import { SkillSyncSingleton } from './services/skills/skill-sync';
 import { DashboardServerFactory, WebServerHandle } from './dashboard';
 import { createPlugins, buildRegistry } from '../plugins';
 
@@ -64,9 +67,15 @@ class Application implements IApplication {
       channels,
       HeartbeatRunRepositoryFactory.create(db),
     );
+    const skillSync = SkillSyncSingleton.getInstance(
+      this.logger,
+      SkillsRepositoryFactory.create(this.logger),
+      LearnedSkillsRepositoryFactory.create(db),
+    );
 
     channels.startAll();
     heartbeat.start();
+    skillSync.start();
 
     try {
       const webServer = this.modes.web
@@ -118,6 +127,7 @@ class Application implements IApplication {
 
     this.runtime.channels.stopAll();
     this.runtime.heartbeat.stop();
+    SkillSyncSingleton.getExistingInstance()?.stop();
 
     try {
       await this.runtime.webServer?.stop();

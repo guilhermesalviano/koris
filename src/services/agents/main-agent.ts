@@ -1,6 +1,5 @@
 import { IToolsQueue, ToolsQueueFactory } from '../tools-queue';
-import { FIRST_PROMPT_HELPER } from '../../constants';
-import { replacePlaceholders } from '../../utils/prompt';
+import { TOOL_EXECUTION_CONTRACT } from '../../constants';
 import type { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import type { IMessageService } from '../message-service';
 import type { ILogger } from '../../infrastructure/logger';
@@ -41,10 +40,10 @@ class MainAgent implements IMainAgent {
       signal: options?.signal ?? NEVER_ABORTED,
       onProgress: options?.onProgress ?? ((progress) => this.logger.info(progress)),
       options,
+      initiatedBy: 'manager',
     };
 
-    const prompt = replacePlaceholders(FIRST_PROMPT_HELPER, { v1: userMessage });
-    const response = await this.ChatService.complete(prompt, channel, options, messageHistory, message.getSessionId());
+    const response = await this.ChatService.complete(userMessage, channel, options, messageHistory, message.getSessionId(), [TOOL_EXECUTION_CONTRACT]);
     if (response.kind === 'message') return response.text;
     return this.pipeline.execute(response.calls, userMessage, messageHistory, ctx);
   }
@@ -54,7 +53,7 @@ class MainAgentFactory {
   static create(logger: ILogger): IMainAgent {
     const ChatService = ChatServiceFactory.create(logger, 'manager', 'manager');
     const toolsQueue = ToolsQueueFactory.create(logger);
-    const pipeline = ToolCallPipelineFactory.create(logger, ChatService);
+    const pipeline = ToolCallPipelineFactory.create(logger);
     return new MainAgent(logger, ChatService, toolsQueue, pipeline);
   }
 }

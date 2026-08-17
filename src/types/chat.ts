@@ -2,7 +2,7 @@ import type { Message } from "./messages";
 import type { ProcessedMessage, ProcessOptions } from "./agents";
 import type { ToolCall } from "./tools";
 
-export type AIRole = 'system' | 'user' | 'assistant';
+export type AIRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export interface AIToolDefinition {
   type: 'function';
@@ -74,7 +74,9 @@ export interface IChatService {
     channel: string,
     options?: ProcessOptions,
     messageHistory?: Message[],
-    sessionId?: string
+    sessionId?: string,
+    extraSystemBlocks?: string[],
+    toolResults?: Message[],
   ): Promise<AIResponse>;
 
   handler(

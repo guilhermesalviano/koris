@@ -5,14 +5,13 @@
  * variable name so logs stay readable and don't duplicate constant text.
  */
 import {
-  FIRST_PROMPT_HELPER,
-  HEARTBEAT_PROMPT,
-  PLAN_PROMPT,
+  EXECUTOR_SYNTHESIS_RULES,
+  HEARTBEAT_INSTRUCTIONS,
+  PLAN_INSTRUCTIONS,
   SKILL_LEARNING_PROMPT,
-  SKILL_READY_PROMPT,
-  SUMMARIZATION_PROMPT,
+  SUMMARIZATION_INSTRUCTIONS,
   SYSTEM_PROMPT,
-  TOOLS_RESULT_PROMPT,
+  TOOL_EXECUTION_CONTRACT,
 } from '../constants';
 
 export interface CurlCommandOptions {
@@ -54,13 +53,12 @@ function buildRedaction(label: string, text: string): PromptRedaction {
 
 const PROMPT_REDACTIONS: PromptRedaction[] = [
   buildRedaction('<SYSTEM_PROMPT>', SYSTEM_PROMPT),
-  buildRedaction('<FIRST_PROMPT_HELPER>', FIRST_PROMPT_HELPER),
-  buildRedaction('<TOOLS_RESULT_PROMPT>', TOOLS_RESULT_PROMPT),
-  buildRedaction('<SUMMARIZATION_PROMPT>', SUMMARIZATION_PROMPT),
-  buildRedaction('<PLAN_PROMPT>', PLAN_PROMPT),
+  buildRedaction('<TOOL_EXECUTION_CONTRACT>', TOOL_EXECUTION_CONTRACT),
+  buildRedaction('<EXECUTOR_SYNTHESIS_RULES>', EXECUTOR_SYNTHESIS_RULES),
+  buildRedaction('<SUMMARIZATION_INSTRUCTIONS>', SUMMARIZATION_INSTRUCTIONS),
+  buildRedaction('<PLAN_INSTRUCTIONS>', PLAN_INSTRUCTIONS),
   buildRedaction('<SKILL_LEARNING_PROMPT>', SKILL_LEARNING_PROMPT),
-  buildRedaction('<SKILL_READY_PROMPT>', SKILL_READY_PROMPT),
-  buildRedaction('<HEARTBEAT_PROMPT>', HEARTBEAT_PROMPT),
+  buildRedaction('<HEARTBEAT_INSTRUCTIONS>', HEARTBEAT_INSTRUCTIONS),
 ];
 
 /**

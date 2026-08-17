@@ -141,6 +141,109 @@ describe('PromptRepository buildMemoryContext', () => {
   });
 });
 
+describe('PromptRepository tool results', () => {
+  it('appends tool results as tool-role messages after the user message', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+      toolResults: [
+        { role: 'tool', content: 'Tool: ls, Result: a' },
+        { role: 'tool', content: 'Tool: pwd, Result: /home' },
+      ],
+    });
+
+    expect(messages[messages.length - 3]).toEqual({ role: 'user', content: 'Hello' });
+    expect(messages[messages.length - 2]).toEqual({ role: 'tool', content: 'Tool: ls, Result: a' });
+    expect(messages[messages.length - 1]).toEqual({ role: 'tool', content: 'Tool: pwd, Result: /home' });
+  });
+
+  it('omits tool messages when none are provided', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+    });
+
+    expect(messages.some((m) => m.role === 'tool')).toBe(false);
+  });
+
+  it('emits tool_call_id and tool_calls on provider messages', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+      toolResults: [
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{ id: 'call_1', function: { name: 'ls', arguments: { flags: '-l' } } }],
+        },
+        { role: 'tool', content: 'Tool: ls, Result: a', tool_call_id: 'call_1' },
+      ],
+    });
+
+    expect(messages[messages.length - 2]).toEqual({
+      role: 'assistant',
+      content: '',
+      tool_calls: [{ id: 'call_1', function: { name: 'ls', arguments: { flags: '-l' } } }],
+    });
+    expect(messages[messages.length - 1]).toEqual({
+      role: 'tool',
+      content: 'Tool: ls, Result: a',
+      tool_call_id: 'call_1',
+    });
+  });
+
+  it('does not sanitize tool result content', async () => {
+    const originalEnabled = config.AI.PROMPT_SANITIZER;
+    (config.AI.PROMPT_SANITIZER as boolean) = true;
+    try {
+      const repository = makeRepository();
+
+      const { messages } = await repository.build({
+        userMessage: 'I really want to go.',
+        channel: 'whatsapp',
+        toolResults: [{ role: 'tool', content: 'a a a b b b' }],
+      });
+
+      expect(messages[messages.length - 1].content).toBe('a a a b b b');
+    } finally {
+      (config.AI.PROMPT_SANITIZER as boolean) = originalEnabled;
+    }
+  });
+});
+
+describe('PromptRepository extraSystemBlocks', () => {
+  it('appends situation-specific contract blocks to the system prompt', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+      extraSystemBlocks: ['# Contract One', '# Contract Two'],
+    });
+
+    const systemContent = messages[0].content as string;
+    expect(systemContent).toContain('# Contract One');
+    expect(systemContent).toContain('# Contract Two');
+  });
+
+  it('omits extra blocks when none are provided', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+    });
+
+    expect(messages[0].content).not.toContain('# Contract One');
+  });
+});
+
 describe('PromptRepository prompt sanitizer', () => {
   const originalEnabled = config.AI.PROMPT_SANITIZER;
 

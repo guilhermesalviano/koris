@@ -14,7 +14,7 @@ function llmRow(overrides: Partial<UsageRow> = {}): UsageRow {
     id: 'l1',
     run_id: 'run-1',
     channel: 'telegram',
-    kind: 'llm',
+    type: 'llm',
     role: 'manager',
     agent_name: 'manager',
     input_tokens: 100,
@@ -30,7 +30,7 @@ function toolRow(overrides: Partial<UsageRow> = {}): UsageRow {
     id: 't1',
     run_id: 'run-1',
     channel: 'telegram',
-    kind: 'tool',
+    type: 'tool',
     role: 'worker',
     agent_name: 'executorWorker',
     tool_name: 'curl-request',
@@ -79,7 +79,7 @@ describe('usage engine', () => {
     const rows = [
       llmRow({ id: 'l1', run_id: 'run-1', input_tokens: 90, output_tokens: 10 }),
       toolRow({ id: 't1', run_id: 'run-1', tool_name: 'curl-request' }),
-      toolRow({ id: 't2', run_id: 'run-1', tool_name: 'get_skill', tool_args: JSON.stringify({ skill_name: 'git' }) }),
+      toolRow({ id: 't2', run_id: 'run-1', tool_name: 'search_engine' }),
     ];
 
     const report = buildUsageReport(rows);
@@ -87,10 +87,8 @@ describe('usage engine', () => {
     expect(report.byTool['curl-request'].toolCalls).toBe(1);
     expect(report.byTool['curl-request'].inputTokens).toBe(45);
     expect(report.byTool['curl-request'].outputTokens).toBe(5);
-    expect(report.byTool['get_skill'].inputTokens).toBe(45);
-    expect(report.byTool['get_skill'].outputTokens).toBe(5);
-    expect(report.bySkill['git'].totalTokens).toBe(100);
-    expect(report.bySkill['git'].calls).toBe(1);
+    expect(report.byTool['search_engine'].inputTokens).toBe(45);
+    expect(report.byTool['search_engine'].outputTokens).toBe(5);
   });
 
   it('buildUsageReport attributes tool-only runs with zero llm tokens', () => {
@@ -140,7 +138,6 @@ describe('usage engine', () => {
     expect(report.byAgent['unknown'].calls).toBe(1);
     expect(report.byChannel['unknown'].calls).toBe(1);
     expect(report.byTool['unknown'].toolCalls).toBe(1);
-    expect(Object.keys(report.bySkill)).toHaveLength(0);
   });
 
   it('formatUsageReport keeps markdown for telegram', () => {

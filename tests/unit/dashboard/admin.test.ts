@@ -4,6 +4,14 @@ import type { ILogger } from '../../../src/infrastructure/logger';
 
 const {
   auditRepo,
+  sessionRepo,
+  messageRepo,
+  memoryRepo,
+  heartbeatRepo,
+  channelRepo,
+  learnedSkillsRepo,
+  skillsRepo,
+  skillSync,
 } = vi.hoisted(() => ({
   auditRepo: {
     count: vi.fn(),
@@ -13,6 +21,14 @@ const {
     deleteAll: vi.fn(),
     usage: vi.fn(),
   },
+  sessionRepo: { count: vi.fn(), countOpen: vi.fn() },
+  messageRepo: { count: vi.fn() },
+  memoryRepo: { count: vi.fn() },
+  heartbeatRepo: { getAll: vi.fn() },
+  channelRepo: { getAll: vi.fn() },
+  learnedSkillsRepo: { count: vi.fn(), getAll: vi.fn(), getByName: vi.fn(), setEnabled: vi.fn() },
+  skillsRepo: { get: vi.fn() },
+  skillSync: { sync: vi.fn(), getExistingInstance: vi.fn() },
 }));
 
 vi.mock('../../../src/repositories/audit-log', () => ({
@@ -20,34 +36,39 @@ vi.mock('../../../src/repositories/audit-log', () => ({
 }));
 
 vi.mock('../../../src/repositories/session', () => ({
-  SessionRepositoryFactory: { create: () => ({}) },
+  SessionRepositoryFactory: { create: () => sessionRepo },
 }));
 
 vi.mock('../../../src/repositories/message', () => ({
-  MessageRepositoryFactory: { create: () => ({}) },
+  MessageRepositoryFactory: { create: () => messageRepo },
 }));
 
 vi.mock('../../../src/repositories/memory', () => ({
-  MemoryRepositoryFactory: { create: () => ({}) },
+  MemoryRepositoryFactory: { create: () => memoryRepo },
 }));
 
 vi.mock('../../../src/repositories/heartbeat', () => ({
-  HeartbeatRepositoryFactory: { create: () => ({}) },
+  HeartbeatRepositoryFactory: { create: () => heartbeatRepo },
 }));
 
 vi.mock('../../../src/repositories/channel', () => ({
-  ChannelRepositoryFactory: { create: () => ({}) },
+  ChannelRepositoryFactory: { create: () => channelRepo },
 }));
 
 vi.mock('../../../src/repositories/learned-skills', () => ({
-  LearnedSkillsRepositoryFactory: { create: () => ({}) },
+  LearnedSkillsRepositoryFactory: { create: () => learnedSkillsRepo },
 }));
 
 vi.mock('../../../src/repositories/skills', () => ({
-  SkillsRepositoryFactory: { create: () => ({}) },
+  SkillsRepositoryFactory: { create: () => skillsRepo },
+}));
+
+vi.mock('../../../src/services/skills/skill-sync', () => ({
+  SkillSyncSingleton: skillSync,
 }));
 
 import { AdminRouterFactory } from '../../../src/dashboard/admin';
+import { config } from '../../../src/config';
 
 function makeResponse(): Response {
   const res = {
@@ -92,7 +113,7 @@ describe('AdminRouterFactory /audit', () => {
     auditRepo.findAll.mockReturnValue([
       {
         id: 'a1',
-        kind: 'llm',
+        type: 'llm',
         role: 'manager',
         agent_name: 'manager',
         provider: 'ollama',
@@ -105,7 +126,7 @@ describe('AdminRouterFactory /audit', () => {
       },
       {
         id: 'a2',
-        kind: 'tool',
+        type: 'tool',
         role: 'worker',
         agent_name: 'executorWorker',
         tool_name: 'curl-request',
@@ -114,12 +135,12 @@ describe('AdminRouterFactory /audit', () => {
         error_message: 'blocked',
         created_at: '2026-01-01T00:01:00.000Z',
       },
-      { id: 'a3', kind: 'tool', role: 'worker', agent_name: 'learnerWorker', tool_name: 'get-skill', duration_ms: 2, status: 'success', created_at: '2026-01-01T00:02:00.000Z' },
+      { id: 'a3', type: 'tool', role: 'worker', agent_name: 'executorWorker', tool_name: 'search_engine', duration_ms: 2, status: 'success', created_at: '2026-01-01T00:02:00.000Z' },
     ] as never);
 
     const router = AdminRouterFactory.create(logger, {} as never);
     const res = makeResponse();
-    callRoute(router, makeRequest('GET', '/audit?kind=llm&limit=25', { kind: 'llm', limit: '25' }), res);
+    callRoute(router, makeRequest('GET', '/audit?type=llm&limit=25', { type: 'llm', limit: '25' }), res);
 
     expect(res.json).toHaveBeenCalledTimes(1);
     const body = res.json.mock.calls[0][0];
@@ -129,7 +150,7 @@ describe('AdminRouterFactory /audit', () => {
     expect(body.items).toHaveLength(3);
     expect(body.items[0]).toMatchObject({
       id: 'a1',
-      kind: 'llm',
+      type: 'llm',
       agentName: 'manager',
       promptPreview: expect.stringContaining('...'),
       responsePreview: 'hi there',
@@ -138,15 +159,15 @@ describe('AdminRouterFactory /audit', () => {
     expect(auditRepo.findAll).toHaveBeenCalledWith({
       limit: 25,
       offset: 0,
-      filters: expect.objectContaining({ kind: 'llm' }),
+      filters: expect.objectContaining({ type: 'llm' }),
     });
-    expect(auditRepo.count).toHaveBeenCalledWith(expect.objectContaining({ kind: 'llm' }));
+    expect(auditRepo.count).toHaveBeenCalledWith(expect.objectContaining({ type: 'llm' }));
   });
 
   it('returns a single audit entry by id', () => {
     auditRepo.findById.mockReturnValue({
       id: 'a1',
-      kind: 'llm',
+      type: 'llm',
       role: 'manager',
       agent_name: 'manager',
       provider: 'ollama',
@@ -163,7 +184,7 @@ describe('AdminRouterFactory /audit', () => {
     callRoute(router, makeRequest('GET', '/audit/a1'), res);
 
     expect(res.status).not.toHaveBeenCalled();
-    expect(res.json.mock.calls[0][0]).toMatchObject({ id: 'a1', kind: 'llm', status: 'success' });
+    expect(res.json.mock.calls[0][0]).toMatchObject({ id: 'a1', type: 'llm', status: 'success' });
   });
 
   it('returns 404 when the audit entry is not found', () => {
@@ -238,8 +259,8 @@ describe('AdminRouterFactory /usage', () => {
 
   it('returns a usage report for all-time', () => {
     auditRepo.usage.mockReturnValue([
-      { id: 'a1', run_id: 'r1', channel: 'telegram', kind: 'llm', role: 'manager', agent_name: 'manager', prompt_length: 40, response_length: 8, duration_ms: 10, created_at: '2026-01-01T00:00:00.000Z' },
-      { id: 'a2', run_id: 'r1', channel: 'telegram', kind: 'tool', role: 'worker', agent_name: 'executorWorker', tool_name: 'curl-request', duration_ms: 4, created_at: '2026-01-01T00:00:10.000Z' },
+      { id: 'a1', run_id: 'r1', channel: 'telegram', type: 'llm', role: 'manager', agent_name: 'manager', prompt_length: 40, response_length: 8, duration_ms: 10, created_at: '2026-01-01T00:00:00.000Z' },
+      { id: 'a2', run_id: 'r1', channel: 'telegram', type: 'tool', role: 'worker', agent_name: 'executorWorker', tool_name: 'curl-request', duration_ms: 4, created_at: '2026-01-01T00:00:10.000Z' },
     ] as never);
 
     const router = AdminRouterFactory.create(logger, {} as never);
@@ -278,5 +299,200 @@ describe('AdminRouterFactory /usage', () => {
 
     expect(auditRepo.usage).toHaveBeenCalledWith({ from: undefined });
     expect(res.json.mock.calls[0][0].days).toBeNull();
+  });
+});
+
+describe('AdminRouterFactory /overview', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    sessionRepo.count.mockReturnValue(4);
+    sessionRepo.countOpen.mockReturnValue(1);
+    messageRepo.count.mockReturnValue(42);
+    memoryRepo.count.mockReturnValue(7);
+    heartbeatRepo.getAll.mockReturnValue([
+      { lastRun: new Date('2026-01-02T10:00:00.000Z') },
+      { lastRun: new Date('2026-01-03T10:00:00.000Z') },
+    ] as never);
+    learnedSkillsRepo.count.mockReturnValue(2);
+    skillsRepo.get.mockReturnValue([{}, {}, {}] as never);
+    channelRepo.getAll.mockReturnValue([
+      { channel: 'telegram', target: '@me', isPrincipal: true },
+    ] as never);
+    auditRepo.count.mockReturnValue(2);
+    auditRepo.findAll.mockReturnValue([
+      {
+        id: 'e1',
+        type: 'tool',
+        role: 'worker',
+        agent_name: 'executorWorker',
+        tool_name: 'curl-request',
+        duration_ms: 3,
+        status: 'error',
+        error_message: 'blocked',
+        created_at: '2026-01-03T09:00:00.000Z',
+      },
+    ] as never);
+    auditRepo.usage.mockReturnValue([
+      { id: 'u1', type: 'llm', agent_name: 'manager', prompt_length: 40, response_length: 8, duration_ms: 10, created_at: '2026-01-01T00:00:00.000Z' },
+    ] as never);
+  });
+
+  it('returns aggregate counts, config, queue, usage and recent errors', async () => {
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    router.handle(makeRequest('GET', '/overview'), res, () => {});
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(res.json).toHaveBeenCalledTimes(1);
+    const body = res.json.mock.calls[0][0];
+
+    expect(body.sessions).toBe(4);
+    expect(body.openSessions).toBe(1);
+    expect(body.messages).toBe(42);
+    expect(body.memories).toBe(7);
+    expect(body.heartbeats).toBe(2);
+    expect(body.learnedSkills).toBe(2);
+    expect(body.skills).toBe(3);
+    expect(body.auditErrors).toBe(2);
+    expect(body.lastHeartbeatRunAt).toMatch(/^2026-01-03T/);
+
+    expect(body.workerProvider).toBeDefined();
+    expect(body.workerModel).toBeDefined();
+    expect(body.heartbeatEnabled).toBeTypeOf('boolean');
+    expect(body.summarizerEnabled).toBeTypeOf('boolean');
+    expect(body.aiParallel).toBeTypeOf('boolean');
+    expect(body.aiSubagentsParallel).toBeTypeOf('boolean');
+
+    expect(body.channels).toEqual([
+      { type: 'telegram', enabled: expect.any(Boolean) },
+      { type: 'whatsapp', enabled: expect.any(Boolean) },
+    ]);
+    expect(body.registeredChannels).toEqual([
+      { type: 'telegram', target: '@me', principal: true },
+    ]);
+
+    expect(body.health.status).toBe('ok');
+    expect(body.activeRuns).toEqual([]);
+    expect(body.queue).toMatchObject({
+      parallel: expect.any(Boolean),
+      subagentsParallel: expect.any(Boolean),
+      running: [],
+      queued: [],
+    });
+    expect(body.usage.totalTokens).toBeGreaterThan(0);
+    expect(body.recentErrors).toHaveLength(1);
+    expect(body.recentErrors[0]).toMatchObject({ id: 'e1', status: 'error' });
+
+    expect(auditRepo.count).toHaveBeenCalledWith({ status: 'error' });
+    expect(auditRepo.findAll).toHaveBeenCalledWith({
+      limit: 5,
+      filters: { status: 'error' },
+    });
+    expect(auditRepo.usage).toHaveBeenCalledWith(expect.objectContaining({ from: expect.any(String) }));
+  });
+});
+
+describe('AdminRouterFactory /skills', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('GET /skills merges disk skills with learned state and the limit', () => {
+    skillsRepo.get.mockReturnValue([
+      { name: 'git', description: 'Git skill', read_when: ['when needed'], content: 'run rebase' },
+      { name: 'docker', description: 'Docker skill', read_when: null, content: 'run compose' },
+    ] as never);
+    learnedSkillsRepo.getAll.mockReturnValue([
+      { name: 'git', enabled: false, learned_at: '2026-01-01 00:00:00' },
+    ] as never);
+
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/skills'), res);
+
+    expect(res.json).toHaveBeenCalledWith({
+      items: [
+        {
+          name: 'git',
+          description: 'Git skill',
+          read_when: ['when needed'],
+          content: 'run rebase',
+          enabled: false,
+          learned_at: '2026-01-01 00:00:00',
+        },
+        {
+          name: 'docker',
+          description: 'Docker skill',
+          read_when: null,
+          content: 'run compose',
+          enabled: true,
+          learned_at: null,
+        },
+      ],
+      limit: config.LEARNED_SKILLS_LIMIT,
+    });
+  });
+
+  it('PATCH /skills/:name toggles the enabled flag', () => {
+    learnedSkillsRepo.setEnabled.mockReturnValue(true);
+    learnedSkillsRepo.getByName.mockReturnValue({ name: 'git', enabled: false });
+
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/skills/git');
+    req.body = { enabled: false };
+    callRoute(router, req, res);
+
+    expect(learnedSkillsRepo.setEnabled).toHaveBeenCalledWith('git', false);
+    expect(res.json).toHaveBeenCalledWith({ success: true, skill: { name: 'git', enabled: false } });
+  });
+
+  it('PATCH /skills/:name rejects a non-boolean enabled value', () => {
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/skills/git');
+    req.body = { enabled: 'yes' };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'enabled must be a boolean' });
+    expect(learnedSkillsRepo.setEnabled).not.toHaveBeenCalled();
+  });
+
+  it('PATCH /skills/:name returns 404 when the skill is unknown', () => {
+    learnedSkillsRepo.setEnabled.mockReturnValue(false);
+
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/skills/missing');
+    req.body = { enabled: true };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Skill not found' });
+  });
+
+  it('POST /skills/sync triggers a resync when initialized', () => {
+    skillSync.getExistingInstance.mockReturnValue(skillSync);
+
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/skills/sync'), res);
+
+    expect(skillSync.sync).toHaveBeenCalledTimes(1);
+    expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('POST /skills/sync returns 503 when sync is not initialized', () => {
+    skillSync.getExistingInstance.mockReturnValue(null);
+
+    const router = AdminRouterFactory.create(logger, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/skills/sync'), res);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Skill sync not initialized' });
+    expect(skillSync.sync).not.toHaveBeenCalled();
   });
 });

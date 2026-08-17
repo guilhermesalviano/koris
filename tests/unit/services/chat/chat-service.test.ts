@@ -40,6 +40,8 @@ describe('ChatService.complete', () => {
       toolsEnabled: true,
       messageHistory: [],
       sessionId: 'sess-1',
+      extraSystemBlocks: undefined,
+      toolResults: undefined,
     });
     expect(completionService.complete).toHaveBeenCalledWith(
       { messages: [{ role: 'user', content: 'hi' }] },
@@ -59,6 +61,20 @@ describe('ChatService.complete', () => {
 
     expect(promptRepository.build).toHaveBeenCalledWith(
       expect.objectContaining({ messageHistory: [{ role: 'user', content: 'a' }] }),
+    );
+  });
+
+  it('forwards tool results to the prompt repository', async () => {
+    const promptRepository = makePromptRepository();
+    const completionService = makeCompletionService();
+    completionService.complete.mockResolvedValue({ kind: 'message', text: 'ok', finishReason: 'stop' });
+    const service = new ChatService(completionService as never, promptRepository as never);
+    const toolResults = [{ role: 'tool', content: 'Tool: ls, Result: files' }];
+
+    await service.complete('hi', 'tui', undefined, [], undefined, undefined, toolResults);
+
+    expect(promptRepository.build).toHaveBeenCalledWith(
+      expect.objectContaining({ toolResults }),
     );
   });
 

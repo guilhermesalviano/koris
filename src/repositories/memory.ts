@@ -12,6 +12,7 @@ interface IMemoryRepository {
   getBySessionId(sessionId: string): Memory[];
   deleteById(id: string): void;
   search(queryEmbedding: number[], limit: number, excludeSessionId?: string): Memory[];
+  count(): number;
 }
 
 class MemoryRepository implements IMemoryRepository {
@@ -94,6 +95,13 @@ class MemoryRepository implements IMemoryRepository {
 
   deleteById(id: string): void {
     this.db.run('DELETE FROM memories WHERE id = ?', [id]);
+  }
+
+  count(): number {
+    const row = this.db.get(
+      `SELECT COUNT(*) AS total FROM memories WHERE type != 'reminder'`,
+    ) as { total?: number } | undefined;
+    return row?.total ?? 0;
   }
 
   private mapRow(row: any): Memory {

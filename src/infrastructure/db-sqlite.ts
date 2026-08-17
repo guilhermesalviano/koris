@@ -164,7 +164,7 @@ class DatabaseService implements IDatabaseService {
         CREATE TABLE IF NOT EXISTS messages (
           id TEXT PRIMARY KEY,
           session_id TEXT NOT NULL,
-          role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
+          role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system', 'tool')),
           content TEXT NOT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
@@ -179,14 +179,18 @@ class DatabaseService implements IDatabaseService {
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS learned_skills (
           id TEXT PRIMARY KEY,
-          skill_name TEXT NOT NULL UNIQUE,
-          skill_content TEXT NOT NULL,
+          name TEXT NOT NULL UNIQUE,
+          description TEXT,
+          read_when TEXT,
+          content TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
           learned_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
 
       this.db.exec(`
-        CREATE INDEX IF NOT EXISTS idx_learned_skills_skill_name ON learned_skills(skill_name);
+        CREATE INDEX IF NOT EXISTS idx_learned_skills_name ON learned_skills(name);
+        CREATE INDEX IF NOT EXISTS idx_learned_skills_enabled ON learned_skills(enabled);
         CREATE INDEX IF NOT EXISTS idx_learned_skills_learned_at ON learned_skills(learned_at);
       `);
 
@@ -196,7 +200,7 @@ class DatabaseService implements IDatabaseService {
           run_id TEXT,
           session_id TEXT,
           channel TEXT,
-          kind TEXT NOT NULL CHECK(kind IN ('llm', 'tool')),
+          type TEXT NOT NULL CHECK(type IN ('llm', 'tool')),
           role TEXT NOT NULL CHECK(role IN ('manager', 'worker')),
           agent_name TEXT,
           provider TEXT,
@@ -224,7 +228,7 @@ class DatabaseService implements IDatabaseService {
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
         CREATE INDEX IF NOT EXISTS idx_audit_logs_session_id ON audit_logs(session_id);
-        CREATE INDEX IF NOT EXISTS idx_audit_logs_kind ON audit_logs(kind);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_type ON audit_logs(type);
         CREATE INDEX IF NOT EXISTS idx_audit_logs_role ON audit_logs(role);
         CREATE INDEX IF NOT EXISTS idx_audit_logs_status ON audit_logs(status);
       `);

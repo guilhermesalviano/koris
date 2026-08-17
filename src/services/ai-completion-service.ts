@@ -148,7 +148,7 @@ export class AICompletionService implements IAICompletionService {
 
     const entry: AuditLogLlm = {
       id: generateId(),
-      kind: 'llm',
+      type: 'llm',
       role: this.role,
       agentName: this.agentName,
       runId: options?.audit?.runId,

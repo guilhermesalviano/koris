@@ -17,7 +17,7 @@ class AuditService implements IAuditService {
     try {
       this.repository.save(entry);
     } catch (error) {
-      this.logger.error('Failed to record audit entry', { kind: entry.kind, error });
+      this.logger.error('Failed to record audit entry', { type: entry.type, error });
     }
   }
 }

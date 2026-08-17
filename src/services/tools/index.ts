@@ -2,7 +2,6 @@ import { CommandFn, ToolCall, ToolResult } from '../../types/tools';
 import { executeCurl } from './curl-request';
 import { executeSearch } from './search';
 import { executeCommand } from './execute-command';
-import { executeGetSkill } from './get-skill';
 import { setBeat } from './beats/create';
 import { listBeats } from './beats/list';
 import { updateBeat } from './beats/update';
@@ -52,7 +51,6 @@ class AgnosticExecutionToolFactory {
   static create(): AgnosticExecutionTool {
     const COMMAND_MAP: Command = {
       'execute_command': executeCommand,
-      'get_skill': executeGetSkill,
       'curl_request': executeCurl,
       'search_engine': executeSearch,
       'set_beat': setBeat,

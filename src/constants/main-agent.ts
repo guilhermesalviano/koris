@@ -1,10 +1,10 @@
-export const FIRST_PROMPT_HELPER = `
-## Tool Execution Contract
+export const TOOL_EXECUTION_CONTRACT = `
+# Tool Execution Contract
 
-As Agent, verify if skill documentation is already in your **SYSTEM** context before invoking get_skill. Ensure the human's request is entirely resolved through tool calls.
+Relevant skill documentation is already available in your **SYSTEM** context. Ensure the human's request is entirely resolved through tool calls.
 
 ### EXECUTION RULES
-- **Skills first:** If a task might have a dedicated skill, call 'get_skill' before acting. Never invoke a skill tool without learning it first.
+- **Skills first:** If a task matches a skill, follow that skill's instructions and use its tools.
 - **Clarification:** if the human's request is ambiguous, ask for clarification instead of guessing.
 - **Parallel:** If tasks are independent, emit ALL tool calls in a single response — never serialize what can run together.
 - **Sequential:** If task B depends on task A's result, wait for A before calling B.
@@ -16,9 +16,6 @@ Before responding to the human, answer internally:
 
 If **no** → call the missing tools.
 If **yes** → compose the final response using only the tool results.
-
-### USER REQUEST
-{v1}
 `;
 // ### DECOMPOSITION
 // Break the human's message into atomic tasks. Each task that can be answered or acted on by a tool MUST trigger one.
@@ -37,19 +34,7 @@ export const SKILL_LEARNING_PROMPT = `
 5. Pass all user-provided values (city names, IDs, names) exactly as written — do not normalize or correct them.
 `;
 
-export const SKILL_READY_PROMPT = `
-## TOOL CALL MANDATE
-As Agent, execute the tool call required to fulfill the human's request.
-
-- **STRICT RULE:** You are a function-calling engine.
-- **FORBIDDEN:** Do not explain why you are calling a tool. Do not summarize the documentation. Do not provide a plan.
-- **OUTPUT:** Provide ONLY the tool call in the required JSON format.
-
-## USER REQUEST
-{v1}
-`;
-
-export const TOOLS_RESULT_PROMPT = `
+export const EXECUTOR_SYNTHESIS_RULES = `
 Answer the human's request as Agent, using ONLY the data in TOOL RESULTS below.
 
 ## RULES
@@ -61,12 +46,6 @@ Answer the human's request as Agent, using ONLY the data in TOOL RESULTS below.
 - If your response will be sent to the human, present the data in a friendly, human-readable way (e.g. a natural-language summary); never echo, paste, or quote the raw tool output verbatim.
 - Do not mention tools, functions, or internal details in your response.
 - Do not repeat the human's question.
-
-## USER REQUEST
-{v1}
-
-## TOOL RESULTS
-{v2}
 
 Respond strictly from the data above. If the data is insufficient, state exactly what is missing.
 `;

@@ -190,7 +190,7 @@ describe('ToolsQueue', () => {
       expect(auditService.record).toHaveBeenCalledTimes(1);
       const entry = auditService.record.mock.calls[0][0];
       expect(entry).toMatchObject({
-        kind: 'tool',
+        type: 'tool',
         role: 'worker',
         agentName: 'executorWorker',
         toolName: 'echo',
@@ -217,7 +217,7 @@ describe('ToolsQueue', () => {
 
       const entry = auditService.record.mock.calls[0][0];
       expect(entry).toMatchObject({
-        kind: 'tool',
+        type: 'tool',
         agentName: 'learnerWorker',
         success: false,
         status: 'error',
