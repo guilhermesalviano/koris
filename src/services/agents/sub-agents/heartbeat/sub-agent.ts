@@ -104,6 +104,7 @@ class Heartbeat implements ISubAgent<Date> {
             signal: new AbortController().signal,
             onProgress: (progress: string) => this.logger.info(progress),
             options: { toolsEnabled: true, runId: beat.id },
+            initiatedBy: 'heartbeat',
           },
         );
       }
