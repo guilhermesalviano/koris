@@ -13,7 +13,7 @@ function makeLogger(): ILogger {
 function makeContext(overrides: Partial<LoopContext> = {}): LoopContext {
   return {
     channel: 'tui',
-    toolsQueue: { handle: vi.fn().mockResolvedValue([{ success: true, toolName: 'execute_command', result: 'done' }]) } as never,
+    toolsQueue: { handle: vi.fn().mockResolvedValue([{ success: true, toolName: 'execute_command', result: 'done', toolCallId: 'call_1' }]) } as never,
     signal: new AbortController().signal,
     onProgress: vi.fn(),
     ...overrides,
@@ -37,7 +37,7 @@ function makeWorker(overrides: Partial<{
   return { executor, workerComplete, managerComplete };
 }
 
-const toolCalls: ToolCall[] = [{ name: 'execute_command', arguments: { command: 'ls' } }];
+const toolCalls: ToolCall[] = [{ id: 'call_1', name: 'execute_command', arguments: { command: 'ls' } }];
 
 describe('ExecutorWorker', () => {
   beforeEach(() => {
@@ -102,7 +102,7 @@ describe('ExecutorWorker', () => {
     expect(managerComplete).not.toHaveBeenCalled();
   });
 
-  it('passes the user message and tool results to the selected chat service', async () => {
+  it('passes the user message and tool messages to the selected chat service', async () => {
     const { executor, managerComplete } = makeWorker();
 
     await executor.run({
@@ -119,7 +119,14 @@ describe('ExecutorWorker', () => {
       [{ role: 'user', content: 'list files' }],
       undefined,
       [EXECUTOR_SYNTHESIS_RULES],
-      [{ role: 'tool', content: 'Tool: execute_command, Result: done' }],
+      [
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{ id: 'call_1', function: { name: 'execute_command', arguments: { command: 'ls' } } }],
+        },
+        { role: 'tool', content: 'Tool: execute_command, Result: done', tool_call_id: 'call_1' },
+      ],
     );
   });
 

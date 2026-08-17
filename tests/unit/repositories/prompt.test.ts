@@ -170,6 +170,34 @@ describe('PromptRepository tool results', () => {
     expect(messages.some((m) => m.role === 'tool')).toBe(false);
   });
 
+  it('emits tool_call_id and tool_calls on provider messages', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+      toolResults: [
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{ id: 'call_1', function: { name: 'ls', arguments: { flags: '-l' } } }],
+        },
+        { role: 'tool', content: 'Tool: ls, Result: a', tool_call_id: 'call_1' },
+      ],
+    });
+
+    expect(messages[messages.length - 2]).toEqual({
+      role: 'assistant',
+      content: '',
+      tool_calls: [{ id: 'call_1', function: { name: 'ls', arguments: { flags: '-l' } } }],
+    });
+    expect(messages[messages.length - 1]).toEqual({
+      role: 'tool',
+      content: 'Tool: ls, Result: a',
+      tool_call_id: 'call_1',
+    });
+  });
+
   it('does not sanitize tool result content', async () => {
     const originalEnabled = config.AI.PROMPT_SANITIZER;
     (config.AI.PROMPT_SANITIZER as boolean) = true;

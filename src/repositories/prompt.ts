@@ -91,7 +91,12 @@ class PromptRepository implements IPromptRepository {
 
     const sanitized = this.sanitizePromptIfEnabled(userMessage, limitedHistory);
 
-    const toolMessages = toolResults?.map((r) => ({ role: r.role, content: r.content })) ?? [];
+    const toolMessages: Message[] = toolResults?.map((r) => {
+      const message: Message = { role: r.role, content: r.content };
+      if (r.tool_call_id) message.tool_call_id = r.tool_call_id;
+      if (r.tool_calls?.length) message.tool_calls = r.tool_calls;
+      return message;
+    }) ?? [];
 
     return [
       { role: 'system', content: systemBlocks.join('\n') },

@@ -121,6 +121,7 @@ function parseToolCall(tc: any, index: number, logger?: ILogger): ToolCall {
   }
 
   return {
+    id: typeof tc.id === 'string' && tc.id ? tc.id : `call_${index}`,
     name,
     arguments: parsedArgs,
   };

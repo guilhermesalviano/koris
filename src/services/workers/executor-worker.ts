@@ -56,8 +56,21 @@ class ExecutorWorker implements IWorker<ExecutorWorkerArgs, ProcessedMessage> {
       content: r.success
         ? `Tool: ${r.toolName}, Result: ${r.result}`
         : `Tool: ${r.toolName}, Success: ${r.success}, Error: ${r.error}`,
+      tool_call_id: r.toolCallId,
     }));
     this.logger.info(`Tool results: ${toolResults.map((r) => r.content).join('\n')}`);
+
+    const toolMessages: Message[] = [
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: toolCalls.map((tc) => ({
+          id: tc.id,
+          function: { name: tc.name, arguments: tc.arguments },
+        })),
+      },
+      ...toolResults,
+    ];
 
     const isBackground = ctx.initiatedBy === 'heartbeat' || ctx.initiatedBy === 'summarizer';
     const chatService = isBackground ? this.workerChatService : this.managerChatService;
@@ -68,7 +81,7 @@ class ExecutorWorker implements IWorker<ExecutorWorkerArgs, ProcessedMessage> {
       messageHistory,
       ctx.message?.getSessionId(),
       [EXECUTOR_SYNTHESIS_RULES],
-      toolResults,
+      toolMessages,
     );
 
     if (response.kind === 'message') return response.text;
