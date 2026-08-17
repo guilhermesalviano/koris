@@ -119,7 +119,7 @@ describe('Summarizer', () => {
     expect(logger.info).toHaveBeenCalledWith('Summarizer worker completed for session session-1');
   });
 
-  it('logs an error when the model returns tool calls', async () => {
+  it('skips summarization without saving memory when the model returns tool calls', async () => {
     const logger = makeLogger();
     const completionService = {
       complete: vi.fn().mockResolvedValue({
@@ -133,10 +133,11 @@ describe('Summarizer', () => {
     await summarizer.handler(props);
 
     expect(props.memoryService.save).not.toHaveBeenCalled();
-    expect(logger.error).toHaveBeenCalledWith(
-      'Failed to summarize for session session-1',
-      expect.objectContaining({ error: expect.any(Error) }),
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Summarizer received an unexpected tool-call response; skipping summarization',
+      expect.objectContaining({ sessionId: 'session-1' }),
     );
+    expect(logger.error).not.toHaveBeenCalled();
   });
 
   it('logs an error when completion fails', async () => {
