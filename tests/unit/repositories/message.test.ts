@@ -10,6 +10,17 @@ function makeDb(rows: any[] = []) {
   };
 }
 
+function makeImageRepo(images: any[] = []) {
+  return {
+    save: vi.fn(),
+    getByIds: vi.fn().mockReturnValue(images),
+  };
+}
+
+function makeRepository(db: any, imageRepo: any = makeImageRepo()) {
+  return new MessageRepository(db, imageRepo);
+}
+
 describe('MessageRepository', () => {
   it('fetches the latest N messages while returning them in chronological order', () => {
     const db = makeDb([
@@ -28,7 +39,7 @@ describe('MessageRepository', () => {
         created_at: '2026-05-01T12:00:02.000Z',
       },
     ]);
-    const repository = new MessageRepository(db as any);
+    const repository = makeRepository(db);
 
     const messages = repository.getBySessionId('sess-1', 2);
 
@@ -42,7 +53,7 @@ describe('MessageRepository', () => {
 
   it('uses the default limit when no limit is provided', () => {
     const db = makeDb([]);
-    const repository = new MessageRepository(db as any);
+    const repository = makeRepository(db);
 
     repository.getBySessionId('sess-1');
 
@@ -50,26 +61,40 @@ describe('MessageRepository', () => {
     expect(params).toEqual(['sess-1', 15]);
   });
 
-  it('persists images as a JSON column', () => {
+  it('persists each image to the images table and stores its id on the message', () => {
     const db = makeDb([]);
-    const repository = new MessageRepository(db as any);
+    const imageRepo = makeImageRepo();
+    const repository = makeRepository(db, imageRepo);
 
     repository.save(new Message({
       sessionId: 'sess-1',
       role: 'user',
       content: 'describe',
-      images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }],
+      images: [
+        { data: 'aGVsbG8=', mimeType: 'image/png' },
+        { data: 'd29ybGQ=', mimeType: 'image/jpeg' },
+      ],
       id: 'm1',
       createdAt: '2026-05-01T12:00:00.000Z',
     }));
 
+    expect(imageRepo.save).toHaveBeenCalledTimes(2);
+    const saved = imageRepo.save.mock.calls.map((call) => call[0]);
+    expect(saved[0].data).toBe('aGVsbG8=');
+    expect(saved[0].mimeType).toBe('image/png');
+    expect(saved[1].data).toBe('d29ybGQ=');
+    expect(saved[1].mimeType).toBe('image/jpeg');
+    expect(saved.every((image: any) => typeof image.id === 'string' && image.id.length > 0)).toBe(true);
+
     const [, params] = db.run.mock.calls[0];
-    expect(params[4]).toBe(JSON.stringify([{ data: 'aGVsbG8=', mimeType: 'image/png' }]));
+    const storedIds = JSON.parse(params[4]);
+    expect(storedIds).toEqual([saved[0].id, saved[1].id]);
   });
 
-  it('stores null images when a message has no attachments', () => {
+  it('stores null image_ids when a message has no attachments', () => {
     const db = makeDb([]);
-    const repository = new MessageRepository(db as any);
+    const imageRepo = makeImageRepo();
+    const repository = makeRepository(db, imageRepo);
 
     repository.save(new Message({
       sessionId: 'sess-1',
@@ -79,30 +104,53 @@ describe('MessageRepository', () => {
       createdAt: '2026-05-01T12:00:00.000Z',
     }));
 
+    expect(imageRepo.save).not.toHaveBeenCalled();
     const [, params] = db.run.mock.calls[0];
     expect(params[4]).toBeNull();
   });
 
-  it('parses images back from the JSON column when reading history', () => {
+  it('resolves image ids back into image attachments when reading history', () => {
     const db = makeDb([
       {
         id: 'm1',
         session_id: 'sess-1',
         role: 'user',
         content: 'describe',
-        images: JSON.stringify([{ data: 'aGVsbG8=', mimeType: 'image/png' }]),
+        image_ids: JSON.stringify(['img-1']),
         created_at: '2026-05-01T12:00:00.000Z',
       },
     ]);
-    const repository = new MessageRepository(db as any);
+    const imageRepo = makeImageRepo([{ id: 'img-1', data: 'aGVsbG8=', mimeType: 'image/png' }]);
+    const repository = makeRepository(db, imageRepo);
 
     const [message] = repository.getBySessionId('sess-1', 1);
+
+    expect(imageRepo.getByIds).toHaveBeenCalledWith(['img-1']);
     expect(message.images).toEqual([{ data: 'aGVsbG8=', mimeType: 'image/png' }]);
+  });
+
+  it('leaves images undefined when a message has no image ids', () => {
+    const db = makeDb([
+      {
+        id: 'm1',
+        session_id: 'sess-1',
+        role: 'user',
+        content: 'plain',
+        created_at: '2026-05-01T12:00:00.000Z',
+      },
+    ]);
+    const imageRepo = makeImageRepo();
+    const repository = makeRepository(db, imageRepo);
+
+    const [message] = repository.getBySessionId('sess-1', 1);
+
+    expect(imageRepo.getByIds).toHaveBeenCalledWith([]);
+    expect(message.images).toBeUndefined();
   });
 
   it('fetches the first user message as the session preview', () => {
     const db = makeDb([{ content: 'hello there' }]);
-    const repository = new MessageRepository(db as any);
+    const repository = makeRepository(db);
 
     const preview = repository.getPreviewBySessionId('sess-1');
 
@@ -115,7 +163,7 @@ describe('MessageRepository', () => {
 
   it('returns null when the session has no user message', () => {
     const db = makeDb([undefined]);
-    const repository = new MessageRepository(db as any);
+    const repository = makeRepository(db);
 
     expect(repository.getPreviewBySessionId('sess-1')).toBeNull();
   });
