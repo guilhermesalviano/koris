@@ -67,4 +67,16 @@ describe('ImageRepository', () => {
 
     expect(images).toEqual([{ id: 'img-1', data: 'aGVsbG8=', mimeType: undefined, createdAt: undefined }]);
   });
+
+  it('deletes all images and returns the number of deleted rows', () => {
+    const db = makeDb();
+    (db.run as ReturnType<typeof vi.fn>).mockReturnValue({ changes: 4, lastInsertRowid: 0 });
+    const repository = new ImageRepository(db as any);
+
+    const deleted = repository.deleteAll();
+
+    const [sql] = db.run.mock.calls[0];
+    expect(sql).toBe('DELETE FROM images');
+    expect(deleted).toBe(4);
+  });
 });

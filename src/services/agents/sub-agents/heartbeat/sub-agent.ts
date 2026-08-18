@@ -7,7 +7,7 @@ import { IPromptRepository, PromptRepositoryFactory } from "../../../../reposito
 import { getAIProvider } from "../../../providers";
 import { replacePlaceholders } from "../../../../utils/prompt";
 import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
-import { HEARTBEAT_INSTRUCTIONS, HEARTBEAT_DATA } from "../../../../constants";
+import { HEARTBEAT_INSTRUCTIONS, HEARTBEAT_DATA, SYSTEM_BEAT_CLEAR_IMAGES } from "../../../../constants";
 import type { ILogger } from "../../../../infrastructure/logger";
 import { IToolsQueue, ToolsQueue } from "../../../tools-queue";
 import { ISubAgent } from "../../../../types/agents";
@@ -17,6 +17,7 @@ import { IChannelService, ChannelServiceFactory } from "../../../channel-service
 import { IToolCallPipeline, ToolCallPipelineFactory } from "../../tool-call-pipeline";
 import { TaskQueue, sharedSubAgentQueue } from "../../../sub-agents-queue/task-queue";
 import { subAgentQueuesRegistry } from "../../../sub-agents-queue/sub-agent-queue-registry";
+import { IImageRepository, ImageRepositoryFactory } from "../../../../repositories/image";
 
 class Heartbeat implements ISubAgent<Date> {
   constructor(
@@ -28,6 +29,7 @@ class Heartbeat implements ISubAgent<Date> {
     private completionService: IAICompletionService,
     private pipeline: IToolCallPipeline,
     private channelService: IChannelService,
+    private imageRepository: IImageRepository,
   ) {
     this.queue = config.AI.SUBAGENTS_PARALLEL ? new TaskQueue(1) : sharedSubAgentQueue;
     subAgentQueuesRegistry.register('heartbeat', this.queue);
@@ -71,6 +73,12 @@ class Heartbeat implements ISubAgent<Date> {
   private async executeBeat(beat: HeartbeatEntity, date: Date): Promise<void> {
     this.logger.info(`Heartbeat: Executing beat "${beat.id}" — ${beat.beat}`);
     this.heartbeatRepository.updateLastRun(beat.id, date);
+
+    if (beat.beat === SYSTEM_BEAT_CLEAR_IMAGES) {
+      const deleted = this.imageRepository.deleteAll();
+      this.logger.info(`Heartbeat: System beat "${beat.id}" cleared ${deleted} image(s) from the images table.`);
+      return;
+    }
 
     const instructions = replacePlaceholders(HEARTBEAT_INSTRUCTIONS, { v1: `${beat.type}` });
     const data = replacePlaceholders(HEARTBEAT_DATA, { v2: `beat: ${beat.beat}` });
@@ -138,7 +146,8 @@ class HeartbeatFactory {
     const completionService = new AICompletionService(aiProvider, logger, { role: 'worker', agentName: 'heartbeat' });
     const pipeline = ToolCallPipelineFactory.create(logger);
     const channelService = ChannelServiceFactory.create(db);
-    return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, channelsManager, completionService, pipeline, channelService);
+    const imageRepository = ImageRepositoryFactory.create(db);
+    return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, channelsManager, completionService, pipeline, channelService, imageRepository);
   }
 }
 

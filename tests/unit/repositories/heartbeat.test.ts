@@ -36,8 +36,25 @@ describe('HeartbeatRepository', () => {
       formatISO(heartbeat.lastRun as Date),
       null,
       null,
+      0,
       formatISO(heartbeat.createdAt),
     ]);
+  });
+
+  it('save stores managed flag when set', () => {
+    const db = makeDb();
+    const repository = new HeartbeatRepository(db as never);
+    const heartbeat = new Heartbeat({
+      id: 'h1',
+      beat: '__koris_clear_images__',
+      type: 'scheduled_beat',
+      cronExpression: '0 0 * * *',
+      managed: true,
+    });
+
+    repository.save(heartbeat);
+
+    expect(db.run.mock.calls[0][1][7]).toBe(1);
   });
 
   it('save stores the beat channel and target', () => {
@@ -231,6 +248,23 @@ describe('HeartbeatRepository', () => {
     expect(params).toEqual(['whatsapp', '5511@s.whatsapp.net', 'h1']);
   });
 
+  it('update maps the managed flag', () => {
+    const db = makeDb();
+    db.get.mockReturnValue({
+      id: 'h1',
+      beat: 't',
+      type: 'reminder',
+      cron_expression: '0 9 * * *',
+    });
+    const repository = new HeartbeatRepository(db as never);
+
+    repository.update('h1', { managed: true });
+
+    const [sql, params] = db.run.mock.calls[0];
+    expect(sql).toBe('UPDATE heartbeat SET managed = ? WHERE id = ?');
+    expect(params).toEqual([1, 'h1']);
+  });
+
   it('getAll maps rows including channel and target into Heartbeat entities', () => {
     const db = makeDb([
       {
@@ -250,6 +284,24 @@ describe('HeartbeatRepository', () => {
 
     expect(items[0].channel).toBe('telegram');
     expect(items[0].target).toBe('987654321');
+  });
+
+  it('getAll maps the managed flag', () => {
+    const db = makeDb([
+      {
+        id: 'h1',
+        beat: '__koris_clear_images__',
+        type: 'scheduled_beat',
+        cron_expression: '0 0 * * *',
+        managed: 1,
+        created_at: '2025-12-01T00:00:00.000Z',
+      },
+    ]);
+    const repository = new HeartbeatRepository(db as never);
+
+    const [item] = repository.getAll();
+
+    expect(item.managed).toBe(true);
   });
 
   it('factory getInstance throws before create is called', () => {
