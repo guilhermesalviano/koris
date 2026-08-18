@@ -1,7 +1,7 @@
 {
   "name": "koris-agent",
   "version": "1.0.0",
-  "description": "",
+  "description": "Autonomous AI agent framework with pluggable channels, skills, persistent memory, and a web dashboard.",
   "main": "dist/src/app.js",
   "bin": {
     "koris-agent": "dist/src/app.js"
@@ -30,7 +30,8 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
-    "test:mutation": "stryker run"
+    "test:mutation": "stryker run",
+    "release": "tsx scripts/release.ts"
   },
   "repository": {
     "type": "git",
