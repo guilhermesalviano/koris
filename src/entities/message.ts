@@ -8,6 +8,7 @@ export class Message {
   public readonly role: MessageRole;
   public readonly content: string;
   public readonly images?: ImageAttachment[];
+  public readonly missingImages?: number;
   public readonly createdAt: string;
 
   constructor(data: {
@@ -16,6 +17,7 @@ export class Message {
     role: MessageRole;
     content: string;
     images?: ImageAttachment[];
+    missingImages?: number;
     createdAt?: string;
   }) {
     this.id = data.id || generateId();
@@ -23,6 +25,7 @@ export class Message {
     this.role = data.role;
     this.content = data.content;
     this.images = data.images;
+    this.missingImages = data.missingImages;
     this.createdAt = data.createdAt || nowISO();
   }
 }

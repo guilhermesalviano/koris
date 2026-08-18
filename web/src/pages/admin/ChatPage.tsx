@@ -134,9 +134,9 @@ export default function ChatPage() {
             <div className={`bubble-col flex max-w-[calc(100%-44px)] flex-col gap-1 ${m.role === 'user' ? 'items-end' : ''}`}>
               {m.role === 'user' ? (
                 <div className="bubble relative break-words rounded-card rounded-br-[5px] bg-accent px-3.5 py-2.5 text-sm leading-relaxed text-white">
-                  {m.images && m.images.length > 0 && (
+                  {(m.images && m.images.length > 0) || (m.missingImages ?? 0) > 0 ? (
                     <div className="mb-2 flex flex-wrap gap-1.5">
-                      {m.images.map((img, i) => (
+                      {m.images?.map((img, i) => (
                         <button
                           key={i}
                           type="button"
@@ -147,8 +147,21 @@ export default function ChatPage() {
                           <img src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-20 max-w-[140px] cursor-zoom-in rounded-md object-cover transition-opacity duration-150 group-hover:opacity-90" />
                         </button>
                       ))}
+                      {Array.from({ length: m.missingImages ?? 0 }).map((_, i) => (
+                        <div key={`missing-${i}`} className="group relative flex h-20 w-[140px] cursor-default items-center justify-center rounded-md border border-dashed border-txt-3/40 bg-bg-3">
+                          <svg className="h-7 w-7 fill-none stroke-txt-3/50" style={{ strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                            <line x1="4" y1="4" x2="20" y2="20" />
+                          </svg>
+                          <div className="pointer-events-none absolute bottom-full right-0 z-10 mb-1.5 max-w-[220px] rounded-md border border-subtle bg-bg-2 px-2 py-1 text-right font-mono text-[11px] leading-snug text-txt-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                            This image was deleted and is no longer accessible
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  )}
+                  ) : null}
                   {m.content}
                 </div>
               ) : m.pending && !m.content ? (

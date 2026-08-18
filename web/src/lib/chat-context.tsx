@@ -7,6 +7,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   images?: ImageAttachment[];
+  missingImages?: number;
   status?: string;
   pending?: boolean;
   timestamp: string;
@@ -15,7 +16,7 @@ export interface ChatMessage {
 
 interface ChatHistoryResponse {
   sessionId: string | null;
-  messages: { id: string; role: string; content: string; images?: ImageAttachment[]; createdAt: string }[];
+  messages: { id: string; role: string; content: string; images?: ImageAttachment[]; missingImages?: number; createdAt: string }[];
 }
 
 interface ChatContextValue {
@@ -53,12 +54,13 @@ function timeStr(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function mapMessages(messages: { id: string; role: string; content: string; images?: ImageAttachment[]; createdAt: string }[]): ChatMessage[] {
+function mapMessages(messages: { id: string; role: string; content: string; images?: ImageAttachment[]; missingImages?: number; createdAt: string }[]): ChatMessage[] {
   return messages.map((m) => ({
     id: nextId(),
     role: m.role === 'user' ? 'user' : 'assistant',
     content: m.content,
     images: m.images,
+    missingImages: m.missingImages,
     timestamp: timeStr(new Date(m.createdAt)),
   }));
 }
