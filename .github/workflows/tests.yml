@@ -15,6 +15,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
+        with:
+          version: 10.18.3
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -24,14 +26,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: |
-          pnpm install --frozen-lockfile --force || {
-            echo "Initial install failed, cleaning npm artifacts and pnpm store before retry..."
-            rm -f package-lock.json
-            find . -name node_modules -type d -prune -exec rm -rf {} +
-            pnpm store prune
-            pnpm install --frozen-lockfile --force
-          }
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
@@ -43,7 +38,7 @@ jobs:
       - name: Check if coverage was generated
         id: check-coverage
         run: |
-          if [ -f ./apps/client/coverage/coverage-final.json ]; then
+          if [ -f ./coverage/coverage-final.json ]; then
             echo "found=true" >> $GITHUB_OUTPUT
           else
             echo "found=false" >> $GITHUB_OUTPUT
@@ -57,7 +52,7 @@ jobs:
           node <<'NODE'
           const fs = require('node:fs');
 
-          const coveragePath = './apps/client/coverage/coverage-final.json';
+          const coveragePath = './coverage/coverage-final.json';
           const min = Number(process.env.COVERAGE_MIN ?? '80');
           const coverage = JSON.parse(fs.readFileSync(coveragePath, 'utf8'));
 
@@ -135,6 +130,6 @@ jobs:
         if: steps.check-coverage.outputs.found == 'true'
         uses: codecov/codecov-action@v4
         with:
-          files: ./apps/client/coverage/coverage-final.json
+          files: ./coverage/coverage-final.json
           flags: unittests
           fail_ci_if_error: false
