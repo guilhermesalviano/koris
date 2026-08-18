@@ -55,6 +55,7 @@ export interface MessageItem {
   role: string;
   content: string;
   images?: ImageAttachment[];
+  missingImages?: number;
   createdAt: string;
 }
 

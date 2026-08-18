@@ -146,6 +146,47 @@ describe('MessageRepository', () => {
 
     expect(imageRepo.getByIds).toHaveBeenCalledWith([]);
     expect(message.images).toBeUndefined();
+    expect(message.missingImages).toBeUndefined();
+  });
+
+  it('reports the number of referenced images that were deleted', () => {
+    const db = makeDb([
+      {
+        id: 'm1',
+        session_id: 'sess-1',
+        role: 'user',
+        content: 'describe',
+        image_ids: JSON.stringify(['img-1', 'img-2']),
+        created_at: '2026-05-01T12:00:00.000Z',
+      },
+    ]);
+    const imageRepo = makeImageRepo([{ id: 'img-1', data: 'aGVsbG8=', mimeType: 'image/png' }]);
+    const repository = makeRepository(db, imageRepo);
+
+    const [message] = repository.getBySessionId('sess-1', 1);
+
+    expect(message.images).toEqual([{ data: 'aGVsbG8=', mimeType: 'image/png' }]);
+    expect(message.missingImages).toBe(1);
+  });
+
+  it('reports all images as missing when none of the referenced rows exist', () => {
+    const db = makeDb([
+      {
+        id: 'm1',
+        session_id: 'sess-1',
+        role: 'user',
+        content: 'describe',
+        image_ids: JSON.stringify(['img-1', 'img-2']),
+        created_at: '2026-05-01T12:00:00.000Z',
+      },
+    ]);
+    const imageRepo = makeImageRepo();
+    const repository = makeRepository(db, imageRepo);
+
+    const [message] = repository.getBySessionId('sess-1', 1);
+
+    expect(message.images).toBeUndefined();
+    expect(message.missingImages).toBe(2);
   });
 
   it('fetches the first user message as the session preview', () => {

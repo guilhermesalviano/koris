@@ -57,6 +57,7 @@ class MessageRepository implements IMessageRepository {
     return rows.map((row: any) => {
       const imageIds = this.parseImageIds(row.image_ids);
       const images = this.imageRepository.getByIds(imageIds).map(({ data, mimeType }) => ({ data, mimeType }));
+      const missingImages = imageIds.length - images.length;
 
       return new Message({
         id: row.id,
@@ -64,6 +65,7 @@ class MessageRepository implements IMessageRepository {
         role: row.role,
         content: row.content,
         images: images.length ? images : undefined,
+        missingImages: missingImages > 0 ? missingImages : undefined,
         createdAt: row.created_at
       });
     });
