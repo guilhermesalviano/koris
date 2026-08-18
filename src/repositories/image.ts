@@ -10,6 +10,7 @@ export interface ImageRecord {
 interface IImageRepository {
   save(image: ImageRecord): void;
   getByIds(ids: string[]): ImageRecord[];
+  deleteAll(): number;
 }
 
 class ImageRepository implements IImageRepository {
@@ -41,6 +42,11 @@ class ImageRepository implements IImageRepository {
       mimeType: row.mime_type ?? undefined,
       createdAt: row.created_at ?? undefined,
     }));
+  }
+
+  deleteAll(): number {
+    const result = this.db.run('DELETE FROM images');
+    return result.changes;
   }
 }
 

@@ -86,9 +86,12 @@ class DatabaseService implements IDatabaseService {
           last_run DATETIME,
           channel TEXT,
           target TEXT,
+          managed INTEGER NOT NULL DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
+
+      this.migrateHeartbeatManaged();
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS heartbeat_runs (
@@ -252,6 +255,21 @@ class DatabaseService implements IDatabaseService {
     } catch (error) {
       logger.error('[database] Failed to initialize database schema', { error });
       throw error;
+    }
+  }
+
+  /**
+   * One-time migration: adds the `managed` flag to heartbeat rows so the
+   * default-beats sync can distinguish config-owned beats from user-created ones.
+   */
+  private migrateHeartbeatManaged(): void {
+    try {
+      const columns = this.db.prepare('PRAGMA table_info(heartbeat)').all() as { name: string }[];
+      if (!columns.some((c) => c.name === 'managed')) {
+        this.db.exec('ALTER TABLE heartbeat ADD COLUMN managed INTEGER NOT NULL DEFAULT 0;');
+      }
+    } catch (error) {
+      logger.error('[database] Failed to add heartbeat managed column', { error });
     }
   }
 

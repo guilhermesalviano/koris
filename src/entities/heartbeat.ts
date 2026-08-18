@@ -9,6 +9,7 @@ export class Heartbeat {
   public channel?: string;
   public target?: string;
   public lastRun?: Date;
+  public managed?: boolean;
   public readonly createdAt: Date;
 
   constructor(data: {
@@ -19,6 +20,7 @@ export class Heartbeat {
     channel?: string;
     target?: string;
     lastRun?: Date;
+    managed?: boolean;
     createdAt?: Date;
   }) {
     this.id = data.id || generateId();
@@ -28,6 +30,7 @@ export class Heartbeat {
     this.channel = data.channel;
     this.target = data.target;
     this.lastRun = data.lastRun;
+    this.managed = data.managed;
     this.createdAt = data.createdAt || new Date();
   }
 }

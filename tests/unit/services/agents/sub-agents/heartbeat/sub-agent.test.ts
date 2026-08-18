@@ -3,6 +3,7 @@ import { Heartbeat } from '../../../../../../src/services/agents/sub-agents/hear
 import { config } from '../../../../../../src/config';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
 import { sharedSubAgentQueue } from '../../../../../../src/services/sub-agents-queue/task-queue';
+import { SYSTEM_BEAT_CLEAR_IMAGES } from '../../../../../../src/constants';
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
@@ -40,6 +41,9 @@ function makeHeartbeat(overrides: Partial<{
         : overrides.deliveryTarget,
     ),
   };
+  const imageRepository = {
+    deleteAll: vi.fn().mockReturnValue(3),
+  };
 
   const heartbeat = new Heartbeat(
     logger,
@@ -50,6 +54,7 @@ function makeHeartbeat(overrides: Partial<{
     completionService as never,
     pipeline as never,
     channelService as never,
+    imageRepository as never,
   );
 
   return {
@@ -61,6 +66,7 @@ function makeHeartbeat(overrides: Partial<{
     pipeline,
     channelsManager,
     channelService,
+    imageRepository,
   };
 }
 
@@ -342,6 +348,26 @@ describe('Heartbeat', () => {
       const { heartbeat } = makeHeartbeat();
 
       expect((heartbeat as unknown as { queue: unknown }).queue).not.toBe(sharedSubAgentQueue);
+    });
+
+    it('executes a system cleanup beat natively without the LLM or delivery', async () => {
+      const now = localDate(0, 0);
+      const { heartbeat, imageRepository, completionService, promptRepository, channelsManager, heartbeatRepository } = makeHeartbeat({
+        beats: [{
+          id: 'cleanup',
+          beat: SYSTEM_BEAT_CLEAR_IMAGES,
+          cronExpression: '0 0 * * *',
+          type: 'scheduled_beat',
+        }],
+      });
+
+      await heartbeat.handler(now);
+
+      expect(imageRepository.deleteAll).toHaveBeenCalledTimes(1);
+      expect(completionService.complete).not.toHaveBeenCalled();
+      expect(promptRepository.build).not.toHaveBeenCalled();
+      expect(channelsManager.sendMessage).not.toHaveBeenCalled();
+      expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('cleanup', now);
     });
 
     it('exposes queue state via snapshot', async () => {
