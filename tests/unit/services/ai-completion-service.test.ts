@@ -102,6 +102,23 @@ describe('AICompletionService', () => {
     expect(entry.outputTokens).toBe(120);
   });
 
+  it('masks base64 image data in the audited prompt', async () => {
+    const expected: AIResponse = { kind: 'message', text: 'ok', finishReason: 'stop' };
+    const { service, auditService } = makeService(vi.fn().mockResolvedValue(expected));
+    const imageRequest = {
+      ...request,
+      messages: [
+        { role: 'user', content: 'describe this', images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }] },
+      ],
+    };
+
+    await service.complete(imageRequest);
+
+    const entry = auditService.record.mock.calls[0][0];
+    expect(entry.prompt).toContain('[image:8 bytes]');
+    expect(entry.prompt).not.toContain('aGVsbG8=');
+  });
+
   it('records tool-call counts in the audit entry', async () => {
     const expected: AIResponse = {
       kind: 'tool_calls',

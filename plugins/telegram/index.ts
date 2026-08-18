@@ -4,6 +4,7 @@ import { ADAPTERS } from '../../src/channels';
 import type { ILogger } from '../../src/infrastructure/logger';
 import type { Plugin, PluginRegistry } from '../registry';
 import type { IMessageGateway } from '../../src/services/agents/message-gateway';
+import type { ImageAttachment } from '../../src/types/messages';
 import { stripInternalStreamMarkers } from '../../src/utils/stream-markers';
 import { config } from '../../src/config';
 
@@ -38,19 +39,57 @@ interface TelegramPluginOptions {
   enabled: boolean;
 }
 
+interface TelegramPhotoSize {
+  file_id: string;
+  file_unique_id?: string;
+  width?: number;
+  height?: number;
+  file_size?: number;
+}
+
+interface TelegramPhotoMessage extends TelegramMessage {
+  photo?: TelegramPhotoSize[];
+  caption?: string;
+}
+
+const IMAGE_MIME_BY_EXT: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  bmp: 'image/bmp',
+  tiff: 'image/tiff',
+};
+
+function mimeFromPath(filePath: string): string | undefined {
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+  return IMAGE_MIME_BY_EXT[ext];
+}
+
+function telegramFileBaseUrl(): string {
+  return `https://api.telegram.org/bot${config.CHANNELS.TELEGRAM.BOT_TOKEN}`;
+}
+
+function telegramFileDownloadUrl(): string {
+  return `https://api.telegram.org/file/bot${config.CHANNELS.TELEGRAM.BOT_TOKEN}`;
+}
+
 class TelegramChannel implements ITelegramChannel {
   constructor(private readonly bot?: TelegramBot) {}
 
   async handleMessage(gateway: IMessageGateway, msg: TelegramMessage): Promise<void> {
     const { id: chatId, type: chatType } = msg.chat;
-    const { text, entities } = msg;
+    const telegramMsg = msg as TelegramPhotoMessage;
+    const text = telegramMsg.caption ?? telegramMsg.text ?? '';
+    const photo = telegramMsg.photo?.[telegramMsg.photo.length - 1];
 
-    if (!text) {
+    if (!text && !photo) {
       return;
     }
 
     const isGroup = chatType === 'group' || chatType === 'supergroup';
-    if (isGroup && !isBotMentioned(text, entities ?? [], botUsername)) {
+    if (isGroup && !isBotMentioned(text, telegramMsg.entities ?? [], botUsername)) {
       return;
     }
 
@@ -63,7 +102,8 @@ class TelegramChannel implements ITelegramChannel {
       return;
     }
 
-    await this.processAndReply(gateway, chatId, text);
+    const images = photo ? await this.downloadPhoto(photo.file_id) : [];
+    await this.processAndReply(gateway, chatId, text, images);
   }
 
   async sendText(chatId: number, text: string): Promise<void> {
@@ -107,10 +147,10 @@ class TelegramChannel implements ITelegramChannel {
     }
   }
 
-  private async processAndReply(gateway: IMessageGateway, chatId: number, text: string): Promise<void> {
+  private async processAndReply(gateway: IMessageGateway, chatId: number, text: string, images?: ImageAttachment[]): Promise<void> {
     try {
       await this.withTypingIndicator(chatId, async () => {
-        const response = await gateway.handle(text, String(chatId), { channel: 'telegram' });
+        const response = await gateway.handle({ text, images }, String(chatId), { channel: 'telegram' });
         const resolved = await this.resolveResponse(response);
         await this.sendText(chatId, resolved);
       });
@@ -118,6 +158,34 @@ class TelegramChannel implements ITelegramChannel {
       console.error('Error processing message:', err);
       const error = err instanceof Error ? err.message : 'Sorry, I ran into an unexpected problem. Could you try again?';
       await (await this.getBotClient()).sendMessage(chatId, `❌ ${error}`);
+    }
+  }
+
+  private async downloadPhoto(fileId: string): Promise<ImageAttachment[]> {
+    try {
+      const baseUrl = telegramFileBaseUrl();
+      const fileRes = await fetch(`${baseUrl}/getFile`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ file_id: fileId }),
+      });
+      const fileData = await fileRes.json() as { ok?: boolean; result?: { file_path?: string } };
+      const filePath = fileData.ok ? fileData.result?.file_path : undefined;
+      if (!filePath) {
+        return [];
+      }
+
+      const mediaRes = await fetch(`${telegramFileDownloadUrl()}/${filePath}`);
+      if (!mediaRes.ok) {
+        return [];
+      }
+
+      const base64 = Buffer.from(await mediaRes.arrayBuffer()).toString('base64');
+      const mimeType = mimeFromPath(filePath);
+      return [{ data: base64, ...(mimeType ? { mimeType } : {}) }];
+    } catch (err) {
+      console.error('Error downloading Telegram photo:', err);
+      return [];
     }
   }
 

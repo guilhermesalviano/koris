@@ -1,7 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
+import ImageLightbox from '../../components/ImageLightbox';
+import { AttachIcon, BrokenImageIcon, ChatIcon, CloseIcon, SendIcon } from '../../components/Icons';
+import type { ImageAttachment } from '../../lib/types';
 
 const MAX_CHARS = 4000;
 
@@ -12,11 +15,17 @@ const PROMPTS = [
   'How do I center a div in CSS?',
 ];
 
+function imageSrc(image: ImageAttachment): string {
+  return `data:${image.mimeType ?? 'image/png'};base64,${image.data}`;
+}
+
 export default function ChatPage() {
   const { sessionId } = useParams();
-  const { messages, input, setInput, streaming, historyLoaded, toast, submit, fillPrompt, openSession } = useChat();
+  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, fillPrompt, openSession } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<{ images: ImageAttachment[]; index: number } | null>(null);
 
   // Sync the viewed session with the URL. `null` targets the live chat (latest
   // open web session, without creating one).
@@ -39,7 +48,7 @@ export default function ChatPage() {
     }
   }, [input]);
 
-  const canSend = !streaming && input.trim().length > 0;
+  const canSend = !streaming && (input.trim().length > 0 || attachments.length > 0);
 
   function handlePromptClick(text: string) {
     fillPrompt(text);
@@ -53,6 +62,41 @@ export default function ChatPage() {
     }
   }
 
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (files.length === 0) return;
+    e.preventDefault();
+    addFiles(files);
+  }
+
+  function handleFiles(files: FileList | null) {
+    if (!files) return;
+    addFiles(Array.from(files));
+  }
+
+  function addFiles(files: File[]) {
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    if (images.length === 0) return;
+
+    for (const file of images) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        const base64 = result.includes(',') ? result.slice(result.indexOf(',') + 1) : result;
+        setAttachments((prev) => [...prev, { data: base64, mimeType: file.type }]);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function removeAttachment(index: number) {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function cyclePreview(direction: number) {
+    setPreview((p) => (p ? { ...p, index: (p.index + direction + p.images.length) % p.images.length } : p));
+  }
+
   const showEmptyState = historyLoaded && messages.length === 0;
   const footerHint = '↵ send · ⇧↵ newline';
   const charCount = input.length;
@@ -63,9 +107,7 @@ export default function ChatPage() {
         {showEmptyState && (
           <div className="m-auto max-w-sm px-6 py-10 text-center">
             <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-strong bg-bg-3">
-              <svg className="h-6 w-6 stroke-txt-3 fill-none" style={{ strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
+              <ChatIcon className="h-6 w-6 fill-none stroke-txt-3" />
             </div>
             <h2 className="mb-2 text-base font-medium">What can I help with?</h2>
             <p className="text-[13px] leading-relaxed text-txt-2">Ask anything — code, concepts, writing, analysis. I&apos;ll think it through with you.</p>
@@ -91,6 +133,29 @@ export default function ChatPage() {
             <div className={`bubble-col flex max-w-[calc(100%-44px)] flex-col gap-1 ${m.role === 'user' ? 'items-end' : ''}`}>
               {m.role === 'user' ? (
                 <div className="bubble relative break-words rounded-card rounded-br-[5px] bg-accent px-3.5 py-2.5 text-sm leading-relaxed text-white">
+                  {(m.images && m.images.length > 0) || (m.missingImages ?? 0) > 0 ? (
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {m.images?.map((img, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setPreview({ images: m.images ?? [], index: i })}
+                          title="View image"
+                          className="group overflow-hidden rounded-md transition-transform duration-150 hover:scale-[1.03] focus:outline-none focus:ring-2 focus:ring-accent"
+                        >
+                          <img src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-20 max-w-[140px] cursor-zoom-in rounded-md object-cover transition-opacity duration-150 group-hover:opacity-90" />
+                        </button>
+                      ))}
+                      {Array.from({ length: m.missingImages ?? 0 }).map((_, i) => (
+                        <div key={`missing-${i}`} className="group relative flex h-20 w-[140px] cursor-default items-center justify-center rounded-md border border-dashed border-txt-3/40 bg-bg-3">
+                          <BrokenImageIcon className="h-7 w-7 fill-none stroke-txt-3/50" />
+                          <div className="pointer-events-none absolute bottom-full right-0 z-10 mb-1.5 max-w-[220px] rounded-md border border-subtle bg-bg-2 px-2 py-1 text-right font-mono text-[11px] leading-snug text-txt-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                            This image was deleted and is no longer accessible
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   {m.content}
                 </div>
               ) : m.pending && !m.content ? (
@@ -118,7 +183,50 @@ export default function ChatPage() {
       </div>
 
       <div className="flex-shrink-0 border-t border-subtle bg-bg/90 px-4 pb-4 pt-3 backdrop-blur-md">
+        {attachments.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {attachments.map((img, i) => (
+              <div key={i} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPreview({ images: attachments, index: i })}
+                  title="View image"
+                  className="block h-16 w-16 overflow-hidden rounded-lg border border-strong transition-transform duration-150 hover:scale-[1.03] focus:outline-none focus:ring-2 focus:ring-accent"
+                >
+                  <img src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-full w-full cursor-zoom-in object-cover" />
+                </button>
+                <button
+                  onClick={() => removeAttachment(i)}
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-strong bg-bg text-txt-2 hover:text-red-400"
+                  title="Remove image"
+                >
+                  <CloseIcon className="h-3 w-3 fill-none stroke-current" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="flex items-start gap-2 rounded-card border border-strong bg-bg-3 px-4 py-2.5 pr-2.5 transition-colors duration-200 focus-within:border-accent">
+          <button
+            type="button"
+            disabled={streaming}
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach image"
+            className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[10px] border-none bg-transparent text-txt-3 transition-all duration-150 hover:bg-bg-2 hover:text-accent-2 disabled:opacity-35 disabled:cursor-default"
+          >
+            <AttachIcon className="h-[16px] w-[16px] fill-none stroke-current" />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              handleFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
           <textarea
             ref={textareaRef}
             rows={1}
@@ -128,6 +236,7 @@ export default function ChatPage() {
             maxLength={MAX_CHARS}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3"
           />
           <button
@@ -136,10 +245,7 @@ export default function ChatPage() {
             onClick={submit}
             className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:enabled:opacity-90 active:enabled:scale-95 disabled:opacity-35 disabled:cursor-default"
           >
-            <svg className="relative z-10 h-[15px] w-[15px] fill-none stroke-white" style={{ strokeWidth: 2.2, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
-            </svg>
+            <SendIcon className="relative z-10 h-[15px] w-[15px] fill-none stroke-white" />
           </button>
         </div>
         <div className="mt-1.5 flex items-center justify-between px-1 font-mono text-[11px] text-txt-3">
@@ -153,6 +259,14 @@ export default function ChatPage() {
           {toast}
         </div>
       )}
+
+      <ImageLightbox
+        src={preview ? imageSrc(preview.images[preview.index]) : null}
+        caption={preview && preview.images.length > 1 ? `Image ${preview.index + 1} of ${preview.images.length}` : undefined}
+        onClose={() => setPreview(null)}
+        onPrev={preview && preview.images.length > 1 ? () => cyclePreview(-1) : undefined}
+        onNext={preview && preview.images.length > 1 ? () => cyclePreview(1) : undefined}
+      />
     </div>
   );
 }

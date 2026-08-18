@@ -4,6 +4,7 @@ import type { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import type { IMessageService } from '../message-service';
 import type { ILogger } from '../../infrastructure/logger';
 import type { IChatService } from '../../types/chat';
+import type { ImageAttachment } from '../../types/messages';
 import type { LoopContext } from '../../types/context';
 import { ChatServiceFactory } from '../chat/chat-service';
 import { IToolCallPipeline, ToolCallPipelineFactory } from './tool-call-pipeline';
@@ -12,6 +13,7 @@ interface MainAgentArgs {
   userMessage: string;
   channel: string;
   message: IMessageService;
+  images?: ImageAttachment[];
   options?: ProcessOptions;
 }
 
@@ -30,12 +32,13 @@ class MainAgent implements IMainAgent {
   ) {}
 
   async run(args: MainAgentArgs): Promise<ProcessedMessage> {
-    const { userMessage, channel, message, options } = args;
+    const { userMessage, channel, message, images, options } = args;
     const messageHistory = message.getHistory();
 
     const ctx: LoopContext = {
       channel,
       message,
+      images,
       toolsQueue: this.toolsQueue,
       signal: options?.signal ?? NEVER_ABORTED,
       onProgress: options?.onProgress ?? ((progress) => this.logger.info(progress)),
@@ -43,7 +46,7 @@ class MainAgent implements IMainAgent {
       initiatedBy: 'manager',
     };
 
-    const response = await this.ChatService.complete(userMessage, channel, options, messageHistory, message.getSessionId(), [TOOL_EXECUTION_CONTRACT]);
+    const response = await this.ChatService.complete(userMessage, channel, options, messageHistory, message.getSessionId(), [TOOL_EXECUTION_CONTRACT], undefined, images);
     if (response.kind === 'message') return response.text;
     return this.pipeline.execute(response.calls, userMessage, messageHistory, ctx);
   }

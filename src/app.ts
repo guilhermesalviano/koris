@@ -16,6 +16,7 @@ import { SessionManager } from './services/session-manager';
 import { DatabaseServiceFactory } from './infrastructure/db-sqlite';
 import { HeartbeatRepositoryFactory } from './repositories/heartbeat';
 import { HeartbeatRunRepositoryFactory } from './repositories/heartbeat-run';
+import { seedDefaultBeats } from './services/agents/sub-agents/heartbeat/default-beats';
 import { SkillsRepositoryFactory } from './repositories/skills';
 import { LearnedSkillsRepositoryFactory } from './repositories/learned-skills';
 import { SkillSyncSingleton } from './services/skills/skill-sync';
@@ -57,6 +58,7 @@ class Application implements IApplication {
 
   private async createCliRuntime(): Promise<IRuntime> {
     const db = DatabaseServiceFactory.create();
+    seedDefaultBeats(db, this.logger);
     const sessionManager = new SessionManager(db);
     const gateway = MessageGatewayFactory.create(this.logger, this.source, db, sessionManager);
     const registry = buildRegistry(createPlugins());

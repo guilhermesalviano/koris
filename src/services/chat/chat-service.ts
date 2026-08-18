@@ -6,6 +6,7 @@ import { DatabaseServiceFactory } from "../../infrastructure/db-sqlite";
 import { AICompletionService, IAICompletionService } from "../ai-completion-service";
 import type { AIResponse, IChatService } from "../../types/chat";
 import type { Message } from "../../entities/message";
+import type { ImageAttachment } from "../../types/messages";
 
 class ChatService implements IChatService {
   constructor(
@@ -21,10 +22,16 @@ class ChatService implements IChatService {
     sessionId?: string,
     extraSystemBlocks?: string[],
     toolResults?: Message[],
+    images?: ImageAttachment[],
   ): Promise<AIResponse> {
-    const messagesHistory = messageHistory?.map(m => ({ role: m.role, content: m.content }));
+    const messagesHistory = messageHistory?.map(m => ({
+      role: m.role,
+      content: m.content,
+      ...(m.images?.length ? { images: m.images } : {}),
+    }));
     const promptPayload = await this.promptRepository.build({
       userMessage: message,
+      images,
       channel,
       toolsEnabled: options?.toolsEnabled,
       messageHistory: messagesHistory,

@@ -127,6 +127,7 @@ describe('ExecutorWorker', () => {
         },
         { role: 'tool', content: 'Tool: execute_command, Result: done', tool_call_id: 'call_1' },
       ],
+      undefined,
     );
   });
 

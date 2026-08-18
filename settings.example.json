@@ -8,9 +8,9 @@
   "heartbeat": false,
   "channels": {
     "telegram": {
-      "enabled": true,
+      "enabled": false,
       "bot_token": "YOUR_BOT_TOKEN",
-      "whitelist": ""
+      "whitelist": "NUMBER1"
     },
     "whatsapp": {
       "enabled": false,

@@ -100,7 +100,7 @@ describe('channels/telegram', () => {
 
     await handleMessage(agent, createMessage(text, 'group', mentionEntity(text, BOT_USERNAME)));
 
-    expect(agent.handle).toHaveBeenCalledWith(text, '123', { channel: 'telegram' });
+    expect(agent.handle).toHaveBeenCalledWith({ text, images: [] }, '123', { channel: 'telegram' });
     expect(bot.sendMessage).toHaveBeenCalled();
   });
 
@@ -168,7 +168,7 @@ describe('channels/telegram', () => {
 
     await handleMessage(agent, createMessage('hello', 'private', [], 123));
 
-    expect(agent.handle).toHaveBeenCalledWith('hello', '123', { channel: 'telegram' });
+    expect(agent.handle).toHaveBeenCalledWith({ text: 'hello', images: [] }, '123', { channel: 'telegram' });
     expect(bot.sendMessage).toHaveBeenCalled();
   });
 
@@ -222,6 +222,113 @@ describe('channels/telegram', () => {
     await handleMessage(agent, createMessage('hello'));
 
     expect(bot.sendMessage).toHaveBeenCalledWith(123, expect.stringContaining('❌'));
+  });
+});
+
+describe('channels/telegram photos', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _setTelegramWhitelistForTesting([123]);
+    _setBotUsernameForTesting(null);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function createPhotoMessage(photo: Array<{ file_id: string }>, caption?: string): TelegramMessage {
+    return {
+      chat: { id: 123, type: 'private' },
+      from: { id: 123, is_bot: false, first_name: 'Test' },
+      photo,
+      caption,
+    } as TelegramMessage;
+  }
+
+  it('downloads a telegram photo and forwards it as an image attachment', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, result: { file_path: 'photos/file.jpg' } }),
+      })
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => Buffer.from('fake-image-bytes') });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    await handleMessage(agent, createPhotoMessage([{ file_id: 'file-1' }], 'what is this?'));
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://api.telegram.org/bottest-token/getFile',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ file_id: 'file-1' }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://api.telegram.org/file/bottest-token/photos/file.jpg');
+    expect(agent.handle).toHaveBeenCalledWith(
+      {
+        text: 'what is this?',
+        images: [{ data: Buffer.from('fake-image-bytes').toString('base64'), mimeType: 'image/jpeg' }],
+      },
+      '123',
+      { channel: 'telegram' },
+    );
+    expect(bot.sendMessage).toHaveBeenCalled();
+  });
+
+  it('forwards an image-only photo message without a caption', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, result: { file_path: 'photos/img.png' } }),
+      })
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => Buffer.from('png-bytes') });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    await handleMessage(agent, createPhotoMessage([{ file_id: 'file-2' }]));
+
+    expect(agent.handle).toHaveBeenCalledWith(
+      {
+        text: '',
+        images: [{ data: Buffer.from('png-bytes').toString('base64'), mimeType: 'image/png' }],
+      },
+      '123',
+      { channel: 'telegram' },
+    );
+  });
+
+  it('forwards no images when getFile fails', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: false, error_code: 400, description: 'Bad file' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    await handleMessage(agent, createPhotoMessage([{ file_id: 'file-3' }], 'analyze'));
+
+    expect(agent.handle).toHaveBeenCalledWith({ text: 'analyze', images: [] }, '123', { channel: 'telegram' });
+  });
+
+  it('forwards no images when the media download is not ok', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, result: { file_path: 'photos/file.jpg' } }),
+      })
+      .mockResolvedValueOnce({ ok: false, status: 404 });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    await handleMessage(agent, createPhotoMessage([{ file_id: 'file-4' }], 'analyze'));
+
+    expect(agent.handle).toHaveBeenCalledWith({ text: 'analyze', images: [] }, '123', { channel: 'telegram' });
   });
 });
 

@@ -86,9 +86,12 @@ class DatabaseService implements IDatabaseService {
           last_run DATETIME,
           channel TEXT,
           target TEXT,
+          managed INTEGER NOT NULL DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
+
+      this.migrateHeartbeatManaged();
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS heartbeat_runs (
@@ -166,6 +169,7 @@ class DatabaseService implements IDatabaseService {
           session_id TEXT NOT NULL,
           role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system', 'tool')),
           content TEXT NOT NULL,
+          image_ids TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
         );
@@ -174,6 +178,22 @@ class DatabaseService implements IDatabaseService {
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
         CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+      `);
+
+      /**
+       * Image attachments stored independently so messages only reference them by id.
+       */
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS images (
+          id TEXT PRIMARY KEY,
+          data TEXT NOT NULL,
+          mime_type TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_images_created_at ON images(created_at);
       `);
 
       this.db.exec(`
@@ -235,6 +255,21 @@ class DatabaseService implements IDatabaseService {
     } catch (error) {
       logger.error('[database] Failed to initialize database schema', { error });
       throw error;
+    }
+  }
+
+  /**
+   * One-time migration: adds the `managed` flag to heartbeat rows so the
+   * default-beats sync can distinguish config-owned beats from user-created ones.
+   */
+  private migrateHeartbeatManaged(): void {
+    try {
+      const columns = this.db.prepare('PRAGMA table_info(heartbeat)').all() as { name: string }[];
+      if (!columns.some((c) => c.name === 'managed')) {
+        this.db.exec('ALTER TABLE heartbeat ADD COLUMN managed INTEGER NOT NULL DEFAULT 0;');
+      }
+    } catch (error) {
+      logger.error('[database] Failed to add heartbeat managed column', { error });
     }
   }
 

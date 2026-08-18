@@ -50,17 +50,39 @@ describe('ChatService.complete', () => {
     expect(response).toEqual({ kind: 'message', text: 'hello back', finishReason: 'stop' });
   });
 
-  it('maps message history to role/content only', async () => {
+  it('maps message history to role/content while preserving images', async () => {
     const promptRepository = makePromptRepository();
     const completionService = makeCompletionService();
     completionService.complete.mockResolvedValue({ kind: 'message', text: 'ok', finishReason: 'stop' });
     const service = new ChatService(completionService as never, promptRepository as never);
-    const history = [{ role: 'user', content: 'a', extra: 1 }];
+    const history = [
+      { role: 'user', content: 'a', extra: 1 },
+      { role: 'user', content: 'photo', images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }] },
+    ];
 
     await service.complete('hi', 'tui', undefined, history as never);
 
     expect(promptRepository.build).toHaveBeenCalledWith(
-      expect.objectContaining({ messageHistory: [{ role: 'user', content: 'a' }] }),
+      expect.objectContaining({
+        messageHistory: [
+          { role: 'user', content: 'a' },
+          { role: 'user', content: 'photo', images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }] },
+        ],
+      }),
+    );
+  });
+
+  it('forwards the current message images to the prompt repository', async () => {
+    const promptRepository = makePromptRepository();
+    const completionService = makeCompletionService();
+    completionService.complete.mockResolvedValue({ kind: 'message', text: 'ok', finishReason: 'stop' });
+    const service = new ChatService(completionService as never, promptRepository as never);
+    const images = [{ data: 'aGVsbG8=', mimeType: 'image/png' }];
+
+    await service.complete('describe this', 'tui', undefined, [], undefined, undefined, undefined, images);
+
+    expect(promptRepository.build).toHaveBeenCalledWith(
+      expect.objectContaining({ images }),
     );
   });
 

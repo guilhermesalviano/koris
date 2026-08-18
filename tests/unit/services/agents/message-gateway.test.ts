@@ -148,6 +148,30 @@ describe('MessageGateway', () => {
     );
   });
 
+  it('forwards images to the main agent and persists them', async () => {
+    const { gateway, deps } = makeGateway();
+    const images = [{ data: 'aGVsbG8=', mimeType: 'image/png' }];
+
+    await gateway.handle({ text: 'describe this', images }, 'origin-1');
+
+    expect(deps.mainAgent.run).toHaveBeenCalledWith(
+      expect.objectContaining({ userMessage: 'describe this', images }),
+    );
+    expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ ask: 'describe this', askImages: images }),
+    );
+  });
+
+  it('handles plain string input without images', async () => {
+    const { gateway, deps } = makeGateway();
+
+    await gateway.handle('hello', 'origin-1');
+
+    expect(deps.mainAgent.run).toHaveBeenCalledWith(
+      expect.objectContaining({ userMessage: 'hello', images: undefined }),
+    );
+  });
+
   it('records the channel and origin target via the channel service', async () => {
     const { gateway, deps } = makeGateway('web');
 

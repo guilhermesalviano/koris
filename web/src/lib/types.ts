@@ -45,10 +45,17 @@ export interface SessionsResponse {
   items: SessionSummary[];
 }
 
+export interface ImageAttachment {
+  data: string;
+  mimeType?: string;
+}
+
 export interface MessageItem {
   id: string;
   role: string;
   content: string;
+  images?: ImageAttachment[];
+  missingImages?: number;
   createdAt: string;
 }
 
