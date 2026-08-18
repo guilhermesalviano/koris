@@ -71,6 +71,10 @@ function telegramFileBaseUrl(): string {
   return `https://api.telegram.org/bot${config.CHANNELS.TELEGRAM.BOT_TOKEN}`;
 }
 
+function telegramFileDownloadUrl(): string {
+  return `https://api.telegram.org/file/bot${config.CHANNELS.TELEGRAM.BOT_TOKEN}`;
+}
+
 class TelegramChannel implements ITelegramChannel {
   constructor(private readonly bot?: TelegramBot) {}
 
@@ -171,7 +175,7 @@ class TelegramChannel implements ITelegramChannel {
         return [];
       }
 
-      const mediaRes = await fetch(`${baseUrl}/${filePath}`);
+      const mediaRes = await fetch(`${telegramFileDownloadUrl()}/${filePath}`);
       if (!mediaRes.ok) {
         return [];
       }
