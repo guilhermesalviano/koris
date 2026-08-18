@@ -1,6 +1,21 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import type { SessionSummary } from '../../lib/types';
+import {
+  AuditIcon,
+  ChannelsIcon,
+  ChatIcon,
+  CloseIcon,
+  HeartbeatsIcon,
+  MemoriesIcon,
+  MenuIcon,
+  OverviewIcon,
+  PlusIcon,
+  QueueIcon,
+  SessionsIcon,
+  SettingsIcon,
+  SkillsIcon,
+} from '../../components/Icons';
 import ChatPage from './ChatPage';
 import OverviewPage from './OverviewPage';
 import SessionsPage from './SessionsPage';
@@ -14,35 +29,20 @@ import UsagePage from './UsagePage';
 import QueuePage from './QueuePage';
 import { ChatProvider, useChat } from '../../lib/chat-context';
 
-function Icon({ path }: { path: string }) {
-  return (
-    <svg
-      className="h-4 w-4 flex-shrink-0 fill-none stroke-current"
-      style={{ strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' }}
-      viewBox="0 0 24 24"
-    >
-      <path d={path} />
-    </svg>
-  );
-}
-
-const ICONS = {
-  chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
-  overview: 'M3 3v18h18M7 15l4-6 4 4 4-8',
-  sessions: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
-  memories: 'M12 2a7 7 0 0 0-7 7c0 2.4 1.2 4.1 2.5 5.3.8.7 1.5 1.7 1.5 2.7v1h6v-1c0-1 .7-2 1.5-2.7C17.8 13.1 19 11.4 19 9a7 7 0 0 0-7-7zM9 21h6',
-  heartbeats: 'M22 12h-4l-3 9L9 3l-3 9H2',
-  channels: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7',
-  skills: 'M12 2l3 6 6.5 1-4.7 4.6 1.1 6.4-5.9-3-5.9 3 1.1-6.4L2.5 9l6.5-1z',
-  audit: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
-  queue: 'M12 3v18M3 7l9-4 9 4M3 17l9 4 9-4M3 7v10M21 7v10M3 12h18',
-  settings:
-    'M10.3 2h3.4l.4 2.5a8 8 0 0 1 2 .8l2.1-1.4 2.4 2.4-1.4 2.1a8 8 0 0 1 .8 2l2.5.4v3.4l-2.5.4a8 8 0 0 1-.8 2l1.4 2.1-2.4 2.4-2.1-1.4a8 8 0 0 1-2 .8l-.4 2.5h-3.4l-.4-2.5a8 8 0 0 1-2-.8l-2.1 1.4-2.4-2.4 1.4-2.1a8 8 0 0 1-.8-2L2 13.7v-3.4l2.5-.4a8 8 0 0 1 .8-2L3.9 5.8l2.4-2.4 2.1 1.4a8 8 0 0 1 2-.8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
-  menu: 'M3 6h18M3 12h18M3 18h18',
-  close: 'M18 6 6 18M6 6l12 12',
+const NAV_ICONS = {
+  overview: OverviewIcon,
+  sessions: SessionsIcon,
+  memories: MemoriesIcon,
+  heartbeats: HeartbeatsIcon,
+  channels: ChannelsIcon,
+  skills: SkillsIcon,
+  audit: AuditIcon,
+  usage: OverviewIcon,
+  queue: QueueIcon,
+  settings: SettingsIcon,
 };
 
-const MANAGE_ITEMS: { to: string; label: string; icon: keyof typeof ICONS }[] = [
+const MANAGE_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] = [
   { to: '/admin/overview', label: 'Overview', icon: 'overview' },
   { to: '/admin/sessions', label: 'Sessions', icon: 'sessions' },
   { to: '/admin/memories', label: 'Memories', icon: 'memories' },
@@ -65,17 +65,20 @@ function navItemClass({ isActive }: { isActive: boolean }, vertical: boolean): s
 function NavItems({ vertical = false, onNavigate }: { vertical?: boolean; onNavigate?: () => void }) {
   return (
     <>
-      {MANAGE_ITEMS.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          onClick={onNavigate}
-          className={(state) => navItemClass(state, vertical)}
-        >
-          <Icon path={ICONS[item.icon]} />
-          <span>{item.label}</span>
-        </NavLink>
-      ))}
+      {MANAGE_ITEMS.map((item) => {
+        const Icon = NAV_ICONS[item.icon];
+        return (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            onClick={onNavigate}
+            className={(state) => navItemClass(state, vertical)}
+          >
+            <Icon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
+            <span>{item.label}</span>
+          </NavLink>
+        );
+      })}
     </>
   );
 }
@@ -150,7 +153,7 @@ function Header({
           aria-expanded={navOpen}
           className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
         >
-          <Icon path={ICONS.menu} />
+          <MenuIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
         </button>
         <button
           onClick={onOpenChats}
@@ -158,7 +161,7 @@ function Header({
           aria-expanded={chatsOpen}
           className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt md:hidden"
         >
-          <Icon path={ICONS.chat} />
+          <ChatIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
         </button>
       </div>
 
@@ -241,10 +244,7 @@ function ChatsPanel({ onNavigate }: { onNavigate?: () => void }) {
           onClick={handleNewChat}
           className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-strong bg-bg-3 px-3 py-2 text-[13px] text-txt transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2"
         >
-          <svg className="h-3.5 w-3.5 fill-none stroke-current" style={{ strokeWidth: 2, strokeLinecap: 'round' }} viewBox="0 0 24 24">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
+          <PlusIcon className="h-3.5 w-3.5 fill-none stroke-current" />
           New chat
         </button>
       </div>
@@ -284,7 +284,7 @@ function DrawerHeader({ title, onClose }: { title: string; onClose: () => void }
         aria-label={`Close ${title}`}
         className="ml-auto flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
       >
-        <Icon path={ICONS.close} />
+        <CloseIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
       </button>
     </div>
   );
