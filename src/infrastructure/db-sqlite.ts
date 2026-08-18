@@ -166,7 +166,7 @@ class DatabaseService implements IDatabaseService {
           session_id TEXT NOT NULL,
           role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system', 'tool')),
           content TEXT NOT NULL,
-          images TEXT,
+          image_ids TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
         );
@@ -175,6 +175,22 @@ class DatabaseService implements IDatabaseService {
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
         CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+      `);
+
+      /**
+       * Image attachments stored independently so messages only reference them by id.
+       */
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS images (
+          id TEXT PRIMARY KEY,
+          data TEXT NOT NULL,
+          mime_type TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_images_created_at ON images(created_at);
       `);
 
       this.db.exec(`
