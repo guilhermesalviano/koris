@@ -5,13 +5,26 @@ import { IDatabaseService } from '../../infrastructure/db-sqlite';
 import { ISessionManager } from '../session-manager';
 import { IMainAgent, MainAgentFactory } from './main-agent';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
+import { ImageAttachment } from '../../types/messages';
 import { generateId } from '../../utils/generate-id';
 import { ISessionContextFactory, SessionContextFactory } from './session-context';
 import { IBackgroundDispatcher, BackgroundDispatcherFactory } from './background-dispatcher';
 import { IChannelService, ChannelServiceFactory } from '../channel-service';
 
+export type InboundInput = string | { text: string; images?: ImageAttachment[] };
+
+function normalizeInput(input: InboundInput): { text: string; images?: ImageAttachment[] } {
+  if (typeof input === 'string') {
+    return { text: input };
+  }
+  if (input == null || typeof input !== 'object') {
+    return { text: '' };
+  }
+  return { text: input.text, images: input.images };
+}
+
 interface IMessageGateway {
-  handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage>;
+  handle(input: InboundInput, originId: string, options?: ProcessOptions): Promise<ProcessedMessage>;
 }
 
 class MessageGateway implements IMessageGateway {
@@ -24,10 +37,11 @@ class MessageGateway implements IMessageGateway {
     private channelService: IChannelService,
   ) {}
 
-  async handle(message: string, originId: string, options?: ProcessOptions): Promise<ProcessedMessage> {
-    const safeMessage = toSafeMessage(message);
+  async handle(input: InboundInput, originId: string, options?: ProcessOptions): Promise<ProcessedMessage> {
+    const { text, images } = normalizeInput(input);
+    const safeMessage = toSafeMessage(text);
 
-    this.logger.info(`Processing message from ${this.channel} (origin: ${originId}): "${previewMessage(safeMessage)}"`);
+    this.logger.info(`Processing message from ${this.channel} (origin: ${originId}): "${previewMessage(safeMessage)}"${images?.length ? ` with ${images.length} image(s)` : ''}`);
 
     const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(originId, options?.sessionId);
 
@@ -38,6 +52,7 @@ class MessageGateway implements IMessageGateway {
       this.backgroundDispatcher.persistConversation({
         sessionId: sessionService.getSession().id,
         ask: safeMessage,
+        askImages: images,
         answer: response,
         channel: this.channel,
       });
@@ -48,13 +63,14 @@ class MessageGateway implements IMessageGateway {
       userMessage: safeMessage,
       channel: this.channel,
       message: messageService,
+      images,
       options: { ...options, runId: options?.runId ?? generateId() },
     });
 
     this.logger.info(`Processed message from ${this.channel}: "${previewMessage(safeMessage)}" => "${previewMessage(response)}"`);
 
     const sessionId = messageService.getSessionId();
-    this.backgroundDispatcher.persistConversation({ sessionId, ask: safeMessage, answer: response, channel: this.channel });
+    this.backgroundDispatcher.persistConversation({ sessionId, ask: safeMessage, askImages: images, answer: response, channel: this.channel });
     this.backgroundDispatcher.summarizeConversation({
       sessionId,
       ask: safeMessage,

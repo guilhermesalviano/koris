@@ -1,4 +1,4 @@
-import type { Message } from "./messages";
+import type { Message, ImageAttachment } from "./messages";
 import type { ProcessedMessage, ProcessOptions } from "./agents";
 import type { ToolCall } from "./tools";
 
@@ -77,6 +77,7 @@ export interface IChatService {
     sessionId?: string,
     extraSystemBlocks?: string[],
     toolResults?: Message[],
+    images?: ImageAttachment[],
   ): Promise<AIResponse>;
 
   handler(

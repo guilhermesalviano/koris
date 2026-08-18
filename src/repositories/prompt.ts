@@ -1,14 +1,14 @@
 import { IContextRepository, ContextRepositoryFactory } from './context';
 import type { AIChatRequest, AIToolDefinition, AIProvider } from '../types/chat';
 import { IToolsRepository, ToolsRepositoryFactory } from './tools';
-import { Message } from '../types/messages';
+import { Message, ImageAttachment } from '../types/messages';
 import { Memory } from '../entities/memory';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
 import { IMemoryRepository, MemoryRepositoryFactory } from './memory';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { ILogger } from '../infrastructure/logger';
 import { InjectManager } from '../services/inject-manager';
-import { SYSTEM_PROMPT } from '../constants';
+import { SYSTEM_PROMPT, IMAGE_ANALYSIS_INSTRUCTION } from '../constants';
 import { config } from '../config';
 import { sanitizePrompt, SanitizeStats } from '../utils/prompt-sanitizer';
 
@@ -28,6 +28,7 @@ function sumStats(target: SanitizeStats, source: SanitizeStats): void {
 interface BuildPromptParams {
   userMessage: string;
   channel: string;
+  images?: ImageAttachment[];
   toolsEnabled?: boolean;
   messageHistory?: Message[];
   includeBeatTools?: boolean;
@@ -68,11 +69,15 @@ class PromptRepository implements IPromptRepository {
     return { messages, tools };
   }
 
-  private async buildHistory({ channel, userMessage, messageHistory, sessionId, extraSystemBlocks, toolResults }: BuildPromptParams): Promise<Message[]> {
+  private async buildHistory({ channel, userMessage, images, messageHistory, sessionId, extraSystemBlocks, toolResults }: BuildPromptParams): Promise<Message[]> {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
 
     for (const block of extraSystemBlocks ?? []) {
       systemBlocks.push(block);
+    }
+
+    if (images?.length) {
+      systemBlocks.push(IMAGE_ANALYSIS_INSTRUCTION);
     }
 
     const injectedContent = InjectManager.getInjectedContent();
@@ -101,7 +106,7 @@ class PromptRepository implements IPromptRepository {
     return [
       { role: 'system', content: systemBlocks.join('\n') },
       ...sanitized.history,
-      { role: 'user', content: sanitized.userMessage },
+      { role: 'user', content: sanitized.userMessage, ...(images?.length ? { images } : {}) },
       ...toolMessages,
     ];
   }

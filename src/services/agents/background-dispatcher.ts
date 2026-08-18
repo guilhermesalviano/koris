@@ -7,10 +7,12 @@ import { ConversationWorkerFactory, ConversationWorkerProps } from '../workers/c
 import { SummarizerFactory, SummarizerWorkerProps } from './sub-agents/summarizer/sub-agent';
 import { ISubAgent } from '../../types/agents';
 import { IWorker } from '../../types/workers';
+import { ImageAttachment } from '../../types/messages';
 
 interface PersistConversationProps {
   sessionId: string;
   ask: string;
+  askImages?: ImageAttachment[];
   answer: string;
   channel: string;
 }

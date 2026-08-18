@@ -15,13 +15,18 @@ export type OnText = (text: string) => void;
 export async function streamChat(
   message: string,
   sessionId: string | null,
+  images: { data: string; mimeType?: string }[],
   onStatus: OnStatus,
   onText: OnText,
 ): Promise<void> {
+  const payload: Record<string, unknown> = { message };
+  if (sessionId) payload.sessionId = sessionId;
+  if (images.length) payload.images = images;
+
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(sessionId ? { message, sessionId } : { message }),
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {

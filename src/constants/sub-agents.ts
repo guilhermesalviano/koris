@@ -9,6 +9,8 @@ export const HEARTBEAT_INSTRUCTIONS = `
 </instructions>
 `.trim();
 
+export const SYSTEM_BEAT_CLEAR_IMAGES = '__koris_clear_images__';
+
 export const HEARTBEAT_DATA = `
 <beat>
 {v2}

@@ -1,5 +1,7 @@
 import { Message } from '../entities/message';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
+import { generateId } from '../utils/generate-id';
+import { IImageRepository, ImageRepositoryFactory } from './image';
 
 interface IMessageRepository {
   save(message: Message): void;
@@ -10,17 +12,27 @@ interface IMessageRepository {
 }
 
 class MessageRepository implements IMessageRepository {
-  constructor(private db: IDatabaseService) { }
+  constructor(
+    private db: IDatabaseService,
+    private imageRepository: IImageRepository,
+  ) { }
 
   save(message: Message): void {
+    const imageIds = message.images?.map((image) => {
+      const id = generateId();
+      this.imageRepository.save({ id, data: image.data, mimeType: image.mimeType });
+      return id;
+    }) ?? [];
+
     this.db.run(
-      `INSERT INTO messages (id, session_id, role, content, created_at)
-      VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO messages (id, session_id, role, content, image_ids, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)`,
       [
         message.id,
         message.sessionId,
         message.role,
         message.content,
+        imageIds.length ? JSON.stringify(imageIds) : null,
         message.createdAt
       ]
     );
@@ -32,8 +44,8 @@ class MessageRepository implements IMessageRepository {
 
   getBySessionId(sessionId: string, limit = 15): Message[] {
     const rows = this.db.query<any>(
-      `SELECT id, session_id, role, content, created_at FROM (
-         SELECT id, session_id, role, content, created_at FROM messages
+      `SELECT id, session_id, role, content, image_ids, created_at FROM (
+         SELECT id, session_id, role, content, image_ids, created_at FROM messages
          WHERE session_id = ?
          ORDER BY created_at DESC
          LIMIT ?
@@ -41,14 +53,35 @@ class MessageRepository implements IMessageRepository {
        ORDER BY created_at ASC`,
       [sessionId, limit]
     );
-    
-    return rows.map((row: any) => new Message({
-      id: row.id,
-      sessionId: row.session_id,
-      role: row.role,
-      content: row.content,
-      createdAt: row.created_at
-    }));
+
+    return rows.map((row: any) => {
+      const imageIds = this.parseImageIds(row.image_ids);
+      const images = this.imageRepository.getByIds(imageIds).map(({ data, mimeType }) => ({ data, mimeType }));
+      const missingImages = imageIds.length - images.length;
+
+      return new Message({
+        id: row.id,
+        sessionId: row.session_id,
+        role: row.role,
+        content: row.content,
+        images: images.length ? images : undefined,
+        missingImages: missingImages > 0 ? missingImages : undefined,
+        createdAt: row.created_at
+      });
+    });
+  }
+
+  private parseImageIds(raw: unknown): string[] {
+    if (typeof raw !== 'string' || !raw) {
+      return [];
+    }
+
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : [];
+    } catch {
+      return [];
+    }
   }
 
   getPreviewBySessionId(sessionId: string): string | null {
@@ -71,7 +104,7 @@ class MessageRepository implements IMessageRepository {
 
 class MessageRepositoryFactory {
   public static create(db: IDatabaseService): MessageRepository {
-    return new MessageRepository(db);
+    return new MessageRepository(db, ImageRepositoryFactory.create(db));
   }
 }
 

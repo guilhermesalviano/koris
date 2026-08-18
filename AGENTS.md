@@ -99,7 +99,7 @@ Two independent flags control how LLM calls are ordered:
 ## Workers & sub-agents
 
 - `src/services/workers/` — `conversation-worker.ts`, `executor-worker.ts`. All implement the generic `IWorker<TArgs, TResult>` (`src/types/workers.ts`).
-- `src/services/agents/` — `message-gateway.ts` (channel entry facade), `session-context.ts` (session + per-session message/memory services), `background-dispatcher.ts` (fire-and-forget persistence + summarization), `main-agent.ts` (main LLM orchestrator), `tool-call-pipeline.ts` (executor orchestration, shared with heartbeat), `sub-agents/` (`heartbeat/` scheduled beats: `runner.ts` schedules, `sub-agent.ts` runs the beat LLM; `summarizer/`).
+- `src/services/agents/` — `message-gateway.ts` (channel entry facade), `session-context.ts` (session + per-session message/memory services), `background-dispatcher.ts` (fire-and-forget persistence + summarization), `main-agent.ts` (main LLM orchestrator), `tool-call-pipeline.ts` (executor orchestration, shared with heartbeat), `sub-agents/` (`heartbeat/` scheduled beats: `runner.ts` schedules, `sub-agent.ts` runs the beat LLM, `default-beats.ts` syncs `heartbeats.default.json`; `summarizer/`).
 - `src/services/skills/` — `skill-sync.ts` (`SkillSyncService` + `SkillSyncSingleton`): syncs `skills/` into `learned_skills` at startup and on file changes (fs.watch + 500ms debounce), pruning rows whose skill folder was removed.
 
 ## Plugins & skills (extension mechanisms)
@@ -109,7 +109,11 @@ Two independent flags control how LLM calls are ordered:
 
 ## Database schema (`src/infrastructure/db-sqlite.ts`)
 
-Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/lesson/reminder), `messages` (short-term, `role` in user/assistant/system), `learned_skills`. Foreign keys cascade on `session_id`. Access **only** through `src/repositories/*`. `DatabaseServiceFactory.create()` is safe to call many times (multiple instances share one DB file; init is reported once).
+Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/lesson/reminder), `messages` (short-term, `role` in user/assistant/system), `images`, `learned_skills`. Foreign keys cascade on `session_id`. Access **only** through `src/repositories/*`. `DatabaseServiceFactory.create()` is safe to call many times (multiple instances share one DB file; init is reported once).
+
+## Default heartbeats (`heartbeats.default.json`)
+
+`heartbeats.default.json` at the project root defines the beats seeded into the `heartbeat` table on every startup by `seedDefaultBeats()` (`src/services/agents/sub-agents/heartbeat/default-beats.ts`, called from `app.ts`). Entries are `{ beat, type, cron_expression, channel?, target? }`. Config-owned beats are marked `managed=1` and fully synced (updated, or pruned when removed from the file); beats created via the `set_beat` tool or dashboard are never touched. The reserved `__koris_clear_images__` beat is handled natively by the heartbeat sub-agent (no LLM call) — it empties the `images` table. `images` holds base64 attachments by uuid id; `messages.image_ids` stores the ids.
 
 ## Web frontend
 
