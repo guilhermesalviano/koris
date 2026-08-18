@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from './Icons';
 
 interface ImageLightboxProps {
   src: string | null;
@@ -48,9 +49,7 @@ export default function ImageLightbox({ src, onClose, onPrev, onNext, caption }:
           title="Previous image (←)"
           className="absolute left-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white/90 transition-colors duration-150 hover:bg-black/70"
         >
-          <svg className="h-5 w-5 fill-none stroke-current" style={{ strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
+          <ChevronLeftIcon className="h-5 w-5 fill-none stroke-current" />
         </button>
       )}
       {onNext && (
@@ -63,9 +62,7 @@ export default function ImageLightbox({ src, onClose, onPrev, onNext, caption }:
           title="Next image (→)"
           className="absolute right-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white/90 transition-colors duration-150 hover:bg-black/70"
         >
-          <svg className="h-5 w-5 fill-none stroke-current" style={{ strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
+          <ChevronRightIcon className="h-5 w-5 fill-none stroke-current" />
         </button>
       )}
       <button
@@ -74,10 +71,7 @@ export default function ImageLightbox({ src, onClose, onPrev, onNext, caption }:
         title="Close (Esc)"
         className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white/90 transition-colors duration-150 hover:bg-black/70"
       >
-        <svg className="h-5 w-5 fill-none stroke-current" style={{ strokeWidth: 2 }} viewBox="0 0 24 24">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
+        <CloseIcon className="h-5 w-5 fill-none stroke-current" />
       </button>
       <img
         src={src}

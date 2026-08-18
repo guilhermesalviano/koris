@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
 import ImageLightbox from '../../components/ImageLightbox';
+import { AttachIcon, BrokenImageIcon, ChatIcon, CloseIcon, SendIcon } from '../../components/Icons';
 import type { ImageAttachment } from '../../lib/types';
 
 const MAX_CHARS = 4000;
@@ -106,9 +107,7 @@ export default function ChatPage() {
         {showEmptyState && (
           <div className="m-auto max-w-sm px-6 py-10 text-center">
             <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-strong bg-bg-3">
-              <svg className="h-6 w-6 stroke-txt-3 fill-none" style={{ strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
+              <ChatIcon className="h-6 w-6 fill-none stroke-txt-3" />
             </div>
             <h2 className="mb-2 text-base font-medium">What can I help with?</h2>
             <p className="text-[13px] leading-relaxed text-txt-2">Ask anything — code, concepts, writing, analysis. I&apos;ll think it through with you.</p>
@@ -149,12 +148,7 @@ export default function ChatPage() {
                       ))}
                       {Array.from({ length: m.missingImages ?? 0 }).map((_, i) => (
                         <div key={`missing-${i}`} className="group relative flex h-20 w-[140px] cursor-default items-center justify-center rounded-md border border-dashed border-txt-3/40 bg-bg-3">
-                          <svg className="h-7 w-7 fill-none stroke-txt-3/50" style={{ strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                            <circle cx="8.5" cy="8.5" r="1.5" />
-                            <polyline points="21 15 16 10 5 21" />
-                            <line x1="4" y1="4" x2="20" y2="20" />
-                          </svg>
+                          <BrokenImageIcon className="h-7 w-7 fill-none stroke-txt-3/50" />
                           <div className="pointer-events-none absolute bottom-full right-0 z-10 mb-1.5 max-w-[220px] rounded-md border border-subtle bg-bg-2 px-2 py-1 text-right font-mono text-[11px] leading-snug text-txt-2 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                             This image was deleted and is no longer accessible
                           </div>
@@ -206,10 +200,7 @@ export default function ChatPage() {
                   className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-strong bg-bg text-txt-2 hover:text-red-400"
                   title="Remove image"
                 >
-                  <svg className="h-3 w-3 fill-none stroke-current" style={{ strokeWidth: 2 }} viewBox="0 0 24 24">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
+                  <CloseIcon className="h-3 w-3 fill-none stroke-current" />
                 </button>
               </div>
             ))}
@@ -223,11 +214,7 @@ export default function ChatPage() {
             title="Attach image"
             className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[10px] border-none bg-transparent text-txt-3 transition-all duration-150 hover:bg-bg-2 hover:text-accent-2 disabled:opacity-35 disabled:cursor-default"
           >
-            <svg className="h-[16px] w-[16px] fill-none stroke-current" style={{ strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>
+            <AttachIcon className="h-[16px] w-[16px] fill-none stroke-current" />
           </button>
           <input
             ref={fileInputRef}
@@ -258,10 +245,7 @@ export default function ChatPage() {
             onClick={submit}
             className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:enabled:opacity-90 active:enabled:scale-95 disabled:opacity-35 disabled:cursor-default"
           >
-            <svg className="relative z-10 h-[15px] w-[15px] fill-none stroke-white" style={{ strokeWidth: 2.2, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24">
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
-            </svg>
+            <SendIcon className="relative z-10 h-[15px] w-[15px] fill-none stroke-white" />
           </button>
         </div>
         <div className="mt-1.5 flex items-center justify-between px-1 font-mono text-[11px] text-txt-3">
