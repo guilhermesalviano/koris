@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
+import ImageLightbox from '../../components/ImageLightbox';
 import type { ImageAttachment } from '../../lib/types';
 
 const MAX_CHARS = 4000;
@@ -23,6 +24,7 @@ export default function ChatPage() {
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<{ images: ImageAttachment[]; index: number } | null>(null);
 
   // Sync the viewed session with the URL. `null` targets the live chat (latest
   // open web session, without creating one).
@@ -90,6 +92,10 @@ export default function ChatPage() {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function cyclePreview(direction: number) {
+    setPreview((p) => (p ? { ...p, index: (p.index + direction + p.images.length) % p.images.length } : p));
+  }
+
   const showEmptyState = historyLoaded && messages.length === 0;
   const footerHint = '↵ send · ⇧↵ newline';
   const charCount = input.length;
@@ -131,7 +137,15 @@ export default function ChatPage() {
                   {m.images && m.images.length > 0 && (
                     <div className="mb-2 flex flex-wrap gap-1.5">
                       {m.images.map((img, i) => (
-                        <img key={i} src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-20 max-w-[140px] rounded-md object-cover" />
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setPreview({ images: m.images ?? [], index: i })}
+                          title="View image"
+                          className="group overflow-hidden rounded-md transition-transform duration-150 hover:scale-[1.03] focus:outline-none focus:ring-2 focus:ring-accent"
+                        >
+                          <img src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-20 max-w-[140px] cursor-zoom-in rounded-md object-cover transition-opacity duration-150 group-hover:opacity-90" />
+                        </button>
                       ))}
                     </div>
                   )}
@@ -166,7 +180,14 @@ export default function ChatPage() {
           <div className="mb-2 flex flex-wrap gap-2">
             {attachments.map((img, i) => (
               <div key={i} className="relative">
-                <img src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-16 w-16 rounded-lg border border-strong object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setPreview({ images: attachments, index: i })}
+                  title="View image"
+                  className="block h-16 w-16 overflow-hidden rounded-lg border border-strong transition-transform duration-150 hover:scale-[1.03] focus:outline-none focus:ring-2 focus:ring-accent"
+                >
+                  <img src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-full w-full cursor-zoom-in object-cover" />
+                </button>
                 <button
                   onClick={() => removeAttachment(i)}
                   className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-strong bg-bg text-txt-2 hover:text-red-400"
@@ -241,6 +262,14 @@ export default function ChatPage() {
           {toast}
         </div>
       )}
+
+      <ImageLightbox
+        src={preview ? imageSrc(preview.images[preview.index]) : null}
+        caption={preview && preview.images.length > 1 ? `Image ${preview.index + 1} of ${preview.images.length}` : undefined}
+        onClose={() => setPreview(null)}
+        onPrev={preview && preview.images.length > 1 ? () => cyclePreview(-1) : undefined}
+        onNext={preview && preview.images.length > 1 ? () => cyclePreview(1) : undefined}
+      />
     </div>
   );
 }
