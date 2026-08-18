@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository.
 
 ## What this is
 
-`koris-agent` is an autonomous AI agent framework written in TypeScript (CommonJS, strict mode). It receives messages through pluggable channels (Telegram, WhatsApp, TUI, web dashboard), runs them through an LLM, and can execute tools (`curl`, some shell commands, search, beats, skills instructions). It has persistent SQLite memory, session tracking, heartbeat (scheduled) agents, and a summarizer sub-agent.
+`koris-assistant` is an autonomous AI agent framework written in TypeScript (CommonJS, strict mode). It receives messages through pluggable channels (Telegram, WhatsApp, TUI, web dashboard), runs them through an LLM, and can execute tools (`curl`, some shell commands, search, beats, skills instructions). It has persistent SQLite memory, session tracking, heartbeat (scheduled) agents, and a summarizer sub-agent.
 
 ## Tech stack & package manager
 

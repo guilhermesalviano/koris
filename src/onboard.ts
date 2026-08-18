@@ -239,7 +239,7 @@ export function buildOnboardingScreen(
   const width = Math.max(40, maxWidth);
   const skippedSteps = new Set(snapshot.skippedSteps ?? []);
   const lines: string[] = [
-    'Koris Agent onboarding',
+    'Koris Assistant onboarding',
     'A step-by-step TUI setup flow with a persistent left rail.',
     '',
   ];
@@ -322,7 +322,7 @@ export class Onboard {
 
   async run(): Promise<void> {
     startTui({
-      title: 'koris-agent onboarding',
+      title: 'koris-assistant onboarding',
       fixedInput: true,
       inputMode: 'screen',
       allowEmptyInput: true,

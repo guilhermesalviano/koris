@@ -1,24 +1,26 @@
 # GitHub Actions Workflows
 
-This directory contains CI workflows for linting, security tests, and CodeQL.
+This directory contains CI workflows for linting, tests, and CodeQL.
 
 ## Workflows
 
 ### `lint.yml` — Lint
 
-- **Trigger**: push (main/develop)
+- **Trigger**: pull request (main/develop)
 - **What it does**:
   - Sets up pnpm (pinned)
   - Sets up Node
   - Installs dependencies from repo root
-  - Runs `pnpm lint` (turbo, TypeScript typecheck across packages)
+  - Runs `pnpm lint` (server TypeScript type-check)
+  - Runs `pnpm lint:client` (web frontend TypeScript type-check)
 
-### `tests.yml` — Security Tests
+### `tests.yml` — Tests
 
-- **Trigger**: push (main/develop), PR (main), manual dispatch
+- **Trigger**: pull request (main/develop)
 - **Jobs**:
-  - `security-tests`: runs the security test suite (Vitest) for the client package (`pnpm --filter koris-agent ...`)
-  - `security-analysis`: runs `pnpm audit` and Trivy, uploads SARIF
+  - `test`: installs dependencies, builds, runs the Vitest suite with coverage
+  - Coverage annotations and a coverage summary are posted as CI annotations
+  - Uploads coverage to Codecov (single-package `coverage/` output)
 
 ### `codeql.yml` — CodeQL Analysis
 
@@ -28,5 +30,5 @@ This directory contains CI workflows for linting, security tests, and CodeQL.
 
 ## Toolchain pinning
 
-- pnpm: **10.18.3** (`pnpm/action-setup@v5` with `version: 10.18.3`)
+- pnpm: **10.18.3** (`pnpm/action-setup@v6` with `version: 10.18.3`)
 - Node: **24.x**
