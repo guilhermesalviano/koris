@@ -100,7 +100,7 @@ class Application implements IApplication {
     const { gateway } = this.runtime;
 
     startTUI({
-      title: 'koris-agent',
+      title: 'koris-assistant',
       showHints: false,
       placeholder: 'Type /help for commands.',
       onInput: async (input: string) => gateway.handle(input, 'tui'),

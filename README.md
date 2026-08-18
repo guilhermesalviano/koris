@@ -1,6 +1,6 @@
-# Koris Agent
+# Koris Assistant
 
-Koris Agent is an autonomous AI agent framework designed with a modular architecture, featuring pluggable skills, persistent memory management, and an interactive Terminal User Interface (TUI).
+Koris Assistant is an autonomous AI agent framework designed with a modular architecture, featuring pluggable skills, persistent memory management, and an interactive Terminal User Interface (TUI).
 
 ## Key Features
 
