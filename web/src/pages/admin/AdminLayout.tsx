@@ -4,17 +4,18 @@ import type { SessionSummary } from '../../lib/types';
 import {
   AuditIcon,
   ChannelsIcon,
-  ChatIcon,
   CloseIcon,
   HeartbeatsIcon,
   MemoriesIcon,
   MenuIcon,
+  MoonIcon,
   OverviewIcon,
   PlusIcon,
   QueueIcon,
   SessionsIcon,
   SettingsIcon,
   SkillsIcon,
+  SunIcon,
 } from '../../components/Icons';
 import ChatPage from './ChatPage';
 import OverviewPage from './OverviewPage';
@@ -42,40 +43,54 @@ const NAV_ICONS = {
   settings: SettingsIcon,
 };
 
-const MANAGE_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] = [
+const MAIN_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] = [
   { to: '/admin/overview', label: 'Overview', icon: 'overview' },
-  { to: '/admin/sessions', label: 'Sessions', icon: 'sessions' },
   { to: '/admin/memories', label: 'Memories', icon: 'memories' },
   { to: '/admin/heartbeats', label: 'Beats', icon: 'heartbeats' },
-  { to: '/admin/channels', label: 'Channels', icon: 'channels' },
   { to: '/admin/skills', label: 'Skills', icon: 'skills' },
-  { to: '/admin/audit', label: 'Audit', icon: 'audit' },
-  { to: '/admin/usage', label: 'Usage', icon: 'overview' },
   { to: '/admin/queue', label: 'Queue', icon: 'queue' },
+];
+
+const CONFIG_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] = [
+  { to: '/admin/sessions', label: 'Sessions', icon: 'sessions' },
+  { to: '/admin/channels', label: 'Channels', icon: 'channels' },
+  { to: '/admin/audit', label: 'Audit', icon: 'audit' },
+  { to: '/admin/usage', label: 'Usage', icon: 'usage' },
   { to: '/admin/settings', label: 'Settings', icon: 'settings' },
 ];
 
-function navItemClass({ isActive }: { isActive: boolean }, vertical: boolean): string {
+function navItemClass({ isActive }: { isActive: boolean }, vertical: boolean, collapsed: boolean): string {
   const base = vertical
-    ? 'flex w-full items-center gap-2.5 rounded-lg border border-transparent px-3 py-2.5 text-[13px] text-txt-2 hover:bg-bg-3 hover:text-txt'
+    ? `flex w-full items-center rounded-lg border border-transparent py-2.5 text-[13px] text-txt-2 hover:bg-bg-3 hover:text-txt ${collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'}`
     : 'flex items-center gap-1.5 rounded-lg border border-transparent px-2.5 py-1.5 text-[13px] text-txt-2 hover:bg-bg-3 hover:text-txt';
   return isActive ? `${base} bg-accent-muted !text-accent-2 border-accent-muted` : base;
 }
 
-function NavItems({ vertical = false, onNavigate }: { vertical?: boolean; onNavigate?: () => void }) {
+function NavItems({
+  items,
+  vertical = false,
+  collapsed = false,
+  onNavigate,
+}: {
+  items: typeof MAIN_ITEMS;
+  vertical?: boolean;
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
   return (
     <>
-      {MANAGE_ITEMS.map((item) => {
+      {items.map((item) => {
         const Icon = NAV_ICONS[item.icon];
         return (
           <NavLink
             key={item.to}
             to={item.to}
             onClick={onNavigate}
-            className={(state) => navItemClass(state, vertical)}
+            title={collapsed ? item.label : undefined}
+            className={(state) => navItemClass(state, vertical, collapsed)}
           >
             <Icon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-            <span>{item.label}</span>
+            {!collapsed && <span>{item.label}</span>}
           </NavLink>
         );
       })}
@@ -117,7 +132,7 @@ function Drawer({
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] border-r border-subtle bg-bg-2 shadow-2xl transition-transform duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-subtle bg-bg-2 shadow-2xl transition-transform duration-200 ease-out ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -127,16 +142,37 @@ function Drawer({
   );
 }
 
+const THEME_KEY = 'koris-theme';
+const SIDEBAR_KEY = 'koris-sidebar-collapsed';
+
+function getInitialDark(): boolean {
+  try {
+    return localStorage.getItem(THEME_KEY) !== 'light';
+  } catch {
+    return true;
+  }
+}
+
+function getInitialCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === 'collapsed';
+  } catch {
+    return false;
+  }
+}
+
 function Header({
   navOpen,
-  chatsOpen,
+  isDark,
   onOpenNav,
-  onOpenChats,
+  onToggleCollapse,
+  onToggleTheme,
 }: {
   navOpen: boolean;
-  chatsOpen: boolean;
+  isDark: boolean;
   onOpenNav: () => void;
-  onOpenChats: () => void;
+  onToggleCollapse: () => void;
+  onToggleTheme: () => void;
 }) {
   const { serverHealthy, streaming, backgroundRun, activeSessionId } = useChat();
   const backgroundActive = !!backgroundRun && backgroundRun.sessionId === activeSessionId;
@@ -144,32 +180,25 @@ function Header({
   const statusOnline = serverHealthy && !processing;
   const statusLabel = !serverHealthy ? 'Offline' : processing ? 'Thinking…' : 'Online';
 
+  function handleMenu() {
+    if (window.matchMedia('(min-width: 768px)').matches) {
+      onToggleCollapse();
+    } else {
+      onOpenNav();
+    }
+  }
+
   return (
     <header className="flex h-14 flex-shrink-0 items-center justify-between gap-2 border-b border-subtle bg-bg/80 px-3 backdrop-blur-md sm:px-4">
       <div className="flex min-w-0 items-center gap-1">
         <button
-          onClick={onOpenNav}
-          aria-label="Open menu"
+          onClick={handleMenu}
+          aria-label="Toggle sidebar"
           aria-expanded={navOpen}
           className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
         >
           <MenuIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
         </button>
-        <button
-          onClick={onOpenChats}
-          aria-label="Open chats"
-          aria-expanded={chatsOpen}
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt md:hidden"
-        >
-          <ChatIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-        </button>
-      </div>
-
-      <div className="flex flex-shrink-0 items-center gap-2">
-        <div className="flex items-center gap-1.5 rounded-full border border-subtle bg-bg-3 px-2.5 py-1 font-mono text-[11px] text-txt-3">
-          <div className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${statusOnline ? 'bg-green-500' : 'bg-red-500'}`} />
-          <span className="hidden sm:inline">{statusLabel}</span>
-        </div>
         <div className="ml-1 flex items-center gap-2.5">
           <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-accent">
             <img src="/logo.png" alt="koris-assistant" className="h-full w-full object-cover" />
@@ -178,6 +207,25 @@ function Header({
             <div className="text-[13px] font-medium">koris-assistant</div>
             <div className="font-mono text-[11px] text-txt-3">Admin panel</div>
           </div>
+        </div>
+      </div>
+
+      <div className="flex flex-shrink-0 items-center gap-2">
+        <button
+          onClick={onToggleTheme}
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={isDark ? 'Light mode' : 'Dark mode'}
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
+        >
+          {isDark ? (
+            <SunIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
+          ) : (
+            <MoonIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
+          )}
+        </button>
+        <div className="flex items-center gap-1.5 rounded-full border border-subtle bg-bg-3 px-2.5 py-1 font-mono text-[11px] text-txt-3">
+          <div className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${statusOnline ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span className="hidden sm:inline">{statusLabel}</span>
         </div>
       </div>
     </header>
@@ -226,7 +274,7 @@ function ChatItem({ session, live, onNavigate }: { session: SessionSummary; live
   );
 }
 
-function ChatsPanel({ onNavigate }: { onNavigate?: () => void }) {
+function ChatsPanel({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
   const { sessions, newChat } = useChat();
   const navigate = useNavigate();
   const liveWebId = sessions.find((s) => s.entryChannel === 'web' && !s.endedAt)?.id;
@@ -235,6 +283,22 @@ function ChatsPanel({ onNavigate }: { onNavigate?: () => void }) {
     await newChat();
     onNavigate?.();
     navigate('/admin/chat');
+  }
+
+  if (collapsed) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="p-2">
+          <button
+            onClick={handleNewChat}
+            title="New chat"
+            className="flex w-full items-center justify-center rounded-lg border border-strong bg-bg-3 px-2 py-2 text-txt transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2"
+          >
+            <PlusIcon className="h-3.5 w-3.5 fill-none stroke-current" />
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -267,10 +331,54 @@ function ChatsPanel({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function Sidebar() {
+function ConfigButton({ onOpen, collapsed = false }: { onOpen: () => void; collapsed?: boolean }) {
   return (
-    <aside className="hidden w-60 flex-shrink-0 flex-col border-r border-subtle bg-bg-2 md:flex">
-      <ChatsPanel />
+    <button
+      onClick={onOpen}
+      title={collapsed ? 'Config' : undefined}
+      className={`flex w-full items-center rounded-lg border border-transparent py-2.5 text-[13px] text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt ${
+        collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'
+      }`}
+    >
+      <SettingsIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
+      {!collapsed && <span>Config</span>}
+    </button>
+  );
+}
+
+function SidebarContent({
+  collapsed = false,
+  onOpenConfig,
+  onNavigate,
+}: {
+  collapsed?: boolean;
+  onOpenConfig: () => void;
+  onNavigate?: () => void;
+}) {
+  return (
+    <>
+      <div className="flex-shrink-0 space-y-0.5 p-2 pb-1.5">
+        <NavItems items={MAIN_ITEMS} vertical collapsed={collapsed} onNavigate={onNavigate} />
+      </div>
+      <div className="flex-shrink-0 border-t border-subtle" />
+      <div className="min-h-0 flex-1">
+        <ChatsPanel collapsed={collapsed} onNavigate={onNavigate} />
+      </div>
+      <div className="flex-shrink-0 border-t border-subtle p-2">
+        <ConfigButton collapsed={collapsed} onOpen={onOpenConfig} />
+      </div>
+    </>
+  );
+}
+
+function Sidebar({ collapsed, onOpenConfig }: { collapsed: boolean; onOpenConfig: () => void }) {
+  return (
+    <aside
+      className={`relative hidden flex-shrink-0 flex-col border-r border-subtle bg-bg-2 transition-[width] duration-200 md:flex ${
+        collapsed ? 'w-16' : 'w-60'
+      }`}
+    >
+      <SidebarContent collapsed={collapsed} onOpenConfig={onOpenConfig} />
     </aside>
   );
 }
@@ -292,19 +400,39 @@ function DrawerHeader({ title, onClose }: { title: string; onClose: () => void }
 
 export default function AdminLayout() {
   const [navOpen, setNavOpen] = useState(false);
-  const [chatsOpen, setChatsOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(getInitialCollapsed);
+  const [isDark, setIsDark] = useState(getInitialDark);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('light', !isDark);
+    try {
+      localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+    } catch {
+      // storage unavailable — theme still applies for this session
+    }
+  }, [isDark]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_KEY, collapsed ? 'collapsed' : 'expanded');
+    } catch {
+      // storage unavailable — state still applies for this session
+    }
+  }, [collapsed]);
 
   return (
     <ChatProvider>
       <div className="relative z-10 flex h-screen w-full flex-col supports-[height:100dvh]:h-dvh">
         <Header
           navOpen={navOpen}
-          chatsOpen={chatsOpen}
+          isDark={isDark}
           onOpenNav={() => setNavOpen(true)}
-          onOpenChats={() => setChatsOpen(true)}
+          onToggleCollapse={() => setCollapsed((c) => !c)}
+          onToggleTheme={() => setIsDark((d) => !d)}
         />
         <div className="flex min-h-0 flex-1">
-          <Sidebar />
+          <Sidebar collapsed={collapsed} onOpenConfig={() => setConfigOpen(true)} />
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <Routes>
               <Route index element={<Navigate to="/admin/chat" replace />} />
@@ -326,15 +454,21 @@ export default function AdminLayout() {
 
         <Drawer open={navOpen} onClose={() => setNavOpen(false)} label="Menu">
           <DrawerHeader title="Menu" onClose={() => setNavOpen(false)} />
-          <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
-            <NavItems vertical onNavigate={() => setNavOpen(false)} />
+          <div className="flex min-h-0 flex-1 flex-col">
+            <SidebarContent
+              onNavigate={() => setNavOpen(false)}
+              onOpenConfig={() => {
+                setNavOpen(false);
+                setConfigOpen(true);
+              }}
+            />
           </div>
         </Drawer>
 
-        <Drawer open={chatsOpen} onClose={() => setChatsOpen(false)} label="Chats" mobileOnly>
-          <DrawerHeader title="Chats" onClose={() => setChatsOpen(false)} />
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <ChatsPanel onNavigate={() => setChatsOpen(false)} />
+        <Drawer open={configOpen} onClose={() => setConfigOpen(false)} label="Config">
+          <DrawerHeader title="Config" onClose={() => setConfigOpen(false)} />
+          <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
+            <NavItems items={CONFIG_ITEMS} vertical onNavigate={() => setConfigOpen(false)} />
           </div>
         </Drawer>
       </div>

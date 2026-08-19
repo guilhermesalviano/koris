@@ -21,7 +21,7 @@ export default function SettingsPage() {
   }, [load]);
 
   return (
-    <PageShell title="Settings" onRefresh={load}>
+    <PageShell title="Settings" description="Runtime configuration" onRefresh={load}>
       {error && <EmptyState text={error} />}
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data !== null && (

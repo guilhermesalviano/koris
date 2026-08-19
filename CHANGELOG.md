@@ -15,6 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [1.0.1] - 2026-08-19
+
+### Added
+
+- Web frontend: light/dark theme toggle (dark by default), persisted in `localStorage`.
+- Web frontend: per-page document titles and meta descriptions; page headers show a short description subtitle.
+- Web frontend: favicon switches to an alert variant when an AI response finishes while the tab is unfocused, restored when the page is opened again.
+
+### Changed
+
+- Web frontend: reorganized the admin sidebar — main menu at the top, "New chat" + chat history in the middle, and a bottom Config menu for less-used items (Sessions, Channels, Audit, Usage, Settings).
+- Web frontend: mobile menu drawer now mirrors the full sidebar layout.
+- Web frontend: header hamburger collapses/expands the desktop sidebar to icon-only mode (state persisted); brand moved to the left and the status pill to the right.
+
+### Fixed
+
+### Removed
+
 ## [1.0.0] - 2026-08-18
 
 First public release of Koris Assistant.

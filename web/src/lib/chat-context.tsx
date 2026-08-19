@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { checkHealth, streamChat, apiRequest } from './api';
+import { clearResponseAlert, triggerResponseDone } from './response-alert';
 import type { ActiveRun, ActiveRunsResponse, ImageAttachment, SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
 
 export interface ChatMessage {
@@ -222,6 +223,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const webRun = runs.find((r) => r.channel === 'web') ?? null;
       const key = webRun ? `${webRun.sessionId}:${webRun.startedAt}` : '';
       if (key !== lastKey) {
+        if (lastKey && !key && !streamingRef.current) {
+          triggerResponseDone();
+        }
         lastKey = key;
         setBackgroundRun(webRun);
       }
@@ -325,6 +329,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     setStreaming(true);
     streamingRef.current = true;
+    clearResponseAlert();
     const userMsg: ChatMessage = { id: nextId(), role: 'user', content: text, images, timestamp: timeStr(new Date()) };
     const assistantId = nextId();
     setMessages((prev) => [...prev, userMsg, { id: assistantId, role: 'assistant', content: '', pending: true, timestamp: '' }]);
@@ -363,6 +368,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setMessages((prev) => prev.map((m) => (m.id === assistantId
         ? { ...m, content: accumulated || 'No response.', pending: false, status: undefined, timestamp: timeStr(new Date()) }
         : m)));
+      triggerResponseDone();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Request failed';
       setMessages((prev) => prev.map((m) => (m.id === assistantId

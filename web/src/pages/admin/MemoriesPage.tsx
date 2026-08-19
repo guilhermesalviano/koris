@@ -33,7 +33,7 @@ export default function MemoriesPage() {
   }
 
   return (
-    <PageShell title="Memories" onRefresh={load}>
+    <PageShell title="Memories" description="Long-term memory: summaries, facts, lessons and reminders" onRefresh={load}>
       {error && <EmptyState text={error} />}
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data && data.items.length === 0 && <EmptyState text="No memories yet." />}
