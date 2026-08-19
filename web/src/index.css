@@ -16,6 +16,11 @@
   --color-txt-2: #8888a0;
   --color-txt-3: #555568;
 
+  --color-border-subtle: rgba(255, 255, 255, 0.07);
+  --color-border-strong: rgba(255, 255, 255, 0.12);
+  --color-border-accent-muted: rgba(243, 98, 70, 0.3);
+  --color-accent-muted: rgba(243, 98, 70, 0.12);
+
   --radius-card: 18px;
 
   --animate-msg-in: msgIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
@@ -46,20 +51,63 @@
   to   { opacity: 0; }
 }
 
+:root {
+  color-scheme: dark;
+}
+
 @utility border-subtle {
-  border-color: rgba(255, 255, 255, 0.07);
+  border-color: var(--color-border-subtle);
 }
 
 @utility border-strong {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: var(--color-border-strong);
 }
 
 @utility border-accent-muted {
-  border-color: rgba(243, 98, 70, 0.3);
+  border-color: var(--color-border-accent-muted);
 }
 
 @utility bg-accent-muted {
-  background-color: rgba(243, 98, 70, 0.12);
+  background-color: var(--color-accent-muted);
+}
+
+html.light {
+  color-scheme: light;
+  --color-bg: #f6f6f8;
+  --color-bg-2: #ffffff;
+  --color-bg-3: #efeff2;
+  --color-bg-4: #e4e4ea;
+  --color-txt: #191922;
+  --color-txt-2: #56566b;
+  --color-txt-3: #8f8fa3;
+  --color-border-subtle: rgba(0, 0, 0, 0.07);
+  --color-border-strong: rgba(0, 0, 0, 0.12);
+}
+
+html.light body::before {
+  background-image:
+    linear-gradient(rgba(243, 98, 70, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(243, 98, 70, 0.05) 1px, transparent 1px);
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+html.light .bubble pre {
+  background: #f0f0f2;
+}
+
+html.light .bubble pre::before {
+  color: #8f8fa3;
+}
+
+html.light .bubble :not(pre) > code {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+html.light .bubble hr {
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 /* Grid background */

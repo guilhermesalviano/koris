@@ -8,12 +8,14 @@ import {
   HeartbeatsIcon,
   MemoriesIcon,
   MenuIcon,
+  MoonIcon,
   OverviewIcon,
   PlusIcon,
   QueueIcon,
   SessionsIcon,
   SettingsIcon,
   SkillsIcon,
+  SunIcon,
 } from '../../components/Icons';
 import ChatPage from './ChatPage';
 import OverviewPage from './OverviewPage';
@@ -140,14 +142,37 @@ function Drawer({
   );
 }
 
+const THEME_KEY = 'koris-theme';
+const SIDEBAR_KEY = 'koris-sidebar-collapsed';
+
+function getInitialDark(): boolean {
+  try {
+    return localStorage.getItem(THEME_KEY) !== 'light';
+  } catch {
+    return true;
+  }
+}
+
+function getInitialCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === 'collapsed';
+  } catch {
+    return false;
+  }
+}
+
 function Header({
   navOpen,
+  isDark,
   onOpenNav,
   onToggleCollapse,
+  onToggleTheme,
 }: {
   navOpen: boolean;
+  isDark: boolean;
   onOpenNav: () => void;
   onToggleCollapse: () => void;
+  onToggleTheme: () => void;
 }) {
   const { serverHealthy, streaming, backgroundRun, activeSessionId } = useChat();
   const backgroundActive = !!backgroundRun && backgroundRun.sessionId === activeSessionId;
@@ -186,6 +211,18 @@ function Header({
       </div>
 
       <div className="flex flex-shrink-0 items-center gap-2">
+        <button
+          onClick={onToggleTheme}
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={isDark ? 'Light mode' : 'Dark mode'}
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
+        >
+          {isDark ? (
+            <SunIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
+          ) : (
+            <MoonIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
+          )}
+        </button>
         <div className="flex items-center gap-1.5 rounded-full border border-subtle bg-bg-3 px-2.5 py-1 font-mono text-[11px] text-txt-3">
           <div className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${statusOnline ? 'bg-green-500' : 'bg-red-500'}`} />
           <span className="hidden sm:inline">{statusLabel}</span>
@@ -364,15 +401,35 @@ function DrawerHeader({ title, onClose }: { title: string; onClose: () => void }
 export default function AdminLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(getInitialCollapsed);
+  const [isDark, setIsDark] = useState(getInitialDark);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('light', !isDark);
+    try {
+      localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+    } catch {
+      // storage unavailable — theme still applies for this session
+    }
+  }, [isDark]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_KEY, collapsed ? 'collapsed' : 'expanded');
+    } catch {
+      // storage unavailable — state still applies for this session
+    }
+  }, [collapsed]);
 
   return (
     <ChatProvider>
       <div className="relative z-10 flex h-screen w-full flex-col supports-[height:100dvh]:h-dvh">
         <Header
           navOpen={navOpen}
+          isDark={isDark}
           onOpenNav={() => setNavOpen(true)}
           onToggleCollapse={() => setCollapsed((c) => !c)}
+          onToggleTheme={() => setIsDark((d) => !d)}
         />
         <div className="flex min-h-0 flex-1">
           <Sidebar collapsed={collapsed} onOpenConfig={() => setConfigOpen(true)} />
