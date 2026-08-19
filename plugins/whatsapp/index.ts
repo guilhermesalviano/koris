@@ -30,7 +30,14 @@ interface WhatsAppPluginOptions {
 }
 
 interface IWhatsAppChannel {
-  handleMessage(gateway: IMessageGateway, jid: string, name: string, text: string, images?: ImageAttachment[]): Promise<void>;
+  handleMessage(
+    gateway: IMessageGateway,
+    jid: string,
+    name: string,
+    text: string,
+    images?: ImageAttachment[],
+    options?: { isWhitelistedSender?: boolean },
+  ): Promise<void>;
   sendText(jid: string, text: string): Promise<void>;
 }
 
@@ -47,6 +54,26 @@ let lastWhitelistedJid: string | null = null;
 
 function getLastWhitelistedJid(): string | null {
   return lastWhitelistedJid;
+}
+
+function isWhitelistedSender(msg: WAMessage): boolean {
+  const key = msg.key;
+  if (!key) return false;
+
+  const candidates = [
+    key.participantAlt,
+    key.remoteJidAlt,
+    key.participant ?? undefined,
+    key.remoteJid ?? undefined,
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+  if (whitelist.length === 0) {
+    return false;
+  }
+
+  return candidates.some((candidate) =>
+    whitelist.some((number) => candidate.includes(number)),
+  );
 }
 
 async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise<SocketLike> {
@@ -96,20 +123,13 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
       options.logger.debug(`[whatsapp] raw message received: ${JSON.stringify(msg)}`);
 
       const { key, pushName: senderName } = msg;
-      const { fromMe, remoteJid: jid, participantAlt, remoteJidAlt } = key;
+      const { fromMe, remoteJid: jid } = key;
 
       if (fromMe) continue;
 
-      const isWhitelisted = whitelist.some(number =>
-        participantAlt?.includes(number) || remoteJidAlt?.includes(number)
-      );
+      const isWhitelisted = isWhitelistedSender(msg);
 
-      if (!isWhitelisted) {
-        options.logger.debug(`[whatsapp] message ignored: not from whitelisted number`);
-        continue;
-      }
-
-      if (jid) {
+      if (isWhitelisted && jid) {
         lastWhitelistedJid = jid;
       }
 
@@ -122,7 +142,7 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
       const text = image?.caption ?? rawText ?? '';
       if (!shouldProcess(jid, text)) continue;
 
-      void handleInboundMessage(options, sock, jid, senderName, text, image).catch((err: Error) => {
+      void handleInboundMessage(options, sock, jid, senderName, text, image, isWhitelisted).catch((err: Error) => {
         options.logger.warn(`WhatsApp message handling error: ${err.message}`);
       });
     }
@@ -194,6 +214,7 @@ function extractImage(msg: WAMessage): ExtractedImage | null {
    senderName: string,
    text: string,
    image: ExtractedImage | null,
+   isWhitelistedSender: boolean,
  ): Promise<void> {
    const cleanedText = mentionId ? text.replace(`@${mentionId}`, '').trim() : text;
    const images: ImageAttachment[] = [];
@@ -203,7 +224,7 @@ function extractImage(msg: WAMessage): ExtractedImage | null {
    }
 
    const channel = new WhatsAppChannel(sock);
-   await channel.handleMessage(options.gateway, jid, senderName, cleanedText, images);
+   await channel.handleMessage(options.gateway, jid, senderName, cleanedText, images, { isWhitelistedSender });
  }
 
  function formatBaileysLog(msg: unknown): string {
@@ -234,11 +255,27 @@ class WhatsAppChannel implements IWhatsAppChannel {
     private readonly sock?: SocketLike
   ) {}
 
-  async handleMessage(gateway: IMessageGateway, jid: string, name: string, text: string, images?: ImageAttachment[]): Promise<void> {
+  async handleMessage(
+    gateway: IMessageGateway,
+    jid: string,
+    name: string,
+    text: string,
+    images?: ImageAttachment[],
+    options?: { isWhitelistedSender?: boolean },
+  ): Promise<void> {
     try {
       // In testing... To remember old version: `Message from ${name}: ${text}`;
       const prompt = `${name} says: ${text}`;
-      const response = await gateway.handle({ text: prompt, images }, jid, { channel: 'whatsapp' });
+      const isWhitelistedSender = options?.isWhitelistedSender ?? false;
+      const response = await gateway.handle(
+        { text: prompt, images },
+        jid,
+        {
+          channel: 'whatsapp',
+          toolsEnabled: isWhitelistedSender,
+          learnedSkillsEnabled: isWhitelistedSender,
+        },
+      );
       const resolved = await this.resolveResponse(response);
       await this.sendText(jid, resolved);
     } catch (err) {

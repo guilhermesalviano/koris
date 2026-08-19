@@ -20,13 +20,14 @@ function makeMemory(overrides: Partial<ConstructorParameters<typeof Memory>[0]> 
 
 function makeRepository(overrides: Partial<{
   memoryRepository: any;
+  learnedSkillsRepository: any;
   aiProvider: any;
   logger: ILogger;
 }> = {}) {
   return new PromptRepository(
     { get: vi.fn().mockReturnValue('') } as any,
     { getAll: vi.fn().mockReturnValue([]) } as any,
-    { getRecent: vi.fn().mockReturnValue([]) } as any,
+    overrides.learnedSkillsRepository ?? { getRecent: vi.fn().mockReturnValue([]) },
     overrides.memoryRepository ?? {
       getAll: vi.fn().mockReturnValue([]),
       search: vi.fn().mockReturnValue([]),
@@ -301,6 +302,45 @@ describe('PromptRepository extraSystemBlocks', () => {
     });
 
     expect(messages[0].content).not.toContain('# Contract One');
+  });
+});
+
+describe('PromptRepository learned skills gating', () => {
+  it('injects learned skills into the system prompt by default', async () => {
+    const repository = makeRepository({
+      learnedSkillsRepository: {
+        getRecent: vi.fn().mockReturnValue([
+          { name: 'docs', description: 'Doc helper', content: 'Use docs first.', read_when: ['when needed'] },
+        ]),
+      },
+    });
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+    });
+
+    expect(messages[0].content).toContain('# Learned Skills Content');
+    expect(messages[0].content).toContain('### Skill: docs');
+  });
+
+  it('omits learned skills when learnedSkillsEnabled is false', async () => {
+    const repository = makeRepository({
+      learnedSkillsRepository: {
+        getRecent: vi.fn().mockReturnValue([
+          { name: 'docs', description: 'Doc helper', content: 'Use docs first.', read_when: ['when needed'] },
+        ]),
+      },
+    });
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+      learnedSkillsEnabled: false,
+    });
+
+    expect(messages[0].content).not.toContain('# Learned Skills Content');
+    expect(messages[0].content).not.toContain('### Skill: docs');
   });
 });
 

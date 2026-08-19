@@ -38,6 +38,7 @@ describe('ChatService.complete', () => {
       userMessage: 'hello',
       channel: 'tui',
       toolsEnabled: true,
+      learnedSkillsEnabled: undefined,
       messageHistory: [],
       sessionId: 'sess-1',
       extraSystemBlocks: undefined,
@@ -97,6 +98,19 @@ describe('ChatService.complete', () => {
 
     expect(promptRepository.build).toHaveBeenCalledWith(
       expect.objectContaining({ toolResults }),
+    );
+  });
+
+  it('forwards learned-skills gating options to the prompt repository', async () => {
+    const promptRepository = makePromptRepository();
+    const completionService = makeCompletionService();
+    completionService.complete.mockResolvedValue({ kind: 'message', text: 'ok', finishReason: 'stop' });
+    const service = new ChatService(completionService as never, promptRepository as never);
+
+    await service.complete('hi', 'whatsapp', { toolsEnabled: false, learnedSkillsEnabled: false });
+
+    expect(promptRepository.build).toHaveBeenCalledWith(
+      expect.objectContaining({ toolsEnabled: false, learnedSkillsEnabled: false }),
     );
   });
 

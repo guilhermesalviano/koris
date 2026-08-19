@@ -70,7 +70,11 @@ describe('channels/whatsapp', () => {
       const channel = new WhatsAppChannel(mockSock as never);
       await channel.handleMessage(agent, 'group123@g.us', senderName, text);
 
-      expect(agent.handle).toHaveBeenCalledWith({ text: `${senderName} says: ${text}` }, 'group123@g.us', { channel: 'whatsapp' });
+      expect(agent.handle).toHaveBeenCalledWith(
+        { text: `${senderName} says: ${text}` },
+        'group123@g.us',
+        { channel: 'whatsapp', toolsEnabled: false, learnedSkillsEnabled: false },
+      );
       expect(mockSock.sendMessage).toHaveBeenCalled();
     });
 
@@ -82,7 +86,11 @@ describe('channels/whatsapp', () => {
       const channel = new WhatsAppChannel(mockSock as never);
       await channel.handleMessage(agent, 'group123@g.us', senderName, text);
 
-      expect(agent.handle).toHaveBeenCalledWith({ text: `${senderName} says: ${text}` }, 'group123@g.us', { channel: 'whatsapp' });
+      expect(agent.handle).toHaveBeenCalledWith(
+        { text: `${senderName} says: ${text}` },
+        'group123@g.us',
+        { channel: 'whatsapp', toolsEnabled: false, learnedSkillsEnabled: false },
+      );
       expect(mockSock.sendMessage).toHaveBeenCalled();
     });
 
@@ -92,7 +100,11 @@ describe('channels/whatsapp', () => {
       const channel = new WhatsAppChannel(mockSock as never);
       await channel.handleMessage(agent, 'group123@g.us', 'guilherme', `hey @${MENTION_ID} help`);
 
-      expect(agent.handle).toHaveBeenCalledWith({ text: `guilherme says: hey @${MENTION_ID} help` }, 'group123@g.us', { channel: 'whatsapp' });
+      expect(agent.handle).toHaveBeenCalledWith(
+        { text: `guilherme says: hey @${MENTION_ID} help` },
+        'group123@g.us',
+        { channel: 'whatsapp', toolsEnabled: false, learnedSkillsEnabled: false },
+      );
     });
 
     it('forwards group messages even when mentionId is not configured', async () => {
@@ -101,7 +113,26 @@ describe('channels/whatsapp', () => {
       const channel = new WhatsAppChannel(mockSock as never);
       await channel.handleMessage(agent, 'group123@g.us', 'guilherme', `@${MENTION_ID} hello`);
 
-      expect(agent.handle).toHaveBeenCalledWith({ text: `guilherme says: @${MENTION_ID} hello` }, 'group123@g.us', { channel: 'whatsapp' });
+      expect(agent.handle).toHaveBeenCalledWith(
+        { text: `guilherme says: @${MENTION_ID} hello` },
+        'group123@g.us',
+        { channel: 'whatsapp', toolsEnabled: false, learnedSkillsEnabled: false },
+      );
+    });
+
+    it('enables tools and learned skills for whitelisted WhatsApp senders', async () => {
+      const agent = { handle: vi.fn().mockResolvedValue('pong') };
+
+      const channel = new WhatsAppChannel(mockSock as never);
+      await channel.handleMessage(agent, 'jid@s.whatsapp.net', 'guilherme', 'hello', undefined, {
+        isWhitelistedSender: true,
+      });
+
+      expect(agent.handle).toHaveBeenCalledWith(
+        { text: 'guilherme says: hello', images: undefined },
+        'jid@s.whatsapp.net',
+        { channel: 'whatsapp', toolsEnabled: true, learnedSkillsEnabled: true },
+      );
     });
   });
 

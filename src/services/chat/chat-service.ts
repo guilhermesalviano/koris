@@ -34,6 +34,7 @@ class ChatService implements IChatService {
       images,
       channel,
       toolsEnabled: options?.toolsEnabled,
+      learnedSkillsEnabled: options?.learnedSkillsEnabled,
       messageHistory: messagesHistory,
       sessionId,
       extraSystemBlocks,

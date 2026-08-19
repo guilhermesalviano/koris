@@ -2,6 +2,7 @@ export type ProcessedMessage = string;
 export type ProcessOptions = {
   signal?: AbortSignal;
   toolsEnabled?: boolean;
+  learnedSkillsEnabled?: boolean;
   onProgress?: (summary: string) => void;
   sessionId?: string;
   runId?: string;

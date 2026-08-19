@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MainAgent } from '../../../../src/services/agents/main-agent';
-import { TOOL_EXECUTION_CONTRACT } from '../../../../src/constants';
+import { RESTRICTED_EXECUTION_CONTRACT, TOOL_EXECUTION_CONTRACT } from '../../../../src/constants';
 import type { ILogger } from '../../../../src/infrastructure/logger';
 import type { Message } from '../../../../src/entities/message';
 
@@ -123,6 +123,29 @@ describe('MainAgent', () => {
       [],
       'session-1',
       [TOOL_EXECUTION_CONTRACT],
+      undefined,
+      undefined,
+    );
+  });
+
+  it('uses restricted contract when tools are disabled', async () => {
+    const { mainAgent, chatComplete } = makeMainAgent();
+    const message = makeMessageService();
+
+    await mainAgent.run({
+      userMessage: 'search latest news',
+      channel: 'whatsapp',
+      message: message as never,
+      options: { toolsEnabled: false, learnedSkillsEnabled: false },
+    });
+
+    expect(chatComplete).toHaveBeenCalledWith(
+      'search latest news',
+      'whatsapp',
+      expect.objectContaining({ toolsEnabled: false, learnedSkillsEnabled: false }),
+      [],
+      'session-1',
+      [RESTRICTED_EXECUTION_CONTRACT],
       undefined,
       undefined,
     );
