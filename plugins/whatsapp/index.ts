@@ -16,6 +16,7 @@ const WHATSAPP_MESSAGE_LIMIT = 4_000;
 let channelHandler: IChannelHandlerFactory;
 let mentionId = '';
 let whitelist: string[] = [];
+let allowUntrusted = false;
 
 interface WhatsAppChannelStartOptions {
   authFolder: string;
@@ -258,6 +259,11 @@ class WhatsAppChannel implements IWhatsAppChannel {
     images?: ImageAttachment[],
     options?: { isWhitelistedSender?: boolean },
   ): Promise<void> {
+    const isTrustedSender = options?.isWhitelistedSender ?? false;
+    if (!isTrustedSender && !allowUntrusted) {
+      return;
+    }
+
     const handler = channelHandler.create({
       channel: 'whatsapp',
       gateway,
@@ -278,7 +284,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
       images,
       isGroup,
       mentionsBot: isGroup && mentionId.length > 0 && text.includes(`@${mentionId}`),
-      isTrustedSender: options?.isWhitelistedSender ?? false,
+      isTrustedSender,
       mentionId,
     });
   }
@@ -377,6 +383,7 @@ export function create(context: PluginContext): Plugin {
   channelHandler = context.channelHandler;
   mentionId = cfg.MENTION_ID;
   whitelist = cfg.WHITELIST.split(',').map((num) => num.trim()).filter(Boolean);
+  allowUntrusted = context.config.channels.ALLOW_UNTRUSTED;
 
   return createWhatsAppPlugin({
     enabled: cfg.ENABLED,

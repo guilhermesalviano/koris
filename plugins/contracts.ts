@@ -95,6 +95,7 @@ export function splitMessage(text: string, maxLength: number): string[] {
 }
 
 export interface ChannelsConfig {
+  ALLOW_UNTRUSTED: boolean;
   TELEGRAM: {
     ENABLED: boolean;
     BOT_TOKEN: string;

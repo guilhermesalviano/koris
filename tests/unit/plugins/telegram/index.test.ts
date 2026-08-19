@@ -27,10 +27,11 @@ vi.mock('@guilhermesalviano/telegram-bot', () => ({
   initBot: vi.fn(),
 }));
 
-function makeContext(overrides: { enabled?: boolean; whitelist?: string } = {}): PluginContext {
+function makeContext(overrides: { enabled?: boolean; whitelist?: string; allowUntrusted?: boolean } = {}): PluginContext {
   return {
     config: {
       channels: {
+        ALLOW_UNTRUSTED: overrides.allowUntrusted ?? false,
         TELEGRAM: {
           ENABLED: overrides.enabled ?? true,
           BOT_TOKEN: 'test-token',
@@ -187,6 +188,41 @@ describe('channels/telegram', () => {
 
     expect(agent.handle).not.toHaveBeenCalled();
     expect(bot.sendMessage).toHaveBeenCalledWith(
+      123,
+      'You need to allow this number to send messages on the server.',
+    );
+  });
+
+  it('processes private messages from a non-whitelisted sender when allow_untrusted is on', async () => {
+    create(makeContext({ allowUntrusted: true }));
+    _setTelegramWhitelistForTesting([123]);
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    await handleMessage(agent, createMessage('hello', 'private', [], 999));
+
+    expect(agent.handle).toHaveBeenCalledWith({ text: 'hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: false, learnedSkillsEnabled: false });
+    expect(bot.sendMessage).toHaveBeenCalled();
+  });
+
+  it('treats whitelisted senders as trusted when allow_untrusted is on', async () => {
+    create(makeContext({ allowUntrusted: true }));
+    _setTelegramWhitelistForTesting([123]);
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    await handleMessage(agent, createMessage('hello', 'private', [], 123));
+
+    expect(agent.handle).toHaveBeenCalledWith({ text: 'hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true });
+  });
+
+  it('allows everyone without a deny message when allow_untrusted is on and whitelist is empty', async () => {
+    create(makeContext({ allowUntrusted: true }));
+    _setTelegramWhitelistForTesting([]);
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    await handleMessage(agent, createMessage('hello', 'private', [], 999));
+
+    expect(agent.handle).toHaveBeenCalledWith({ text: 'hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: false, learnedSkillsEnabled: false });
+    expect(bot.sendMessage).not.toHaveBeenCalledWith(
       123,
       'You need to allow this number to send messages on the server.',
     );

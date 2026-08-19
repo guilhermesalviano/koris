@@ -18,10 +18,11 @@ vi.mock('@whiskeysockets/baileys', () => ({
   DisconnectReason: { loggedOut: 401, connectionClosed: 428, connectionLost: 408 },
 }));
 
-function makeContext(): PluginContext {
+function makeContext(overrides: { allowUntrusted?: boolean } = {}): PluginContext {
   return {
     config: {
       channels: {
+        ALLOW_UNTRUSTED: overrides.allowUntrusted ?? true,
         TELEGRAM: { ENABLED: false, BOT_TOKEN: '', WHITELIST: '' },
         WHATSAPP: { ENABLED: true, AUTH_FOLDER: '', WHITELIST: '', MENTION_ID },
       },
@@ -146,6 +147,18 @@ describe('channels/whatsapp', () => {
         'jid@s.whatsapp.net',
         { channel: 'whatsapp', toolsEnabled: true, learnedSkillsEnabled: true },
       );
+    });
+
+    it('ignores untrusted senders when allow_untrusted is off', async () => {
+      create(makeContext({ allowUntrusted: false }));
+
+      const agent = { handle: vi.fn().mockResolvedValue('pong') };
+
+      const channel = new WhatsAppChannel(mockSock as never);
+      await channel.handleMessage(agent, 'jid@s.whatsapp.net', 'guilherme', 'hello');
+
+      expect(agent.handle).not.toHaveBeenCalled();
+      expect(mockSock.sendMessage).not.toHaveBeenCalled();
     });
   });
 

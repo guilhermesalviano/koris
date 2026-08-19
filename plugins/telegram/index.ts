@@ -19,6 +19,7 @@ let botUsername: string | null = null;
 let botToken = '';
 let channelHandler: IChannelHandlerFactory;
 let telegramWhitelist = new Set<number>();
+let allowUntrusted = false;
 
 interface ITelegramChannel {
   handleMessage(gateway: IMessageGateway, msg: TelegramMessage): Promise<void>;
@@ -94,17 +95,21 @@ class TelegramChannel implements ITelegramChannel {
       return;
     }
 
-    if (telegramWhitelist.size === 0) {
-      await this.sendDenyMessage(chatId);
-      return;
-    }
+    const isWhitelisted = msg.from?.id != null && telegramWhitelist.has(msg.from.id);
 
-    if (!(msg.from?.id && telegramWhitelist.has(msg.from.id))) {
-      return;
+    if (!allowUntrusted) {
+      if (telegramWhitelist.size === 0) {
+        await this.sendDenyMessage(chatId);
+        return;
+      }
+
+      if (!isWhitelisted) {
+        return;
+      }
     }
 
     const images = photo ? await this.downloadPhoto(photo.file_id) : [];
-    await this.processAndReply(gateway, chatId, text, images, isGroup, mentionsBot);
+    await this.processAndReply(gateway, chatId, text, images, isGroup, mentionsBot, isWhitelisted);
   }
 
   async sendText(chatId: number, text: string): Promise<void> {
@@ -155,6 +160,7 @@ class TelegramChannel implements ITelegramChannel {
     images: ImageAttachment[],
     isGroup: boolean,
     mentionsBot: boolean,
+    isTrustedSender: boolean,
   ): Promise<void> {
     try {
       await this.withTypingIndicator(chatId, async () => {
@@ -175,7 +181,7 @@ class TelegramChannel implements ITelegramChannel {
           images,
           isGroup,
           mentionsBot,
-          isTrustedSender: true,
+          isTrustedSender,
         });
       });
     } catch (err) {
@@ -397,6 +403,7 @@ export function create(context: PluginContext): Plugin | null {
 
   botToken = cfg.BOT_TOKEN;
   channelHandler = context.channelHandler;
+  allowUntrusted = context.config.channels.ALLOW_UNTRUSTED;
   telegramWhitelist = new Set(
     cfg.WHITELIST.split(',')
       .map((id) => id.trim())

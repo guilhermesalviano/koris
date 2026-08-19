@@ -70,6 +70,7 @@ export const config = {
     PROMPT_SANITIZER: get('ai.prompt_sanitizer', 'false') === 'true',
   },
   CHANNELS: {
+    ALLOW_UNTRUSTED: get('channels.allow_untrusted', 'false') === 'true',
     TELEGRAM: {
       ENABLED:    get('channels.telegram.enabled', 'false') === 'true',
       BOT_TOKEN:  get('channels.telegram.bot_token', ''),
