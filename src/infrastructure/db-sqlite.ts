@@ -231,6 +231,7 @@ class DatabaseService implements IDatabaseService {
           response_length INTEGER,
           finish_reason TEXT,
           tool_calls INTEGER DEFAULT 0,
+          tools_enabled INTEGER,
           tool_name TEXT,
           tool_args TEXT,
           success INTEGER,
@@ -252,9 +253,26 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_audit_logs_role ON audit_logs(role);
         CREATE INDEX IF NOT EXISTS idx_audit_logs_status ON audit_logs(status);
       `);
+
+      this.migrateAuditToolsEnabled();
     } catch (error) {
       logger.error('[database] Failed to initialize database schema', { error });
       throw error;
+    }
+  }
+
+  /**
+   * One-time migration: adds the `tools_enabled` flag to audit_logs rows so
+   * LLM audit entries can record whether tools were enabled in the request.
+   */
+  private migrateAuditToolsEnabled(): void {
+    try {
+      const columns = this.db.prepare('PRAGMA table_info(audit_logs)').all() as { name: string }[];
+      if (!columns.some((c) => c.name === 'tools_enabled')) {
+        this.db.exec('ALTER TABLE audit_logs ADD COLUMN tools_enabled INTEGER;');
+      }
+    } catch (error) {
+      logger.error('[database] Failed to add audit_logs tools_enabled column', { error });
     }
   }
 

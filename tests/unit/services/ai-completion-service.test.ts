@@ -82,6 +82,7 @@ describe('AICompletionService', () => {
       responseLength: 5,
       finishReason: 'stop',
       toolCalls: 0,
+      toolsEnabled: false,
       status: 'success',
     });
     expect(typeof entry.id).toBe('string');
@@ -126,12 +127,32 @@ describe('AICompletionService', () => {
       finishReason: 'tool_calls',
     };
     const { service, auditService } = makeService(vi.fn().mockResolvedValue(expected));
+    const toolRequest = {
+      ...request,
+      tools: [
+        {
+          type: 'function' as const,
+          function: { name: 'weather', description: 'weather', parameters: {} },
+        },
+      ],
+    };
+
+    await service.complete(toolRequest);
+
+    const entry = auditService.record.mock.calls[0][0];
+    expect(entry.toolCalls).toBe(2);
+    expect(entry.toolsEnabled).toBe(true);
+    expect(entry.response).toBe(JSON.stringify(expected.calls));
+  });
+
+  it('records toolsEnabled false when no tools are provided in the request', async () => {
+    const expected: AIResponse = { kind: 'message', text: 'ok', finishReason: 'stop' };
+    const { service, auditService } = makeService(vi.fn().mockResolvedValue(expected));
 
     await service.complete(request);
 
     const entry = auditService.record.mock.calls[0][0];
-    expect(entry.toolCalls).toBe(2);
-    expect(entry.response).toBe(JSON.stringify(expected.calls));
+    expect(entry.toolsEnabled).toBe(false);
   });
 
   it('records an error audit entry with the mapped error code', async () => {

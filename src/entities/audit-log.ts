@@ -24,6 +24,7 @@ export interface AuditLogLlm extends AuditLogBase {
   responseLength?: number;
   finishReason?: AIFinishReason;
   toolCalls: number;
+  toolsEnabled?: boolean;
   durationMs: number;
   status: AuditStatus;
   errorCode?: string;

@@ -64,7 +64,7 @@ describe('AuditLogRepository', () => {
     expect(params[7]).toBe('ollama');
     expect(params[8]).toBe('qwen2.5');
     expect(params[9]).toBe(entry.prompt);
-    expect(params[24]).toBe(formatISO(entry.createdAt));
+    expect(params[25]).toBe(formatISO(entry.createdAt));
   });
 
   it('save stores token counts for an llm entry', () => {
@@ -75,8 +75,8 @@ describe('AuditLogRepository', () => {
     repository.save(entry);
 
     const params = db.run.mock.calls[0][1];
-    expect(params[22]).toBe(1200);
-    expect(params[23]).toBe(340);
+    expect(params[23]).toBe(1200);
+    expect(params[24]).toBe(340);
   });
 
   it('save stores nulls for tool-only columns on an llm entry', () => {
@@ -87,9 +87,20 @@ describe('AuditLogRepository', () => {
     repository.save(entry);
 
     const params = db.run.mock.calls[0][1];
-    expect(params[15]).toBeNull();
     expect(params[16]).toBeNull();
     expect(params[17]).toBeNull();
+    expect(params[18]).toBeNull();
+  });
+
+  it('save stores tools_enabled flag for an llm entry', () => {
+    const db = makeDb();
+    const repository = new AuditLogRepository(db as never);
+    const entry: AuditLogLlm = { ...makeLlmEntry(), toolsEnabled: true };
+
+    repository.save(entry);
+
+    const params = db.run.mock.calls[0][1];
+    expect(params[15]).toBe(1);
   });
 
   it('save stores tool fields on a tool entry', () => {
@@ -101,9 +112,9 @@ describe('AuditLogRepository', () => {
 
     const params = db.run.mock.calls[0][1];
     expect(params[4]).toBe('tool');
-    expect(params[15]).toBe('curl-request');
-    expect(params[16]).toBe(entry.toolArgs);
-    expect(params[17]).toBe(0);
+    expect(params[16]).toBe('curl-request');
+    expect(params[17]).toBe(entry.toolArgs);
+    expect(params[18]).toBe(0);
     expect(params[7]).toBeNull();
   });
 

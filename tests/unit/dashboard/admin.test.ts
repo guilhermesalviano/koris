@@ -176,6 +176,7 @@ describe('AdminRouterFactory /audit', () => {
       response: 'hi',
       duration_ms: 10,
       status: 'success',
+      tools_enabled: 1,
       created_at: '2026-01-01T00:00:00.000Z',
     } as never);
 
@@ -184,7 +185,7 @@ describe('AdminRouterFactory /audit', () => {
     callRoute(router, makeRequest('GET', '/audit/a1'), res);
 
     expect(res.status).not.toHaveBeenCalled();
-    expect(res.json.mock.calls[0][0]).toMatchObject({ id: 'a1', type: 'llm', status: 'success' });
+    expect(res.json.mock.calls[0][0]).toMatchObject({ id: 'a1', type: 'llm', status: 'success', toolsEnabled: true });
   });
 
   it('returns 404 when the audit entry is not found', () => {

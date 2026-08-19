@@ -82,6 +82,7 @@ function toAuditJson(row: AuditLogRow) {
     responseLength: row.response_length,
     finishReason: row.finish_reason,
     toolCalls: row.tool_calls,
+    toolsEnabled: row.tools_enabled == null ? undefined : row.tools_enabled === 1,
     toolName: row.tool_name,
     toolArgs: row.tool_args,
     success: row.success == null ? undefined : row.success === 1,
