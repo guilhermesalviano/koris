@@ -97,7 +97,7 @@ export default function AuditPage() {
     'rounded-lg border border-strong bg-bg-3 px-3 py-1.5 font-mono text-[11px] text-txt-2 outline-none focus:border-accent';
 
   return (
-    <PageShell title="Audit log" onRefresh={() => { load(); if (selectedId) loadDetail(selectedId); }}>
+    <PageShell title="Audit log" description="Tool-call audit trail" onRefresh={() => { load(); if (selectedId) loadDetail(selectedId); }}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <select value={type} onChange={(e) => applyFilters(e.target.value, status)} className={selectClass}>
           <option value="">all types</option>

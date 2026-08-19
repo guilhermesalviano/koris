@@ -54,7 +54,7 @@ export default function SessionsPage() {
   }
 
   return (
-    <PageShell title="Sessions" onRefresh={() => { load(); if (selectedId) loadDetail(selectedId); }}>
+    <PageShell title="Sessions" description="All conversations and their details" onRefresh={() => { load(); if (selectedId) loadDetail(selectedId); }}>
       {error && <EmptyState text={error} />}
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data && data.items.length === 0 && <EmptyState text="No sessions yet." />}

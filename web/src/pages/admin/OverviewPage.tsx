@@ -244,7 +244,7 @@ export default function OverviewPage() {
   }, [load]);
 
   return (
-    <PageShell title="Overview" onRefresh={load}>
+    <PageShell title="Overview" description="System status, usage and live activity" onRefresh={load}>
       <div className="mb-4 font-mono text-[11px] text-txt-3">auto-refresh {POLL_INTERVAL_MS / 1000}s</div>
 
       {error && <EmptyState text={error} />}

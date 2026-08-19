@@ -53,7 +53,7 @@ export default function SkillsPage() {
   const inContext = data ? Math.min(enabledCount, data.limit) : 0;
 
   return (
-    <PageShell title="Skills" onRefresh={load}>
+    <PageShell title="Skills" description="Available and learned skills" onRefresh={load}>
       {error && <EmptyState text={error} />}
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data && (

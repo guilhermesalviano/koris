@@ -94,7 +94,7 @@ export default function UsagePage() {
   const total = data?.total;
 
   return (
-    <PageShell title="Token usage" onRefresh={load}>
+    <PageShell title="Token usage" description="Token and call statistics" onRefresh={load}>
       <div className="mb-4 flex items-center gap-2">
         <select
           value={days}

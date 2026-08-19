@@ -89,7 +89,7 @@ export default function QueuePage() {
   }, [load]);
 
   return (
-    <PageShell title="LLM queue" onRefresh={load}>
+    <PageShell title="LLM queue" description="LLM call queue status" onRefresh={load}>
       <div className="mb-4 flex items-center gap-2 font-mono text-[11px] text-txt-3">
         {lastUpdated && <span>Last update: {lastUpdated.toLocaleTimeString()}</span>}
         <span>·</span>

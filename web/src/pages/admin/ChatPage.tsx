@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
+import { usePageTitle } from '../../lib/use-page-title';
 import ImageLightbox from '../../components/ImageLightbox';
 import { AttachIcon, BrokenImageIcon, ChatIcon, CloseIcon, SendIcon } from '../../components/Icons';
 import type { ImageAttachment } from '../../lib/types';
@@ -21,11 +22,14 @@ function imageSrc(image: ImageAttachment): string {
 
 export default function ChatPage() {
   const { sessionId } = useParams();
-  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, fillPrompt, openSession } = useChat();
+  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, fillPrompt, openSession, sessions, activeSessionId } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<{ images: ImageAttachment[]; index: number } | null>(null);
+  const activeTitle = activeSessionId ? sessions.find((s) => s.id === activeSessionId)?.preview?.trim() : undefined;
+
+  usePageTitle(activeTitle || 'Chat', 'Chat with the koris-assistant agent');
 
   // Sync the viewed session with the URL. `null` targets the live chat (latest
   // open web session, without creating one).

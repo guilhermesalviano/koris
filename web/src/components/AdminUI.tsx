@@ -1,16 +1,23 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { usePageTitle } from '../lib/use-page-title';
 
 interface PageShellProps {
   title: string;
+  description?: string;
   onRefresh?: () => void;
   children: ReactNode;
 }
 
-export function PageShell({ title, onRefresh, children }: PageShellProps) {
+export function PageShell({ title, description, onRefresh, children }: PageShellProps) {
+  usePageTitle(title, description);
+
   return (
     <>
-      <header className="sticky top-0 z-10 flex flex-shrink-0 items-center gap-2.5 border-b border-subtle bg-bg/80 px-6 py-3.5 backdrop-blur-md">
-        <h1 className="text-sm font-medium">{title}</h1>
+      <header className="sticky top-0 z-10 flex flex-shrink-0 items-center gap-2.5 border-b border-subtle bg-bg/80 px-6 py-3 backdrop-blur-md">
+        <div className="min-w-0">
+          <h1 className="text-sm font-medium">{title}</h1>
+          {description && <p className="mt-0.5 truncate font-mono text-[11px] text-txt-3">{description}</p>}
+        </div>
         {onRefresh && (
           <div className="ml-auto flex items-center gap-2">
             <button

@@ -35,7 +35,7 @@ export default function ChannelsPage() {
   const principal = data?.items.find((c) => c.isPrincipal);
 
   return (
-    <PageShell title="Channels" onRefresh={load}>
+    <PageShell title="Channels" description="Connected messaging channels" onRefresh={load}>
       {error && <EmptyState text={error} />}
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data && (

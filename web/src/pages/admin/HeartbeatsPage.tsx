@@ -62,7 +62,7 @@ export default function HeartbeatsPage() {
   }
 
   return (
-    <PageShell title="Beats" onRefresh={load}>
+    <PageShell title="Beats" description="Scheduled heartbeat agents" onRefresh={load}>
       <Card>
         <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">New beat</div>
         <form onSubmit={createBeat} className="grid grid-cols-1 gap-2 md:grid-cols-4">
