@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../../src/constants/thinking';
-import { handleMessage, sendText, WhatsAppChannel } from '../../../../plugins/whatsapp';
+import { ChannelHandlerFactory } from '../../../../src/channels';
+import { create, handleMessage, sendText, WhatsAppChannel } from '../../../../plugins/whatsapp';
+import type { PluginContext } from '../../../../plugins/contracts';
 
 const MENTION_ID = '162157312364643';
 
@@ -16,6 +18,20 @@ vi.mock('@whiskeysockets/baileys', () => ({
   DisconnectReason: { loggedOut: 401, connectionClosed: 428, connectionLost: 408 },
 }));
 
+function makeContext(): PluginContext {
+  return {
+    config: {
+      channels: {
+        TELEGRAM: { ENABLED: false, BOT_TOKEN: '', WHITELIST: '' },
+        WHATSAPP: { ENABLED: true, AUTH_FOLDER: '', WHITELIST: '', MENTION_ID },
+      },
+    },
+    logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
+    gateway: { handle: vi.fn() },
+    channelHandler: ChannelHandlerFactory,
+  };
+}
+
 async function* createResponseStream(): AsyncGenerator<string> {
   yield THINK_START;
   yield 'internal reasoning';
@@ -28,6 +44,7 @@ describe('channels/whatsapp', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSock.sendMessage.mockResolvedValue(undefined);
+    create(makeContext());
   });
 
   describe('WhatsAppChannel.handleMessage', () => {
@@ -71,14 +88,14 @@ describe('channels/whatsapp', () => {
       await channel.handleMessage(agent, 'group123@g.us', senderName, text);
 
       expect(agent.handle).toHaveBeenCalledWith(
-        { text: `${senderName} says: ${text}` },
+        { text: `${senderName} says: what time is it?` },
         'group123@g.us',
         { channel: 'whatsapp', toolsEnabled: false, learnedSkillsEnabled: false },
       );
       expect(mockSock.sendMessage).toHaveBeenCalled();
     });
 
-    it('forwards group message that does not start with the mention', async () => {
+    it('ignores group message that does not mention the bot', async () => {
       const agent = { handle: vi.fn().mockResolvedValue('pong') };
       const senderName = 'TestUser';
       const text = 'anyone know the weather today?';
@@ -86,22 +103,18 @@ describe('channels/whatsapp', () => {
       const channel = new WhatsAppChannel(mockSock as never);
       await channel.handleMessage(agent, 'group123@g.us', senderName, text);
 
-      expect(agent.handle).toHaveBeenCalledWith(
-        { text: `${senderName} says: ${text}` },
-        'group123@g.us',
-        { channel: 'whatsapp', toolsEnabled: false, learnedSkillsEnabled: false },
-      );
-      expect(mockSock.sendMessage).toHaveBeenCalled();
+      expect(agent.handle).not.toHaveBeenCalled();
+      expect(mockSock.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('forwards group message where mention appears mid-text', async () => {
+    it('strips the mention before forwarding group messages', async () => {
       const agent = { handle: vi.fn().mockResolvedValue('pong') };
 
       const channel = new WhatsAppChannel(mockSock as never);
       await channel.handleMessage(agent, 'group123@g.us', 'guilherme', `hey @${MENTION_ID} help`);
 
       expect(agent.handle).toHaveBeenCalledWith(
-        { text: `guilherme says: hey @${MENTION_ID} help` },
+        { text: `guilherme says: hey  help` },
         'group123@g.us',
         { channel: 'whatsapp', toolsEnabled: false, learnedSkillsEnabled: false },
       );
@@ -114,7 +127,7 @@ describe('channels/whatsapp', () => {
       await channel.handleMessage(agent, 'group123@g.us', 'guilherme', `@${MENTION_ID} hello`);
 
       expect(agent.handle).toHaveBeenCalledWith(
-        { text: `guilherme says: @${MENTION_ID} hello` },
+        { text: `guilherme says: hello` },
         'group123@g.us',
         { channel: 'whatsapp', toolsEnabled: false, learnedSkillsEnabled: false },
       );

@@ -1,3 +1,7 @@
+import type { ImageAttachment } from '../../plugins/contracts';
+
+export type { ImageAttachment };
+
 export type MessageRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export interface MessageToolCall {
@@ -6,11 +10,6 @@ export interface MessageToolCall {
     name: string;
     arguments: Record<string, unknown>;
   };
-}
-
-export interface ImageAttachment {
-  data: string;
-  mimeType?: string;
 }
 
 export interface Message {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ChannelDefinition } from '../../../src/channels';
 import { ADAPTERS } from '../../../src/channels';
 import { createPlugins, buildRegistry, type Plugin } from '../../../plugins';
+import type { PluginContext } from '../../../plugins/contracts';
 
 function makeEntry(name: string, isDir: boolean) {
   return { name, isDirectory: () => isDir };
@@ -25,6 +26,20 @@ describe('createPlugins', () => {
     expect(result).toEqual([pluginA, pluginB]);
     expect(loadModule).toHaveBeenCalledWith('/fake/plugin-a');
     expect(loadModule).toHaveBeenCalledWith('/fake/plugin-b');
+  });
+
+  it('passes the injected context to create()', () => {
+    const plugin: Plugin = { name: 'a', setup: vi.fn() };
+    const create = vi.fn(() => plugin);
+    const context = {} as PluginContext;
+
+    const readdirSync = vi.fn().mockReturnValue([makeEntry('plugin-a', true)]);
+    const loadModule = vi.fn().mockReturnValue({ create });
+
+    const result = createPlugins({ directory: '/fake', readdirSync, loadModule, context });
+
+    expect(result).toEqual([plugin]);
+    expect(create).toHaveBeenCalledWith(context);
   });
 
   it('skips non-directory entries', () => {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TelegramMessage } from '@guilhermesalviano/telegram-bot';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../../src/constants/thinking';
+import { ChannelHandlerFactory } from '../../../../src/channels';
 import {
   _setBotUsernameForTesting,
   _setTelegramWhitelistForTesting,
@@ -11,6 +12,7 @@ import {
   sendWithApproval,
   TelegramChannelFactory,
 } from '../../../../plugins/telegram';
+import type { PluginContext } from '../../../../plugins/contracts';
 
 const BOT_USERNAME = 'KorisBot';
 
@@ -20,24 +22,28 @@ const bot = vi.hoisted(() => ({
   getMe: vi.fn(),
 }));
 
-const configMock = vi.hoisted(() => ({
-  config: {
-    CHANNELS: {
-      TELEGRAM: {
-        ENABLED: false,
-        BOT_TOKEN: 'test-token',
-        WHITELIST: '',
-      },
-    },
-  },
-}));
-
 vi.mock('@guilhermesalviano/telegram-bot', () => ({
   getBot: () => bot,
   initBot: vi.fn(),
 }));
 
-vi.mock('../../../../src/config', () => configMock);
+function makeContext(overrides: { enabled?: boolean; whitelist?: string } = {}): PluginContext {
+  return {
+    config: {
+      channels: {
+        TELEGRAM: {
+          ENABLED: overrides.enabled ?? true,
+          BOT_TOKEN: 'test-token',
+          WHITELIST: overrides.whitelist ?? '123',
+        },
+        WHATSAPP: { ENABLED: false, AUTH_FOLDER: '', WHITELIST: '', MENTION_ID: '' },
+      },
+    },
+    logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
+    gateway: { handle: vi.fn() },
+    channelHandler: ChannelHandlerFactory,
+  };
+}
 
 function createMessage(
   text: string,
@@ -73,6 +79,7 @@ describe('channels/telegram', () => {
     vi.clearAllMocks();
     bot.sendChatAction.mockResolvedValue(undefined);
     bot.sendMessage.mockResolvedValue(undefined);
+    create(makeContext());
     _setBotUsernameForTesting(null);
     _setTelegramWhitelistForTesting([123]);
   });
@@ -100,7 +107,7 @@ describe('channels/telegram', () => {
 
     await handleMessage(agent, createMessage(text, 'group', mentionEntity(text, BOT_USERNAME)));
 
-    expect(agent.handle).toHaveBeenCalledWith({ text, images: [] }, '123', { channel: 'telegram' });
+    expect(agent.handle).toHaveBeenCalledWith({ text, images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true });
     expect(bot.sendMessage).toHaveBeenCalled();
   });
 
@@ -168,7 +175,7 @@ describe('channels/telegram', () => {
 
     await handleMessage(agent, createMessage('hello', 'private', [], 123));
 
-    expect(agent.handle).toHaveBeenCalledWith({ text: 'hello', images: [] }, '123', { channel: 'telegram' });
+    expect(agent.handle).toHaveBeenCalledWith({ text: 'hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true });
     expect(bot.sendMessage).toHaveBeenCalled();
   });
 
@@ -228,6 +235,7 @@ describe('channels/telegram', () => {
 describe('channels/telegram photos', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    create(makeContext());
     _setTelegramWhitelistForTesting([123]);
     _setBotUsernameForTesting(null);
   });
@@ -271,7 +279,7 @@ describe('channels/telegram photos', () => {
         images: [{ data: Buffer.from('fake-image-bytes').toString('base64'), mimeType: 'image/jpeg' }],
       },
       '123',
-      { channel: 'telegram' },
+      { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true },
     );
     expect(bot.sendMessage).toHaveBeenCalled();
   });
@@ -296,7 +304,7 @@ describe('channels/telegram photos', () => {
         images: [{ data: Buffer.from('png-bytes').toString('base64'), mimeType: 'image/png' }],
       },
       '123',
-      { channel: 'telegram' },
+      { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true },
     );
   });
 
@@ -311,7 +319,7 @@ describe('channels/telegram photos', () => {
 
     await handleMessage(agent, createPhotoMessage([{ file_id: 'file-3' }], 'analyze'));
 
-    expect(agent.handle).toHaveBeenCalledWith({ text: 'analyze', images: [] }, '123', { channel: 'telegram' });
+    expect(agent.handle).toHaveBeenCalledWith({ text: 'analyze', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true });
   });
 
   it('forwards no images when the media download is not ok', async () => {
@@ -328,7 +336,7 @@ describe('channels/telegram photos', () => {
 
     await handleMessage(agent, createPhotoMessage([{ file_id: 'file-4' }], 'analyze'));
 
-    expect(agent.handle).toHaveBeenCalledWith({ text: 'analyze', images: [] }, '123', { channel: 'telegram' });
+    expect(agent.handle).toHaveBeenCalledWith({ text: 'analyze', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true });
   });
 });
 
@@ -403,15 +411,11 @@ describe('channels/telegram send', () => {
 
 describe('create()', () => {
   it('returns null when telegram is disabled', () => {
-    configMock.config.CHANNELS.TELEGRAM.ENABLED = false;
-
-    expect(create()).toBeNull();
+    expect(create(makeContext({ enabled: false }))).toBeNull();
   });
 
   it('returns a plugin when telegram is enabled', () => {
-    configMock.config.CHANNELS.TELEGRAM.ENABLED = true;
-
-    const plugin = create();
+    const plugin = create(makeContext({ enabled: true }));
 
     expect(plugin).not.toBeNull();
     expect(plugin?.name).toBe('telegram');

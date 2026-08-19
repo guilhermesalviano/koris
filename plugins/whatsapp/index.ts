@@ -1,20 +1,21 @@
-import type { ChannelDefinition } from '../../src/channels';
-import { ADAPTERS } from '../../src/channels';
-import type { ILogger } from '../../src/infrastructure/logger';
-import type { Plugin, PluginRegistry } from '../registry';
-import type { IMessageGateway } from '../../src/services/agents/message-gateway';
-import type { ImageAttachment } from '../../src/types/messages';
+import { ADAPTERS, splitMessage } from '../contracts';
+import type {
+  ChannelDefinition,
+  IChannelHandlerFactory,
+  ILogger,
+  IMessageGateway,
+  ImageAttachment,
+  Plugin,
+  PluginContext,
+} from '../contracts';
+import type { PluginRegistry } from '../registry';
 import type { WAMessage } from '@whiskeysockets/baileys';
-import { stripInternalStreamMarkers } from '../../src/utils/stream-markers';
-import { config } from '../../src/config';
-
-const whatsappConfig = config?.CHANNELS?.WHATSAPP;
-const mentionId = whatsappConfig?.MENTION_ID;
 
 const WHATSAPP_MESSAGE_LIMIT = 4_000;
-const whitelist = whatsappConfig?.WHITELIST
-  ? whatsappConfig.WHITELIST.split(',').map(num => num.trim()).filter(Boolean)
-  : [];
+
+let channelHandler: IChannelHandlerFactory;
+let mentionId = '';
+let whitelist: string[] = [];
 
 interface WhatsAppChannelStartOptions {
   authFolder: string;
@@ -140,7 +141,9 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
       if (!rawText && !image) continue;
 
       const text = image?.caption ?? rawText ?? '';
-      if (!shouldProcess(jid, text)) continue;
+      const isGroup = jid.endsWith('@g.us');
+      const mentionsBot = isGroup && options.mentionId.length > 0 && text.includes(`@${options.mentionId}`);
+      if (isGroup && !mentionsBot) continue;
 
       void handleInboundMessage(options, sock, jid, senderName, text, image, isWhitelisted).catch((err: Error) => {
         options.logger.warn(`WhatsApp message handling error: ${err.message}`);
@@ -189,13 +192,6 @@ function extractImage(msg: WAMessage): ExtractedImage | null {
    };
  }
 
- function shouldProcess(jid: string, text: string): boolean {
-   if (jid.endsWith('@g.us')) {
-     return mentionId.length > 0 && text.includes(`@${mentionId}`);
-   }
-   return true;
- }
-
  async function downloadImageBase64(image: ExtractedImage, logger: ILogger): Promise<ImageAttachment | null> {
    try {
      const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
@@ -216,7 +212,6 @@ function extractImage(msg: WAMessage): ExtractedImage | null {
    image: ExtractedImage | null,
    isWhitelistedSender: boolean,
  ): Promise<void> {
-   const cleanedText = mentionId ? text.replace(`@${mentionId}`, '').trim() : text;
    const images: ImageAttachment[] = [];
    if (image) {
      const attachment = await downloadImageBase64(image, options.logger);
@@ -224,7 +219,7 @@ function extractImage(msg: WAMessage): ExtractedImage | null {
    }
 
    const channel = new WhatsAppChannel(sock);
-   await channel.handleMessage(options.gateway, jid, senderName, cleanedText, images, { isWhitelistedSender });
+   await channel.handleMessage(options.gateway, jid, senderName, text, images, { isWhitelistedSender });
  }
 
  function formatBaileysLog(msg: unknown): string {
@@ -263,26 +258,29 @@ class WhatsAppChannel implements IWhatsAppChannel {
     images?: ImageAttachment[],
     options?: { isWhitelistedSender?: boolean },
   ): Promise<void> {
-    try {
-      // In testing... To remember old version: `Message from ${name}: ${text}`;
-      const prompt = `${name} says: ${text}`;
-      const isWhitelistedSender = options?.isWhitelistedSender ?? false;
-      const response = await gateway.handle(
-        { text: prompt, images },
-        jid,
-        {
-          channel: 'whatsapp',
-          toolsEnabled: isWhitelistedSender,
-          learnedSkillsEnabled: isWhitelistedSender,
+    const handler = channelHandler.create({
+      channel: 'whatsapp',
+      gateway,
+      mentionId,
+      reply: {
+        sendText: (target: string, reply: string) => this.sendText(target, reply),
+        sendError: async (target: string, message: string) => {
+          const sock = await this.getSocket();
+          await sock.sendMessage(target, { text: message });
         },
-      );
-      const resolved = await this.resolveResponse(response);
-      await this.sendText(jid, resolved);
-    } catch (err) {
-      const sock = await this.getSocket();
-      const error = err instanceof Error ? err.message : 'Sorry, I ran into an unexpected problem. Could you try again?';
-      await sock.sendMessage(jid, { text: `❌ ${error}` });
-    }
+      },
+    });
+
+    const isGroup = jid.endsWith('@g.us');
+    await handler.handle(jid, {
+      text,
+      senderName: name,
+      images,
+      isGroup,
+      mentionsBot: isGroup && mentionId.length > 0 && text.includes(`@${mentionId}`),
+      isTrustedSender: options?.isWhitelistedSender ?? false,
+      mentionId,
+    });
   }
 
   async sendText(jid: string, text: string): Promise<void> {
@@ -290,28 +288,6 @@ class WhatsAppChannel implements IWhatsAppChannel {
     for (const chunk of splitMessage(text, WHATSAPP_MESSAGE_LIMIT)) {
       await sock.sendMessage(jid, { text: chunk });
     }
-  }
-
-  private async resolveResponse(response: unknown): Promise<string> {
-    if (typeof response === 'string') {
-      return stripInternalStreamMarkers(response);
-    }
-
-    if (this.isAsyncIterable(response)) {
-      let out = '';
-      for await (const chunk of response) {
-        out += chunk;
-      }
-      return stripInternalStreamMarkers(out);
-    }
-
-    return String(response);
-  }
-
-  private isAsyncIterable(value: unknown): value is AsyncIterable<string> {
-    if (!value || typeof value !== 'object') return false;
-    const maybe = value as { [Symbol.asyncIterator]?: unknown };
-    return typeof maybe[Symbol.asyncIterator] === 'function';
   }
 
   private async getSocket(): Promise<SocketLike> {
@@ -396,32 +372,15 @@ export {
   WhatsAppChannelFactory,
 };
 
-export function create(): Plugin {
+export function create(context: PluginContext): Plugin {
+  const cfg = context.config.channels.WHATSAPP;
+  channelHandler = context.channelHandler;
+  mentionId = cfg.MENTION_ID;
+  whitelist = cfg.WHITELIST.split(',').map((num) => num.trim()).filter(Boolean);
+
   return createWhatsAppPlugin({
-    enabled: config.CHANNELS.WHATSAPP.ENABLED,
-    authFolder: config.CHANNELS.WHATSAPP.AUTH_FOLDER,
-    mentionId: config.CHANNELS.WHATSAPP.MENTION_ID,
+    enabled: cfg.ENABLED,
+    authFolder: cfg.AUTH_FOLDER,
+    mentionId,
   });
-}
-
-function splitMessage(text: string, maxLength: number): string[] {
-  if (!text) return [];
-
-  const chunks: string[] = [];
-  let remaining = text;
-
-  while (remaining.length > maxLength) {
-    const candidate = remaining.slice(0, maxLength);
-    const splitIndex = Math.max(candidate.lastIndexOf('\n'), candidate.lastIndexOf(' '));
-    const end = splitIndex > 0 ? splitIndex : maxLength;
-
-    chunks.push(remaining.slice(0, end).trimEnd());
-    remaining = remaining.slice(end).trimStart();
-  }
-
-  if (remaining.length > 0) {
-    chunks.push(remaining);
-  }
-
-  return chunks;
 }

@@ -10,8 +10,9 @@ import { generateId } from '../../utils/generate-id';
 import { ISessionContextFactory, SessionContextFactory } from './session-context';
 import { IBackgroundDispatcher, BackgroundDispatcherFactory } from './background-dispatcher';
 import { IChannelService, ChannelServiceFactory } from '../channel-service';
+import type { InboundInput, IMessageGateway } from '../../../plugins/contracts';
 
-export type InboundInput = string | { text: string; images?: ImageAttachment[] };
+export type { InboundInput, IMessageGateway };
 
 function normalizeInput(input: InboundInput): { text: string; images?: ImageAttachment[] } {
   if (typeof input === 'string') {
@@ -21,10 +22,6 @@ function normalizeInput(input: InboundInput): { text: string; images?: ImageAtta
     return { text: '' };
   }
   return { text: input.text, images: input.images };
-}
-
-interface IMessageGateway {
-  handle(input: InboundInput, originId: string, options?: ProcessOptions): Promise<ProcessedMessage>;
 }
 
 class MessageGateway implements IMessageGateway {
@@ -94,4 +91,4 @@ class MessageGatewayFactory {
   }
 }
 
-export { IMessageGateway, MessageGateway, MessageGatewayFactory }
+export { MessageGateway, MessageGatewayFactory }

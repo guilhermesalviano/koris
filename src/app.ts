@@ -9,7 +9,7 @@ import { startTUI } from './tui';
 import { LoggerFactory, ILogger } from './infrastructure/logger';
 import { MessageGatewayFactory, IMessageGateway } from './services/agents/message-gateway';
 import { IHeartbeatRunner, HeartbeatSingleton } from './services/agents/sub-agents/heartbeat/runner';
-import { ChannelsSingleton, ADAPTERS, type IChannelsManager } from './channels';
+import { ChannelsSingleton, ADAPTERS, ChannelHandlerFactory, type IChannelsManager } from './channels';
 import { SHUTDOWN_SIGNALS } from './constants/tui';
 import { hasFlag, logError } from './utils/runtime';
 import { SessionManager } from './services/session-manager';
@@ -22,9 +22,20 @@ import { LearnedSkillsRepositoryFactory } from './repositories/learned-skills';
 import { SkillSyncSingleton } from './services/skills/skill-sync';
 import { DashboardServerFactory, WebServerHandle } from './dashboard';
 import { createPlugins, buildRegistry } from '../plugins';
+import { config } from './config';
+import type { PluginContext } from '../plugins/contracts';
 
 const logger = LoggerFactory.create();
 const MODES = ['tui', 'web'] as const;
+
+function createPluginContext(logger: ILogger, gateway: IMessageGateway): PluginContext {
+  return {
+    config: { channels: config.CHANNELS },
+    logger,
+    gateway,
+    channelHandler: ChannelHandlerFactory,
+  };
+}
 
 type Mode = typeof MODES[number];
 type RuntimeModes = Record<Mode, boolean>;
@@ -61,7 +72,7 @@ class Application implements IApplication {
     seedDefaultBeats(db, this.logger);
     const sessionManager = new SessionManager(db);
     const gateway = MessageGatewayFactory.create(this.logger, this.source, db, sessionManager);
-    const registry = buildRegistry(createPlugins());
+    const registry = buildRegistry(createPlugins({ context: createPluginContext(this.logger, gateway) }));
     const channels = ChannelsSingleton.getInstance(this.logger, gateway, registry.collect(ADAPTERS));
     const heartbeat = HeartbeatSingleton.getInstance(
       this.logger,
