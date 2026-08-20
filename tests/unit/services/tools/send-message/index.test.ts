@@ -57,6 +57,40 @@ describe('sendMessage tool', () => {
     expect(result.error).toContain('channel');
   });
 
+  it('returns error when channel is missing and the context channel is not recordable', async () => {
+    const result = await sendMessage(logger, { content: 'Olá', target: '111' }, { channel: 'web' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('channel');
+  });
+
+  it('infers the channel from the conversation context', async () => {
+    mockService.send.mockResolvedValue(makeMessage());
+    const result = await sendMessage(logger, { content: 'Olá', target: '111' }, { channel: 'whatsapp' });
+
+    expect(result.success).toBe(true);
+    expect(mockService.send).toHaveBeenCalledWith({
+      content: 'Olá',
+      channel: 'whatsapp',
+      target: '111',
+    });
+  });
+
+  it('explicit channel wins over the context channel', async () => {
+    mockService.send.mockResolvedValue(makeMessage());
+    const result = await sendMessage(
+      logger,
+      { content: 'Olá', channel: 'telegram', target: '111' },
+      { channel: 'whatsapp' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockService.send).toHaveBeenCalledWith({
+      content: 'Olá',
+      channel: 'telegram',
+      target: '111',
+    });
+  });
+
   it('returns error when the channel manager is not running', async () => {
     vi.mocked(ChannelsSingleton.getExistingInstance).mockReturnValue(null);
     const result = await sendMessage(logger, { content: 'Olá', channel: 'telegram', target: '111' });

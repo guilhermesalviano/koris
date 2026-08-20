@@ -236,15 +236,15 @@ class ToolsRepository implements IToolsRepository {
         name: 'send_message',
         description:
           'Start a new outbound message to someone through a channel (Telegram or WhatsApp). ' +
-          'Provide the channel and the recipient target (Telegram chat id or WhatsApp JID). ' +
-          '"content" must be the exact message body to send.',
+          'Provide the target (Telegram chat id or WhatsApp JID). "channel" is inferred from the current chat when messaging from a Telegram/WhatsApp chat; ' +
+          'provide it explicitly otherwise. "content" must be the exact message body to send.',
         parameters: {
           type: 'object',
           properties: {
             channel: {
               type: 'string',
               enum: ['telegram', 'whatsapp'],
-              description: 'Channel to send through (required).',
+              description: 'Channel to send through. Optional when messaging from a Telegram or WhatsApp chat (inferred); required otherwise.',
             },
             target: {
               type: 'string',
@@ -255,7 +255,7 @@ class ToolsRepository implements IToolsRepository {
               description: 'Exact message body to send (required).',
             },
           },
-          required: ['content', 'channel', 'target'],
+          required: ['content', 'target'],
         },
       },
     };
