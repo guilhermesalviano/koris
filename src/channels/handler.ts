@@ -37,9 +37,7 @@ class ChannelHandler implements IChannelHandler {
     }
 
     const text = this.stripMention(message.text);
-    const prompt = this.prefixSenderName && message.senderName
-      ? `${message.senderName} says: ${text}`
-      : text;
+    const prompt = this.buildPrompt(message, text);
 
     try {
       const response = await this.gateway.handle(
@@ -66,6 +64,32 @@ class ChannelHandler implements IChannelHandler {
   private stripMention(text: string): string {
     if (!this.mentionId) return text;
     return text.replace(`@${this.mentionId}`, '').trim();
+  }
+
+  private buildPrompt(message: InboundChannelMessage, text: string): string {
+    if (text.trim().startsWith('/')) {
+      return text;
+    }
+
+    const parts: string[] = ['[Context]'];
+    const trustSuffix = message.isTrustedSender ? '' : ' (untrusted sender)';
+    if (message.groupName) {
+      parts.push(`Chat: "${message.groupName}" (group)${trustSuffix}.`);
+    } else if (message.isGroup) {
+      parts.push(`Chat: group${trustSuffix}.`);
+    } else {
+      parts.push(`Chat: direct${trustSuffix}.`);
+    }
+
+    if (this.prefixSenderName && message.senderName) {
+      parts.push(`Sender: ${message.senderName}.`);
+    }
+
+    if (text) {
+      parts.push(`Message: ${text}`);
+    }
+
+    return parts.join(' ');
   }
 }
 

@@ -9,6 +9,7 @@ const MENTION_ID = '162157312364643';
 const mockSock = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   sendPresenceUpdate: vi.fn(),
+  groupMetadata: vi.fn(),
   end: vi.fn(),
   ev: { on: vi.fn() },
 }));
@@ -47,6 +48,7 @@ describe('channels/whatsapp', () => {
     vi.clearAllMocks();
     mockSock.sendMessage.mockResolvedValue(undefined);
     mockSock.sendPresenceUpdate.mockResolvedValue(undefined);
+    mockSock.groupMetadata.mockResolvedValue({ subject: 'Family' });
     create(makeContext());
   });
 
@@ -91,7 +93,7 @@ describe('channels/whatsapp', () => {
       await channel.handleMessage(agent, 'group123@g.us', senderName, text);
 
       expect(agent.handle).toHaveBeenCalledWith(
-        { text: `${senderName} says: what time is it?` },
+        { text: '[Context] Chat: group (untrusted sender). Sender: TestUser. Message: what time is it?' },
         'group123@g.us',
         { channel: 'whatsapp', toolsEnabled: false, learnedSkillsEnabled: false },
       );
@@ -117,7 +119,7 @@ describe('channels/whatsapp', () => {
       await channel.handleMessage(agent, 'group123@g.us', 'guilherme', `hey @${MENTION_ID} help`);
 
       expect(agent.handle).toHaveBeenCalledWith(
-        { text: `guilherme says: hey  help` },
+        { text: '[Context] Chat: group (untrusted sender). Sender: guilherme. Message: hey  help' },
         'group123@g.us',
         { channel: 'whatsapp', toolsEnabled: false, learnedSkillsEnabled: false },
       );
@@ -130,7 +132,7 @@ describe('channels/whatsapp', () => {
       await channel.handleMessage(agent, 'group123@g.us', 'guilherme', `@${MENTION_ID} hello`);
 
       expect(agent.handle).toHaveBeenCalledWith(
-        { text: `guilherme says: hello` },
+        { text: '[Context] Chat: group (untrusted sender). Sender: guilherme. Message: hello' },
         'group123@g.us',
         { channel: 'whatsapp', toolsEnabled: false, learnedSkillsEnabled: false },
       );
@@ -145,9 +147,24 @@ describe('channels/whatsapp', () => {
       });
 
       expect(agent.handle).toHaveBeenCalledWith(
-        { text: 'guilherme says: hello', images: undefined },
+        { text: '[Context] Chat: direct. Sender: guilherme. Message: hello', images: undefined },
         'jid@s.whatsapp.net',
         { channel: 'whatsapp', toolsEnabled: true, learnedSkillsEnabled: true },
+      );
+    });
+
+    it('prefixes group messages with the group name', async () => {
+      const agent = { handle: vi.fn().mockResolvedValue('pong') };
+
+      const channel = new WhatsAppChannel(mockSock as never);
+      await channel.handleMessage(agent, 'group123@g.us', 'guilherme', `@${MENTION_ID} hello`, undefined, {
+        groupName: 'Family',
+      });
+
+      expect(agent.handle).toHaveBeenCalledWith(
+        { text: '[Context] Chat: "Family" (group) (untrusted sender). Sender: guilherme. Message: hello' },
+        'group123@g.us',
+        expect.any(Object),
       );
     });
 

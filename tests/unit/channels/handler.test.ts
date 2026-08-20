@@ -67,7 +67,7 @@ describe('channels/handler', () => {
     await handler.handle('jid', message({ senderName: 'guilherme', text: 'hi' }));
 
     expect(gateway.handle).toHaveBeenCalledWith(
-      { text: 'guilherme says: hi', images: undefined },
+      { text: '[Context] Chat: direct (untrusted sender). Sender: guilherme. Message: hi', images: undefined },
       'jid',
       { channel: 'test-channel', toolsEnabled: false, learnedSkillsEnabled: false },
     );
@@ -86,7 +86,57 @@ describe('channels/handler', () => {
     await handler.handle('jid', message({ senderName: 'guilherme', text: 'hi' }));
 
     expect(gateway.handle).toHaveBeenCalledWith(
-      { text: 'hi', images: undefined },
+      { text: '[Context] Chat: direct (untrusted sender). Message: hi', images: undefined },
+      'jid',
+      expect.any(Object),
+    );
+  });
+
+  it('prefixes group messages with the group name', async () => {
+    const { handler, gateway, reply } = makeHandler();
+    gateway.handle.mockResolvedValue('pong');
+
+    await handler.handle('group@g.us', message({
+      isGroup: true,
+      mentionsBot: true,
+      senderName: 'guilherme',
+      groupName: 'Family',
+      text: 'hi',
+    }));
+
+    expect(gateway.handle).toHaveBeenCalledWith(
+      { text: '[Context] Chat: "Family" (group) (untrusted sender). Sender: guilherme. Message: hi', images: undefined },
+      'group@g.us',
+      expect.any(Object),
+    );
+  });
+
+  it('prefixes group messages without a name as bare group', async () => {
+    const { handler, gateway, reply } = makeHandler();
+    gateway.handle.mockResolvedValue('pong');
+
+    await handler.handle('group@g.us', message({
+      isGroup: true,
+      mentionsBot: true,
+      senderName: 'guilherme',
+      text: 'hi',
+    }));
+
+    expect(gateway.handle).toHaveBeenCalledWith(
+      { text: '[Context] Chat: group (untrusted sender). Sender: guilherme. Message: hi', images: undefined },
+      'group@g.us',
+      expect.any(Object),
+    );
+  });
+
+  it('does not prefix commands so they still reach the command handler', async () => {
+    const { handler, gateway, reply } = makeHandler();
+    gateway.handle.mockResolvedValue('pong');
+
+    await handler.handle('jid', message({ senderName: 'guilherme', text: '/help' }));
+
+    expect(gateway.handle).toHaveBeenCalledWith(
+      { text: '/help', images: undefined },
       'jid',
       expect.any(Object),
     );
@@ -99,7 +149,7 @@ describe('channels/handler', () => {
     await handler.handle('jid', message({ text: `hey @${MENTION_ID} help` }));
 
     expect(gateway.handle).toHaveBeenCalledWith(
-      { text: 'hey  help', images: undefined },
+      { text: '[Context] Chat: direct (untrusted sender). Message: hey  help', images: undefined },
       'jid',
       expect.any(Object),
     );

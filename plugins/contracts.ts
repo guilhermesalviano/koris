@@ -47,6 +47,7 @@ export interface InboundChannelMessage {
   mentionsBot: boolean;
   isTrustedSender: boolean;
   mentionId?: string;
+  groupName?: string;
 }
 
 export interface ChannelReply {

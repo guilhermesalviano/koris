@@ -109,7 +109,7 @@ class TelegramChannel implements ITelegramChannel {
     }
 
     const images = photo ? await this.downloadPhoto(photo.file_id) : [];
-    await this.processAndReply(gateway, chatId, text, images, isGroup, mentionsBot, isWhitelisted);
+    await this.processAndReply(gateway, chatId, text, images, isGroup, mentionsBot, isWhitelisted, msg.chat.title);
   }
 
   async sendText(chatId: number, text: string): Promise<void> {
@@ -161,6 +161,7 @@ class TelegramChannel implements ITelegramChannel {
     isGroup: boolean,
     mentionsBot: boolean,
     isTrustedSender: boolean,
+    groupName?: string,
   ): Promise<void> {
     try {
       await this.withTypingIndicator(chatId, async () => {
@@ -182,6 +183,7 @@ class TelegramChannel implements ITelegramChannel {
           isGroup,
           mentionsBot,
           isTrustedSender,
+          groupName,
         });
       });
     } catch (err) {

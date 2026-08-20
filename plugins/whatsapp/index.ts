@@ -13,6 +13,7 @@ import type { WAMessage } from '@whiskeysockets/baileys';
 
 const WHATSAPP_MESSAGE_LIMIT = 4_000;
 const TYPING_INTERVAL_MS = 5_000;
+const GROUP_NAME_TTL_MS = 60 * 60 * 1_000;
 
 let channelHandler: IChannelHandlerFactory;
 let mentionId = '';
@@ -39,7 +40,7 @@ interface IWhatsAppChannel {
     name: string,
     text: string,
     images?: ImageAttachment[],
-    options?: { isWhitelistedSender?: boolean },
+    options?: { isWhitelistedSender?: boolean; groupName?: string },
   ): Promise<void>;
   sendText(jid: string, text: string): Promise<void>;
 }
@@ -47,6 +48,7 @@ interface IWhatsAppChannel {
 interface SocketLike {
   sendMessage(jid: string, content: { text: string }): Promise<unknown>;
   sendPresenceUpdate(presence: 'composing' | 'paused', jid: string): Promise<unknown>;
+  groupMetadata(jid: string): Promise<{ subject?: string }>;
   end(err: Error | undefined): void;
   ev: {
     on(event: string, handler: (data: unknown) => void): void;
@@ -55,6 +57,27 @@ interface SocketLike {
 
 let activeSocket: SocketLike | null = null;
 let lastWhitelistedJid: string | null = null;
+
+const groupNameCache = new Map<string, { name: string; fetchedAt: number }>();
+
+async function resolveGroupName(sock: SocketLike, jid: string, logger: ILogger): Promise<string | undefined> {
+  const cached = groupNameCache.get(jid);
+  if (cached && Date.now() - cached.fetchedAt < GROUP_NAME_TTL_MS) {
+    return cached.name;
+  }
+
+  try {
+    const metadata = await sock.groupMetadata(jid);
+    if (!metadata.subject) {
+      return undefined;
+    }
+    groupNameCache.set(jid, { name: metadata.subject, fetchedAt: Date.now() });
+    return metadata.subject;
+  } catch (err) {
+    logger.warn(`Failed to fetch WhatsApp group metadata for ${jid}: ${err instanceof Error ? err.message : String(err)}`);
+    return undefined;
+  }
+}
 
 function getLastWhitelistedJid(): string | null {
   return lastWhitelistedJid;
@@ -221,9 +244,10 @@ function extractImage(msg: WAMessage): ExtractedImage | null {
      if (attachment) images.push(attachment);
    }
 
-   const channel = new WhatsAppChannel(sock);
-   await channel.handleMessage(options.gateway, jid, senderName, text, images, { isWhitelistedSender });
- }
+const channel = new WhatsAppChannel(sock);
+   const groupName = jid.endsWith('@g.us') ? await resolveGroupName(sock, jid, options.logger) : undefined;
+   await channel.handleMessage(options.gateway, jid, senderName, text, images, { isWhitelistedSender, groupName });
+  }
 
  function formatBaileysLog(msg: unknown): string {
   if (typeof msg === 'string') return msg;
@@ -259,7 +283,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
     name: string,
     text: string,
     images?: ImageAttachment[],
-    options?: { isWhitelistedSender?: boolean },
+    options?: { isWhitelistedSender?: boolean; groupName?: string },
   ): Promise<void> {
     const isTrustedSender = options?.isWhitelistedSender ?? false;
     if (!isTrustedSender && !allowUntrusted) {
@@ -289,6 +313,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
         mentionsBot: isGroup && mentionId.length > 0 && text.includes(`@${mentionId}`),
         isTrustedSender,
         mentionId,
+        groupName: options?.groupName,
       }),
     );
   }
