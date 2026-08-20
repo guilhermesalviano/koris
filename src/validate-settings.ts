@@ -268,9 +268,11 @@ async function main() {
     );
 
     advisory(
-      config.CHANNELS.TELEGRAM.WHITELIST.trim().length > 0,
-      'channels.telegram.whitelist is set',
-      'channels.telegram.whitelist is empty — anyone can chat with the bot',
+      config.CHANNELS.TELEGRAM.WHITELIST.trim().length > 0 || config.CHANNELS.ALLOW_UNTRUSTED,
+      'channels.telegram.whitelist is set (or channels.allow_untrusted is enabled)',
+      config.CHANNELS.ALLOW_UNTRUSTED
+        ? 'channels.telegram.whitelist is empty — anyone can chat with the bot (allow_untrusted is on)'
+        : 'channels.telegram.whitelist is empty — no one can chat with the bot',
     );
 
     if (config.CHANNELS.TELEGRAM.BOT_TOKEN.trim().length > 0) {

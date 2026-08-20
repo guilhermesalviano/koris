@@ -45,11 +45,11 @@ Guidance for AI coding agents working in this repository.
 - `src/infrastructure/` — `db-sqlite.ts` (SQLite wrapper + schema + factory) and `logger.ts` (Winston `LoggerFactory`).
 - `src/repositories/` — data-access layer, one file per table/concern: `session`, `message`, `memory`, `skills`, `learned-skills`, `prompt` (builds LLM prompt payload), `context`, `heartbeat`, `tools`, `pre-prompt`. All return raw rows / typed records; SQL is written here, not in services.
 - `src/services/` — business logic (see below).
-- `src/channels/` — `ChannelDefinition` contract + `ChannelsManager`/`ChannelsSingleton` and the `ADAPTERS` extension point.
+- `src/channels/` — the channel runtime: `ChannelsManager`/`ChannelsSingleton`, the generic inbound pipeline (`handler.ts`), and response/utils helpers (`utils.ts`). It implements the channel contract from `plugins/contracts.ts`.
 - `src/dashboard/` — Express web server (`DashboardServerFactory`), port 3000: serves the built frontend from `dist-web/` and mounts `/api/chat` (SSE) + `/api/admin` (see `admin.ts`).
 - `src/tui/` — terminal UI wrapper.
 - `src/utils/` — pure helper functions (prompt replacement, curl, dates, telegram escaping, tool-call parsing, sanitize-log-text, etc.).
-- `plugins/` — the plugin system: `registry.ts` (ExtensionPoint/PluginRegistry) + one folder per channel plugin (`telegram/`, `whatsapp/`), each exposing `create()`.
+- `plugins/` — the plugin system with inverted dependencies. `registry.ts` (ExtensionPoint/PluginRegistry) + `contracts.ts` (the dependency-free plugin SDK: `PluginContext`, channel/gateway/logger interfaces, `ADAPTERS`, `splitMessage`) + one folder per channel plugin (`telegram/`, `whatsapp/`), each exposing `create(context)`.
 - `skills/` — markdown skill definitions, one folder per skill with a `SKILL.md` (front-matter `name`/`description` + body). Synced into the `learned_skills` table at startup and on file changes by `src/services/skills/skill-sync.ts`.
 - `memory/` — runtime SQLite database files (gitignored state).
 - `temp/` — runtime scratch dir for generated files (heartbeat reports, etc.).
@@ -61,7 +61,7 @@ Guidance for AI coding agents working in this repository.
 
 ## Core message flow (follow this to trace behavior)
 
-1. A channel plugin (`plugins/telegram`, `plugins/whatsapp`, or `src/tui`) calls `MessageGateway.handle(message, originId)`.
+1. A channel plugin (`plugins/telegram`, `plugins/whatsapp`, or `src/tui`) receives a message, normalizes it into an `InboundChannelMessage`, and delegates to the generic `IChannelHandler` (injected via `PluginContext.channelHandler`, `src/channels/handler.ts`) which applies the channel rules (group-mention filter, trust-based tools/learned-skills gating, prompt prefixing, reply splitting) and calls `MessageGateway.handle(message, originId)`.
 2. `src/services/agents/message-gateway.ts` resolves the session via `session-context.ts`, checks for commands (`/help` etc. via `src/services/commands/`), else delegates to the **MainAgent**. After the response, `background-dispatcher.ts` fires the persistence + summarization jobs.
 3. `src/services/agents/main-agent.ts` passes the user message (the Tool Execution Contract lives in the system prompt via `TOOL_EXECUTION_CONTRACT`), calls `ChatService.complete()` (`src/services/chat/chat-service.ts`), which builds the full prompt via `PromptRepository.build()` and calls the AI provider.
 4. If the LLM returns tool calls, MainAgent hands them to the **ToolCallPipeline** (`src/services/agents/tool-call-pipeline.ts`), which sends them to the **ExecutorWorker** (`src/services/workers/executor-worker.ts`) which loops tool-call → tool result → next LLM call until a final message.
@@ -104,7 +104,7 @@ Two independent flags control how LLM calls are ordered:
 
 ## Plugins & skills (extension mechanisms)
 
-- **Plugins** (`plugins/`): a plugin is a folder exposing `create(): Plugin | null`. `createPlugins()` scans the dir, `buildRegistry()` calls each `setup(registry)`. Channel plugins extend `ADAPTERS` (from `src/channels`) with a `ChannelDefinition` (`name`, `enabled`, `start`, optional `sendMessage`). Add a new channel by adding a folder under `plugins/`.
+- **Plugins** (`plugins/`): the plugin SDK lives in `plugins/contracts.ts` (dependency-free: `PluginContext`, `ChannelDefinition`, `ADAPTERS`, `ILogger`/`IMessageGateway`, channel-handler types, `splitMessage`). Plugins never import from `src/` — the app injects concrete services via a `PluginContext` built in `src/app.ts` (`createPluginContext`) and passed to `createPlugins({ context })` → each plugin folder's `create(context): Plugin | null`. The scanner loads every subdirectory of `plugins/` (contract/registry are files, not dirs, so they're skipped). Channel plugins register a `ChannelDefinition` (`name`, `enabled`, `start`, optional `sendMessage`) on the `ADAPTERS` extension point in `setup(registry)`. Add/remove a channel by adding/removing a folder under `plugins/` — no core changes needed.
 - **Skills** (`skills/`): markdown files synced into the `learned_skills` table at startup and on file changes by `SkillSyncService` (`src/services/skills/skill-sync.ts`), which wraps each `SKILL.md` body in `SKILL_LEARNING_PROMPT` (with `<GATEWAY_HOST>` resolved to `config.GATEWAY_HOST`) and prunes rows whose folder was removed. To add a skill, add a `skills/<name>/SKILL.md` with front-matter + body.
 
 ## Database schema (`src/infrastructure/db-sqlite.ts`)
@@ -127,6 +127,7 @@ Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/l
 ## Conventions to follow
 
 - **Interfaces prefixed `I`** (`IMessageGateway`, `ILogger`, `IChatService`); implementations are classes; creation is via `XxxFactory.create()` and singletons via `XxxSingleton.getInstance()`.
+- **Dependency inversion for plugins**: plugins import **only** from `plugins/contracts.ts` (the SDK) and `plugins/registry.ts` — never from `src/`. Core depends on the SDK too (via re-export shims like `src/infrastructure/logger.ts` and `src/channels/`), and injects concrete services through `PluginContext` at the composition root (`src/app.ts`).
 - **No code comments** in source files unless asked. Code should be self-explanatory.
 - **Relative imports only** (the `@` alias exists only in Vitest config, not tsconfig — tests can use `@/`, source should not).
 - Config values come from the `config` object, never hard-coded secrets or paths.

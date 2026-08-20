@@ -6,13 +6,9 @@ import fs from 'fs';
 import { config } from '../config';
 import { sanitizeLogText, sanitizeMeta } from '../utils/sanitize-log-text';
 import { nowISO } from '../utils/date';
+import type { ILogger } from '../../plugins/contracts';
 
-interface ILogger {
-  info(message: string, meta?: Record<string, unknown>): void;
-  error(message: string, meta?: Record<string, unknown>): void;
-  debug(message: string, meta?: Record<string, unknown>): void;
-  warn(message: string, meta?: Record<string, unknown>): void;
-}
+export type { ILogger };
 
 class Logger implements ILogger {
   logger: WinstonLogger;
@@ -102,4 +98,4 @@ class LoggerFactory {
   }
 }
 
-export { ILogger, Logger, LoggerFactory };
+export { Logger, LoggerFactory };

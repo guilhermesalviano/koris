@@ -234,6 +234,7 @@ export default function AuditPage() {
                 <div><span className="text-txt-3">model </span>{detail.model ?? detail.provider ?? '—'}</div>
                 {detail.finishReason && <div><span className="text-txt-3">finish </span>{detail.finishReason}</div>}
                 {detail.toolCalls !== undefined && <div><span className="text-txt-3">toolCalls </span>{detail.toolCalls}</div>}
+                {detail.toolsEnabled !== undefined && <div><span className="text-txt-3">tools </span>{detail.toolsEnabled ? 'enabled' : 'off'}</div>}
                 {detail.errorCode && <div className="text-red-400"><span className="text-txt-3">error </span>{detail.errorCode}</div>}
                 {detail.errorMessage && <div className="col-span-3 break-all text-red-400">{detail.errorMessage}</div>}
               </div>

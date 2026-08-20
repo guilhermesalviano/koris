@@ -30,6 +30,7 @@ interface BuildPromptParams {
   channel: string;
   images?: ImageAttachment[];
   toolsEnabled?: boolean;
+  learnedSkillsEnabled?: boolean;
   messageHistory?: Message[];
   includeBeatTools?: boolean;
   sessionId?: string;
@@ -69,7 +70,16 @@ class PromptRepository implements IPromptRepository {
     return { messages, tools };
   }
 
-  private async buildHistory({ channel, userMessage, images, messageHistory, sessionId, extraSystemBlocks, toolResults }: BuildPromptParams): Promise<Message[]> {
+  private async buildHistory({
+    channel,
+    userMessage,
+    images,
+    messageHistory,
+    sessionId,
+    extraSystemBlocks,
+    toolResults,
+    learnedSkillsEnabled,
+  }: BuildPromptParams): Promise<Message[]> {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
 
     for (const block of extraSystemBlocks ?? []) {
@@ -83,7 +93,7 @@ class PromptRepository implements IPromptRepository {
     const injectedContent = InjectManager.getInjectedContent();
     if (injectedContent) systemBlocks.push(`# Personality\n${injectedContent}`);
 
-    const learnedSkills = this.buildLearnedSkills();
+    const learnedSkills = this.buildLearnedSkills({ learnedSkillsEnabled });
     if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
 
     const memory = await this.buildMemoryContext(userMessage, sessionId);
@@ -154,7 +164,11 @@ class PromptRepository implements IPromptRepository {
     return { userMessage: userResult.text, history: sanitizedHistory };
   }
 
-  private buildLearnedSkills(): string {
+  private buildLearnedSkills({ learnedSkillsEnabled }: { learnedSkillsEnabled?: boolean }): string {
+    if (learnedSkillsEnabled === false) {
+      return '';
+    }
+
     const learnedSkillsLimit = config.LEARNED_SKILLS_LIMIT;
 
     return this.learnedSkillsRepository

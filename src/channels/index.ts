@@ -1,15 +1,28 @@
-import { ExtensionPoint } from '../../plugins/registry';
 import type { ILogger } from '../infrastructure/logger';
 import type { IMessageGateway } from '../services/agents/message-gateway';
+import type {
+  ChannelDefinition,
+  ChannelHandlerOptions,
+  ChannelReply,
+  IChannelHandler,
+  IChannelHandlerFactory,
+  InboundChannelMessage,
+} from '../../plugins/contracts';
+import { ADAPTERS } from '../../plugins/contracts';
+import { ChannelHandler, ChannelHandlerFactory } from './handler';
+import { resolveResponse, splitMessage } from './utils';
+
+export type {
+  ChannelDefinition,
+  ChannelHandlerOptions,
+  ChannelReply,
+  IChannelHandler,
+  IChannelHandlerFactory,
+  InboundChannelMessage,
+};
+export { ADAPTERS, ChannelHandler, ChannelHandlerFactory, resolveResponse, splitMessage };
 
 export type StopFn = () => void;
-
-export interface ChannelDefinition {
-  name: string;
-  enabled: () => boolean;
-  start: (logger: ILogger, gateway: IMessageGateway) => StopFn | void;
-  sendMessage?: (logger: ILogger, target: string, message: string) => Promise<void>;
-}
 
 export interface IChannelsManager {
   startAll(): void;
@@ -89,5 +102,3 @@ class ChannelsSingleton {
 }
 
 export { ChannelsManager, ChannelsSingleton };
-
-export const ADAPTERS = new ExtensionPoint<ChannelDefinition>('channels.adapters');

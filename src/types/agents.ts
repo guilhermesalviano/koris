@@ -1,12 +1,6 @@
-export type ProcessedMessage = string;
-export type ProcessOptions = {
-  signal?: AbortSignal;
-  toolsEnabled?: boolean;
-  onProgress?: (summary: string) => void;
-  sessionId?: string;
-  runId?: string;
-  channel?: string;
-};
+import type { ProcessedMessage, ProcessOptions } from '../../plugins/contracts';
+
+export type { ProcessedMessage, ProcessOptions };
 
 export interface IAgent<TInput, TOutput> {
   run(input: TInput): Promise<TOutput>;

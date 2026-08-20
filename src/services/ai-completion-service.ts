@@ -167,6 +167,7 @@ export class AICompletionService implements IAICompletionService {
       responseLength: responseText?.length,
       finishReason: response?.finishReason,
       toolCalls: response?.kind === 'tool_calls' ? response.calls.length : 0,
+      toolsEnabled: (request.tools?.length ?? 0) > 0,
       durationMs,
       status: error ? 'error' : 'success',
       errorCode: error?.code,

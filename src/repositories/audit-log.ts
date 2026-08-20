@@ -18,6 +18,7 @@ export interface AuditLogRow {
   response_length?: number;
   finish_reason?: string;
   tool_calls: number;
+  tools_enabled?: number;
   tool_name?: string;
   tool_args?: string;
   success?: number;
@@ -123,9 +124,9 @@ class AuditLogRepository implements IAuditLogRepository {
       `INSERT INTO audit_logs (
         id, run_id, session_id, channel, type, role, agent_name, provider, model,
         prompt, prompt_length, response, response_length, finish_reason, tool_calls,
-        tool_name, tool_args, success, duration_ms, status, error_code, error_message,
-        input_tokens, output_tokens, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        tools_enabled, tool_name, tool_args, success, duration_ms, status, error_code,
+        error_message, input_tokens, output_tokens, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.id,
         entry.runId ?? null,
@@ -142,6 +143,7 @@ class AuditLogRepository implements IAuditLogRepository {
         entry.type === 'llm' ? (entry.responseLength ?? null) : null,
         entry.type === 'llm' ? (entry.finishReason ?? null) : null,
         entry.type === 'llm' ? entry.toolCalls : 0,
+        entry.type === 'llm' ? (entry.toolsEnabled == null ? null : entry.toolsEnabled ? 1 : 0) : null,
         entry.type === 'tool' ? entry.toolName : null,
         entry.type === 'tool' ? (entry.toolArgs ?? null) : null,
         entry.type === 'tool' ? (entry.success ? 1 : 0) : null,

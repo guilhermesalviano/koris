@@ -177,6 +177,7 @@ export interface AuditItem {
   responseLength?: number;
   finishReason?: string;
   toolCalls?: number;
+  toolsEnabled?: boolean;
   toolName?: string;
   toolArgs?: string;
   success?: boolean;

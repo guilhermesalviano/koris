@@ -1,5 +1,5 @@
 import { IToolsQueue, ToolsQueueFactory } from '../tools-queue';
-import { TOOL_EXECUTION_CONTRACT } from '../../constants';
+import { RESTRICTED_EXECUTION_CONTRACT, TOOL_EXECUTION_CONTRACT } from '../../constants';
 import type { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import type { IMessageService } from '../message-service';
 import type { ILogger } from '../../infrastructure/logger';
@@ -34,6 +34,9 @@ class MainAgent implements IMainAgent {
   async run(args: MainAgentArgs): Promise<ProcessedMessage> {
     const { userMessage, channel, message, images, options } = args;
     const messageHistory = message.getHistory();
+    const toolContracts = options?.toolsEnabled === false
+      ? [RESTRICTED_EXECUTION_CONTRACT]
+      : [TOOL_EXECUTION_CONTRACT];
 
     const ctx: LoopContext = {
       channel,
@@ -46,7 +49,7 @@ class MainAgent implements IMainAgent {
       initiatedBy: 'manager',
     };
 
-    const response = await this.ChatService.complete(userMessage, channel, options, messageHistory, message.getSessionId(), [TOOL_EXECUTION_CONTRACT], undefined, images);
+    const response = await this.ChatService.complete(userMessage, channel, options, messageHistory, message.getSessionId(), toolContracts, undefined, images);
     if (response.kind === 'message') return response.text;
     return this.pipeline.execute(response.calls, userMessage, messageHistory, ctx);
   }

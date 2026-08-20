@@ -7,6 +7,7 @@
   "learned_skills_limit": 10,
   "heartbeat": false,
   "channels": {
+    "allow_untrusted": false,
     "telegram": {
       "enabled": false,
       "bot_token": "YOUR_BOT_TOKEN",

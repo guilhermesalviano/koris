@@ -1,25 +1,25 @@
 import type { InlineKeyboardMarkup, TelegramBot, TelegramMessage } from '@guilhermesalviano/telegram-bot';
-import type { ChannelDefinition } from '../../src/channels';
-import { ADAPTERS } from '../../src/channels';
-import type { ILogger } from '../../src/infrastructure/logger';
-import type { Plugin, PluginRegistry } from '../registry';
-import type { IMessageGateway } from '../../src/services/agents/message-gateway';
-import type { ImageAttachment } from '../../src/types/messages';
-import { stripInternalStreamMarkers } from '../../src/utils/stream-markers';
-import { config } from '../../src/config';
+import { ADAPTERS, splitMessage } from '../contracts';
+import type {
+  ChannelDefinition,
+  IChannelHandlerFactory,
+  ILogger,
+  IMessageGateway,
+  ImageAttachment,
+  Plugin,
+  PluginContext,
+} from '../contracts';
+import type { PluginRegistry } from '../registry';
 
 const TYPING_INTERVAL_MS = 5_000;
 const TELEGRAM_MESSAGE_LIMIT = 4_000;
 const TELEGRAM_DENY_MESSAGE = 'You need to allow this number to send messages on the server.';
 
 let botUsername: string | null = null;
-
-const TELEGRAM_WHITELIST = new Set<number>(
-  config.CHANNELS.TELEGRAM.WHITELIST.split(',')
-    .map((id) => id.trim())
-    .filter(Boolean)
-    .map(Number),
-);
+let botToken = '';
+let channelHandler: IChannelHandlerFactory;
+let telegramWhitelist = new Set<number>();
+let allowUntrusted = false;
 
 interface ITelegramChannel {
   handleMessage(gateway: IMessageGateway, msg: TelegramMessage): Promise<void>;
@@ -68,11 +68,11 @@ function mimeFromPath(filePath: string): string | undefined {
 }
 
 function telegramFileBaseUrl(): string {
-  return `https://api.telegram.org/bot${config.CHANNELS.TELEGRAM.BOT_TOKEN}`;
+  return `https://api.telegram.org/bot${botToken}`;
 }
 
 function telegramFileDownloadUrl(): string {
-  return `https://api.telegram.org/file/bot${config.CHANNELS.TELEGRAM.BOT_TOKEN}`;
+  return `https://api.telegram.org/file/bot${botToken}`;
 }
 
 class TelegramChannel implements ITelegramChannel {
@@ -89,21 +89,27 @@ class TelegramChannel implements ITelegramChannel {
     }
 
     const isGroup = chatType === 'group' || chatType === 'supergroup';
-    if (isGroup && !isBotMentioned(text, telegramMsg.entities ?? [], botUsername)) {
+    const mentionsBot = isBotMentioned(text, telegramMsg.entities ?? [], botUsername);
+
+    if (isGroup && !mentionsBot) {
       return;
     }
 
-    if (TELEGRAM_WHITELIST.size === 0) {
-      await this.sendDenyMessage(chatId);
-      return;
-    }
+    const isWhitelisted = msg.from?.id != null && telegramWhitelist.has(msg.from.id);
 
-    if (!(msg.from?.id && TELEGRAM_WHITELIST.has(msg.from.id))) {
-      return;
+    if (!allowUntrusted) {
+      if (telegramWhitelist.size === 0) {
+        await this.sendDenyMessage(chatId);
+        return;
+      }
+
+      if (!isWhitelisted) {
+        return;
+      }
     }
 
     const images = photo ? await this.downloadPhoto(photo.file_id) : [];
-    await this.processAndReply(gateway, chatId, text, images);
+    await this.processAndReply(gateway, chatId, text, images, isGroup, mentionsBot, isWhitelisted, msg.chat.title);
   }
 
   async sendText(chatId: number, text: string): Promise<void> {
@@ -147,12 +153,38 @@ class TelegramChannel implements ITelegramChannel {
     }
   }
 
-  private async processAndReply(gateway: IMessageGateway, chatId: number, text: string, images?: ImageAttachment[]): Promise<void> {
+  private async processAndReply(
+    gateway: IMessageGateway,
+    chatId: number,
+    text: string,
+    images: ImageAttachment[],
+    isGroup: boolean,
+    mentionsBot: boolean,
+    isTrustedSender: boolean,
+    groupName?: string,
+  ): Promise<void> {
     try {
       await this.withTypingIndicator(chatId, async () => {
-        const response = await gateway.handle({ text, images }, String(chatId), { channel: 'telegram' });
-        const resolved = await this.resolveResponse(response);
-        await this.sendText(chatId, resolved);
+        const handler = channelHandler.create({
+          channel: 'telegram',
+          gateway,
+          prefixSenderName: false,
+          reply: {
+            sendText: (target: string, reply: string) => this.sendText(Number(target), reply),
+            sendError: async (target: string, message: string) => {
+              await (await this.getBotClient()).sendMessage(Number(target), message);
+            },
+          },
+        });
+
+        await handler.handle(String(chatId), {
+          text,
+          images,
+          isGroup,
+          mentionsBot,
+          isTrustedSender,
+          groupName,
+        });
       });
     } catch (err) {
       console.error('Error processing message:', err);
@@ -202,23 +234,6 @@ class TelegramChannel implements ITelegramChannel {
     }
   }
 
-  private async resolveResponse(response: unknown): Promise<string> {
-    if (typeof response === 'string') {
-      return stripInternalStreamMarkers(response);
-    }
-
-    if (this.isAsyncIterable(response)) {
-      let out = '';
-      for await (const chunk of response) {
-        out += chunk;
-      }
-
-      return stripInternalStreamMarkers(out);
-    }
-
-    return String(response);
-  }
-
   private async withTypingIndicator<T>(chatId: number, work: () => Promise<T>): Promise<T> {
     try {
       await (await this.getBotClient()).sendChatAction(chatId, 'typing');
@@ -233,15 +248,6 @@ class TelegramChannel implements ITelegramChannel {
     } finally {
       clearInterval(timer);
     }
-  }
-
-  private isAsyncIterable(value: unknown): value is AsyncIterable<string> {
-    if (!value || typeof value !== 'object') {
-      return false;
-    }
-
-    const maybe = value as { [Symbol.asyncIterator]?: unknown };
-    return typeof maybe[Symbol.asyncIterator] === 'function';
   }
 
   private isEntityParseError(error: unknown): boolean {
@@ -387,41 +393,28 @@ export function _setBotUsernameForTesting(username: string | null): void {
 
 /** @internal — only for use in tests */
 export function _setTelegramWhitelistForTesting(ids: number[]): void {
-  TELEGRAM_WHITELIST.clear();
-  ids.forEach((id) => TELEGRAM_WHITELIST.add(id));
+  telegramWhitelist.clear();
+  ids.forEach((id) => telegramWhitelist.add(id));
 }
 
-export function create(): Plugin | null {
-  if (!config.CHANNELS.TELEGRAM.ENABLED) {
+export function create(context: PluginContext): Plugin | null {
+  const cfg = context.config.channels.TELEGRAM;
+  if (!cfg.ENABLED) {
     return null;
   }
 
+  botToken = cfg.BOT_TOKEN;
+  channelHandler = context.channelHandler;
+  allowUntrusted = context.config.channels.ALLOW_UNTRUSTED;
+  telegramWhitelist = new Set(
+    cfg.WHITELIST.split(',')
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map(Number),
+  );
+
   return createTelegramPlugin({
-    token: config.CHANNELS.TELEGRAM.BOT_TOKEN,
+    token: cfg.BOT_TOKEN,
     enabled: true,
   });
-}
-
-function splitMessage(text: string, maxLength: number): string[] {
-  if (!text) {
-    return [];
-  }
-
-  const chunks: string[] = [];
-  let remaining = text;
-
-  while (remaining.length > maxLength) {
-    const candidate = remaining.slice(0, maxLength);
-    const splitIndex = Math.max(candidate.lastIndexOf('\n'), candidate.lastIndexOf(' '));
-    const end = splitIndex > 0 ? splitIndex : maxLength;
-
-    chunks.push(remaining.slice(0, end).trimEnd());
-    remaining = remaining.slice(end).trimStart();
-  }
-
-  if (remaining.length > 0) {
-    chunks.push(remaining);
-  }
-
-  return chunks;
 }
