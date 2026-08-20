@@ -26,6 +26,8 @@ class ToolsRepository implements IToolsRepository {
       tools.push(this.deleteBeatTool());
     }
 
+    tools.push(this.sendMessageTool());
+
     return tools;
   }
 
@@ -222,6 +224,38 @@ class ToolsRepository implements IToolsRepository {
             },
           },
           required: ['id'],
+        },
+      },
+    };
+  }
+
+  private sendMessageTool(): AIToolDefinition {
+    return {
+      type: 'function',
+      function: {
+        name: 'send_message',
+        description:
+          'Start a new outbound message to someone through a channel (Telegram or WhatsApp). ' +
+          'Provide the channel and the recipient target (Telegram chat id or WhatsApp JID). ' +
+          '"content" must be the exact message body to send.',
+        parameters: {
+          type: 'object',
+          properties: {
+            channel: {
+              type: 'string',
+              enum: ['telegram', 'whatsapp'],
+              description: 'Channel to send through (required).',
+            },
+            target: {
+              type: 'string',
+              description: 'Recipient address on the channel (Telegram chat id or WhatsApp JID) (required).',
+            },
+            content: {
+              type: 'string',
+              description: 'Exact message body to send (required).',
+            },
+          },
+          required: ['content', 'channel', 'target'],
         },
       },
     };

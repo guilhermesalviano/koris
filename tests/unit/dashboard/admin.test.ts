@@ -9,6 +9,7 @@ const {
   memoryRepo,
   heartbeatRepo,
   channelRepo,
+  outboundRepo,
   learnedSkillsRepo,
   skillsRepo,
   skillSync,
@@ -26,6 +27,14 @@ const {
   memoryRepo: { count: vi.fn() },
   heartbeatRepo: { getAll: vi.fn() },
   channelRepo: { getAll: vi.fn() },
+  outboundRepo: {
+    count: vi.fn(),
+    save: vi.fn(),
+    getById: vi.fn(),
+    getAll: vi.fn(),
+    markSent: vi.fn(),
+    markFailed: vi.fn(),
+  },
   learnedSkillsRepo: { count: vi.fn(), getAll: vi.fn(), getByName: vi.fn(), setEnabled: vi.fn() },
   skillsRepo: { get: vi.fn() },
   skillSync: { sync: vi.fn(), getExistingInstance: vi.fn() },
@@ -53,6 +62,10 @@ vi.mock('../../../src/repositories/heartbeat', () => ({
 
 vi.mock('../../../src/repositories/channel', () => ({
   ChannelRepositoryFactory: { create: () => channelRepo },
+}));
+
+vi.mock('../../../src/repositories/outbound-message', () => ({
+  OutboundMessageRepositoryFactory: { create: () => outboundRepo },
 }));
 
 vi.mock('../../../src/repositories/learned-skills', () => ({
@@ -317,6 +330,7 @@ describe('AdminRouterFactory /overview', () => {
     ] as never);
     learnedSkillsRepo.count.mockReturnValue(2);
     skillsRepo.get.mockReturnValue([{}, {}, {}] as never);
+    outboundRepo.count.mockReturnValue(11);
     channelRepo.getAll.mockReturnValue([
       { channel: 'telegram', target: '@me', isPrincipal: true },
     ] as never);
@@ -355,6 +369,7 @@ describe('AdminRouterFactory /overview', () => {
     expect(body.heartbeats).toBe(2);
     expect(body.learnedSkills).toBe(2);
     expect(body.skills).toBe(3);
+    expect(body.outboundMessages).toBe(11);
     expect(body.auditErrors).toBe(2);
     expect(body.lastHeartbeatRunAt).toMatch(/^2026-01-03T/);
 

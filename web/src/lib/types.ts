@@ -109,6 +109,21 @@ export interface ChannelsResponse {
   items: ChannelItem[];
 }
 
+export interface OutboundMessageItem {
+  id: string;
+  channel: 'telegram' | 'whatsapp';
+  target: string;
+  content: string;
+  status: 'sent' | 'failed';
+  errorMessage?: string | null;
+  createdAt: string;
+  sentAt?: string | null;
+}
+
+export interface OutboundResponse {
+  items: OutboundMessageItem[];
+}
+
 export interface SkillItem {
   name: string;
   description: string;

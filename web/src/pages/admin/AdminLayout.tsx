@@ -23,6 +23,7 @@ import SessionsPage from './SessionsPage';
 import MemoriesPage from './MemoriesPage';
 import HeartbeatsPage from './HeartbeatsPage';
 import ChannelsPage from './ChannelsPage';
+import OutboundPage from './OutboundPage';
 import SkillsPage from './SkillsPage';
 import SettingsPage from './SettingsPage';
 import AuditPage from './AuditPage';
@@ -54,6 +55,7 @@ const MAIN_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] 
 const CONFIG_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] = [
   { to: '/admin/sessions', label: 'Sessions', icon: 'sessions' },
   { to: '/admin/channels', label: 'Channels', icon: 'channels' },
+  { to: '/admin/outbound', label: 'Outbound', icon: 'sessions' },
   { to: '/admin/audit', label: 'Audit', icon: 'audit' },
   { to: '/admin/usage', label: 'Usage', icon: 'usage' },
   { to: '/admin/settings', label: 'Settings', icon: 'settings' },
@@ -443,6 +445,7 @@ export default function AdminLayout() {
               <Route path="memories" element={<MemoriesPage />} />
               <Route path="heartbeats" element={<HeartbeatsPage />} />
               <Route path="channels" element={<ChannelsPage />} />
+              <Route path="outbound" element={<OutboundPage />} />
               <Route path="skills" element={<SkillsPage />} />
               <Route path="audit" element={<AuditPage />} />
               <Route path="usage" element={<UsagePage />} />

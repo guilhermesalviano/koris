@@ -1,16 +1,17 @@
-import { CommandFn, ToolCall, ToolResult } from '../../types/tools';
+import { CommandFn, ToolCall, ToolExecutionContext, ToolResult } from '../../types/tools';
 import { executeCurl } from './curl-request';
 import { executeSearch } from './search';
 import { setBeat } from './beats/create';
 import { listBeats } from './beats/list';
 import { updateBeat } from './beats/update';
 import { deleteBeat } from './beats/delete';
+import { sendMessage } from './send-message';
 import { ILogger } from '../../infrastructure/logger';
 
 type Command = { [key: string]: CommandFn };
 
 interface IAgnosticExecutionTool {
-  handle(logger: ILogger, toolCall: ToolCall): Promise<ToolResult>;
+  handle(logger: ILogger, toolCall: ToolCall, context?: ToolExecutionContext): Promise<ToolResult>;
 }
 
 class AgnosticExecutionTool {
@@ -18,7 +19,7 @@ class AgnosticExecutionTool {
     private COMMAND_MAP: Command
   ) { }
 
-  async handle(logger: ILogger, toolCall: ToolCall): Promise<ToolResult> {
+  async handle(logger: ILogger, toolCall: ToolCall, context?: ToolExecutionContext): Promise<ToolResult> {
     const { name, arguments: args } = toolCall;
     logger.debug('Executing tool', {
       toolName: name,
@@ -27,7 +28,7 @@ class AgnosticExecutionTool {
 
     try {
       const command = this.COMMAND_MAP[name];
-      if (command) return await command(logger, args);
+      if (command) return await command(logger, args, context);
 
       return {
         toolName: name,
@@ -55,6 +56,7 @@ class AgnosticExecutionToolFactory {
       'list_beats': listBeats,
       'update_beat': updateBeat,
       'delete_beat': deleteBeat,
+      'send_message': sendMessage,
     };
 
     return new AgnosticExecutionTool(COMMAND_MAP);
