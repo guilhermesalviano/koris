@@ -12,6 +12,7 @@ import type { PluginRegistry } from '../registry';
 import type { WAMessage } from '@whiskeysockets/baileys';
 
 const WHATSAPP_MESSAGE_LIMIT = 4_000;
+const TYPING_INTERVAL_MS = 5_000;
 
 let channelHandler: IChannelHandlerFactory;
 let mentionId = '';
@@ -45,6 +46,7 @@ interface IWhatsAppChannel {
 
 interface SocketLike {
   sendMessage(jid: string, content: { text: string }): Promise<unknown>;
+  sendPresenceUpdate(presence: 'composing' | 'paused', jid: string): Promise<unknown>;
   end(err: Error | undefined): void;
   ev: {
     on(event: string, handler: (data: unknown) => void): void;
@@ -278,15 +280,42 @@ class WhatsAppChannel implements IWhatsAppChannel {
     });
 
     const isGroup = jid.endsWith('@g.us');
-    await handler.handle(jid, {
-      text,
-      senderName: name,
-      images,
-      isGroup,
-      mentionsBot: isGroup && mentionId.length > 0 && text.includes(`@${mentionId}`),
-      isTrustedSender,
-      mentionId,
-    });
+    await this.withTypingIndicator(jid, () =>
+      handler.handle(jid, {
+        text,
+        senderName: name,
+        images,
+        isGroup,
+        mentionsBot: isGroup && mentionId.length > 0 && text.includes(`@${mentionId}`),
+        isTrustedSender,
+        mentionId,
+      }),
+    );
+  }
+
+  private async withTypingIndicator<T>(jid: string, work: () => Promise<T>): Promise<T> {
+
+    const sendTyping = async (): Promise<void> => {
+      try {
+        const sock = await this.getSocket();
+        await sock.sendPresenceUpdate('composing', jid);
+      } catch {}
+    };
+
+    await sendTyping();
+    const timer = setInterval(() => {
+      void sendTyping();
+    }, TYPING_INTERVAL_MS);
+
+    try {
+      return await work();
+    } finally {
+      clearInterval(timer);
+      try {
+        const sock = await this.getSocket();
+        await sock.sendPresenceUpdate('paused', jid);
+      } catch {}
+    }
   }
 
   async sendText(jid: string, text: string): Promise<void> {

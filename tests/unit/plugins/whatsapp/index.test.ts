@@ -8,6 +8,7 @@ const MENTION_ID = '162157312364643';
 
 const mockSock = vi.hoisted(() => ({
   sendMessage: vi.fn(),
+  sendPresenceUpdate: vi.fn(),
   end: vi.fn(),
   ev: { on: vi.fn() },
 }));
@@ -45,6 +46,7 @@ describe('channels/whatsapp', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSock.sendMessage.mockResolvedValue(undefined);
+    mockSock.sendPresenceUpdate.mockResolvedValue(undefined);
     create(makeContext());
   });
 
@@ -159,6 +161,66 @@ describe('channels/whatsapp', () => {
 
       expect(agent.handle).not.toHaveBeenCalled();
       expect(mockSock.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('shows a typing indicator while processing a private message', async () => {
+      let resolveAgent: (value: string) => void = () => {};
+      const pending = new Promise<string>((resolve) => { resolveAgent = resolve; });
+      const agent = { handle: vi.fn().mockReturnValue(pending) };
+
+      const channel = new WhatsAppChannel(mockSock as never);
+      const handled = channel.handleMessage(agent, 'jid@s.whatsapp.net', 'guilherme', 'hello');
+
+      await Promise.resolve();
+      expect(mockSock.sendPresenceUpdate).toHaveBeenCalledWith('composing', 'jid@s.whatsapp.net');
+
+      resolveAgent('pong');
+      await handled;
+
+      expect(mockSock.sendPresenceUpdate).toHaveBeenCalledWith('paused', 'jid@s.whatsapp.net');
+    });
+
+    it('re-sends the composing indicator every 5s until the response completes', async () => {
+      vi.useFakeTimers();
+      try {
+        let resolveAgent: (value: string) => void = () => {};
+        const pending = new Promise<string>((resolve) => { resolveAgent = resolve; });
+        const agent = { handle: vi.fn().mockReturnValue(pending) };
+
+        const channel = new WhatsAppChannel(mockSock as never);
+        const handled = channel.handleMessage(agent, 'jid@s.whatsapp.net', 'guilherme', 'hello');
+
+        await Promise.resolve();
+        expect(mockSock.sendPresenceUpdate).toHaveBeenCalledTimes(1);
+        expect(mockSock.sendPresenceUpdate).toHaveBeenCalledWith('composing', 'jid@s.whatsapp.net');
+
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(mockSock.sendPresenceUpdate).toHaveBeenCalledTimes(2);
+
+        resolveAgent('pong');
+        await handled;
+
+        expect(mockSock.sendPresenceUpdate).toHaveBeenCalledWith('paused', 'jid@s.whatsapp.net');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('shows a typing indicator while processing a group message', async () => {
+      let resolveAgent: (value: string) => void = () => {};
+      const pending = new Promise<string>((resolve) => { resolveAgent = resolve; });
+      const agent = { handle: vi.fn().mockReturnValue(pending) };
+
+      const channel = new WhatsAppChannel(mockSock as never);
+      const handled = channel.handleMessage(agent, 'group123@g.us', 'TestUser', `@${MENTION_ID} hello`);
+
+      await Promise.resolve();
+      expect(mockSock.sendPresenceUpdate).toHaveBeenCalledWith('composing', 'group123@g.us');
+
+      resolveAgent('pong');
+      await handled;
+
+      expect(mockSock.sendPresenceUpdate).toHaveBeenCalledWith('paused', 'group123@g.us');
     });
   });
 
