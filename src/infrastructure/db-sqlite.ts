@@ -124,6 +124,24 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_channels_channel ON channels(channel);
       `);
 
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS outbound_messages (
+          id TEXT PRIMARY KEY,
+          channel TEXT NOT NULL CHECK(channel IN ('telegram', 'whatsapp')),
+          target TEXT NOT NULL,
+          content TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('sent', 'failed')),
+          error_message TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          sent_at DATETIME
+        );
+      `);
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_outbound_messages_created_at ON outbound_messages(created_at);
+        CREATE INDEX IF NOT EXISTS idx_outbound_messages_status ON outbound_messages(status);
+      `);
+
       // TODO: add topic and update after first message
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (

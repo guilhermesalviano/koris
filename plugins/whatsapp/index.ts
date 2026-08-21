@@ -1,4 +1,5 @@
 import { ADAPTERS, splitMessage } from '../contracts';
+import { parseMentionTarget } from './jid';
 import type {
   ChannelDefinition,
   IChannelHandlerFactory,
@@ -298,7 +299,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
         sendText: (target: string, reply: string) => this.sendText(target, reply),
         sendError: async (target: string, message: string) => {
           const sock = await this.getSocket();
-          await sock.sendMessage(target, { text: message });
+          await sock.sendMessage(parseMentionTarget(target), { text: message });
         },
       },
     });
@@ -345,8 +346,9 @@ class WhatsAppChannel implements IWhatsAppChannel {
 
   async sendText(jid: string, text: string): Promise<void> {
     const sock = await this.getSocket();
+    const target = parseMentionTarget(jid);
     for (const chunk of splitMessage(text, WHATSAPP_MESSAGE_LIMIT)) {
-      await sock.sendMessage(jid, { text: chunk });
+      await sock.sendMessage(target, { text: chunk });
     }
   }
 

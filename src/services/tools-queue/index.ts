@@ -49,7 +49,7 @@ class ToolsQueue implements IToolsQueue {
         const startedAt = Date.now();
 
         try {
-          const result = await this.agnosticExecutionTool.handle(this.logger, tool);
+          const result = await this.agnosticExecutionTool.handle(this.logger, tool, audit);
           result.toolCallId = tool.id;
           this.recordToolAudit(tool, result, Date.now() - startedAt, audit);
           return result;

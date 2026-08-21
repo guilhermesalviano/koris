@@ -24,6 +24,9 @@ import { formatISO } from '../utils/date';
 import { activeRunsRegistry } from './active-runs';
 import { sharedSerialQueue } from '../services/providers/serial-queue';
 import { subAgentQueuesRegistry } from '../services/sub-agents-queue/sub-agent-queue-registry';
+import { OutboundMessageRepositoryFactory } from '../repositories/outbound-message';
+import { ChannelsSingleton } from '../channels';
+import { OutboundMessageServiceFactory } from '../services/outbound/outbound-message-service';
 
 const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN', 'SERPAPI_KEY', 'SEARCH_API_KEY']);
 
@@ -103,6 +106,7 @@ class AdminRouterFactory {
     const memoryRepo = MemoryRepositoryFactory.create(db);
     const heartbeatRepo = HeartbeatRepositoryFactory.create(db);
     const channelRepo = ChannelRepositoryFactory.create(db);
+    const outboundRepo = OutboundMessageRepositoryFactory.create(db);
     const learnedSkillsRepo = LearnedSkillsRepositoryFactory.create(db);
     const skillsRepo = SkillsRepositoryFactory.create(logger);
     const auditRepo = AuditLogRepositoryFactory.create(db);
@@ -142,6 +146,7 @@ class AdminRouterFactory {
         learnedSkills: learnedSkillsRepo.count(),
         learnedSkillsLimit: config.LEARNED_SKILLS_LIMIT,
         skills: skillsRepo.get().length,
+        outboundMessages: outboundRepo.count(),
         auditErrors: auditRepo.count({ status: 'error' }),
         provider: config.AI.MANAGER.PROVIDER,
         model: config.AI.MANAGER.MODEL,
@@ -403,6 +408,49 @@ class AdminRouterFactory {
       }
 
       res.json(updated);
+    });
+
+    router.get('/outbound', (_req: Request, res: Response) => {
+      res.json({ items: outboundRepo.getAll() });
+    });
+
+    router.post('/outbound', async (req: Request, res: Response) => {
+      const { content, channel, target } = req.body ?? {};
+
+      if (typeof content !== 'string' || !content.trim()) {
+        res.status(400).json({ error: 'content is required' });
+        return;
+      }
+
+      if (channel === undefined || target === undefined) {
+        res.status(400).json({ error: 'channel and target are required.' });
+        return;
+      }
+
+      if (!CHANNEL_TYPES.includes(channel as ChannelType)) {
+        res.status(400).json({ error: `Invalid channel. Must be one of: ${CHANNEL_TYPES.join(', ')}.` });
+        return;
+      }
+
+      const channelsManager = ChannelsSingleton.getExistingInstance();
+      if (!channelsManager) {
+        res.status(503).json({ error: 'Outbound messaging is not available: no channel manager is running.' });
+        return;
+      }
+
+      const service = OutboundMessageServiceFactory.create(logger, channelsManager, db);
+      const message = await service.send({
+        content: content.trim(),
+        channel: String(channel),
+        target: String(target),
+      });
+
+      if (message.status === 'failed') {
+        res.status(502).json({ error: message.errorMessage ?? 'Failed to send the message.' });
+        return;
+      }
+
+      res.status(201).json(message);
     });
 
     router.post('/heartbeats', (req: Request, res: Response) => {

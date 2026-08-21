@@ -99,6 +99,10 @@ class ChannelsSingleton {
     }
     return ChannelsSingleton.instance;
   }
+
+  static getExistingInstance(): ChannelsManager | null {
+    return ChannelsSingleton.instance;
+  }
 }
 
 export { ChannelsManager, ChannelsSingleton };

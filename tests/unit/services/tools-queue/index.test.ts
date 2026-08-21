@@ -249,6 +249,17 @@ describe('ToolsQueue', () => {
         toolName: 'execute_command',
       }));
     });
+
+    it('forwards the execution context to the command', async () => {
+      const command = vi.fn().mockResolvedValue({ toolName: 'execute_command', success: true, result: '' });
+      const tool = new AgnosticExecutionTool({ execute_command: command } as any);
+      const toolCall = { name: 'execute_command', arguments: { command: 'echo "test"' } };
+      const context = { channel: 'whatsapp', sessionId: 's1', runId: 'r1', agentName: 'executorWorker' };
+
+      await tool.handle(mockLogger, toolCall, context);
+
+      expect(command).toHaveBeenCalledWith(mockLogger, { command: 'echo "test"' }, context);
+    });
   });
 });
 

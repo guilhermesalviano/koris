@@ -14,7 +14,18 @@ export interface ToolResult {
   toolCallId?: string;
 }
 
-export type CommandFn = (logger: ILogger, args: Record<string, unknown>) => Promise<ToolResult>;
+export interface ToolExecutionContext {
+  channel?: string;
+  sessionId?: string;
+  runId?: string;
+  agentName?: string;
+}
+
+export type CommandFn = (
+  logger: ILogger,
+  args: Record<string, unknown>,
+  context?: ToolExecutionContext,
+) => Promise<ToolResult>;
 
 export interface AIAgentRequest {
   model?: string;
