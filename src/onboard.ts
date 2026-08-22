@@ -322,7 +322,7 @@ export class Onboard {
 
   async run(): Promise<void> {
     startTui({
-      title: 'koris-assistant onboarding',
+      title: '/koris onboarding',
       fixedInput: true,
       inputMode: 'screen',
       allowEmptyInput: true,

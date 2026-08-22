@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Koris Assistant, please open an issue on [GitHub Issues](https://github.com/guilhermesalviano/koris-assistant/issues) describing:
+If you discover a security vulnerability in Koris Assistant, please open an issue on [GitHub Issues](https://github.com/guilhermesalviano/koris/issues) describing:
 
 - The affected version/commit.
 - Steps to reproduce.

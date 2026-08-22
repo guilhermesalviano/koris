@@ -9,16 +9,16 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/guilhermesalviano/koris-assistant/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/guilhermesalviano/koris-assistant/tests.yml?branch=main&label=tests" alt="Tests"></a>
-  <a href="https://github.com/guilhermesalviano/koris-assistant/actions/workflows/lint.yml"><img src="https://img.shields.io/github/actions/workflow/status/guilhermesalviano/koris-assistant/lint.yml?branch=main&label=lint" alt="Lint"></a>
-  <a href="https://github.com/guilhermesalviano/koris-assistant/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/guilhermesalviano/koris-assistant/codeql.yml?label=codeql" alt="CodeQL"></a>
+  <a href="https://github.com/guilhermesalviano/koris/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/guilhermesalviano/koris/tests.yml?branch=main&label=tests" alt="Tests"></a>
+  <a href="https://github.com/guilhermesalviano/koris/actions/workflows/lint.yml"><img src="https://img.shields.io/github/actions/workflow/status/guilhermesalviano/koris/lint.yml?branch=main&label=lint" alt="Lint"></a>
+  <a href="https://github.com/guilhermesalviano/koris/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/guilhermesalviano/koris/codeql.yml?label=codeql" alt="CodeQL"></a>
   <img src="https://img.shields.io/badge/node-%3E%3D24-339933?logo=node.js&logoColor=white" alt="Node >= 24">
   <img src="https://img.shields.io/badge/package%20manager-pnpm-F69220?logo=pnpm&logoColor=white" alt="pnpm">
   <img src="https://img.shields.io/badge/license-ISC-blue" alt="License: ISC">
 </p>
 
-<p align="center">
-  🌐 <a href="https://guilhermesalviano.github.io/koris-assistant"><b>Landing page</b></a>
+<p align="left">
+  🌐 <a href="https://guilhermesalviano.github.io/koris"><b>Landing page</b></a>
 </p>
 
 ---
@@ -36,7 +36,7 @@
 
 ## Prerequisites
 
-- Node.js (>= 24.0.0)
+- Node.js
 - pnpm
 
 ## Setup & Configuration

@@ -31,7 +31,7 @@ This Code of Conduct applies within all community spaces (issues, pull requests,
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by opening an issue on [GitHub Issues](https://github.com/guilhermesalviano/koris-assistant/issues) or via a private message to a maintainer through GitHub. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by opening an issue on [GitHub Issues](https://github.com/guilhermesalviano/koris/issues) or via a private message to a maintainer through GitHub. All complaints will be reviewed and investigated promptly and fairly.
 
 ## Attribution
 

@@ -41,4 +41,4 @@ Update [`CHANGELOG.md`](./CHANGELOG.md) under `[Unreleased]` for user-facing cha
 
 ## Reporting bugs / requesting features
 
-Open an issue on [GitHub Issues](https://github.com/guilhermesalviano/koris-assistant/issues). For security vulnerabilities, see [`SECURITY.md`](./SECURITY.md) instead.
+Open an issue on [GitHub Issues](https://github.com/guilhermesalviano/koris/issues). For security vulnerabilities, see [`SECURITY.md`](./SECURITY.md) instead.

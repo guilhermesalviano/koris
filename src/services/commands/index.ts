@@ -46,7 +46,7 @@ export function handleCommand(command: string, context: CommandContext): Command
 
 function handleStart(context: CommandContext): CommandResult {
   const message = context.source === 'telegram'
-    ? `👋 *Welcome to koris-assistant!*
+    ? `👋 *Welcome to /koris!*
 
 I'm an AI coding agent (provider: *${config.AI.MANAGER.PROVIDER}*). I can help you with:
 
@@ -56,7 +56,7 @@ I'm an AI coding agent (provider: *${config.AI.MANAGER.PROVIDER}*). I can help y
 • Answering coding questions
 
 Just send me a message with what you need!`
-    : `Welcome to koris-assistant!
+    : `Welcome to /koris!
 
 I'm an AI coding agent (provider: ${config.AI.MANAGER.PROVIDER}) that can help you with:
 • Reading and analyzing code
