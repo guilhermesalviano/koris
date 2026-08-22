@@ -9,7 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Web: first-run setup wizard (`/setup`) — configure the AI provider, Telegram/WhatsApp channels, web search, allowed domains, and personal info from the browser instead of hand-editing `settings.json`. Launches automatically when no `settings.json` is found.
+- Web: `Settings` page is now a live editor (reusing the setup wizard's form) instead of a read-only JSON dump, so configuration can be changed after first run too.
+- Server: settings changes made through the wizard/Settings page apply immediately — the AI provider and Telegram/WhatsApp channels reload without restarting the process.
+- CLI: on startup, if no `settings.json` is found, prints instructions pointing to the web setup wizard or the `pnpm onboard` CLI flow.
+- Landing page: rewrote the "How it works" section as a step-by-step walkthrough for downloading a release zip and running it, replacing the `git clone`-oriented steps.
+
 ### Changed
+
+- Landing page: primary "download" call-to-action buttons now link to the latest GitHub release instead of the repository's home page.
 
 ### Fixed
 
