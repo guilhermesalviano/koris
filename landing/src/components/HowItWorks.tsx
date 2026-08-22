@@ -1,24 +1,37 @@
-import { REPO_URL } from '@/lib/constants';
+import { RELEASES_URL } from '@/lib/constants';
 
 const STEPS = [
   {
     number: '01',
     title: 'Download',
-    command: 'pnpm install',
-    detail: 'Clone the repo, or grab a release, then install dependencies.',
-    link: { label: 'View releases', href: `${REPO_URL}/releases` },
+    command: '# Download the source zip from the latest release',
+    detail: 'Grab the latest release from GitHub and unzip it.',
+    link: { label: 'View releases', href: RELEASES_URL },
   },
   {
     number: '02',
-    title: 'Configure',
-    command: 'cp settings.example.json settings.json\npnpm build',
-    detail: 'Copy the example config and build the project.',
+    title: 'Unzip',
+    command: 'unzip koris-<version>.zip\ncd koris-<version>',
+    detail: 'Extract the archive and enter the project folder.',
   },
   {
     number: '03',
-    title: 'Run',
-    command: 'pnpm app',
-    detail: 'Starts the agent and web dashboard on localhost:3000.',
+    title: 'Install dependencies',
+    command: 'pnpm install',
+    detail: 'Installs all workspace dependencies (root, web/, landing/).',
+  },
+  {
+    number: '04',
+    title: 'Configure & build',
+    command: 'pnpm build && pnpm app',
+    detail:
+      'First run with no settings.json launches straight into a setup wizard in your browser — no manual JSON editing needed.',
+  },
+  {
+    number: '05',
+    title: 'Open the dashboard',
+    command: 'open http://localhost:3000/koris',
+    detail: 'Finish the wizard (AI provider, Telegram/WhatsApp, personal info) and your assistant is live.',
   },
 ];
 
@@ -27,10 +40,10 @@ export function HowItWorks() {
     <section id="how-it-works" className="mt-24 scroll-mt-20">
       <div className="mb-12 max-w-xl">
         <h2 className="text-3xl font-bold tracking-tight text-txt sm:text-4xl">How it works</h2>
-        <p className="mt-3 text-muted">Three steps between clone and a running agent.</p>
+        <p className="mt-3 text-muted">Five steps between download and a running agent.</p>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-3">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {STEPS.map((step) => (
           <div key={step.number} className="rounded-xl border border-border bg-bg-subtle p-6">
             <div className="mb-2 flex items-center justify-between">

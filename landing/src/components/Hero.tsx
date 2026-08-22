@@ -1,4 +1,4 @@
-import { REPO_URL } from '@/lib/constants';
+import { REPO_URL, RELEASES_URL } from '@/lib/constants';
 
 export function Hero() {
   return (
@@ -15,12 +15,12 @@ export function Hero() {
 
         <div className="flex flex-wrap gap-4">
           <a
-            href={REPO_URL}
+            href={RELEASES_URL}
             target="_blank"
             rel="noopener"
             className="rounded-lg bg-accent px-8 py-4 text-sm font-semibold text-bg transition-transform hover:-translate-y-0.5"
           >
-            View on GitHub
+            Download
           </a>
           <a
             href={`${REPO_URL}#readme`}

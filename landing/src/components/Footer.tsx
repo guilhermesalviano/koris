@@ -1,15 +1,15 @@
-import { REPO_URL } from '@/lib/constants';
+import { RELEASES_URL } from '@/lib/constants';
 
 export function Footer() {
   return (
     <div className="mt-24 border-t border-border pt-12 text-center">
       <a
-        href={REPO_URL}
+        href={RELEASES_URL}
         target="_blank"
         rel="noopener"
         className="inline-block rounded-lg bg-accent px-12 py-4 text-sm font-semibold text-bg transition-transform hover:-translate-y-0.5"
       >
-        View on GitHub
+        Download
       </a>
       <span className="ml-3 inline-block rounded-md bg-bg-subtle px-4 py-2 text-xs text-muted">
         ISC License
