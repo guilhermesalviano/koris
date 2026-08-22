@@ -1,13 +1,38 @@
-# Koris Assistant
+<p align="center">
+  <img src="web/public/logo.png" width="120" alt="Koris Assistant logo" />
+</p>
 
-Koris Assistant is an autonomous AI agent framework designed with a modular architecture, featuring pluggable skills, persistent memory management, and an interactive Terminal User Interface (TUI).
+<h1 align="center">Koris Assistant</h1>
+
+<p align="center">
+  An autonomous AI agent framework with pluggable channels, skills, persistent memory, and a web dashboard.
+</p>
+
+<p align="center">
+  <a href="https://github.com/guilhermesalviano/koris-assistant/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/guilhermesalviano/koris-assistant/tests.yml?branch=main&label=tests" alt="Tests"></a>
+  <a href="https://github.com/guilhermesalviano/koris-assistant/actions/workflows/lint.yml"><img src="https://img.shields.io/github/actions/workflow/status/guilhermesalviano/koris-assistant/lint.yml?branch=main&label=lint" alt="Lint"></a>
+  <a href="https://github.com/guilhermesalviano/koris-assistant/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/guilhermesalviano/koris-assistant/codeql.yml?label=codeql" alt="CodeQL"></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D24-339933?logo=node.js&logoColor=white" alt="Node >= 24">
+  <img src="https://img.shields.io/badge/package%20manager-pnpm-F69220?logo=pnpm&logoColor=white" alt="pnpm">
+  <img src="https://img.shields.io/badge/license-ISC-blue" alt="License: ISC">
+</p>
+
+<p align="center">
+  🌐 <a href="https://guilhermesalviano.github.io/koris-assistant"><b>Landing page</b></a>
+</p>
+
+---
 
 ## Key Features
 
-- **Modular Architecture:** Easily extend capabilities using a plugin and skill-based system.
-- **TUI-driven Interaction:** Manage your agents directly from the terminal.
-- **Persistence:** Robust memory management and session tracking.
-- **Extensible:** Built with TypeScript for type safety and maintainability.
+- 🧩 **Modular architecture** — extend capabilities via a plugin system (channels) and a markdown-based skill system.
+- 💬 **Pluggable channels** — Telegram, WhatsApp, a Terminal UI, and a web dashboard, all driven by the same agent core.
+- 🧠 **Persistent memory** — long-term memories, session tracking, and short-term conversation history in SQLite.
+- ⏰ **Heartbeat agents** — scheduled, cron-driven sub-agents ("beats") that run autonomously in the background.
+- 🛠️ **Tool execution** — shell commands, HTTP requests (domain-gated), web search, and beat management, exposed to the LLM.
+- 🔌 **Multi-provider AI** — swap between Ollama, NVIDIA, or a mock provider per role (main agent vs. background workers).
+- 📺 **Web dashboard** — a React admin UI for chatting with the agent and managing sessions, memories, heartbeats, and skills.
+- 🦺 **Type-safe** — built end-to-end in strict TypeScript.
 
 ## Prerequisites
 
@@ -37,6 +62,7 @@ Koris Assistant is an autonomous AI agent framework designed with a modular arch
 You can run the agent in different modes depending on your interface preference.
 
 ### Web Interface
+
 Start the agent as a web service:
 
 ```bash
@@ -49,6 +75,12 @@ Once running, the dashboard will be available at: `http://localhost:3000`
 
 ```bash
 pnpm app --tui
+```
+
+### Telegram
+
+```bash
+pnpm app telegram
 ```
 
 ## Available Scripts
@@ -67,9 +99,13 @@ All commands are run via `pnpm` (or `pnpm run <script>`).
 
 | Script | Description |
 | --- | --- |
-| `build` | Cleans the previous output and compiles TypeScript into `dist/`. Run this before `app`/`onboard`. |
-| `clean` | Removes the `dist/` build output. |
-| `lint` | Type-checks the whole project with `tsc --noEmit` (no output emitted). |
+| `build` | Cleans the previous output and compiles TypeScript into `dist/`, plus the web frontend into `dist-web/`. Run this before `app`/`onboard`. |
+| `build:client` | Builds only the web frontend (`vite build` → `dist-web/`). |
+| `dev:client` | Runs the Vite dev server for the web frontend (proxies `/api` and `/health` to `localhost:3000`). |
+| `clean` | Removes the `dist/` and `dist-web/` build output. |
+| `lint` | Type-checks the server with `tsc --noEmit`. |
+| `lint:client` | Type-checks the web frontend. |
+| `lint:landing` | Type-checks the landing page. |
 | `clear:memory` | Wipes the local SQLite database files under `memory/` (fresh state). |
 
 ### Testing
@@ -81,3 +117,23 @@ All commands are run via `pnpm` (or `pnpm run <script>`).
 | `test:ui` | Opens the Vitest web UI for browsing and running tests interactively. |
 | `test:coverage` | Runs the tests and reports code coverage. |
 | `test:mutation` | Runs mutation testing with Stryker to assess test-suite quality. |
+
+### Landing Page
+
+| Script | Description |
+| --- | --- |
+| `landing:dev` | Runs the Next.js dev server for the marketing landing page. |
+| `landing:build` | Statically exports the landing page to `landing/out/`. |
+| `landing:preview` | Serves the built landing page locally. |
+
+## Learn More
+
+For a deeper dive into the architecture (message flow, AI providers, plugins/skills, database schema), see [`AGENTS.md`](./AGENTS.md).
+
+## Contributing
+
+Contributions are welcome! See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the dev workflow and [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) for community guidelines. Found a security issue? See [`SECURITY.md`](./SECURITY.md).
+
+## License
+
+[ISC](./LICENSE)
