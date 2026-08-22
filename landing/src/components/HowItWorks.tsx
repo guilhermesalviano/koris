@@ -30,7 +30,7 @@ const STEPS = [
   {
     number: '05',
     title: 'Open the dashboard',
-    command: 'open http://localhost:3000/koris',
+    command: 'open http://localhost:3000/',
     detail: 'Finish the wizard (AI provider, Telegram/WhatsApp, personal info) and your assistant is live.',
   },
 ];
