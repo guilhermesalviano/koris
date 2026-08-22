@@ -18,7 +18,7 @@
 </p>
 
 <p align="left">
-  🌐 <a href="https://guilhermesalviano.github.io"><b>Landing page</b></a>
+  🌐 <a href="https://guilhermesalviano.github.io/koris"><b>Landing page</b></a>
 </p>
 
 ---
