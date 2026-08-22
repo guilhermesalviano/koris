@@ -1,8 +1,8 @@
-const REPO_URL = 'https://github.com/guilhermesalviano/koris-assistant';
+import { REPO_URL } from '@/lib/constants';
 
 export function Footer() {
   return (
-    <div className="mt-20 text-center">
+    <div className="mt-24 border-t border-border pt-12 text-center">
       <a
         href={REPO_URL}
         target="_blank"
@@ -16,7 +16,7 @@ export function Footer() {
       </span>
 
       <footer className="mt-16 pb-12 text-sm text-muted">
-        Built with TypeScript &middot; Powered by Node.js
+        Built with ❤️ by Koaris
       </footer>
     </div>
   );
