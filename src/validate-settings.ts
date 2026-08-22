@@ -4,7 +4,7 @@
  * Checks settings.json (and env vars) for correctness before starting the app.
  *
  * Usage:
- *   pnpm --filter koris-assistant validate
+ *   pnpm --filter /koris validate
  *   tsx src/validate-settings.ts
  */
 
@@ -73,7 +73,7 @@ function advisory(ok: boolean, label: string, hint = '', detail = '') {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log(`\n${c.bold}koris-assistant — settings validation${c.reset}`);
+  console.log(`\n${c.bold}/koris — settings validation${c.reset}`);
 
   // ── 1. settings.json file ────────────────────────────────────────────────
   section('settings.json');

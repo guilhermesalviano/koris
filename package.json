@@ -1,10 +1,10 @@
 {
-  "name": "koris-assistant",
+  "name": "/koris",
   "version": "1.0.1",
   "description": "Autonomous AI agent framework with pluggable channels, skills, persistent memory, and a web dashboard.",
   "main": "dist/src/app.js",
   "bin": {
-    "koris-assistant": "dist/src/app.js"
+    "/koris": "dist/src/app.js"
   },
   "files": [
     "dist",
@@ -40,15 +40,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/guilhermesalviano/koris-assistant.git"
+    "url": "git+https://github.com/guilhermesalviano/koris.git"
   },
   "keywords": [],
   "author": "guilhermesalviano",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/guilhermesalviano/koris-assistant/issues"
+    "url": "https://github.com/guilhermesalviano/koris/issues"
   },
-  "homepage": "https://github.com/guilhermesalviano/koris-assistant#readme",
+  "homepage": "https://github.com/guilhermesalviano/koris#readme",
   "dependencies": {
     "@guilhermesalviano/telegram-bot": "^0.1.2",
     "@whiskeysockets/baileys": "7.0.0-rc14",
