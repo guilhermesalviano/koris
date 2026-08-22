@@ -3,7 +3,7 @@ import { deepGet, getConfigValue, loadConfigFile } from './helpers';
 
 const isTest = process.env.NODE_ENV === 'test';
 
-const fileConfig = loadConfigFile({
+let fileConfig = loadConfigFile({
   onParseError: (message) => console.warn(message),
 });
 
@@ -25,7 +25,66 @@ function getPersonalInformation(): Record<string, string> {
   }, {});
 }
 
-export const config = {
+export interface AppConfig {
+  LOG_LEVEL: string;
+  TIMEZONE: string;
+  ENVIRONMENT: string;
+  WEB_PORT: number;
+  BASE_DIR: string;
+  GATEWAY_HOST: string;
+  ALLOWED_DOMAINS: string[];
+  LEARNED_SKILLS_LIMIT: number;
+  SESSION: {
+    TTL_MS: number;
+  };
+  HEARTBEAT: boolean;
+  AI: {
+    PARALLEL: boolean;
+    SUBAGENTS_PARALLEL: boolean;
+    BACKGROUND_GRACE_MS: number;
+    MANAGER: {
+      PROVIDER: string;
+      BASE_URL: string;
+      API_TOKEN: string;
+      MODEL: string;
+    };
+    WORKERS: {
+      PROVIDER: string;
+      BASE_URL: string;
+      API_TOKEN: string;
+      MODEL: string;
+      EMBEDDING_ENABLED: boolean;
+      EMBED_MODEL: string;
+      NUM_CTX: number;
+    };
+    SEARCH_API_KEY: string;
+    TIMEOUTS: {
+      IDLE_MS: number;
+      HARD_MS: number;
+      HEALTH_MS: number;
+    };
+    SUMMARIZER: boolean;
+    PROMPT_SANITIZER: boolean;
+  };
+  CHANNELS: {
+    ALLOW_UNTRUSTED: boolean;
+    TELEGRAM: {
+      ENABLED: boolean;
+      BOT_TOKEN: string;
+      WHITELIST: string;
+    };
+    WHATSAPP: {
+      ENABLED: boolean;
+      AUTH_FOLDER: string;
+      WHITELIST: string;
+      MENTION_ID: string;
+    };
+  };
+  PERSONAL_INFORMATION: Record<string, string>;
+}
+
+function buildConfig(): AppConfig {
+  return {
   LOG_LEVEL:   get('log_level', 'info'),
   TIMEZONE:    get('timezone', 'America/Sao_Paulo'),
   ENVIRONMENT: get('environment', 'development'),
@@ -84,7 +143,26 @@ export const config = {
     },
   },
   PERSONAL_INFORMATION: getPersonalInformation(),
-} as const;
+  };
+}
+
+export const config: AppConfig = buildConfig();
+
+/**
+ * Re-reads settings.json (and env vars) and applies the new values onto the
+ * existing `config` object in place, so already-imported references stay
+ * valid. Note this is a shallow merge: nested objects (config.AI,
+ * config.CHANNELS, ...) are replaced wholesale with new references — code
+ * must not cache a nested object across a reload.
+ */
+export function reloadConfig(options?: { cwd?: string; dirname?: string }): void {
+  fileConfig = loadConfigFile({
+    cwd: options?.cwd,
+    dirname: options?.dirname,
+    onParseError: (message) => console.warn(message),
+  });
+  Object.assign(config, buildConfig());
+}
 
 const isTelegramMode = process.argv.includes('telegram') || process.argv.includes('--telegram');
 if (!isTest && isTelegramMode && !config.CHANNELS.TELEGRAM.BOT_TOKEN) {

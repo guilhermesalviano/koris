@@ -424,6 +424,24 @@ function createWhatsAppPlugin(options: WhatsAppPluginOptions): Plugin {
   };
 }
 
+/**
+ * Primes the module-level runtime state (channel handler, mention id,
+ * whitelist, trust policy) that `create()` normally sets once at boot, so a
+ * caller can (re)start WhatsApp live — e.g. after the setup wizard changes
+ * these values — without restarting the process.
+ */
+export function configureWhatsAppRuntime(cfg: {
+  channelHandler: IChannelHandlerFactory;
+  mentionId: string;
+  whitelist: string;
+  allowUntrusted: boolean;
+}): void {
+  channelHandler = cfg.channelHandler;
+  mentionId = cfg.mentionId;
+  whitelist = cfg.whitelist.split(',').map((num) => num.trim()).filter(Boolean);
+  allowUntrusted = cfg.allowUntrusted;
+}
+
 export {
   createWhatsAppPlugin,
   getLastWhitelistedJid,

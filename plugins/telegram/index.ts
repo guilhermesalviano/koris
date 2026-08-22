@@ -375,6 +375,26 @@ function createTelegramPlugin(options: TelegramPluginOptions): Plugin {
   };
 }
 
+/**
+ * Primes the module-level runtime state (channel handler, whitelist, trust
+ * policy) that `create()` normally sets once at boot — and skips entirely
+ * when Telegram starts disabled — so a caller can (re)start Telegram live
+ * (e.g. after the setup wizard enables it) without restarting the process.
+ */
+export function configureTelegramRuntime(cfg: {
+  channelHandler: IChannelHandlerFactory;
+  token: string;
+  whitelist: string;
+  allowUntrusted: boolean;
+}): void {
+  botToken = cfg.token;
+  channelHandler = cfg.channelHandler;
+  telegramWhitelist = new Set(
+    cfg.whitelist.split(',').map((id) => id.trim()).filter(Boolean).map(Number),
+  );
+  allowUntrusted = cfg.allowUntrusted;
+}
+
 export {
   createTelegramPlugin,
   handleMessage,

@@ -102,6 +102,10 @@ export async function checkHealth(): Promise<boolean> {
   }
 }
 
+export class ApiRequestError extends Error {
+  details?: string[];
+}
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`/api/admin${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -112,7 +116,14 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   const body = isJson ? await res.json().catch(() => ({})) : null;
 
   if (!res.ok) {
-    throw new Error((body && (body as { error?: string }).error) || `Request failed (${res.status})`);
+    const error = new ApiRequestError(
+      (body && (body as { error?: string }).error) || `Request failed (${res.status})`,
+    );
+    const details = body && (body as { details?: unknown }).details;
+    if (Array.isArray(details)) {
+      error.details = details as string[];
+    }
+    throw error;
   }
 
   return body as T;

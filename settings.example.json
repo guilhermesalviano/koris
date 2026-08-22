@@ -48,9 +48,7 @@
     }
   },
   "personal_information": {
-    "name": "John Doe",
-    "gender": "male",
-    "location": "New York, USA"
+    "name": "John Doe"
   }
 }
 

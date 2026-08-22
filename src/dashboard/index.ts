@@ -2,7 +2,9 @@ import express, { type Request, type Response, type Application, type NextFuncti
 import { type Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { config } from '../config';
+import { resolveConfigPaths } from '../config/helpers';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../constants/thinking';
 import { ILogger } from '../infrastructure/logger';
 import { healthCheck } from '../services/provider-health-service';
@@ -280,9 +282,22 @@ class DashboardServer implements WebServerHandle {
     const app = this.createApp();
     this.server = app.listen(config.WEB_PORT, () => {
       this.logger.info(`Server running at http://localhost:${config.WEB_PORT}`);
+      this.logSetupInstructionsIfUnconfigured();
     });
 
     return this;
+  }
+
+  private logSetupInstructionsIfUnconfigured(): void {
+    const configured = resolveConfigPaths(process.cwd(), __dirname).some(existsSync);
+    if (configured) {
+      return;
+    }
+
+    this.logger.info(
+      `No settings.json found yet — open http://localhost:${config.WEB_PORT}/setup in your browser to finish setup, ` +
+        'or run `pnpm onboard` for a CLI setup wizard instead.',
+    );
   }
 
   async stop(): Promise<void> {
@@ -307,7 +322,7 @@ class DashboardServer implements WebServerHandle {
     const indexHandler = new IndexRouteHandler(publicDir);
     const chatHandler = new ChatRouteHandler(this.gateway);
     const healthHandler = new HealthRouteHandler(this.logger);
-    const adminRouter = AdminRouterFactory.create(this.logger, this.db);
+    const adminRouter = AdminRouterFactory.create(this.logger, this.db, this.gateway);
 
     app.use(express.json({ limit: '25mb' }));
     app.use(express.static(publicDir));

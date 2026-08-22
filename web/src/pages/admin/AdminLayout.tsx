@@ -343,7 +343,7 @@ function ConfigButton({ onOpen, collapsed = false }: { onOpen: () => void; colla
       }`}
     >
       <SettingsIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-      {!collapsed && <span>Config</span>}
+      {!collapsed && <span>Configuration</span>}
     </button>
   );
 }
