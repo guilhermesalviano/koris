@@ -24,13 +24,12 @@ const STEPS = [
     number: '04',
     title: 'Configure & build',
     command: 'pnpm build && pnpm app',
-    detail:
-      'First run with no settings.json launches straight into a setup wizard in your browser — no manual JSON editing needed.',
+    detail: 'No settings.json yet? You’ll land in a setup wizard automatically — no manual editing.',
   },
   {
     number: '05',
     title: 'Open the dashboard',
-    command: 'open http://localhost:3000/',
+    command: 'open http://localhost:3000',
     detail: 'Finish the wizard (AI provider, Telegram/WhatsApp, personal info) and your assistant is live.',
   },
 ];
@@ -60,10 +59,10 @@ export function HowItWorks() {
               )}
             </div>
             <h3 className="mb-3 text-lg font-semibold text-txt">{step.title}</h3>
-            <pre className="mb-3 overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-bg px-4 py-3 font-mono text-xs text-accent sm:text-sm">
+            <pre className="mb-3 overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-bg px-4 py-3 font-mono text-xs text-accent sm:text-sm">
               <code>{step.command}</code>
             </pre>
-            <p className="text-sm text-muted">{step.detail}</p>
+            <p className="text-sm leading-relaxed text-muted">{step.detail}</p>
           </div>
         ))}
       </div>
