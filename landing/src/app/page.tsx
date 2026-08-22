@@ -1,0 +1,51 @@
+import { Feature } from '@/components/Feature';
+import { Hero } from '@/components/Hero';
+import { Footer } from '@/components/Footer';
+import { ChatsIcon, CpuIcon, LayersIcon, MemoryIcon, TerminalIcon } from '@/components/icons';
+
+const FEATURES = [
+  {
+    title: 'Modular plugins & skills',
+    description:
+      'Extend the agent with channel plugins and markdown-defined skills, without touching core code.',
+    icon: <LayersIcon />,
+  },
+  {
+    title: 'Persistent memory',
+    description:
+      'A SQLite-backed memory store keeps summaries, facts, and lessons learned across sessions.',
+    icon: <MemoryIcon />,
+  },
+  {
+    title: 'Multi-channel',
+    description: 'Talk to your agent over Telegram, WhatsApp, a terminal UI, or the web dashboard.',
+    icon: <ChatsIcon />,
+  },
+  {
+    title: 'Pluggable AI providers',
+    description: 'Bring your own model &mdash; run against Ollama, NVIDIA, or a mock provider for testing.',
+    icon: <CpuIcon />,
+  },
+  {
+    title: 'Tools & heartbeats',
+    description:
+      'Executes shell commands, curl requests, and search, plus scheduled heartbeat agents that run on their own.',
+    icon: <TerminalIcon />,
+  },
+];
+
+export default function Home() {
+  return (
+    <main className="mx-auto max-w-5xl px-6 py-12 sm:py-16">
+      <Hero />
+
+      <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {FEATURES.map((feature) => (
+          <Feature key={feature.title} {...feature} />
+        ))}
+      </div>
+
+      <Footer />
+    </main>
+  );
+}
