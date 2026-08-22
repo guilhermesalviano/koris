@@ -1,5 +1,9 @@
 dist
 dist-web
+landing/.next
+landing/out
+next-env.d.ts
+*.tsbuildinfo
 
 node_modules
 

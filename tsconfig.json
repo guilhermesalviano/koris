@@ -23,5 +23,5 @@
     "paths": {}
   },
   "include": ["src/**/*", "plugins/**/*"],
-  "exclude": ["node_modules", "dist", "dist-web", "web", "**/*.test.ts", "**/*.spec.ts"]
+  "exclude": ["node_modules", "dist", "dist-web", "web", "landing", "**/*.test.ts", "**/*.spec.ts"]
 }

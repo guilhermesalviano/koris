@@ -28,6 +28,11 @@ Guidance for AI coding agents working in this repository.
 | `pnpm validate` | Validate `settings.json` against expected schema |
 | `pnpm lint` | Type-check server (`tsc --noEmit`) — run this after any change |
 | `pnpm lint:client` | Type-check the web frontend (`tsc --noEmit -p web/tsconfig.json`) |
+| `pnpm lint:landing` | Type-check the landing page (`tsc --noEmit -p landing/tsconfig.json`) |
+| `pnpm landing:dev` | Next.js dev server for the marketing landing page (`landing/`) |
+| `pnpm landing:build` | Static-export the landing page (`next build landing`) → `landing/out/` |
+| `pnpm landing:preview` | Serve the built landing page locally (`landing/out/`) |
+| `pnpm deploy` | Alias for `pnpm landing:build` (used by the GitHub Pages deploy workflow) |
 | `pnpm test` | Run full Vitest suite (`vitest run`) |
 | `pnpm test:watch` | Watch mode |
 | `pnpm test:coverage` | Coverage report |
@@ -56,8 +61,10 @@ Guidance for AI coding agents working in this repository.
 - `scripts/` — helper scripts (`init.ts`).
 - `tests/` — Vitest suites: `unit/`, `integration/`, plus `helpers/test-config.ts` and `setup/vitest.setup.ts`.
 - `web/` — the web frontend (React 19 SPA; see "Web frontend" below).
+- `landing/` — the public marketing landing page, a statically-exported Next.js site (see "Landing page" below).
 - `dist/` — build output (never edit).
 - `dist-web/` — built web frontend (never edit).
+- `landing/out/` — built landing page (never edit).
 
 ## Core message flow (follow this to trace behavior)
 
@@ -123,6 +130,13 @@ Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/l
 - `web/src/lib/chat-context.tsx` — `ChatProvider`/`useChat` hold conversation state, hydrate prior history from `/api/admin/chat/history`, stream replies, and poll server health every 5s. Chats are sessions; `POST /api/admin/sessions` creates a new one without ending the previous, `/api/chat` accepts an optional `sessionId` to route messages to a specific session (`gateway.handle(message, 'web', { sessionId })`, `src/dashboard/index.ts:104`).
 - Admin API: `src/dashboard/admin.ts` (`AdminRouterFactory`, mounted at `/api/admin`) — overview, sessions, memories, chat history, heartbeats (create/update/delete with cron validation), skills (list merged disk+learned, `PATCH /skills/:name` enable/disable, `POST /skills/sync`), settings. Settings are deep-masked for secrets (`BOT_TOKEN`, `API_TOKEN`, `SEARCH_API_KEY`).
 - Build `pnpm build:client` → `dist-web/` (root/outDir in `vite.config.mts`); dev `pnpm dev:client` on port 5173 proxies `/api` and `/health` to `localhost:3000`; type-check via `pnpm lint:client` (`web/tsconfig.json`).
+
+## Landing page
+
+- `landing/` is a standalone Next.js (App Router) site, statically exported (`output: 'export'` in `landing/next.config.ts`, no Node server needed) that is the public marketing page deployed to GitHub Pages. It shares the repo's root `node_modules`/`pnpm` install (`next` is a root dependency, styled with Tailwind v4 via `@tailwindcss/postcss`); there's no separate `package.json` here (single-package pnpm workspace).
+- `landing/next.config.ts` sets `basePath: '/koris-assistant'` for the GitHub Pages project URL (`https://guilhermesalviano.github.io/koris-assistant`) and `images.unoptimized: true` (required for static export). Build output always lands in `landing/out/` (Next forbids `distDir` escaping the project directory), kept separate from `dist/` and `dist-web/`.
+- Structure: `landing/src/app/page.tsx` (the page) → `landing/src/app/layout.tsx` (shared `<head>`/font) + `landing/src/app/globals.css` (Tailwind `@theme` tokens for the page's own dark/teal palette — intentionally distinct from `web/src/index.css`'s orange dashboard theme) + `landing/src/components/` (`Hero`, `Feature`, `Footer`, `icons`).
+- Commands: `pnpm landing:dev` (dev server), `pnpm landing:build` (static export → `landing/out/`), `pnpm landing:preview` (serves `landing/out/` via `pnpm dlx serve`), `pnpm lint:landing` (type-check). `pnpm deploy` is an alias for `pnpm landing:build`, used by `.github/workflows/deploy-landing.yml` (manual `workflow_dispatch`) which installs deps, runs `pnpm run landing:build`, and publishes `landing/out/` to the `gh-pages` branch via `peaceiris/actions-gh-pages`.
 
 ## Conventions to follow
 
