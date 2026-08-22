@@ -13,6 +13,8 @@ const {
   learnedSkillsRepo,
   skillsRepo,
   skillSync,
+  settingsWriter,
+  liveChannelRuntime,
 } = vi.hoisted(() => ({
   auditRepo: {
     count: vi.fn(),
@@ -38,6 +40,15 @@ const {
   learnedSkillsRepo: { count: vi.fn(), getAll: vi.fn(), getByName: vi.fn(), setEnabled: vi.fn() },
   skillsRepo: { get: vi.fn() },
   skillSync: { sync: vi.fn(), getExistingInstance: vi.fn() },
+  settingsWriter: {
+    loadCurrentOrExampleSettings: vi.fn(() => ({})),
+    mergeSettingsPayload: vi.fn((base: object, patch: object) => ({ ...base, ...patch })),
+    writeSettingsFile: vi.fn(() => '/tmp/settings.json'),
+  },
+  liveChannelRuntime: {
+    startWhatsAppLive: vi.fn(),
+    startTelegramLive: vi.fn(),
+  },
 }));
 
 vi.mock('../../../src/repositories/audit-log', () => ({
@@ -79,6 +90,10 @@ vi.mock('../../../src/repositories/skills', () => ({
 vi.mock('../../../src/services/skills/skill-sync', () => ({
   SkillSyncSingleton: skillSync,
 }));
+
+vi.mock('../../../src/config/settings-writer', () => settingsWriter);
+
+vi.mock('../../../src/dashboard/live-channel-runtime', () => liveChannelRuntime);
 
 import { AdminRouterFactory } from '../../../src/dashboard/admin';
 import { config } from '../../../src/config';
@@ -151,7 +166,7 @@ describe('AdminRouterFactory /audit', () => {
       { id: 'a3', type: 'tool', role: 'worker', agent_name: 'executorWorker', tool_name: 'search_engine', duration_ms: 2, status: 'success', created_at: '2026-01-01T00:02:00.000Z' },
     ] as never);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/audit?type=llm&limit=25', { type: 'llm', limit: '25' }), res);
 
@@ -193,7 +208,7 @@ describe('AdminRouterFactory /audit', () => {
       created_at: '2026-01-01T00:00:00.000Z',
     } as never);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/audit/a1'), res);
 
@@ -204,7 +219,7 @@ describe('AdminRouterFactory /audit', () => {
   it('returns 404 when the audit entry is not found', () => {
     auditRepo.findById.mockReturnValue(null);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/audit/missing'), res);
 
@@ -215,7 +230,7 @@ describe('AdminRouterFactory /audit', () => {
   it('deletes a single audit entry', () => {
     auditRepo.deleteById.mockReturnValue(true);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('DELETE', '/audit/a1'), res);
 
@@ -226,7 +241,7 @@ describe('AdminRouterFactory /audit', () => {
   it('returns 404 when deleting a missing audit entry', () => {
     auditRepo.deleteById.mockReturnValue(false);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('DELETE', '/audit/missing'), res);
 
@@ -236,7 +251,7 @@ describe('AdminRouterFactory /audit', () => {
   it('clears all audit entries', () => {
     auditRepo.deleteAll.mockReturnValue(12);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('DELETE', '/audit'), res);
 
@@ -250,7 +265,7 @@ describe('AdminRouterFactory /queue', () => {
   });
 
   it('returns the serial queue state', () => {
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/queue'), res);
 
@@ -277,7 +292,7 @@ describe('AdminRouterFactory /usage', () => {
       { id: 'a2', run_id: 'r1', channel: 'telegram', type: 'tool', role: 'worker', agent_name: 'executorWorker', tool_name: 'curl-request', duration_ms: 4, created_at: '2026-01-01T00:00:10.000Z' },
     ] as never);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/usage'), res);
 
@@ -295,7 +310,7 @@ describe('AdminRouterFactory /usage', () => {
   it('forwards the days filter to the repository', () => {
     auditRepo.usage.mockReturnValue([]);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/usage', { days: '7' }), res);
 
@@ -307,7 +322,7 @@ describe('AdminRouterFactory /usage', () => {
   it('ignores invalid days values', () => {
     auditRepo.usage.mockReturnValue([]);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/usage', { days: 'abc' }), res);
 
@@ -354,7 +369,7 @@ describe('AdminRouterFactory /overview', () => {
   });
 
   it('returns aggregate counts, config, queue, usage and recent errors', async () => {
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     router.handle(makeRequest('GET', '/overview'), res, () => {});
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -423,7 +438,7 @@ describe('AdminRouterFactory /skills', () => {
       { name: 'git', enabled: false, learned_at: '2026-01-01 00:00:00' },
     ] as never);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/skills'), res);
 
@@ -454,7 +469,7 @@ describe('AdminRouterFactory /skills', () => {
     learnedSkillsRepo.setEnabled.mockReturnValue(true);
     learnedSkillsRepo.getByName.mockReturnValue({ name: 'git', enabled: false });
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/skills/git');
     req.body = { enabled: false };
@@ -465,7 +480,7 @@ describe('AdminRouterFactory /skills', () => {
   });
 
   it('PATCH /skills/:name rejects a non-boolean enabled value', () => {
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/skills/git');
     req.body = { enabled: 'yes' };
@@ -479,7 +494,7 @@ describe('AdminRouterFactory /skills', () => {
   it('PATCH /skills/:name returns 404 when the skill is unknown', () => {
     learnedSkillsRepo.setEnabled.mockReturnValue(false);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/skills/missing');
     req.body = { enabled: true };
@@ -492,7 +507,7 @@ describe('AdminRouterFactory /skills', () => {
   it('POST /skills/sync triggers a resync when initialized', () => {
     skillSync.getExistingInstance.mockReturnValue(skillSync);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/skills/sync'), res);
 
@@ -503,12 +518,154 @@ describe('AdminRouterFactory /skills', () => {
   it('POST /skills/sync returns 503 when sync is not initialized', () => {
     skillSync.getExistingInstance.mockReturnValue(null);
 
-    const router = AdminRouterFactory.create(logger, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/skills/sync'), res);
 
     expect(res.status).toHaveBeenCalledWith(503);
     expect(res.json).toHaveBeenCalledWith({ error: 'Skill sync not initialized' });
     expect(skillSync.sync).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminRouterFactory /settings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('GET /settings/status reports whether a settings file is configured', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/settings/status'), res);
+
+    expect(res.json).toHaveBeenCalledTimes(1);
+    const body = res.json.mock.calls[0][0];
+    expect(typeof body.configured).toBe('boolean');
+  });
+
+  it('GET /capabilities returns the real supported providers and channel types, excluding the internal mock provider', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/capabilities'), res);
+
+    expect(res.json).toHaveBeenCalledWith({
+      providers: expect.arrayContaining(['ollama', 'nvidia']),
+      channels: expect.arrayContaining(['telegram', 'whatsapp']),
+    });
+    const body = res.json.mock.calls[0][0];
+    expect(body.providers).not.toContain('mock');
+  });
+
+  it('POST /settings rejects a non-object body', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = 'nope';
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings rejects an out-of-range web_port', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { web_port: 99999 };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = res.json.mock.calls[0][0];
+    expect(body.details).toEqual(expect.arrayContaining([expect.stringContaining('web_port')]));
+    expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings rejects an unsupported AI provider', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { ai: { manager: { provider: 'anthropic' } } };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = res.json.mock.calls[0][0];
+    expect(body.details).toEqual(expect.arrayContaining([expect.stringContaining('ai.manager.provider')]));
+    expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings rejects the internal mock provider', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { ai: { manager: { provider: 'mock' } } };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = res.json.mock.calls[0][0];
+    expect(body.details).toEqual(expect.arrayContaining([expect.stringContaining('reserved for internal testing')]));
+    expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings rejects enabling Telegram without a bot token', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { channels: { telegram: { enabled: true, bot_token: '' } } };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = res.json.mock.calls[0][0];
+    expect(body.details).toEqual(expect.arrayContaining([expect.stringContaining('channels.telegram.bot_token')]));
+    expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings writes a valid patch and reports success', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { web_port: 4000 };
+    callRoute(router, req, res);
+
+    expect(settingsWriter.loadCurrentOrExampleSettings).toHaveBeenCalledTimes(1);
+    expect(settingsWriter.mergeSettingsPayload).toHaveBeenCalledWith({}, { web_port: 4000 });
+    expect(settingsWriter.writeSettingsFile).toHaveBeenCalledWith({ web_port: 4000 });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  it('POST /ai/test-connection requires a provider and base_url', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/ai/test-connection'), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('POST /ai/test-connection skips connectivity checks for the mock provider', async () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/ai/test-connection');
+    req.body = { provider: 'mock', base_url: 'http://localhost:11434' };
+    callRoute(router, req, res);
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(res.json).toHaveBeenCalledWith({ ok: true, skipped: true });
+  });
+
+  it('POST /telegram/test-token requires a bot_token', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/telegram/test-token'), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('POST /whatsapp/connect triggers a live connection attempt', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/whatsapp/connect'), res);
+
+    expect(liveChannelRuntime.startWhatsAppLive).toHaveBeenCalledTimes(1);
+    expect(res.json).toHaveBeenCalledWith({ success: true });
   });
 });

@@ -4,7 +4,7 @@
  * Checks settings.json (and env vars) for correctness before starting the app.
  *
  * Usage:
- *   pnpm --filter /koris validate
+ *   pnpm validate
  *   tsx src/validate-settings.ts
  */
 
@@ -12,6 +12,15 @@ import 'dotenv/config';
 import { existsSync } from 'fs';
 import { config } from './config';
 import { resolveConfigPaths, loadConfigFile } from './config/helpers';
+import {
+  VALID_LOG_LEVELS,
+  isValidUrl,
+  isValidLogLevel,
+  isValidTelegramTokenFormat,
+  isSupportedProvider,
+  checkAiProviderConnectivity,
+  checkTelegramToken,
+} from './config/validators';
 
 // ── ANSI helpers ──────────────────────────────────────────────────────────────
 const c = {
@@ -40,25 +49,6 @@ function section(title: string) {
   console.log(`\n${c.cyan}${c.bold}▸ ${title}${c.reset}`);
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function isValidUrl(value: string): boolean {
-  try { new URL(value); return true; } catch { return false; }
-}
-
-async function httpGet(url: string, timeoutMs = 5000, headers?: Record<string, string>): Promise<{ ok: boolean; status?: number; body?: string; error?: string }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { signal: controller.signal, headers });
-    const body = await res.text().catch(() => '');
-    return { ok: res.ok, status: res.status, body };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 // ── Validation counters ───────────────────────────────────────────────────────
 let errors = 0;
 let warnings = 0;
@@ -73,7 +63,7 @@ function advisory(ok: boolean, label: string, hint = '', detail = '') {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log(`\n${c.bold}/koris — settings validation${c.reset}`);
+  console.log(`\n${c.bold}koris — settings validation${c.reset}`);
 
   // ── 1. settings.json file ────────────────────────────────────────────────
   section('settings.json');
@@ -116,18 +106,15 @@ async function main() {
     config.ALLOWED_DOMAINS.join(', '),
   );
 
-  const validLogLevels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
   check(
-    validLogLevels.includes(config.LOG_LEVEL),
+    isValidLogLevel(config.LOG_LEVEL),
     'log_level is valid',
-    `Got: "${config.LOG_LEVEL}". Must be one of: ${validLogLevels.join(', ')}.`,
+    `Got: "${config.LOG_LEVEL}". Must be one of: ${VALID_LOG_LEVELS.join(', ')}.`,
     config.LOG_LEVEL,
   );
 
   // ── 3. AI Provider ───────────────────────────────────────────────────────
   section('AI Provider');
-
-  const supportedProviders = ['ollama', 'nvidia', 'mock'];
 
   check(
     typeof config.AI.PARALLEL === 'boolean',
@@ -150,11 +137,12 @@ async function main() {
     String(config.AI.BACKGROUND_GRACE_MS),
   );
 
+  const supportedProvidersLabel = 'Supported providers depend on the current build';
 
   check(
-    supportedProviders.includes(config.AI.MANAGER.PROVIDER),
+    isSupportedProvider(config.AI.MANAGER.PROVIDER),
     'ai.manager.provider is supported',
-    `Got: "${config.AI.MANAGER.PROVIDER}". Supported: ${supportedProviders.join(', ')}.`,
+    `Got: "${config.AI.MANAGER.PROVIDER}". ${supportedProvidersLabel}.`,
     config.AI.MANAGER.PROVIDER,
   );
 
@@ -173,9 +161,9 @@ async function main() {
   );
 
   check(
-    supportedProviders.includes(config.AI.WORKERS.PROVIDER),
+    isSupportedProvider(config.AI.WORKERS.PROVIDER),
     'ai.workers.provider is supported',
-    `Got: "${config.AI.WORKERS.PROVIDER}". Supported: ${supportedProviders.join(', ')}.`,
+    `Got: "${config.AI.WORKERS.PROVIDER}". ${supportedProvidersLabel}.`,
     config.AI.WORKERS.PROVIDER,
   );
 
@@ -232,27 +220,21 @@ async function main() {
     }
 
     process.stdout.write(`  ${c.gray}⟳ Checking ${profile.label} AI provider connectivity …${c.reset}\r`);
-    const healthUrl = profile.provider === 'ollama'
-      ? `${profile.baseUrl.replace(/\/+$/, '')}/api/version`
-      : `${profile.baseUrl.replace(/\/+$/, '')}/models`;
-    const headers: Record<string, string> = { 'content-type': 'application/json' };
-    if (profile.provider === 'nvidia' && profile.apiToken) headers['Authorization'] = `Bearer ${profile.apiToken}`;
-    const result = await httpGet(healthUrl, config.AI.TIMEOUTS.HEALTH_MS, headers);
+    const result = await checkAiProviderConnectivity(
+      { label: profile.label, provider: profile.provider, baseUrl: profile.baseUrl, apiToken: profile.apiToken },
+      config.AI.TIMEOUTS.HEALTH_MS,
+    );
 
     if (result.ok) {
-      let detail = '';
-      if (profile.provider === 'ollama') {
-        try { detail = (JSON.parse(result.body ?? '{}') as { version?: string }).version ?? ''; } catch { /* ignore */ }
-      }
-      pass(`AI provider reachable (${profile.label})`, detail ? `v${detail}` : healthUrl);
+      pass(`AI provider reachable (${profile.label})`, result.detail ? `v${result.detail}` : result.healthUrl);
+    } else if (result.authFailed) {
+      fail(`AI provider auth failed (${profile.label})`, `HTTP ${result.status} — check ai.${profile.label}.api_token in settings.json`);
+      errors++;
     } else if (result.error) {
       warn(`AI provider unreachable (${profile.label})`, result.error);
       warnings++;
-    } else if (result.status === 401 || result.status === 403) {
-      fail(`AI provider auth failed (${profile.label})`, `HTTP ${result.status} — check ai.${profile.label}.api_token in settings.json`);
-      errors++;
     } else {
-      warn(`AI provider unreachable (${profile.label})`, `HTTP ${result.status} from ${healthUrl}`);
+      warn(`AI provider unreachable (${profile.label})`, `HTTP ${result.status} from ${result.healthUrl}`);
       warnings++;
     }
   }
@@ -276,38 +258,22 @@ async function main() {
     );
 
     if (config.CHANNELS.TELEGRAM.BOT_TOKEN.trim().length > 0) {
-      // Telegram bot tokens follow the pattern <numeric_id>:<alphanumeric>
-      const tokenPattern = /^\d+:[A-Za-z0-9_-]{35,}$/;
       advisory(
-        tokenPattern.test(config.CHANNELS.TELEGRAM.BOT_TOKEN.trim()),
+        isValidTelegramTokenFormat(config.CHANNELS.TELEGRAM.BOT_TOKEN),
         'channels.telegram.bot_token format looks valid',
         'Expected format: <numeric_id>:<35+ alphanumeric chars>',
       );
 
       process.stdout.write(`  ${c.gray}⟳ Verifying Telegram bot token …${c.reset}\r`);
-      const tgResult = await httpGet(
-        `https://api.telegram.org/bot${config.CHANNELS.TELEGRAM.BOT_TOKEN.trim()}/getMe`,
-        8000,
-      );
+      const tgResult = await checkTelegramToken(config.CHANNELS.TELEGRAM.BOT_TOKEN);
+
       if (tgResult.ok) {
-        try {
-          const data = JSON.parse(tgResult.body ?? '{}') as { ok?: boolean; result?: { username?: string } };
-          if (data.ok === false) {
-            fail('Telegram bot token is invalid', 'Telegram API rejected the token — generate a new one with @BotFather');
-            errors++;
-          } else {
-            pass('Telegram bot token is valid', `@${data.result?.username ?? '?'}`);
-          }
-        } catch {
-          pass('Telegram bot token is valid');
-        }
-      } else if (tgResult.error) {
-        // Network/connection failure — cannot reach Telegram API; treat as a warning
+        pass('Telegram bot token is valid', tgResult.username ? `@${tgResult.username}` : undefined);
+      } else if (tgResult.networkError) {
         warn('Could not reach Telegram API to verify token', tgResult.error);
         warnings++;
       } else {
-        // Got an HTTP error response (e.g. 401/404) — token is explicitly rejected
-        fail('Telegram bot token is invalid', `HTTP ${tgResult.status} from Telegram API — token may be invalid or revoked`);
+        fail('Telegram bot token is invalid', tgResult.error ?? 'Telegram API rejected the token — generate a new one with @BotFather');
         errors++;
       }
     }

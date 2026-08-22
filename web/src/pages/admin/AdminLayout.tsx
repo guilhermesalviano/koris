@@ -203,10 +203,10 @@ function Header({
         </button>
         <div className="ml-1 flex items-center gap-2.5">
           <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-accent">
-            <img src="/logo.png" alt="/koris" className="h-full w-full object-cover" />
+            <img src="/logo.png" alt="koris" className="h-full w-full object-cover" />
           </div>
           <div className="hidden sm:block">
-            <div className="text-[13px] font-medium">/koris</div>
+            <div className="text-[13px] font-medium">koris</div>
             <div className="font-mono text-[11px] text-txt-3">Admin panel</div>
           </div>
         </div>
@@ -343,7 +343,7 @@ function ConfigButton({ onOpen, collapsed = false }: { onOpen: () => void; colla
       }`}
     >
       <SettingsIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-      {!collapsed && <span>Config</span>}
+      {!collapsed && <span>Configuration</span>}
     </button>
   );
 }

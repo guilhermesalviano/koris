@@ -29,7 +29,7 @@ export default function ChatPage() {
   const [preview, setPreview] = useState<{ images: ImageAttachment[]; index: number } | null>(null);
   const activeTitle = activeSessionId ? sessions.find((s) => s.id === activeSessionId)?.preview?.trim() : undefined;
 
-  usePageTitle(activeTitle || 'Chat', 'Chat with the /koris agent');
+  usePageTitle(activeTitle || 'Chat', 'Chat with the koris agent');
 
   // Sync the viewed session with the URL. `null` targets the live chat (latest
   // open web session, without creating one).
