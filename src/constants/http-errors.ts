@@ -10,3 +10,6 @@ export const HTTP_ERROR_MESSAGES: Record<number, string> = {
   503: "I'm currently taking a quick nap or feeling a bit overwhelmed. I'll be back and ready to help you very soon!",
   504: "My provider took a little too long to reply to me. Let's give them a nudge and try again!",
 };
+
+export const NOT_AUTHORIZED_MESSAGE =
+  "You're not authorized to send messages here yet. Please ask the administrator to add you to the allowed list.";

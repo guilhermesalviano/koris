@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../../src/constants/thinking';
+import { NOT_AUTHORIZED_MESSAGE } from '../../../../src/constants';
 import { ChannelHandlerFactory } from '../../../../src/channels';
 import { create, handleMessage, sendText, WhatsAppChannel, WhatsAppChannelFactory } from '../../../../plugins/whatsapp';
 import type { PluginContext } from '../../../../plugins/contracts';
@@ -173,7 +174,7 @@ describe('channels/whatsapp', () => {
       );
     });
 
-    it('ignores untrusted senders when allow_untrusted is off', async () => {
+    it('denies untrusted senders with the not-authorized message when allow_untrusted is off', async () => {
       create(makeContext({ allowUntrusted: false }));
 
       const agent = { handle: vi.fn().mockResolvedValue('pong') };
@@ -182,7 +183,7 @@ describe('channels/whatsapp', () => {
       await channel.handleMessage(agent, 'jid@s.whatsapp.net', 'guilherme', 'hello');
 
       expect(agent.handle).not.toHaveBeenCalled();
-      expect(mockSock.sendMessage).not.toHaveBeenCalled();
+      expect(mockSock.sendMessage).toHaveBeenCalledWith('jid@s.whatsapp.net', { text: NOT_AUTHORIZED_MESSAGE });
     });
 
     it('shows a typing indicator while processing a private message', async () => {

@@ -10,10 +10,10 @@ import type {
   PluginContext,
 } from '../contracts';
 import type { PluginRegistry } from '../registry';
+import { NOT_AUTHORIZED_MESSAGE } from '../../src/constants';
 
 const TYPING_INTERVAL_MS = 5_000;
 const TELEGRAM_MESSAGE_LIMIT = 4_000;
-const TELEGRAM_DENY_MESSAGE = 'You need to allow this number to send messages on the server.';
 
 let botUsername: string | null = null;
 let botToken = '';
@@ -102,15 +102,9 @@ class TelegramChannel implements ITelegramChannel {
 
     const isWhitelisted = msg.from?.id != null && telegramWhitelist.has(msg.from.id);
 
-    if (!allowUntrusted) {
-      if (telegramWhitelist.size === 0) {
-        await this.sendDenyMessage(chatId);
-        return;
-      }
-
-      if (!isWhitelisted) {
-        return;
-      }
+    if (!allowUntrusted && !isWhitelisted) {
+      await this.sendDenyMessage(chatId);
+      return;
     }
 
     const images = photo ? await this.downloadPhoto(photo.file_id) : [];
@@ -156,7 +150,7 @@ class TelegramChannel implements ITelegramChannel {
 
   private async sendDenyMessage(chatId: number): Promise<void> {
     try {
-      await (await this.getBotClient()).sendMessage(chatId, TELEGRAM_DENY_MESSAGE);
+      await (await this.getBotClient()).sendMessage(chatId, NOT_AUTHORIZED_MESSAGE);
     } catch (err) {
       console.error('Error sending deny message:', err);
     }

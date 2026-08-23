@@ -1,5 +1,6 @@
 import { ADAPTERS, splitMessage } from '../contracts';
 import { parseMentionTarget } from './jid';
+import { NOT_AUTHORIZED_MESSAGE } from '../../src/constants';
 import type {
   ChannelDefinition,
   IChannelHandlerFactory,
@@ -431,6 +432,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
   ): Promise<void> {
     const isTrustedSender = options?.isWhitelistedSender ?? false;
     if (!isTrustedSender && !allowUntrusted) {
+      await this.sendText(jid, NOT_AUTHORIZED_MESSAGE);
       return;
     }
 
