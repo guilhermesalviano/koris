@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname as pathDirname, join, normalize } from 'path';
 import { resolveConfigPaths } from './helpers';
 
-const SETTINGS_FILENAME = 'settings.json';
-const EXAMPLE_SETTINGS_FILENAME = 'settings.example.json';
+const SETTINGS_FILENAME = 'koris.json';
+const EXAMPLE_SETTINGS_FILENAME = 'koris.example.json';
 
 export interface SettingsWriterOptions {
   cwd?: string;
@@ -48,8 +48,8 @@ function resolveExampleSettingsPath(options?: SettingsWriterOptions): string {
 }
 
 /**
- * Resolves where settings.json should be written: next to an existing
- * settings.json (or settings.example.json) if one is found, else the app root.
+ * Resolves where koris.json should be written: next to an existing
+ * koris.json (or koris.example.json) if one is found, else the app root.
  */
 export function resolveSettingsWritePath(options?: SettingsWriterOptions): string {
   const cwd = options?.cwd ?? process.cwd();
@@ -64,7 +64,7 @@ export function resolveSettingsWritePath(options?: SettingsWriterOptions): strin
 }
 
 /**
- * Loads settings.example.json as the base template for a first-time write.
+ * Loads koris.example.json as the base template for a first-time write.
  */
 export function loadExampleSettingsTemplate(options?: SettingsWriterOptions): Record<string, unknown> {
   const sourcePath = resolveExampleSettingsPath(options);
@@ -73,7 +73,7 @@ export function loadExampleSettingsTemplate(options?: SettingsWriterOptions): Re
 }
 
 /**
- * Loads the current settings.json if one exists, else falls back to the
+ * Loads the current koris.json if one exists, else falls back to the
  * example template — the base a partial wizard payload gets merged onto.
  */
 export function loadCurrentOrExampleSettings(options?: SettingsWriterOptions): Record<string, unknown> {

@@ -8,7 +8,7 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // One-time first-run check: if no settings.json exists yet, send the user
+  // One-time first-run check: if no koris.json exists yet, send the user
   // into the setup wizard instead of letting the app boot on silent defaults.
   useEffect(() => {
     let cancelled = false;

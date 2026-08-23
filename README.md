@@ -47,9 +47,9 @@
    ```
 
 2. **Configure settings:**
-   Copy the example settings file to `settings.json` and adjust as necessary:
+   Copy the example settings file to `koris.json` and adjust as necessary:
    ```bash
-   cp settings.example.json settings.json
+   cp koris.example.json koris.json
    ```
 
 3. **Build the project:**
@@ -93,7 +93,7 @@ All commands are run via `pnpm` (or `pnpm run <script>`).
 | --- | --- |
 | `app` | Runs the agent (Node). Accepts `--tui` for the terminal UI or `telegram` to run the Telegram mode. Requires a prior build. |
 | `onboard` | Runs the first-time onboarding/setup flow (Node). |
-| `validate` | Validates `settings.json` against the expected schema and exits with an error if misconfigured. |
+| `validate` | Validates `koris.json` against the expected schema and exits with an error if misconfigured. |
 
 ### Build & Tooling
 

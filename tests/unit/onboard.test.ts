@@ -141,8 +141,8 @@ describe('Onboard footer progress', () => {
     const previousCwd = process.cwd();
 
     mkdirSync(appRoot, { recursive: true });
-    writeFileSync(join(appRoot, 'settings.json'), '{}');
-    writeFileSync(join(appRoot, 'settings.example.json'), JSON.stringify({
+    writeFileSync(join(appRoot, 'koris.json'), '{}');
+    writeFileSync(join(appRoot, 'koris.example.json'), JSON.stringify({
       channels: {
         telegram: {
           ENABLED: true,
@@ -292,14 +292,14 @@ describe('onboarding settings draft', () => {
     })).toBe(join(appRoot, SETTINGS_FILENAME));
   });
 
-  it('saves the draft next to settings.json using settings.example.json as the base', () => {
+  it('saves the draft next to koris.json using koris.example.json as the base', () => {
     const repoRoot = createTempDir();
     const appRoot = join(repoRoot, 'apps', 'client');
     const runtimeDir = join(appRoot, 'dist', 'src');
 
     mkdirSync(appRoot, { recursive: true });
-    writeFileSync(join(appRoot, 'settings.json'), '{}');
-    writeFileSync(join(appRoot, 'settings.example.json'), JSON.stringify({
+    writeFileSync(join(appRoot, 'koris.json'), '{}');
+    writeFileSync(join(appRoot, 'koris.example.json'), JSON.stringify({
       heartbeat: true,
       channels: {
         telegram: {

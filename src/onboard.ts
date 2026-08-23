@@ -16,8 +16,8 @@ const SUPPORTED_CHANNELS = ['telegram', 'discord'] as const;
 const SUPPORTED_PROVIDERS = ['ollama', 'nvidia', 'anthropic', 'deepseek'] as const;
 const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 const BOOLEAN_OPTIONS = ['true', 'false'] as const;
-const EXAMPLE_SETTINGS_FILENAME = 'settings.example.json';
-export const SETTINGS_FILENAME = 'settings.json';
+const EXAMPLE_SETTINGS_FILENAME = 'koris.example.json';
+export const SETTINGS_FILENAME = 'koris.json';
 
 type OnboardingScreenMode = 'plain' | 'tui';
 type TimelineState = 'complete' | 'active' | 'pending';
@@ -225,7 +225,7 @@ export function buildOnboardingSummary(answers: OnboardingAnswers): string {
   //   '',
   //   `Launch command: ${buildLaunchCommand(answers.channels)}`,
   //   'Runtime note: selected channels are launched through CLI flags.',
-  //   'Persistence note: this onboarding flow does not write settings.json yet.',
+  //   'Persistence note: this onboarding flow does not write koris.json yet.',
   // );
 
   return lines.join('\n');

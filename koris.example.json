@@ -7,7 +7,7 @@
   "learned_skills_limit": 10,
   "stickers": {
     "enabled": true,
-    "allow_untrusted": true
+    "allow_untrusted": false
   },
   "heartbeat": false,
   "channels": {

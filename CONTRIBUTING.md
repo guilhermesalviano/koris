@@ -11,7 +11,7 @@ Thanks for taking the time to contribute!
    ```
 3. Copy the example settings and adjust as needed:
    ```bash
-   cp settings.example.json settings.json
+   cp koris.example.json koris.json
    ```
 4. Build before running the agent:
    ```bash
