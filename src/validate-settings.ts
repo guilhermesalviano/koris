@@ -113,6 +113,12 @@ async function main() {
     config.LOG_LEVEL,
   );
 
+  advisory(
+    !config.STICKERS.ALLOW_UNTRUSTED,
+    'stickers.allow_untrusted is disabled',
+    'stickers.allow_untrusted is on — anyone outside the channel whitelist can learn/send stickers',
+  );
+
   // ── 3. AI Provider ───────────────────────────────────────────────────────
   section('AI Provider');
 

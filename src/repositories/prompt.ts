@@ -4,6 +4,7 @@ import { IToolsRepository, ToolsRepositoryFactory } from './tools';
 import { Message, ImageAttachment } from '../types/messages';
 import { Memory } from '../entities/memory';
 import { ILearnedSkillsRepository, LearnedSkillsRepositoryFactory } from './learned-skills';
+import { IStickerRulesRepository, StickerRulesRepositoryFactory } from './sticker-rules';
 import { IMemoryRepository, MemoryRepositoryFactory } from './memory';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { ILogger } from '../infrastructure/logger';
@@ -14,6 +15,7 @@ import { sanitizePrompt, SanitizeStats } from '../utils/prompt-sanitizer';
 
 const CHAT_HISTORY_LIMIT = 20;
 const MEMORY_CONTEXT_LIMIT = 20;
+const STICKER_RULES_LIMIT = 20;
 
 function sumStats(target: SanitizeStats, source: SanitizeStats): void {
   target.originalLength += source.originalLength;
@@ -31,6 +33,7 @@ interface BuildPromptParams {
   images?: ImageAttachment[];
   toolsEnabled?: boolean;
   learnedSkillsEnabled?: boolean;
+  stickersEnabled?: boolean;
   messageHistory?: Message[];
   includeBeatTools?: boolean;
   sessionId?: string;
@@ -53,6 +56,7 @@ class PromptRepository implements IPromptRepository {
     private contextRepository: IContextRepository,
     private toolsRepository: IToolsRepository,
     private learnedSkillsRepository: ILearnedSkillsRepository,
+    private stickerRulesRepository: IStickerRulesRepository,
     private memoryRepository: IMemoryRepository,
     private aiProvider: AIProvider,
     private logger: ILogger,
@@ -79,6 +83,7 @@ class PromptRepository implements IPromptRepository {
     extraSystemBlocks,
     toolResults,
     learnedSkillsEnabled,
+    stickersEnabled,
   }: BuildPromptParams): Promise<Message[]> {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
 
@@ -95,6 +100,10 @@ class PromptRepository implements IPromptRepository {
 
     const learnedSkills = this.buildLearnedSkills({ learnedSkillsEnabled });
     if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
+
+    const stickerToolsAllowed = config.STICKERS.ENABLED && (stickersEnabled ?? true);
+    const stickerRules = stickerToolsAllowed ? this.buildStickerRules() : '';
+    if (stickerRules) systemBlocks.push(`# Learned Stickers\n${stickerRules}`);
 
     const memory = await this.buildMemoryContext(userMessage, sessionId);
     if (memory) systemBlocks.push(`# Cross-session Memory Context\n${memory}`);
@@ -183,6 +192,14 @@ class PromptRepository implements IPromptRepository {
       .slice(0, 15000);
   }
 
+  private buildStickerRules(): string {
+    const rules = this.stickerRulesRepository.getRecent(STICKER_RULES_LIMIT);
+    if (rules.length === 0) return '';
+
+    const list = rules.map((rule) => `- id: ${rule.id} — ${rule.description}`).join('\n');
+    return `WhatsApp cannot attach a caption to a sticker: send_sticker always delivers it as its own message, separate from any text you also return. If the sticker alone answers the request, return an empty final message.\n${list}`.slice(0, 15000);
+  }
+
   private async buildMemoryContext(userMessage: string, sessionId?: string): Promise<string> {
     if (config.AI.WORKERS.EMBEDDING_ENABLED) {
       try {
@@ -229,15 +246,17 @@ class PromptRepository implements IPromptRepository {
     return contextString.trim().slice(0, 15000);
   }
 
-  private buildTools({ toolsEnabled, includeBeatTools }: BuildPromptParams): AIToolDefinition[] | undefined {
+  private buildTools({ toolsEnabled, includeBeatTools, stickersEnabled }: BuildPromptParams): AIToolDefinition[] | undefined {
     const toolsEnabledFinal = toolsEnabled ?? true;
-    
+    const stickerToolsAllowed = config.STICKERS.ENABLED && (stickersEnabled ?? true);
+
     if (!toolsEnabledFinal) {
-      return undefined;
+      return stickerToolsAllowed ? this.toolsRepository.getStickerTools() : undefined;
     }
 
     return this.toolsRepository.getAll({
       includeBeatTools,
+      includeStickerTools: stickerToolsAllowed,
     });
   }
 }
@@ -247,8 +266,9 @@ class PromptRepositoryFactory {
     const contextRepository = ContextRepositoryFactory.create();
     const toolsRepository = ToolsRepositoryFactory.create();
     const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
+    const stickerRulesRepository = StickerRulesRepositoryFactory.create(db);
     const memoryRepository = MemoryRepositoryFactory.create(db);
-    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, memoryRepository, aiProvider, logger);
+    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, stickerRulesRepository, memoryRepository, aiProvider, logger);
   }
 }
 
