@@ -52,6 +52,9 @@
       "health_ms": 5000
     }
   },
+  "github": {
+    "token": "ghp_xxx"
+  },
   "personal_information": {
     "name": "John Doe"
   }

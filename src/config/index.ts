@@ -85,6 +85,9 @@ export interface AppConfig {
       MENTION_ID: string;
     };
   };
+  GITHUB: {
+    TOKEN: string;
+  };
   PERSONAL_INFORMATION: Record<string, string>;
 }
 
@@ -153,6 +156,9 @@ function buildConfig(): AppConfig {
       WHITELIST:   get('channels.whatsapp.whitelist', ''),
       MENTION_ID:  get('channels.whatsapp.mention_id', ''),
     },
+  },
+  GITHUB: {
+    TOKEN: get('github.token', ''),
   },
   PERSONAL_INFORMATION: getPersonalInformation(),
   };
