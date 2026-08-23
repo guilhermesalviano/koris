@@ -62,6 +62,7 @@ export interface AppConfig {
       NUM_CTX: number;
     };
     SEARCH_API_KEY: string;
+    SEARXNG_URL: string;
     TIMEOUTS: {
       IDLE_MS: number;
       HARD_MS: number;
@@ -130,6 +131,7 @@ function buildConfig(): AppConfig {
       NUM_CTX: Number(get('ai.workers.num_ctx', '16384')),
     },
     SEARCH_API_KEY: get('ai.search_api_key', ''),
+    SEARXNG_URL: get('ai.searxng_url', ''),
     TIMEOUTS: {
       IDLE_MS:   Number(get('ai.timeouts.idle_ms', String(6 * 60_000))),
       HARD_MS:   Number(get('ai.timeouts.hard_ms', String(20 * 60_000))),

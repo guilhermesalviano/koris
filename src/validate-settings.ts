@@ -208,9 +208,15 @@ async function main() {
   );
 
   advisory(
+    config.AI.SEARXNG_URL.trim().length > 0,
+    'ai.searxng_url is set',
+    'Required for web search tool',
+  );
+
+  advisory(
     config.AI.SEARCH_API_KEY.trim().length > 0,
     'ai.search_api_key is set',
-    'Required for web search tool',
+    'Only used if the SerpAPI fallback is enabled in code (currently inactivated)',
   );
 
   // Connectivity check (skipped for mock)

@@ -74,6 +74,29 @@ Once running, the dashboard will be available at: `http://localhost:3000`
 pnpm app --tui
 ```
 
+## Web Search (SearXNG)
+
+The `search_engine` tool uses a self-hosted [SearXNG](https://docs.searxng.org/) instance — free, no per-query cost, no API key. It's optional: skip this if you don't need web search.
+
+1. **Configure and start SearXNG** (requires Docker):
+   ```bash
+   cd searxng
+   mkdir -p config
+   cp settings.example.yml config/settings.yml
+   openssl rand -hex 32   # paste the output as server.secret_key in config/settings.yml
+   docker compose up -d
+   ```
+   Make sure `config/settings.yml` exists as a **file** before running `docker compose up` — if it doesn't, Docker will happily start anyway but silently create an empty directory in its place, which crashes the container. If you ever see `is a directory` errors in `docker logs koris-searxng`, run `docker compose down -v`, `rm -rf config`, and redo the steps above.
+2. **Point the agent at it** — set `ai.searxng_url` in `koris.json`:
+   ```json
+   "ai": {
+     "searxng_url": "http://localhost:8080"
+   }
+   ```
+3. Restart the agent (or use the web Settings page, which reloads config live).
+
+`json` output format is enabled by `settings.example.yml` already (it's off by default on a fresh SearXNG install and the tool will get HTTP 403s otherwise) — no extra steps needed if you used the file as-is.
+
 ## Available Scripts
 
 All commands are run via `pnpm` (or `pnpm run <script>`).
