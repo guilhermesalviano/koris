@@ -53,7 +53,12 @@ export async function sendSticker(
     await channelsManager.sendSticker(channel, target, rule.reference);
 
     logger.info('send_sticker succeeded', { id, channel, target });
-    return { toolName: 'send_sticker', success: true, result: JSON.stringify({ id, channel, target }) };
+    return {
+      toolName: 'send_sticker',
+      success: true,
+      silent: true,
+      result: JSON.stringify({ id, channel, target }),
+    };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     logger.error('send_sticker failed', { error: errorMsg });

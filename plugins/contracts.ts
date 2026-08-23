@@ -8,6 +8,23 @@ export interface ImageAttachment {
   mimeType?: string;
 }
 
+/**
+ * A pointer to a sticker on the channel's own servers (e.g. WhatsApp's media
+ * CDN), captured from a quoted/replied-to message. Carries no decoded bytes —
+ * `key`/`message` are exactly what the channel needs to re-send the sticker
+ * by reference later (e.g. WhatsApp's "forward" mechanism).
+ */
+export interface StickerReference {
+  key: {
+    remoteJid: string;
+    id?: string;
+    participant?: string;
+    fromMe: boolean;
+  };
+  message: unknown;
+  mimeType?: string;
+}
+
 export interface ILogger {
   info(message: string, meta?: Record<string, unknown>): void;
   error(message: string, meta?: Record<string, unknown>): void;
@@ -20,13 +37,14 @@ export type ProcessOptions = {
   signal?: AbortSignal;
   toolsEnabled?: boolean;
   learnedSkillsEnabled?: boolean;
+  stickersEnabled?: boolean;
   onProgress?: (summary: string) => void;
   sessionId?: string;
   runId?: string;
   channel?: string;
 };
 
-export type InboundInput = string | { text: string; images?: ImageAttachment[] };
+export type InboundInput = string | { text: string; images?: ImageAttachment[]; stickers?: StickerReference[] };
 
 export interface IMessageGateway {
   handle(input: InboundInput, originId: string, options?: ProcessOptions): Promise<ProcessedMessage>;
@@ -37,12 +55,14 @@ export interface ChannelDefinition {
   enabled: () => boolean;
   start: (logger: ILogger, gateway: IMessageGateway) => (() => void) | void;
   sendMessage?: (logger: ILogger, target: string, message: string) => Promise<void>;
+  sendSticker?: (logger: ILogger, target: string, sticker: StickerReference) => Promise<void>;
 }
 
 export interface InboundChannelMessage {
   text: string;
   senderName?: string;
   images?: ImageAttachment[];
+  stickers?: StickerReference[];
   isGroup: boolean;
   mentionsBot: boolean;
   isTrustedSender: boolean;

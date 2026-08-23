@@ -80,7 +80,11 @@ describe('learnSticker tool', () => {
       channel: 'whatsapp',
     });
     expect(result.success).toBe(true);
-    expect(JSON.parse(result.result!)).toEqual({ id: 'sr1', description: 'when happy' });
+    expect(result.silent).toBe(true);
+    expect(JSON.parse(result.result!)).toEqual({
+      id: 'sr1',
+      description: 'when happy',
+    });
   });
 
   it('returns error when the repository throws', async () => {

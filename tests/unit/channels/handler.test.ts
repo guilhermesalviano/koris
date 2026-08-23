@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ChannelHandlerFactory } from '../../../src/channels/handler';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../src/constants/thinking';
 import type { InboundChannelMessage } from '../../../src/channels/handler';
+import { config } from '../../../src/config';
 
 const MENTION_ID = '162157312364643';
 
@@ -69,7 +70,7 @@ describe('channels/handler', () => {
     expect(gateway.handle).toHaveBeenCalledWith(
       { text: '[Context] Chat: direct (untrusted sender). Sender: guilherme. Message: hi', images: undefined },
       'jid',
-      { channel: 'test-channel', toolsEnabled: false, learnedSkillsEnabled: false },
+      { channel: 'test-channel', toolsEnabled: false, learnedSkillsEnabled: false, stickersEnabled: true },
     );
   });
 
@@ -164,8 +165,40 @@ describe('channels/handler', () => {
     expect(gateway.handle).toHaveBeenCalledWith(
       expect.anything(),
       'jid',
-      { channel: 'test-channel', toolsEnabled: true, learnedSkillsEnabled: true },
+      { channel: 'test-channel', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true },
     );
+  });
+
+  it('enables sticker tools for untrusted senders when stickers.allow_untrusted is on', async () => {
+    const { handler, gateway } = makeHandler();
+    gateway.handle.mockResolvedValue('pong');
+
+    await handler.handle('jid', message({ isTrustedSender: false }));
+
+    expect(gateway.handle).toHaveBeenCalledWith(
+      expect.anything(),
+      'jid',
+      expect.objectContaining({ toolsEnabled: false, stickersEnabled: true }),
+    );
+  });
+
+  it('disables sticker tools for untrusted senders when stickers.allow_untrusted is off', async () => {
+    const original = config.STICKERS.ALLOW_UNTRUSTED;
+    (config.STICKERS as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = false;
+    try {
+      const { handler, gateway } = makeHandler();
+      gateway.handle.mockResolvedValue('pong');
+
+      await handler.handle('jid', message({ isTrustedSender: false }));
+
+      expect(gateway.handle).toHaveBeenCalledWith(
+        expect.anything(),
+        'jid',
+        expect.objectContaining({ toolsEnabled: false, stickersEnabled: false }),
+      );
+    } finally {
+      (config.STICKERS as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = original;
+    }
   });
 
   it('strips think output before replying', async () => {

@@ -2,10 +2,12 @@ import type { AIToolDefinition } from '../types/chat';
 
 interface GetAllOptions {
   includeBeatTools?: boolean;
+  includeStickerTools?: boolean;
 }
 
 interface IToolsRepository {
   getAll(options?: GetAllOptions): AIToolDefinition[];
+  getStickerTools(): AIToolDefinition[];
 }
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH'] as const;
@@ -15,6 +17,7 @@ class ToolsRepository implements IToolsRepository {
   getAll(options?: GetAllOptions): AIToolDefinition[] {
     const tools: AIToolDefinition[] = [];
     const includeBeatTools = options?.includeBeatTools ?? true;
+    const includeStickerTools = options?.includeStickerTools ?? true;
 
     tools.push(this.curlTool());
     tools.push(this.searchTool());
@@ -28,7 +31,15 @@ class ToolsRepository implements IToolsRepository {
 
     tools.push(this.sendMessageTool());
 
+    if (includeStickerTools) {
+      tools.push(...this.getStickerTools());
+    }
+
     return tools;
+  }
+
+  getStickerTools(): AIToolDefinition[] {
+    return [this.learnStickerTool(), this.sendStickerTool()];
   }
 
   private curlTool(): AIToolDefinition {
@@ -256,6 +267,49 @@ class ToolsRepository implements IToolsRepository {
             },
           },
           required: ['content', 'target'],
+        },
+      },
+    };
+  }
+
+  private learnStickerTool(): AIToolDefinition {
+    return {
+      type: 'function',
+      function: {
+        name: 'learn_sticker',
+        description:
+          'Remember a sticker so it can be reused later. Only call this when the human\'s message is a reply that quotes a sticker (e.g. quoting a sticker and saying "use this one when I\'m happy" or "remember this for goodbyes") — WhatsApp cannot attach a caption to a sticker, so this is always taught by quoting it in a separate text reply, never by sending the sticker and text together. Fails if the message being answered did not quote a sticker.',
+        parameters: {
+          type: 'object',
+          properties: {
+            description: {
+              type: 'string',
+              description: 'Clear description of the situation in which this sticker should be reused later (e.g. "when the user is happy or celebrating").',
+            },
+          },
+          required: ['description'],
+        },
+      },
+    };
+  }
+
+  private sendStickerTool(): AIToolDefinition {
+    return {
+      type: 'function',
+      function: {
+        name: 'send_sticker',
+        description:
+          'Send a previously learned sticker in the current chat as part of replying. Only use a sticker whose "Learned Stickers" description clearly matches the current situation. Do not invent an id. ' +
+          'WhatsApp cannot attach a caption to a sticker: this always sends it as its own standalone message, separate from any text you also return. If the sticker alone answers the request, return an empty final message instead of also describing it in words.',
+        parameters: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              description: 'The id of the learned sticker to send, from the "Learned Stickers" list (required).',
+            },
+          },
+          required: ['id'],
         },
       },
     };

@@ -85,14 +85,19 @@ describe('sendSticker tool', () => {
 
   it('sends the sticker through the channel manager', async () => {
     const reference = makeReference();
-    mockRepo.getById.mockReturnValue({ id: 'sr1', reference, channel: 'whatsapp' });
+    mockRepo.getById.mockReturnValue({ id: 'sr1', reference, channel: 'whatsapp', description: 'when the user is happy' });
     channelsManager.sendSticker.mockResolvedValue(undefined);
 
     const result = await sendSticker(logger, { id: 'sr1' }, { channel: 'whatsapp', target: '123' });
 
     expect(channelsManager.sendSticker).toHaveBeenCalledWith('whatsapp', '123', reference);
     expect(result.success).toBe(true);
-    expect(JSON.parse(result.result!)).toEqual({ id: 'sr1', channel: 'whatsapp', target: '123' });
+    expect(result.silent).toBe(true);
+    expect(JSON.parse(result.result!)).toEqual({
+      id: 'sr1',
+      channel: 'whatsapp',
+      target: '123',
+    });
   });
 
   it('an explicit target argument overrides the context target', async () => {

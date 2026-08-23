@@ -1,20 +1,14 @@
 import pLimit from "p-limit";
 import { AgnosticExecutionToolFactory, IAgnosticExecutionTool } from "../tools";
 import type { ILogger } from "../../infrastructure/logger";
-import type { ToolCall, ToolResult } from "../../types/tools";
-import type { StickerReference } from "../../../plugins/contracts";
+import type { ToolCall, ToolExecutionContext, ToolResult } from "../../types/tools";
 import { IAuditService, AuditServiceFactory } from "../audit/audit-service";
 import { AuditLogTool } from "../../entities/audit-log";
 import { generateId } from "../../utils/generate-id";
 
-export interface ToolAuditContext {
-  channel?: string;
-  sessionId?: string;
-  runId?: string;
-  agentName?: string;
-  stickers?: StickerReference[];
-  target?: string;
-}
+// ToolAuditContext is the same shape tools receive at execution time (ToolExecutionContext) —
+// kept as a distinct name here since this module's role is audit/dispatch, not tool definitions.
+export type ToolAuditContext = ToolExecutionContext;
 
 interface IToolsQueue {
   handle(

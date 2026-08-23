@@ -79,6 +79,9 @@ describe('MessageGateway', () => {
       userMessage: 'hello there',
       channel: 'web',
       message: deps.messageService,
+      images: undefined,
+      stickers: undefined,
+      target: 'origin-1',
       options: { runId: expect.any(String) },
     });
     expect(result).toBe('assistant reply');
@@ -95,6 +98,9 @@ describe('MessageGateway', () => {
       userMessage: 'run task',
       channel: 'tui',
       message: deps.messageService,
+      images: undefined,
+      stickers: undefined,
+      target: 'origin-1',
       options: { onProgress, signal: controller.signal, toolsEnabled: true, runId: expect.any(String) },
     });
   });
@@ -186,5 +192,21 @@ describe('MessageGateway', () => {
     await gateway.handle('hello', 'origin-1');
 
     expect(deps.channelService.record).toHaveBeenCalledWith('tui', 'origin-1');
+  });
+
+  it('uses the channel option, not the constructed runtime channel, for the main agent and persistence', async () => {
+    const { gateway, deps } = makeGateway('web');
+
+    await gateway.handle('hello', 'origin-1', { channel: 'whatsapp' });
+
+    expect(deps.mainAgent.run).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: 'whatsapp' }),
+    );
+    expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: 'whatsapp' }),
+    );
+    expect(deps.backgroundDispatcher.summarizeConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: 'whatsapp' }),
+    );
   });
 });

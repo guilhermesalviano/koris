@@ -149,6 +149,71 @@ describe('ExecutorWorker', () => {
     expect(managerComplete).toHaveBeenCalledTimes(2);
   });
 
+  it('skips the synthesis call when every tool result is silent and successful', async () => {
+    const { executor, workerComplete, managerComplete } = makeWorker();
+
+    const result = await executor.run({
+      toolCalls,
+      userMessage: 'send the sticker',
+      messageHistory: [],
+      ctx: makeContext({
+        initiatedBy: 'manager',
+        toolsQueue: {
+          handle: vi.fn().mockResolvedValue([
+            { success: true, toolName: 'send_sticker', silent: true, result: '{}', toolCallId: 'call_1' },
+          ]),
+        } as never,
+      }),
+    });
+
+    expect(result).toBe('');
+    expect(managerComplete).not.toHaveBeenCalled();
+    expect(workerComplete).not.toHaveBeenCalled();
+  });
+
+  it('still runs the synthesis call when a batch mixes a silent and a non-silent result', async () => {
+    const { executor, managerComplete } = makeWorker();
+
+    const result = await executor.run({
+      toolCalls,
+      userMessage: 'send the sticker and a message',
+      messageHistory: [],
+      ctx: makeContext({
+        initiatedBy: 'manager',
+        toolsQueue: {
+          handle: vi.fn().mockResolvedValue([
+            { success: true, toolName: 'send_sticker', silent: true, result: '{}', toolCallId: 'call_1' },
+            { success: true, toolName: 'send_message', result: 'sent', toolCallId: 'call_2' },
+          ]),
+        } as never,
+      }),
+    });
+
+    expect(result).toBe('manager answer');
+    expect(managerComplete).toHaveBeenCalled();
+  });
+
+  it('still runs the synthesis call when a silent tool fails', async () => {
+    const { executor, managerComplete } = makeWorker();
+
+    const result = await executor.run({
+      toolCalls,
+      userMessage: 'send the sticker',
+      messageHistory: [],
+      ctx: makeContext({
+        initiatedBy: 'manager',
+        toolsQueue: {
+          handle: vi.fn().mockResolvedValue([
+            { success: false, toolName: 'send_sticker', silent: true, error: 'boom', toolCallId: 'call_1' },
+          ]),
+        } as never,
+      }),
+    });
+
+    expect(result).toBe('manager answer');
+    expect(managerComplete).toHaveBeenCalled();
+  });
+
   it('returns a warning when the max iteration count is reached', async () => {
     const { executor, workerComplete, managerComplete } = makeWorker();
 

@@ -7,6 +7,7 @@ import type {
   IChannelHandler,
   IChannelHandlerFactory,
   InboundChannelMessage,
+  StickerReference,
 } from '../../plugins/contracts';
 import { ADAPTERS } from '../../plugins/contracts';
 import { ChannelHandler, ChannelHandlerFactory } from './handler';
@@ -28,6 +29,7 @@ export interface IChannelsManager {
   startAll(): void;
   stopAll(): void;
   sendMessage(channel: string, target: string, message: string): Promise<void>;
+  sendSticker(channel: string, target: string, sticker: StickerReference): Promise<void>;
 }
 
 class ChannelsManager implements IChannelsManager {
@@ -61,6 +63,20 @@ class ChannelsManager implements IChannelsManager {
   }
 
   async sendMessage(channel: string, target: string, message: string): Promise<void> {
+    const definition = this.resolveChannel(channel, 'sendMessage', 'outgoing messages');
+    await definition.sendMessage(this.logger, target, message);
+  }
+
+  async sendSticker(channel: string, target: string, sticker: StickerReference): Promise<void> {
+    const definition = this.resolveChannel(channel, 'sendSticker', 'sending stickers');
+    await definition.sendSticker(this.logger, target, sticker);
+  }
+
+  private resolveChannel<K extends 'sendMessage' | 'sendSticker'>(
+    channel: string,
+    capability: K,
+    capabilityLabel: string,
+  ): ChannelDefinition & Required<Pick<ChannelDefinition, K>> {
     const definition = this.channels.find((current) => current.name === channel);
 
     if (!definition) {
@@ -71,11 +87,11 @@ class ChannelsManager implements IChannelsManager {
       throw new Error(`Channel "${channel}" is not enabled.`);
     }
 
-    if (!definition.sendMessage) {
-      throw new Error(`Channel "${channel}" does not support outgoing messages.`);
+    if (!definition[capability]) {
+      throw new Error(`Channel "${channel}" does not support ${capabilityLabel}.`);
     }
 
-    await definition.sendMessage(this.logger, target, message);
+    return definition as ChannelDefinition & Required<Pick<ChannelDefinition, K>>;
   }
 }
 

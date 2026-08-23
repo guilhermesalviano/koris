@@ -114,6 +114,19 @@ describe('ChatService.complete', () => {
     );
   });
 
+  it('forwards the stickers gating option to the prompt repository', async () => {
+    const promptRepository = makePromptRepository();
+    const completionService = makeCompletionService();
+    completionService.complete.mockResolvedValue({ kind: 'message', text: 'ok', finishReason: 'stop' });
+    const service = new ChatService(completionService as never, promptRepository as never);
+
+    await service.complete('hi', 'whatsapp', { toolsEnabled: false, stickersEnabled: true });
+
+    expect(promptRepository.build).toHaveBeenCalledWith(
+      expect.objectContaining({ toolsEnabled: false, stickersEnabled: true }),
+    );
+  });
+
   it('rethrows provider errors instead of returning a fallback message', async () => {
     const completionService = makeCompletionService();
     completionService.complete.mockRejectedValue(new Error('provider down'));

@@ -10,18 +10,18 @@ import { generateId } from '../../utils/generate-id';
 import { ISessionContextFactory, SessionContextFactory } from './session-context';
 import { IBackgroundDispatcher, BackgroundDispatcherFactory } from './background-dispatcher';
 import { IChannelService, ChannelServiceFactory } from '../channel-service';
-import type { InboundInput, IMessageGateway } from '../../../plugins/contracts';
+import type { InboundInput, IMessageGateway, StickerReference } from '../../../plugins/contracts';
 
 export type { InboundInput, IMessageGateway };
 
-function normalizeInput(input: InboundInput): { text: string; images?: ImageAttachment[] } {
+function normalizeInput(input: InboundInput): { text: string; images?: ImageAttachment[]; stickers?: StickerReference[] } {
   if (typeof input === 'string') {
     return { text: input };
   }
   if (input == null || typeof input !== 'object') {
     return { text: '' };
   }
-  return { text: input.text, images: input.images };
+  return { text: input.text, images: input.images, stickers: input.stickers };
 }
 
 class MessageGateway implements IMessageGateway {
@@ -35,44 +35,47 @@ class MessageGateway implements IMessageGateway {
   ) {}
 
   async handle(input: InboundInput, originId: string, options?: ProcessOptions): Promise<ProcessedMessage> {
-    const { text, images } = normalizeInput(input);
+    const { text, images, stickers } = normalizeInput(input);
     const safeMessage = toSafeMessage(text);
+    const channel = options?.channel ?? this.channel;
 
-    this.logger.info(`Processing message from ${this.channel} (origin: ${originId}): "${previewMessage(safeMessage)}"${images?.length ? ` with ${images.length} image(s)` : ''}`);
+    this.logger.info(`Processing message from ${channel} (origin: ${originId}): "${previewMessage(safeMessage)}"${images?.length ? ` with ${images.length} image(s)` : ''}`);
 
     const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(originId, options?.sessionId);
 
-    this.channelService.record(options?.channel ?? this.channel, originId);
+    this.channelService.record(channel, originId);
 
     if (isCommand(safeMessage)) {
-      const response = handleCommand(safeMessage, { source: this.channel }).response || '';
+      const response = handleCommand(safeMessage, { source: channel }).response || '';
       this.backgroundDispatcher.persistConversation({
         sessionId: sessionService.getSession().id,
         ask: safeMessage,
         askImages: images,
         answer: response,
-        channel: this.channel,
+        channel,
       });
       return response;
     }
 
     const response = await this.mainAgent.run({
       userMessage: safeMessage,
-      channel: this.channel,
+      channel,
       message: messageService,
       images,
+      stickers,
+      target: originId,
       options: { ...options, runId: options?.runId ?? generateId() },
     });
 
-    this.logger.info(`Processed message from ${this.channel}: "${previewMessage(safeMessage)}" => "${previewMessage(response)}"`);
+    this.logger.info(`Processed message from ${channel}: "${previewMessage(safeMessage)}" => "${previewMessage(response)}"`);
 
     const sessionId = messageService.getSessionId();
-    this.backgroundDispatcher.persistConversation({ sessionId, ask: safeMessage, askImages: images, answer: response, channel: this.channel });
+    this.backgroundDispatcher.persistConversation({ sessionId, ask: safeMessage, askImages: images, answer: response, channel });
     this.backgroundDispatcher.summarizeConversation({
       sessionId,
       ask: safeMessage,
       answer: response,
-      channel: this.channel,
+      channel,
       memoryService,
     });
 

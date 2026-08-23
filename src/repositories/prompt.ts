@@ -101,7 +101,7 @@ class PromptRepository implements IPromptRepository {
     const learnedSkills = this.buildLearnedSkills({ learnedSkillsEnabled });
     if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
 
-    const stickerToolsAllowed = config.STICKERS.ENABLED && (stickersEnabled ?? true);
+    const stickerToolsAllowed = this.isStickerContentAllowed(stickersEnabled);
     const stickerRules = stickerToolsAllowed ? this.buildStickerRules() : '';
     if (stickerRules) systemBlocks.push(`# Learned Stickers\n${stickerRules}`);
 
@@ -248,7 +248,7 @@ class PromptRepository implements IPromptRepository {
 
   private buildTools({ toolsEnabled, includeBeatTools, stickersEnabled }: BuildPromptParams): AIToolDefinition[] | undefined {
     const toolsEnabledFinal = toolsEnabled ?? true;
-    const stickerToolsAllowed = config.STICKERS.ENABLED && (stickersEnabled ?? true);
+    const stickerToolsAllowed = this.isStickerContentAllowed(stickersEnabled);
 
     if (!toolsEnabledFinal) {
       return stickerToolsAllowed ? this.toolsRepository.getStickerTools() : undefined;
@@ -258,6 +258,10 @@ class PromptRepository implements IPromptRepository {
       includeBeatTools,
       includeStickerTools: stickerToolsAllowed,
     });
+  }
+
+  private isStickerContentAllowed(stickersEnabled?: boolean): boolean {
+    return config.STICKERS.ENABLED && (stickersEnabled ?? true);
   }
 }
 

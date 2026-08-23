@@ -7,6 +7,7 @@ import type {
   IMessageGateway,
 } from '../../plugins/contracts';
 import { resolveResponse } from './utils';
+import { config } from '../config';
 
 export type {
   ChannelHandlerOptions,
@@ -41,12 +42,13 @@ class ChannelHandler implements IChannelHandler {
 
     try {
       const response = await this.gateway.handle(
-        { text: prompt, images: message.images },
+        { text: prompt, images: message.images, stickers: message.stickers },
         target,
         {
           channel: this.channel,
           toolsEnabled: message.isTrustedSender,
           learnedSkillsEnabled: message.isTrustedSender,
+          stickersEnabled: this.computeStickersEnabled(message),
         },
       );
       const resolved = await resolveResponse(response);
@@ -59,6 +61,14 @@ class ChannelHandler implements IChannelHandler {
       await this.reply.sendError(target, `❌ ${error}`);
       return true;
     }
+  }
+
+  // Unlike toolsEnabled/learnedSkillsEnabled, this reads global config directly:
+  // ALLOW_UNTRUSTED is a deliberate operator-controlled override that lets stickers
+  // work for untrusted senders even while other tools stay locked (see
+  // PromptRepository.buildTools' privileged-bypass branch).
+  private computeStickersEnabled(message: InboundChannelMessage): boolean {
+    return message.isTrustedSender || config.STICKERS.ALLOW_UNTRUSTED;
   }
 
   private stripMention(text: string): string {

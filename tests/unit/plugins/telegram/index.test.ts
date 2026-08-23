@@ -109,7 +109,7 @@ describe('channels/telegram', () => {
 
     await handleMessage(agent, createMessage(text, 'group', mentionEntity(text, BOT_USERNAME), 123, 'Family'));
 
-    expect(agent.handle).toHaveBeenCalledWith({ text: `[Context] Chat: "Family" (group). Message: ${text}`, images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true });
+    expect(agent.handle).toHaveBeenCalledWith({ text: `[Context] Chat: "Family" (group). Message: ${text}`, images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true });
     expect(bot.sendMessage).toHaveBeenCalled();
   });
 
@@ -177,7 +177,7 @@ describe('channels/telegram', () => {
 
     await handleMessage(agent, createMessage('hello', 'private', [], 123));
 
-    expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct. Message: hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true });
+    expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct. Message: hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true });
     expect(bot.sendMessage).toHaveBeenCalled();
   });
 
@@ -201,7 +201,7 @@ describe('channels/telegram', () => {
 
     await handleMessage(agent, createMessage('hello', 'private', [], 999));
 
-    expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct (untrusted sender). Message: hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: false, learnedSkillsEnabled: false });
+    expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct (untrusted sender). Message: hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: false, learnedSkillsEnabled: false, stickersEnabled: true });
     expect(bot.sendMessage).toHaveBeenCalled();
   });
 
@@ -212,7 +212,7 @@ describe('channels/telegram', () => {
 
     await handleMessage(agent, createMessage('hello', 'private', [], 123));
 
-    expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct. Message: hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true });
+    expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct. Message: hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true });
   });
 
   it('allows everyone without a deny message when allow_untrusted is on and whitelist is empty', async () => {
@@ -222,7 +222,7 @@ describe('channels/telegram', () => {
 
     await handleMessage(agent, createMessage('hello', 'private', [], 999));
 
-    expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct (untrusted sender). Message: hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: false, learnedSkillsEnabled: false });
+    expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct (untrusted sender). Message: hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: false, learnedSkillsEnabled: false, stickersEnabled: true });
     expect(bot.sendMessage).not.toHaveBeenCalledWith(
       123,
       'You need to allow this number to send messages on the server.',
@@ -316,7 +316,7 @@ describe('channels/telegram photos', () => {
         images: [{ data: Buffer.from('fake-image-bytes').toString('base64'), mimeType: 'image/jpeg' }],
       },
       '123',
-      { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true },
+      { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true },
     );
     expect(bot.sendMessage).toHaveBeenCalled();
   });
@@ -341,7 +341,7 @@ describe('channels/telegram photos', () => {
         images: [{ data: Buffer.from('png-bytes').toString('base64'), mimeType: 'image/png' }],
       },
       '123',
-      { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true },
+      { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true },
     );
   });
 
@@ -356,7 +356,7 @@ describe('channels/telegram photos', () => {
 
     await handleMessage(agent, createPhotoMessage([{ file_id: 'file-3' }], 'analyze'));
 
-    expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct. Message: analyze', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true });
+    expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct. Message: analyze', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true });
   });
 
   it('forwards no images when the media download is not ok', async () => {
@@ -373,7 +373,7 @@ describe('channels/telegram photos', () => {
 
     await handleMessage(agent, createPhotoMessage([{ file_id: 'file-4' }], 'analyze'));
 
-    expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct. Message: analyze', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true });
+    expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct. Message: analyze', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true });
   });
 });
 
