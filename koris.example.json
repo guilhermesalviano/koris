@@ -32,7 +32,7 @@
       "provider": "ollama",
       "base_url": "http://localhost:11434",
       "api_token": "PROVIDER_API_TOKEN",
-      "model": "gemma4:e4b"
+      "model": "gemma4:e4b-it-q4_K_M"
     },
     "workers": {
       "provider": "ollama",
