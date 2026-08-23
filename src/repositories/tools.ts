@@ -39,7 +39,7 @@ class ToolsRepository implements IToolsRepository {
   }
 
   getStickerTools(): AIToolDefinition[] {
-    return [this.learnStickerTool(), this.sendStickerTool()];
+    return [this.learnStickerTool(), this.sendStickerTool(), this.unlearnStickerTool()];
   }
 
   private curlTool(): AIToolDefinition {
@@ -307,6 +307,27 @@ class ToolsRepository implements IToolsRepository {
             id: {
               type: 'string',
               description: 'The id of the learned sticker to send, from the "Learned Stickers" list (required).',
+            },
+          },
+          required: ['id'],
+        },
+      },
+    };
+  }
+
+  private unlearnStickerTool(): AIToolDefinition {
+    return {
+      type: 'function',
+      function: {
+        name: 'unlearn_sticker',
+        description:
+          'Forget a previously learned sticker so it stops being suggested or sent. Call this when the user asks to remove, forget, or stop using a sticker rule, or says a learned sticker no longer fits. Use the id from the "Learned Stickers" list — do not invent one.',
+        parameters: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              description: 'The id of the learned sticker to forget, from the "Learned Stickers" list (required).',
             },
           },
           required: ['id'],

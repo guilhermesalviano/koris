@@ -44,7 +44,7 @@ export async function learnSticker(
     return {
       toolName: 'learn_sticker',
       success: true,
-      silent: true,
+      silent: false,
       result: JSON.stringify({ id: rule.id, description: rule.description }),
     };
   } catch (err) {

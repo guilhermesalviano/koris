@@ -8,6 +8,7 @@ import { deleteBeat } from './beats/delete';
 import { sendMessage } from './send-message';
 import { learnSticker } from './learn-sticker';
 import { sendSticker } from './send-sticker';
+import { unlearnSticker } from './unlearn-sticker';
 import { ILogger } from '../../infrastructure/logger';
 
 type Command = { [key: string]: CommandFn };
@@ -61,6 +62,7 @@ class AgnosticExecutionToolFactory {
       'send_message': sendMessage,
       'learn_sticker': learnSticker,
       'send_sticker': sendSticker,
+      'unlearn_sticker': unlearnSticker,
     };
 
     return new AgnosticExecutionTool(COMMAND_MAP);

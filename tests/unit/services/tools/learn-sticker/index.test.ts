@@ -80,7 +80,7 @@ describe('learnSticker tool', () => {
       channel: 'whatsapp',
     });
     expect(result.success).toBe(true);
-    expect(result.silent).toBe(true);
+    expect(result.silent).toBe(false);
     expect(JSON.parse(result.result!)).toEqual({
       id: 'sr1',
       description: 'when happy',
