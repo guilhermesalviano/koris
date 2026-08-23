@@ -2,6 +2,7 @@ import pLimit from "p-limit";
 import { AgnosticExecutionToolFactory, IAgnosticExecutionTool } from "../tools";
 import type { ILogger } from "../../infrastructure/logger";
 import type { ToolCall, ToolResult } from "../../types/tools";
+import type { StickerReference } from "../../../plugins/contracts";
 import { IAuditService, AuditServiceFactory } from "../audit/audit-service";
 import { AuditLogTool } from "../../entities/audit-log";
 import { generateId } from "../../utils/generate-id";
@@ -11,6 +12,8 @@ export interface ToolAuditContext {
   sessionId?: string;
   runId?: string;
   agentName?: string;
+  stickers?: StickerReference[];
+  target?: string;
 }
 
 interface IToolsQueue {
