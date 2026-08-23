@@ -102,7 +102,7 @@ class PromptRepository implements IPromptRepository {
     if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
 
     const stickerToolsAllowed = this.isStickerContentAllowed(stickersEnabled);
-    const stickerRules = stickerToolsAllowed ? this.buildStickerRules() : '';
+    const stickerRules = stickerToolsAllowed ? this.buildStickerRules(channel) : '';
     if (stickerRules) systemBlocks.push(`# Learned Stickers\n${stickerRules}`);
 
     const memory = await this.buildMemoryContext(userMessage, sessionId);
@@ -192,8 +192,8 @@ class PromptRepository implements IPromptRepository {
       .slice(0, 15000);
   }
 
-  private buildStickerRules(): string {
-    const rules = this.stickerRulesRepository.getRecent(STICKER_RULES_LIMIT);
+  private buildStickerRules(channel: string): string {
+    const rules = this.stickerRulesRepository.getRecent(STICKER_RULES_LIMIT, channel);
     if (rules.length === 0) return '';
 
     const list = rules.map((rule) => `- id: ${rule.id} — ${rule.description}`).join('\n');

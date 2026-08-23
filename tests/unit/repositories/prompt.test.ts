@@ -427,12 +427,11 @@ describe('PromptRepository sticker tools gating', () => {
 
 describe('PromptRepository sticker rules', () => {
   it('injects learned stickers into the system prompt', async () => {
+    const getRecent = vi.fn().mockReturnValue([
+      { id: 'sr1', description: 'when the user is happy' },
+    ]);
     const repository = makeRepository({
-      stickerRulesRepository: {
-        getRecent: vi.fn().mockReturnValue([
-          { id: 'sr1', description: 'when the user is happy' },
-        ]),
-      },
+      stickerRulesRepository: { getRecent },
     });
 
     const { messages } = await repository.build({
@@ -442,6 +441,7 @@ describe('PromptRepository sticker rules', () => {
 
     expect(messages[0].content).toContain('# Learned Stickers');
     expect(messages[0].content).toContain('id: sr1 — when the user is happy');
+    expect(getRecent).toHaveBeenCalledWith(20, 'whatsapp');
   });
 
   it('omits the sticker block when there are no learned stickers', async () => {
@@ -453,6 +453,21 @@ describe('PromptRepository sticker rules', () => {
     });
 
     expect(messages[0].content).not.toContain('# Learned Stickers');
+  });
+
+  it('scopes the sticker lookup to the requesting channel', async () => {
+    const getRecent = vi.fn().mockReturnValue([]);
+    const repository = makeRepository({
+      stickerRulesRepository: { getRecent },
+    });
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'telegram',
+    });
+
+    expect(messages[0].content).not.toContain('# Learned Stickers');
+    expect(getRecent).toHaveBeenCalledWith(20, 'telegram');
   });
 });
 

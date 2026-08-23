@@ -116,8 +116,22 @@ describe('StickerRulesRepository', () => {
     repository.getRecent(5);
 
     expect(db.query.mock.calls[0][0]).toContain('WHERE enabled = 1');
+    expect(db.query.mock.calls[0][0]).not.toContain('channel = ?');
     expect(db.query.mock.calls[0][0]).toContain('LIMIT ?');
     expect(db.query.mock.calls[0][1]).toEqual([5]);
+  });
+
+  it('getRecent also filters by channel when one is given', () => {
+    const db = makeDb();
+    db.query.mockReturnValue([]);
+    const repository = new StickerRulesRepository(db as never);
+
+    repository.getRecent(5, 'telegram');
+
+    expect(db.query.mock.calls[0][0]).toContain('WHERE enabled = 1');
+    expect(db.query.mock.calls[0][0]).toContain('AND channel = ?');
+    expect(db.query.mock.calls[0][0]).toContain('LIMIT ?');
+    expect(db.query.mock.calls[0][1]).toEqual(['telegram', 5]);
   });
 
   it('setEnabled updates the enabled column', () => {

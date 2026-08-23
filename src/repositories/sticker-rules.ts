@@ -17,7 +17,7 @@ interface IStickerRulesRepository {
   save(input: SaveStickerRuleInput): StickerRule;
   getById(id: string): StickerRule | null;
   getAll(): StickerRule[];
-  getRecent(limit?: number): StickerRule[];
+  getRecent(limit?: number, channel?: string): StickerRule[];
   setEnabled(id: string, enabled: boolean): boolean;
   deleteById(id: string): boolean;
 }
@@ -87,13 +87,15 @@ class StickerRulesRepository implements IStickerRulesRepository {
     }
   }
 
-  getRecent(limit: number = 10): StickerRule[] {
+  getRecent(limit: number = 10, channel?: string): StickerRule[] {
     try {
+      const sql = channel
+        ? 'SELECT * FROM sticker_rules WHERE enabled = 1 AND channel = ? ORDER BY learned_at DESC LIMIT ?'
+        : 'SELECT * FROM sticker_rules WHERE enabled = 1 ORDER BY learned_at DESC LIMIT ?';
+      const params = channel ? [channel, limit] : [limit];
+
       return this.db
-        .query<StickerRuleRow>(
-          'SELECT * FROM sticker_rules WHERE enabled = 1 ORDER BY learned_at DESC LIMIT ?',
-          [limit]
-        )
+        .query<StickerRuleRow>(sql, params)
         .map(toStickerRule);
     } catch (error) {
       throw error;

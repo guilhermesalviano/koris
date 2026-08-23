@@ -251,6 +251,7 @@ class DatabaseService implements IDatabaseService {
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_sticker_rules_enabled ON sticker_rules(enabled);
         CREATE INDEX IF NOT EXISTS idx_sticker_rules_learned_at ON sticker_rules(learned_at);
+        CREATE INDEX IF NOT EXISTS idx_sticker_rules_channel ON sticker_rules(channel);
       `);
 
       this.db.exec(`
