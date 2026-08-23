@@ -34,6 +34,10 @@ export interface AppConfig {
   GATEWAY_HOST: string;
   ALLOWED_DOMAINS: string[];
   LEARNED_SKILLS_LIMIT: number;
+  STICKERS: {
+    ENABLED: boolean;
+    ALLOW_UNTRUSTED: boolean;
+  };
   SESSION: {
     TTL_MS: number;
   };
@@ -96,6 +100,12 @@ function buildConfig(): AppConfig {
     .map((domain) => domain.trim().toLowerCase())
     .filter(Boolean),
   LEARNED_SKILLS_LIMIT: Number(get('learned_skills_limit', '10')),
+  STICKERS: {
+    ENABLED: get('stickers.enabled', 'true') === 'true',
+    // Temporary: lets senders outside the channel whitelist learn/send stickers
+    // while the rest of the toolset stays locked to trusted senders.
+    ALLOW_UNTRUSTED: get('stickers.allow_untrusted', 'true') === 'true',
+  },
   SESSION: {
     TTL_MS: Number(get('session.ttl_ms', String(30 * 60 * 1000))),
   },

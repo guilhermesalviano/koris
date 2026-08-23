@@ -5,6 +5,10 @@
   "gateway_host": "http://localhost:3000",
   "allowed_domains": [],
   "learned_skills_limit": 10,
+  "stickers": {
+    "enabled": true,
+    "allow_untrusted": true
+  },
   "heartbeat": false,
   "channels": {
     "allow_untrusted": false,
