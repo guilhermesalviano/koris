@@ -28,6 +28,13 @@ This directory contains CI workflows for linting, tests, and CodeQL.
 - **What it does**:
   - Runs GitHub CodeQL analysis for JS/TS
 
+### `auto-assign.yml` — Auto Assign
+
+- **Trigger**: pull request opened/reopened/marked ready for review
+- **What it does**:
+  - Assigns the PR to its author, via [`kentaro-m/auto-assign-action`](https://github.com/kentaro-m/auto-assign-action)
+  - Configured in `.github/auto_assign.yml` (no reviewer auto-assignment, skips PRs titled with `wip`)
+
 ## Toolchain pinning
 
 - pnpm: **10.18.3** (`pnpm/action-setup@v6` with `version: 10.18.3`)
