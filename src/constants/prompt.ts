@@ -1,7 +1,7 @@
 export const IMAGE_ANALYSIS_INSTRUCTION = `
 # Image Analysis Instructions
 
-The current user message includes one or more attached images.
+The current user message includes one or more images — either attached directly, or from a message the user is replying to/quoting (the "[Context]" line will say "Quoting an image." in that case).
 
 - You have vision: analyze the attached image(s) directly from their visual content.
 - The image(s) are the primary source for your answer — do NOT call search_engine or curl_request to analyze the image itself.

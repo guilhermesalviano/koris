@@ -50,6 +50,7 @@ interface TelegramPhotoSize {
 interface TelegramPhotoMessage extends TelegramMessage {
   photo?: TelegramPhotoSize[];
   caption?: string;
+  reply_to_message?: TelegramPhotoMessage;
 }
 
 const IMAGE_MIME_BY_EXT: Record<string, string> = {
@@ -84,6 +85,10 @@ class TelegramChannel implements ITelegramChannel {
     const text = telegramMsg.caption ?? telegramMsg.text ?? '';
     const photo = telegramMsg.photo?.[telegramMsg.photo.length - 1];
 
+    const repliedMsg = telegramMsg.reply_to_message;
+    const quotedText = repliedMsg?.caption ?? repliedMsg?.text;
+    const quotedPhoto = repliedMsg?.photo?.[repliedMsg.photo.length - 1];
+
     if (!text && !photo) {
       return;
     }
@@ -109,7 +114,11 @@ class TelegramChannel implements ITelegramChannel {
     }
 
     const images = photo ? await this.downloadPhoto(photo.file_id) : [];
-    await this.processAndReply(gateway, chatId, text, images, isGroup, mentionsBot, isWhitelisted, msg.chat.title);
+    if (quotedPhoto) {
+      const quotedImages = await this.downloadPhoto(quotedPhoto.file_id);
+      images.push(...quotedImages.map((img) => ({ ...img, source: 'quoted' as const })));
+    }
+    await this.processAndReply(gateway, chatId, text, images, isGroup, mentionsBot, isWhitelisted, msg.chat.title, quotedText);
   }
 
   async sendText(chatId: number, text: string): Promise<void> {
@@ -162,6 +171,7 @@ class TelegramChannel implements ITelegramChannel {
     mentionsBot: boolean,
     isTrustedSender: boolean,
     groupName?: string,
+    quotedText?: string,
   ): Promise<void> {
     try {
       await this.withTypingIndicator(chatId, async () => {
@@ -180,6 +190,7 @@ class TelegramChannel implements ITelegramChannel {
         await handler.handle(String(chatId), {
           text,
           images,
+          quotedText,
           isGroup,
           mentionsBot,
           isTrustedSender,

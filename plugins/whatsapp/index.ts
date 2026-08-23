@@ -42,7 +42,7 @@ interface IWhatsAppChannel {
     name: string,
     text: string,
     images?: ImageAttachment[],
-    options?: { isWhitelistedSender?: boolean; groupName?: string; stickers?: StickerReference[] },
+    options?: { isWhitelistedSender?: boolean; groupName?: string; stickers?: StickerReference[]; quotedText?: string },
   ): Promise<void>;
   sendText(jid: string, text: string): Promise<void>;
   sendSticker(jid: string, sticker: StickerReference): Promise<void>;
@@ -168,6 +168,8 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
       const rawText = extractText(msg);
       const image = extractImage(msg);
       const sticker = extractQuotedSticker(msg);
+      const quotedText = extractQuotedText(msg);
+      const quotedImage = extractQuotedImage(msg);
 
       if (!rawText && !image && !sticker) continue;
 
@@ -176,7 +178,7 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
       const mentionsBot = isGroup && options.mentionId.length > 0 && text.includes(`@${options.mentionId}`);
       if (isGroup && !mentionsBot) continue;
 
-      void handleInboundMessage(options, sock, jid, senderName, text, image, sticker, isWhitelisted).catch((err: Error) => {
+      void handleInboundMessage(options, sock, jid, senderName, text, image, sticker, quotedText, quotedImage, isWhitelisted).catch((err: Error) => {
         options.logger.warn(`WhatsApp message handling error: ${err.message}`);
       });
     }
@@ -215,6 +217,41 @@ interface ExtractedSticker {
   participant?: string;
 }
 
+interface ExtractedQuotedImage {
+  caption?: string;
+  mimetype?: string;
+  quotedMessage: Record<string, unknown>;
+  stanzaId?: string;
+  participant?: string;
+}
+
+interface QuotedMessageInfo {
+  quotedMessage: Record<string, unknown>;
+  stanzaId?: string;
+  participant?: string;
+}
+
+function getQuotedMessageInfo(msg: WAMessage): QuotedMessageInfo | null {
+  if (!msg.message || typeof msg.message !== 'object') return null;
+
+  const content = msg.message as Record<string, unknown>;
+  const extendedText = content['extendedTextMessage'];
+  if (!extendedText || typeof extendedText !== 'object') return null;
+
+  const contextInfo = (extendedText as Record<string, unknown>)['contextInfo'];
+  if (!contextInfo || typeof contextInfo !== 'object') return null;
+
+  const info = contextInfo as Record<string, unknown>;
+  const quotedMessage = info['quotedMessage'];
+  if (!quotedMessage || typeof quotedMessage !== 'object') return null;
+
+  return {
+    quotedMessage: quotedMessage as Record<string, unknown>,
+    stanzaId: typeof info['stanzaId'] === 'string' ? info['stanzaId'] : undefined,
+    participant: typeof info['participant'] === 'string' ? info['participant'] : undefined,
+  };
+}
+
 function extractImage(msg: WAMessage): ExtractedImage | null {
   if (!msg.message || typeof msg.message !== 'object') return null;
 
@@ -231,28 +268,51 @@ function extractImage(msg: WAMessage): ExtractedImage | null {
  }
 
 function extractQuotedSticker(msg: WAMessage): ExtractedSticker | null {
-  if (!msg.message || typeof msg.message !== 'object') return null;
+  const quoted = getQuotedMessageInfo(msg);
+  if (!quoted) return null;
 
-  const content = msg.message as Record<string, unknown>;
-  const extendedText = content['extendedTextMessage'];
-  if (!extendedText || typeof extendedText !== 'object') return null;
-
-  const contextInfo = (extendedText as Record<string, unknown>)['contextInfo'];
-  if (!contextInfo || typeof contextInfo !== 'object') return null;
-
-  const info = contextInfo as Record<string, unknown>;
-  const quotedMessage = info['quotedMessage'];
-  if (!quotedMessage || typeof quotedMessage !== 'object') return null;
-
-  const stickerMessage = (quotedMessage as Record<string, unknown>)['stickerMessage'];
+  const stickerMessage = quoted.quotedMessage['stickerMessage'];
   if (!stickerMessage || typeof stickerMessage !== 'object') return null;
 
   const sticker = stickerMessage as Record<string, unknown>;
   return {
     mimetype: typeof sticker['mimetype'] === 'string' ? sticker['mimetype'] : 'image/webp',
-    quotedMessage,
-    stanzaId: typeof info['stanzaId'] === 'string' ? info['stanzaId'] : undefined,
-    participant: typeof info['participant'] === 'string' ? info['participant'] : undefined,
+    quotedMessage: quoted.quotedMessage,
+    stanzaId: quoted.stanzaId,
+    participant: quoted.participant,
+  };
+}
+
+function extractQuotedText(msg: WAMessage): string | null {
+  const quoted = getQuotedMessageInfo(msg);
+  if (!quoted) return null;
+
+  const conversation = quoted.quotedMessage['conversation'];
+  if (typeof conversation === 'string') return conversation;
+
+  const extended = quoted.quotedMessage['extendedTextMessage'];
+  if (extended && typeof extended === 'object') {
+    const text = (extended as Record<string, unknown>)['text'];
+    if (typeof text === 'string') return text;
+  }
+
+  return null;
+}
+
+function extractQuotedImage(msg: WAMessage): ExtractedQuotedImage | null {
+  const quoted = getQuotedMessageInfo(msg);
+  if (!quoted) return null;
+
+  const imageMessage = quoted.quotedMessage['imageMessage'];
+  if (!imageMessage || typeof imageMessage !== 'object') return null;
+
+  const image = imageMessage as Record<string, unknown>;
+  return {
+    caption: typeof image['caption'] === 'string' ? image['caption'] : undefined,
+    mimetype: typeof image['mimetype'] === 'string' ? image['mimetype'] : undefined,
+    quotedMessage: quoted.quotedMessage,
+    stanzaId: quoted.stanzaId,
+    participant: quoted.participant,
   };
 }
 
@@ -263,6 +323,21 @@ function extractQuotedSticker(msg: WAMessage): ExtractedSticker | null {
      return { data: buffer.toString('base64'), mimeType: image.mimetype };
    } catch (err) {
      logger.warn(`WhatsApp image download failed: ${err instanceof Error ? err.message : String(err)}`);
+     return null;
+   }
+ }
+
+ async function downloadQuotedImageBase64(jid: string, image: ExtractedQuotedImage, logger: ILogger): Promise<ImageAttachment | null> {
+   try {
+     const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
+     const syntheticMessage = {
+       key: { remoteJid: jid, id: image.stanzaId, participant: image.participant, fromMe: false },
+       message: image.quotedMessage,
+     } as WAMessage;
+     const buffer = await downloadMediaMessage(syntheticMessage, 'buffer', {}) as Buffer;
+     return { data: buffer.toString('base64'), mimeType: image.mimetype, source: 'quoted' };
+   } catch (err) {
+     logger.warn(`WhatsApp quoted image download failed: ${err instanceof Error ? err.message : String(err)}`);
      return null;
    }
  }
@@ -289,11 +364,17 @@ function toStickerReference(jid: string, sticker: ExtractedSticker, logger: ILog
    text: string,
    image: ExtractedImage | null,
    sticker: ExtractedSticker | null,
+   quotedText: string | null,
+   quotedImage: ExtractedQuotedImage | null,
    isWhitelistedSender: boolean,
  ): Promise<void> {
    const images: ImageAttachment[] = [];
    if (image) {
      const attachment = await downloadImageBase64(image, options.logger);
+     if (attachment) images.push(attachment);
+   }
+   if (quotedImage) {
+     const attachment = await downloadQuotedImageBase64(jid, quotedImage, options.logger);
      if (attachment) images.push(attachment);
    }
 
@@ -304,7 +385,12 @@ function toStickerReference(jid: string, sticker: ExtractedSticker, logger: ILog
 
 const channel = new WhatsAppChannel(sock);
    const groupName = jid.endsWith('@g.us') ? await resolveGroupName(sock, jid, options.logger) : undefined;
-   await channel.handleMessage(options.gateway, jid, senderName, text, images, { isWhitelistedSender, groupName, stickers });
+   await channel.handleMessage(options.gateway, jid, senderName, text, images, {
+     isWhitelistedSender,
+     groupName,
+     stickers,
+     quotedText: quotedText ?? undefined,
+   });
   }
 
  function formatBaileysLog(msg: unknown): string {
@@ -341,7 +427,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
     name: string,
     text: string,
     images?: ImageAttachment[],
-    options?: { isWhitelistedSender?: boolean; groupName?: string; stickers?: StickerReference[] },
+    options?: { isWhitelistedSender?: boolean; groupName?: string; stickers?: StickerReference[]; quotedText?: string },
   ): Promise<void> {
     const isTrustedSender = options?.isWhitelistedSender ?? false;
     if (!isTrustedSender && !allowUntrusted) {
@@ -368,6 +454,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
         senderName: name,
         images,
         stickers: options?.stickers,
+        quotedText: options?.quotedText,
         isGroup,
         mentionsBot: isGroup && mentionId.length > 0 && text.includes(`@${mentionId}`),
         isTrustedSender,

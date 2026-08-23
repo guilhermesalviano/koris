@@ -95,6 +95,12 @@ class ChannelHandler implements IChannelHandler {
       parts.push(`Sender: ${message.senderName}.`);
     }
 
+    if (message.quotedText) {
+      parts.push(`Quoting: "${message.quotedText}"`);
+    } else if (message.images?.some((img) => img.source === 'quoted')) {
+      parts.push('Quoting an image.');
+    }
+
     if (text) {
       parts.push(`Message: ${text}`);
     }

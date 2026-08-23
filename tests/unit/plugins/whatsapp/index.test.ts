@@ -476,4 +476,137 @@ describe('channels/whatsapp', () => {
       );
     });
   });
+
+  describe('inbound quoted text/image capture', () => {
+    function makeLogger() {
+      return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
+    }
+
+    async function startSocket(gateway: { handle: ReturnType<typeof vi.fn> }) {
+      await WhatsAppChannelFactory.start({
+        authFolder: '',
+        mentionId: MENTION_ID,
+        gateway: gateway as never,
+        logger: makeLogger(),
+      });
+    }
+
+    function getUpsertHandler(): (payload: { messages: unknown[]; type: string }) => void {
+      const call = mockSock.ev.on.mock.calls.find(([event]) => event === 'messages.upsert');
+      if (!call) throw new Error('messages.upsert handler was not registered');
+      return call[1] as (payload: { messages: unknown[]; type: string }) => void;
+    }
+
+    function quotedReply(overrides: {
+      text?: string;
+      stanzaId?: string;
+      participant?: string;
+      quotedMessage?: Record<string, unknown>;
+    } = {}) {
+      return {
+        key: { remoteJid: 'jid@s.whatsapp.net', fromMe: false, id: 'MSG1' },
+        pushName: 'guilherme',
+        message: {
+          extendedTextMessage: {
+            text: overrides.text ?? 'what does this mean?',
+            contextInfo: {
+              stanzaId: overrides.stanzaId ?? 'QUOTED_STANZA_1',
+              participant: overrides.participant ?? 'jid@s.whatsapp.net',
+              quotedMessage: overrides.quotedMessage ?? { conversation: 'the original message' },
+            },
+          },
+        },
+      };
+    }
+
+    it('captures quoted plain text and folds it into the prompt', async () => {
+      const gateway = { handle: vi.fn().mockResolvedValue('pong') };
+      await startSocket(gateway);
+
+      getUpsertHandler()({
+        messages: [quotedReply({ quotedMessage: { conversation: 'the original message' } })],
+        type: 'notify',
+      });
+
+      await vi.waitFor(() => expect(gateway.handle).toHaveBeenCalled());
+
+      expect(gateway.handle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining('Quoting: "the original message"'),
+        }),
+        'jid@s.whatsapp.net',
+        expect.anything(),
+      );
+    });
+
+    it('captures quoted text when the quoted message was itself an extended text message', async () => {
+      const gateway = { handle: vi.fn().mockResolvedValue('pong') };
+      await startSocket(gateway);
+
+      getUpsertHandler()({
+        messages: [quotedReply({ quotedMessage: { extendedTextMessage: { text: 'quoted extended text' } } })],
+        type: 'notify',
+      });
+
+      await vi.waitFor(() => expect(gateway.handle).toHaveBeenCalled());
+
+      expect(gateway.handle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining('Quoting: "quoted extended text"'),
+        }),
+        'jid@s.whatsapp.net',
+        expect.anything(),
+      );
+    });
+
+    it('downloads a quoted image and tags it as quoted', async () => {
+      const gateway = { handle: vi.fn().mockResolvedValue('pong') };
+      mockDownloadMediaMessage.mockResolvedValue(Buffer.from('img-bytes'));
+      await startSocket(gateway);
+
+      getUpsertHandler()({
+        messages: [quotedReply({ quotedMessage: { imageMessage: { mimetype: 'image/jpeg' } } })],
+        type: 'notify',
+      });
+
+      await vi.waitFor(() => expect(gateway.handle).toHaveBeenCalled());
+
+      expect(mockDownloadMediaMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: { remoteJid: 'jid@s.whatsapp.net', id: 'QUOTED_STANZA_1', participant: 'jid@s.whatsapp.net', fromMe: false },
+          message: { imageMessage: { mimetype: 'image/jpeg' } },
+        }),
+        'buffer',
+        {},
+      );
+      expect(gateway.handle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          images: [{ data: Buffer.from('img-bytes').toString('base64'), mimeType: 'image/jpeg', source: 'quoted' }],
+        }),
+        'jid@s.whatsapp.net',
+        expect.anything(),
+      );
+    });
+
+    it('does not extract quoted text when the reply does not quote anything', async () => {
+      const gateway = { handle: vi.fn().mockResolvedValue('pong') };
+      await startSocket(gateway);
+
+      const plainMessage = {
+        key: { remoteJid: 'jid@s.whatsapp.net', fromMe: false, id: 'MSG2' },
+        pushName: 'guilherme',
+        message: { conversation: 'just a normal message' },
+      };
+
+      getUpsertHandler()({ messages: [plainMessage], type: 'notify' });
+
+      await vi.waitFor(() => expect(gateway.handle).toHaveBeenCalled());
+
+      expect(gateway.handle).toHaveBeenCalledWith(
+        expect.objectContaining({ text: expect.not.stringContaining('Quoting') }),
+        'jid@s.whatsapp.net',
+        expect.anything(),
+      );
+    });
+  });
 });
