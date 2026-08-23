@@ -13,3 +13,5 @@ export const HTTP_ERROR_MESSAGES: Record<number, string> = {
 
 export const NOT_AUTHORIZED_MESSAGE =
   "You're not authorized to send messages here yet. Please ask the administrator to add you to the allowed list.";
+
+export const NOT_AUTHORIZED_PERMISSION = "I can only provide text-only help for this WhatsApp account. Tool-based actions are limited to authorized users."
