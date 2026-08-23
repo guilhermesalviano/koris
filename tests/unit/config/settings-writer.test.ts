@@ -13,7 +13,7 @@ import {
   mergeSettingsPayload,
 } from '../../../src/config/settings-writer';
 
-const REAL_EXAMPLE_SETTINGS_PATH = join(__dirname, '..', '..', '..', 'settings.example.json');
+const REAL_EXAMPLE_SETTINGS_PATH = join(__dirname, '..', '..', '..', 'koris.example.json');
 
 const tempDirs: string[] = [];
 
@@ -30,19 +30,19 @@ afterEach(() => {
 });
 
 describe('config/settings-writer', () => {
-  it('writes to <cwd>/settings.json when no settings.json exists anywhere yet', () => {
+  it('writes to <cwd>/koris.json when no koris.json exists anywhere yet', () => {
     const dir = createTempDir();
 
     const written = writeSettingsFile({ web_port: 4000 }, { cwd: dir, dirname: dir });
 
-    expect(written).toBe(join(dir, 'settings.json'));
+    expect(written).toBe(join(dir, 'koris.json'));
     expect(existsSync(written)).toBe(true);
     expect(JSON.parse(readFileSync(written, 'utf-8'))).toEqual({ web_port: 4000 });
   });
 
-  it('writes back to an already-existing settings.json rather than a different candidate', () => {
+  it('writes back to an already-existing koris.json rather than a different candidate', () => {
     const dir = createTempDir();
-    const existingPath = join(dir, 'settings.json');
+    const existingPath = join(dir, 'koris.json');
     writeFileSync(existingPath, JSON.stringify({ web_port: 1234 }));
 
     const resolved = resolveSettingsWritePath({ cwd: dir, dirname: dir });
@@ -53,9 +53,9 @@ describe('config/settings-writer', () => {
     expect(JSON.parse(readFileSync(existingPath, 'utf-8'))).toEqual({ web_port: 9999 });
   });
 
-  it('loads the real settings.example.json shape', () => {
+  it('loads the real koris.example.json shape', () => {
     const dir = createTempDir();
-    copyFileSync(REAL_EXAMPLE_SETTINGS_PATH, join(dir, 'settings.example.json'));
+    copyFileSync(REAL_EXAMPLE_SETTINGS_PATH, join(dir, 'koris.example.json'));
 
     const template = loadExampleSettingsTemplate({ cwd: dir, dirname: dir });
 
@@ -92,18 +92,18 @@ describe('config/settings-writer', () => {
     expect(merged).toEqual({ allowed_domains: ['c.com'], log_level: 'debug' });
   });
 
-  it('loadCurrentOrExampleSettings prefers an existing settings.json over the example template', () => {
+  it('loadCurrentOrExampleSettings prefers an existing koris.json over the example template', () => {
     const dir = createTempDir();
-    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ web_port: 7777 }));
+    writeFileSync(join(dir, 'koris.json'), JSON.stringify({ web_port: 7777 }));
 
     const loaded = loadCurrentOrExampleSettings({ cwd: dir, dirname: dir });
 
     expect(loaded).toEqual({ web_port: 7777 });
   });
 
-  it('loadCurrentOrExampleSettings falls back to the example template when no settings.json exists', () => {
+  it('loadCurrentOrExampleSettings falls back to the example template when no koris.json exists', () => {
     const dir = createTempDir();
-    copyFileSync(REAL_EXAMPLE_SETTINGS_PATH, join(dir, 'settings.example.json'));
+    copyFileSync(REAL_EXAMPLE_SETTINGS_PATH, join(dir, 'koris.example.json'));
 
     const loaded = loadCurrentOrExampleSettings({ cwd: dir, dirname: dir });
 

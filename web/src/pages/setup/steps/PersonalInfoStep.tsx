@@ -14,7 +14,7 @@ let nextId = 0;
 
 function toEntries(map: Record<string, string>): Entry[] {
   const entries = Object.entries(map).map(([key, value]) => ({ id: nextId++, key, value }));
-  // Seed a "name" row by default (matching settings.example.json's
+  // Seed a "name" row by default (matching koris.example.json's
   // personal_information shape) so the field is ready to fill in rather
   // than requiring the user to add it manually.
   return entries.length > 0 ? entries : [{ id: nextId++, key: 'name', value: '' }];

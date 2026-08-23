@@ -43,7 +43,7 @@ const {
   settingsWriter: {
     loadCurrentOrExampleSettings: vi.fn(() => ({})),
     mergeSettingsPayload: vi.fn((base: object, patch: object) => ({ ...base, ...patch })),
-    writeSettingsFile: vi.fn(() => '/tmp/settings.json'),
+    writeSettingsFile: vi.fn(() => '/tmp/koris.json'),
   },
   liveChannelRuntime: {
     startWhatsAppLive: vi.fn(),

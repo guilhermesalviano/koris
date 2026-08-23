@@ -18,7 +18,7 @@ node_modules
 
 logs/
 
-settings.json
+koris.json
 
 temp/*
 memory/*

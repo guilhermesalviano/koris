@@ -28,11 +28,11 @@ export function gateErrorForUrl(input: string): string | null {
 
   const allowed = getAllowedDomains();
   if (allowed.length === 0) {
-    return 'Domain gate: no allowed_domains configured in settings.json — curl requests are blocked. Add "allowed_domains" to settings.json to enable curl requests.';
+    return 'Domain gate: no allowed_domains configured in koris.json — curl requests are blocked. Add "allowed_domains" to koris.json to enable curl requests.';
   }
 
   if (!allowed.includes(hostname)) {
-    return `Domain gate: "${hostname}" is not in allowed_domains. Add it to settings.json to allow this request. Allowed domains: ${allowed.join(', ')}.`;
+    return `Domain gate: "${hostname}" is not in allowed_domains. Add it to koris.json to allow this request. Allowed domains: ${allowed.join(', ')}.`;
   }
 
   return null;

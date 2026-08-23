@@ -24,7 +24,7 @@ const STEPS = [
     number: '04',
     title: 'Configure & build',
     command: 'pnpm build && pnpm app',
-    detail: 'No settings.json yet? You’ll land in a setup wizard automatically — no manual editing.',
+    detail: 'No koris.json yet? You’ll land in a setup wizard automatically — no manual editing.',
   },
   {
     number: '05',

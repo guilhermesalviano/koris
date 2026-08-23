@@ -22,13 +22,13 @@ afterEach(() => {
 });
 
 describe('config/helpers', () => {
-  it('reads apps/client/settings.json when running from the monorepo root', () => {
+  it('reads apps/client/koris.json when running from the monorepo root', () => {
     const repoRoot = createTempDir();
     const appRoot = join(repoRoot, 'apps', 'client');
     const runtimeDir = join(appRoot, 'dist', 'src', 'config');
 
     mkdirSync(runtimeDir, { recursive: true });
-    writeFileSync(join(appRoot, 'settings.json'), JSON.stringify({
+    writeFileSync(join(appRoot, 'koris.json'), JSON.stringify({
       telegram: { BOT_TOKEN: 'test-token' },
     }));
 
@@ -60,6 +60,6 @@ describe('config/helpers', () => {
 
     const paths = resolveConfigPaths(repoRoot, runtimeDir);
 
-    expect(paths).toContain(join(repoRoot, 'apps', 'client', 'settings.json'));
+    expect(paths).toContain(join(repoRoot, 'apps', 'client', 'koris.json'));
   });
 });

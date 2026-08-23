@@ -19,14 +19,14 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
-  // Restore the singleton to its real-repo state (no settings.json checked in).
+  // Restore the singleton to its real-repo state (no koris.json checked in).
   reloadConfig();
 });
 
 describe('config/index reloadConfig', () => {
-  it('applies newly written settings.json values onto the existing config reference', () => {
+  it('applies newly written koris.json values onto the existing config reference', () => {
     const dir = createTempDir();
-    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ web_port: 4321, timezone: 'UTC' }));
+    writeFileSync(join(dir, 'koris.json'), JSON.stringify({ web_port: 4321, timezone: 'UTC' }));
 
     reloadConfig({ cwd: dir, dirname: dir });
 
@@ -37,7 +37,7 @@ describe('config/index reloadConfig', () => {
   it('keeps the same object identity across a reload', () => {
     const before = config;
     const dir = createTempDir();
-    writeFileSync(join(dir, 'settings.json'), JSON.stringify({ web_port: 5555 }));
+    writeFileSync(join(dir, 'koris.json'), JSON.stringify({ web_port: 5555 }));
 
     reloadConfig({ cwd: dir, dirname: dir });
 
@@ -47,7 +47,7 @@ describe('config/index reloadConfig', () => {
 
   it('picks up nested AI/CHANNELS values after a reload', () => {
     const dir = createTempDir();
-    writeFileSync(join(dir, 'settings.json'), JSON.stringify({
+    writeFileSync(join(dir, 'koris.json'), JSON.stringify({
       ai: { manager: { base_url: 'http://example.invalid:1234', model: 'reload-model' } },
       channels: { telegram: { enabled: true, bot_token: '123:abc' } },
     }));

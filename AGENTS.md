@@ -11,7 +11,7 @@ Guidance for AI coding agents working in this repository.
 - **Package manager:** `pnpm` (`pnpm@10.18.3`, single-package workspace). Never use `npm`/`yarn`.
 - **Runtime:** Node >= 24. **Build:** `tsc` → `dist/`. No bundler.
 - **Database:** `better-sqlite3` (synchronous, WAL). DB file lives in `memory/database.db`.
-- **LLM providers:** Ollama, NVIDIA, Mock — selected per role via `settings.json` (`ai.manager.provider` for the main agent, `ai.workers.provider` for workers/summarizer/heartbeat).
+- **LLM providers:** Ollama, NVIDIA, Mock — selected per role via `koris.json` (`ai.manager.provider` for the main agent, `ai.workers.provider` for workers/summarizer/heartbeat).
 - **Testing:** Vitest (globals enabled, `@` alias → `src`). Mutation testing via Stryker.
 - **Channels:** `@whiskeysockets/baileys` (WhatsApp) and `@guilhermesalviano/telegram-bot`.
 
@@ -25,7 +25,7 @@ Guidance for AI coding agents working in this repository.
 | `pnpm dev:client` | Vite dev server (port 5173), proxies `/api` and `/health` to `localhost:3000` |
 | `pnpm app` | Run agent (web on port 3000). Add `--tui` for TUI, `telegram` for Telegram |
 | `pnpm onboard` | First-time onboarding flow |
-| `pnpm validate` | Validate `settings.json` against expected schema |
+| `pnpm validate` | Validate `koris.json` against expected schema |
 | `pnpm lint` | Type-check server (`tsc --noEmit`) — run this after any change |
 | `pnpm lint:client` | Type-check the web frontend (`tsc --noEmit -p web/tsconfig.json`) |
 | `pnpm lint:landing` | Type-check the landing page (`tsc --noEmit -p landing/tsconfig.json`) |
@@ -43,7 +43,7 @@ Guidance for AI coding agents working in this repository.
 
 - `src/app.ts` — process entry point: wires DB, SessionManager, MessageGateway, channels, heartbeat, web server, TUI. Mode detection via argv flags.
 - `src/onboard.ts`, `src/validate-settings.ts` — CLI entry points (`pnpm onboard`, `pnpm validate`).
-- `src/config/` — loads `settings.json` into the typed `config` constant (`config/index.ts`). `config.BASE_DIR` is `process.cwd()`. Read-only; every module imports `config` directly.
+- `src/config/` — loads `koris.json` into the typed `config` constant (`config/index.ts`). `config.BASE_DIR` is `process.cwd()`. Read-only; every module imports `config` directly.
 - `src/constants/` — static prompt/agent text: main agent prompt, sub-agent prompts, thinking, TUI, command help.
 - `src/entities/` — plain data types: `message`, `session`, `memory`, `heartbeat`.
 - `src/types/` — TypeScript interfaces/typedefs (agents, chat, tools, workers, memory, etc.). Shared contracts live here.
@@ -100,7 +100,7 @@ Two independent flags control how LLM calls are ordered:
 
 ## Security
 
-- `src/services/security/gate.ts` — domain allowlist gate for tools. `gateErrorForUrl(input)` returns an error string when a URL's hostname is not in `settings.json` `allowed_domains`, or `null` when permitted; `extractHostname(input)` parses and validates a hostname; `getAllowedDomains()` reads the configured allowlist. Used by `curl-request` to block requests outside the allowlist.
+- `src/services/security/gate.ts` — domain allowlist gate for tools. `gateErrorForUrl(input)` returns an error string when a URL's hostname is not in `koris.json` `allowed_domains`, or `null` when permitted; `extractHostname(input)` parses and validates a hostname; `getAllowedDomains()` reads the configured allowlist. Used by `curl-request` to block requests outside the allowlist.
 - `src/services/tools/runtime.ts` — child-process execution helpers with output-size limits and no-shell `spawn`/`execFile` (structural defense against shell injection).
 
 ## Workers & sub-agents

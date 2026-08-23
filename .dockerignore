@@ -17,7 +17,7 @@ logs
 # Secrets and local config
 .env
 **/.env
-**/settings.json
+**/koris.json
 
 # Dev / CI artifacts
 .git

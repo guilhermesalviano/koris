@@ -48,8 +48,18 @@ class ExecutorWorker implements IWorker<ExecutorWorkerArgs, ProcessedMessage> {
         sessionId: ctx.message?.getSessionId(),
         runId: ctx.options?.runId,
         agentName: 'executorWorker',
+        ...ctx.toolContext,
       },
     );
+
+    const allSilentSuccess = toolResultsArray.length > 0
+      && toolResultsArray.every((r) => r.success && r.silent);
+    if (allSilentSuccess) {
+      this.logger.info('Silent tool result(s); skipping synthesis call', {
+        toolNames: toolResultsArray.map((r) => r.toolName),
+      });
+      return '';
+    }
 
     const toolResults = toolResultsArray.map((r) => ({
       role: 'tool' as const,

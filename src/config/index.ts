@@ -34,6 +34,10 @@ export interface AppConfig {
   GATEWAY_HOST: string;
   ALLOWED_DOMAINS: string[];
   LEARNED_SKILLS_LIMIT: number;
+  STICKERS: {
+    ENABLED: boolean;
+    ALLOW_UNTRUSTED: boolean;
+  };
   SESSION: {
     TTL_MS: number;
   };
@@ -96,6 +100,12 @@ function buildConfig(): AppConfig {
     .map((domain) => domain.trim().toLowerCase())
     .filter(Boolean),
   LEARNED_SKILLS_LIMIT: Number(get('learned_skills_limit', '10')),
+  STICKERS: {
+    ENABLED: get('stickers.enabled', 'true') === 'true',
+    // Temporary: lets senders outside the channel whitelist learn/send stickers
+    // while the rest of the toolset stays locked to trusted senders.
+    ALLOW_UNTRUSTED: get('stickers.allow_untrusted', 'true') === 'true',
+  },
   SESSION: {
     TTL_MS: Number(get('session.ttl_ms', String(30 * 60 * 1000))),
   },
@@ -149,7 +159,7 @@ function buildConfig(): AppConfig {
 export const config: AppConfig = buildConfig();
 
 /**
- * Re-reads settings.json (and env vars) and applies the new values onto the
+ * Re-reads koris.json (and env vars) and applies the new values onto the
  * existing `config` object in place, so already-imported references stay
  * valid. Note this is a shallow merge: nested objects (config.AI,
  * config.CHANNELS, ...) are replaced wholesale with new references — code
@@ -167,6 +177,6 @@ export function reloadConfig(options?: { cwd?: string; dirname?: string }): void
 const isTelegramMode = process.argv.includes('telegram') || process.argv.includes('--telegram');
 if (!isTest && isTelegramMode && !config.CHANNELS.TELEGRAM.BOT_TOKEN) {
   console.error('ERROR: channels.telegram.bot_token is required');
-  console.error('Please set channels.telegram.bot_token in settings.json or CHANNELS_TELEGRAM_BOT_TOKEN as an environment variable');
+  console.error('Please set channels.telegram.bot_token in koris.json or CHANNELS_TELEGRAM_BOT_TOKEN as an environment variable');
   process.exit(1);
 }

@@ -295,7 +295,7 @@ class DashboardServer implements WebServerHandle {
     }
 
     this.logger.info(
-      `No settings.json found yet — open http://localhost:${config.WEB_PORT}/setup in your browser to finish setup, ` +
+      `No koris.json found yet — open http://localhost:${config.WEB_PORT}/setup in your browser to finish setup, ` +
         'or run `pnpm onboard` for a CLI setup wizard instead.',
     );
   }

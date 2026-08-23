@@ -8,6 +8,7 @@ import type {
   ImageAttachment,
   Plugin,
   PluginContext,
+  StickerReference,
 } from '../contracts';
 import type { PluginRegistry } from '../registry';
 import type { WAMessage } from '@whiskeysockets/baileys';
@@ -41,13 +42,14 @@ interface IWhatsAppChannel {
     name: string,
     text: string,
     images?: ImageAttachment[],
-    options?: { isWhitelistedSender?: boolean; groupName?: string },
+    options?: { isWhitelistedSender?: boolean; groupName?: string; stickers?: StickerReference[] },
   ): Promise<void>;
   sendText(jid: string, text: string): Promise<void>;
+  sendSticker(jid: string, sticker: StickerReference): Promise<void>;
 }
 
 interface SocketLike {
-  sendMessage(jid: string, content: { text: string }): Promise<unknown>;
+  sendMessage(jid: string, content: { text: string } | { forward: WAMessage }): Promise<unknown>;
   sendPresenceUpdate(presence: 'composing' | 'paused', jid: string): Promise<unknown>;
   groupMetadata(jid: string): Promise<{ subject?: string }>;
   end(err: Error | undefined): void;
@@ -165,14 +167,16 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
 
       const rawText = extractText(msg);
       const image = extractImage(msg);
-      if (!rawText && !image) continue;
+      const sticker = extractQuotedSticker(msg);
+
+      if (!rawText && !image && !sticker) continue;
 
       const text = image?.caption ?? rawText ?? '';
       const isGroup = jid.endsWith('@g.us');
       const mentionsBot = isGroup && options.mentionId.length > 0 && text.includes(`@${options.mentionId}`);
       if (isGroup && !mentionsBot) continue;
 
-      void handleInboundMessage(options, sock, jid, senderName, text, image, isWhitelisted).catch((err: Error) => {
+      void handleInboundMessage(options, sock, jid, senderName, text, image, sticker, isWhitelisted).catch((err: Error) => {
         options.logger.warn(`WhatsApp message handling error: ${err.message}`);
       });
     }
@@ -204,6 +208,13 @@ interface ExtractedImage {
   message: WAMessage;
 }
 
+interface ExtractedSticker {
+  mimetype?: string;
+  quotedMessage: unknown;
+  stanzaId?: string;
+  participant?: string;
+}
+
 function extractImage(msg: WAMessage): ExtractedImage | null {
   if (!msg.message || typeof msg.message !== 'object') return null;
 
@@ -219,6 +230,32 @@ function extractImage(msg: WAMessage): ExtractedImage | null {
    };
  }
 
+function extractQuotedSticker(msg: WAMessage): ExtractedSticker | null {
+  if (!msg.message || typeof msg.message !== 'object') return null;
+
+  const content = msg.message as Record<string, unknown>;
+  const extendedText = content['extendedTextMessage'];
+  if (!extendedText || typeof extendedText !== 'object') return null;
+
+  const contextInfo = (extendedText as Record<string, unknown>)['contextInfo'];
+  if (!contextInfo || typeof contextInfo !== 'object') return null;
+
+  const info = contextInfo as Record<string, unknown>;
+  const quotedMessage = info['quotedMessage'];
+  if (!quotedMessage || typeof quotedMessage !== 'object') return null;
+
+  const stickerMessage = (quotedMessage as Record<string, unknown>)['stickerMessage'];
+  if (!stickerMessage || typeof stickerMessage !== 'object') return null;
+
+  const sticker = stickerMessage as Record<string, unknown>;
+  return {
+    mimetype: typeof sticker['mimetype'] === 'string' ? sticker['mimetype'] : 'image/webp',
+    quotedMessage,
+    stanzaId: typeof info['stanzaId'] === 'string' ? info['stanzaId'] : undefined,
+    participant: typeof info['participant'] === 'string' ? info['participant'] : undefined,
+  };
+}
+
  async function downloadImageBase64(image: ExtractedImage, logger: ILogger): Promise<ImageAttachment | null> {
    try {
      const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
@@ -230,6 +267,20 @@ function extractImage(msg: WAMessage): ExtractedImage | null {
    }
  }
 
+function toStickerReference(jid: string, sticker: ExtractedSticker, logger: ILogger): StickerReference {
+  logger.debug(`[whatsapp] quoted sticker captured (stanzaId=${sticker.stanzaId ?? 'unknown'}, participant=${sticker.participant ?? 'unknown'})`);
+  return {
+    key: {
+      remoteJid: jid,
+      id: sticker.stanzaId,
+      participant: sticker.participant,
+      fromMe: false,
+    },
+    message: sticker.quotedMessage,
+    mimeType: sticker.mimetype,
+  };
+}
+
  async function handleInboundMessage(
    options: WhatsAppChannelStartOptions,
    sock: SocketLike,
@@ -237,6 +288,7 @@ function extractImage(msg: WAMessage): ExtractedImage | null {
    senderName: string,
    text: string,
    image: ExtractedImage | null,
+   sticker: ExtractedSticker | null,
    isWhitelistedSender: boolean,
  ): Promise<void> {
    const images: ImageAttachment[] = [];
@@ -245,9 +297,14 @@ function extractImage(msg: WAMessage): ExtractedImage | null {
      if (attachment) images.push(attachment);
    }
 
+   const stickers: StickerReference[] = [];
+   if (sticker) {
+     stickers.push(toStickerReference(jid, sticker, options.logger));
+   }
+
 const channel = new WhatsAppChannel(sock);
    const groupName = jid.endsWith('@g.us') ? await resolveGroupName(sock, jid, options.logger) : undefined;
-   await channel.handleMessage(options.gateway, jid, senderName, text, images, { isWhitelistedSender, groupName });
+   await channel.handleMessage(options.gateway, jid, senderName, text, images, { isWhitelistedSender, groupName, stickers });
   }
 
  function formatBaileysLog(msg: unknown): string {
@@ -284,7 +341,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
     name: string,
     text: string,
     images?: ImageAttachment[],
-    options?: { isWhitelistedSender?: boolean; groupName?: string },
+    options?: { isWhitelistedSender?: boolean; groupName?: string; stickers?: StickerReference[] },
   ): Promise<void> {
     const isTrustedSender = options?.isWhitelistedSender ?? false;
     if (!isTrustedSender && !allowUntrusted) {
@@ -310,6 +367,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
         text,
         senderName: name,
         images,
+        stickers: options?.stickers,
         isGroup,
         mentionsBot: isGroup && mentionId.length > 0 && text.includes(`@${mentionId}`),
         isTrustedSender,
@@ -352,6 +410,13 @@ class WhatsAppChannel implements IWhatsAppChannel {
     }
   }
 
+  async sendSticker(jid: string, sticker: StickerReference): Promise<void> {
+    const sock = await this.getSocket();
+    const target = parseMentionTarget(jid);
+    const forwarded = { key: sticker.key, message: sticker.message } as WAMessage;
+    await sock.sendMessage(target, { forward: forwarded });
+  }
+
   private async getSocket(): Promise<SocketLike> {
     if (this.sock) return this.sock;
     if (activeSocket) return activeSocket;
@@ -384,6 +449,11 @@ class WhatsAppChannelFactory {
     const channel = new WhatsAppChannel();
     await channel.sendText(jid, text);
   }
+
+  static async sendSticker(jid: string, sticker: StickerReference): Promise<void> {
+    const channel = new WhatsAppChannel();
+    await channel.sendSticker(jid, sticker);
+  }
 }
 
 const whatsappChannel = WhatsAppChannelFactory.create();
@@ -411,6 +481,9 @@ function createWhatsAppAdapter(options: WhatsAppPluginOptions): ChannelDefinitio
     },
     sendMessage: async (_logger: ILogger, target: string, message: string) => {
       await WhatsAppChannelFactory.sendText(target, message);
+    },
+    sendSticker: async (_logger: ILogger, target: string, sticker: StickerReference) => {
+      await WhatsAppChannelFactory.sendSticker(target, sticker);
     },
   };
 }

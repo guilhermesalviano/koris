@@ -5,6 +5,7 @@ import type { IMessageService } from '../message-service';
 import type { ILogger } from '../../infrastructure/logger';
 import type { IChatService } from '../../types/chat';
 import type { ImageAttachment } from '../../types/messages';
+import type { StickerReference } from '../../../plugins/contracts';
 import type { LoopContext } from '../../types/context';
 import { ChatServiceFactory } from '../chat/chat-service';
 import { IToolCallPipeline, ToolCallPipelineFactory } from './tool-call-pipeline';
@@ -14,6 +15,8 @@ interface MainAgentArgs {
   channel: string;
   message: IMessageService;
   images?: ImageAttachment[];
+  stickers?: StickerReference[];
+  target?: string;
   options?: ProcessOptions;
 }
 
@@ -32,7 +35,7 @@ class MainAgent implements IMainAgent {
   ) {}
 
   async run(args: MainAgentArgs): Promise<ProcessedMessage> {
-    const { userMessage, channel, message, images, options } = args;
+    const { userMessage, channel, message, images, stickers, target, options } = args;
     const messageHistory = message.getHistory();
     const toolContracts = options?.toolsEnabled === false
       ? [RESTRICTED_EXECUTION_CONTRACT]
@@ -42,6 +45,7 @@ class MainAgent implements IMainAgent {
       channel,
       message,
       images,
+      toolContext: { stickers, target },
       toolsQueue: this.toolsQueue,
       signal: options?.signal ?? NEVER_ABORTED,
       onProgress: options?.onProgress ?? ((progress) => this.logger.info(progress)),

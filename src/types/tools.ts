@@ -1,4 +1,5 @@
 import type { ILogger } from "../infrastructure/logger";
+import type { StickerReference } from "../../plugins/contracts";
 
 export interface ToolCall {
   id?: string;
@@ -12,6 +13,12 @@ export interface ToolResult {
   result?: string;
   error?: string;
   toolCallId?: string;
+  /**
+   * Set on a successful result when the tool's user-facing effect is already fully
+   * delivered by the tool itself. The executor loop skips its post-tool synthesis
+   * call entirely when every result in a batch is silent and successful.
+   */
+  silent?: boolean;
 }
 
 export interface ToolExecutionContext {
@@ -19,6 +26,8 @@ export interface ToolExecutionContext {
   sessionId?: string;
   runId?: string;
   agentName?: string;
+  stickers?: StickerReference[];
+  target?: string;
 }
 
 export type CommandFn = (

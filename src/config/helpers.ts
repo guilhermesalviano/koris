@@ -13,10 +13,10 @@ const defaultFileIO: ConfigFileIO = {
 
 export function resolveConfigPaths(cwd: string = process.cwd(), dirname: string = __dirname): string[] {
   return Array.from(new Set([
-    join(cwd, 'settings.json'),
-    join(cwd, 'apps', 'client', 'settings.json'),
-    join(dirname, '..', '..', 'settings.json'),
-    join(dirname, '..', '..', '..', 'settings.json'),
+    join(cwd, 'koris.json'),
+    join(cwd, 'apps', 'client', 'koris.json'),
+    join(dirname, '..', '..', 'koris.json'),
+    join(dirname, '..', '..', '..', 'koris.json'),
   ].map((path) => normalize(path))));
 }
 
@@ -38,7 +38,7 @@ export function loadConfigFile(options?: {
   try {
     return JSON.parse(fileIO.read(configPath)) as Record<string, unknown>;
   } catch {
-    options?.onParseError?.('Warning: Failed to parse settings.json, ignoring file.');
+    options?.onParseError?.('Warning: Failed to parse koris.json, ignoring file.');
     return {};
   }
 }

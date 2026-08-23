@@ -14,7 +14,7 @@ const starting = new Set<LiveChannelName>();
  * Starts (or, if already connecting/connected, no-ops on) the WhatsApp
  * channel outside the normal one-time boot registration in
  * `ChannelsManager`, so the setup wizard can bring it up live after saving
- * settings.json — without a process restart.
+ * koris.json — without a process restart.
  */
 export function startWhatsAppLive(logger: ILogger, gateway: IMessageGateway): void {
   if (stopFns.has('whatsapp') || starting.has('whatsapp')) return;
@@ -48,7 +48,7 @@ export function startWhatsAppLive(logger: ILogger, gateway: IMessageGateway): vo
  * Starts (or no-ops on) the Telegram channel live, mirroring
  * `startWhatsAppLive`. Needed because `plugins/telegram`'s `create()`
  * doesn't even register a channel definition when Telegram starts disabled
- * — which is the default on a fresh install with no settings.json.
+ * — which is the default on a fresh install with no koris.json.
  */
 export function startTelegramLive(logger: ILogger, gateway: IMessageGateway, token: string): void {
   if (stopFns.has('telegram') || starting.has('telegram')) return;

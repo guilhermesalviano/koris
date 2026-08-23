@@ -232,6 +232,28 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_learned_skills_learned_at ON learned_skills(learned_at);
       `);
 
+      /**
+       * Stickers learned from conversation: a lightweight channel-native
+       * reference (e.g. a WhatsApp message key + content, for forwarding by
+       * reference) plus a description of when the agent should reuse it.
+       */
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS sticker_rules (
+          id TEXT PRIMARY KEY,
+          description TEXT NOT NULL,
+          reference TEXT NOT NULL,
+          channel TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          learned_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_sticker_rules_enabled ON sticker_rules(enabled);
+        CREATE INDEX IF NOT EXISTS idx_sticker_rules_learned_at ON sticker_rules(learned_at);
+        CREATE INDEX IF NOT EXISTS idx_sticker_rules_channel ON sticker_rules(channel);
+      `);
+
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS audit_logs (
           id TEXT PRIMARY KEY,

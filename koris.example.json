@@ -5,6 +5,10 @@
   "gateway_host": "http://localhost:3000",
   "allowed_domains": [],
   "learned_skills_limit": 10,
+  "stickers": {
+    "enabled": true,
+    "allow_untrusted": false
+  },
   "heartbeat": false,
   "channels": {
     "allow_untrusted": false,
@@ -28,7 +32,7 @@
       "provider": "ollama",
       "base_url": "http://localhost:11434",
       "api_token": "PROVIDER_API_TOKEN",
-      "model": "gemma4:e4b"
+      "model": "gemma4:e4b-it-q4_K_M"
     },
     "workers": {
       "provider": "ollama",

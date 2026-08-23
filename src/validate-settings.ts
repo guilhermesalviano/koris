@@ -1,7 +1,7 @@
 /**
  * Settings validation script.
  *
- * Checks settings.json (and env vars) for correctness before starting the app.
+ * Checks koris.json (and env vars) for correctness before starting the app.
  *
  * Usage:
  *   pnpm validate
@@ -65,8 +65,8 @@ function advisory(ok: boolean, label: string, hint = '', detail = '') {
 async function main() {
   console.log(`\n${c.bold}koris — settings validation${c.reset}`);
 
-  // ── 1. settings.json file ────────────────────────────────────────────────
-  section('settings.json');
+  // ── 1. koris.json file ────────────────────────────────────────────────
+  section('koris.json');
   const candidatePaths = resolveConfigPaths(process.cwd(), __dirname);
   const foundPath = candidatePaths.find(existsSync);
 
@@ -78,7 +78,7 @@ async function main() {
       pass('Valid JSON');
     }
   } else {
-    warn('settings.json not found — using defaults and env vars only', 'create apps/client/settings.json to configure the app');
+    warn('koris.json not found — using defaults and env vars only', 'create apps/client/koris.json to configure the app');
     warnings++;
   }
 
@@ -95,14 +95,14 @@ async function main() {
   advisory(
     isValidUrl(config.GATEWAY_HOST),
     'gateway_host is a valid URL',
-    'Set gateway_host in settings.json to the public URL of this server',
+    'Set gateway_host in koris.json to the public URL of this server',
     config.GATEWAY_HOST,
   );
 
   advisory(
     config.ALLOWED_DOMAINS.length > 0,
     'allowed_domains is configured',
-    'Add allowed_domains to settings.json to permit curl_request (default-deny)',
+    'Add allowed_domains to koris.json to permit curl_request (default-deny)',
     config.ALLOWED_DOMAINS.join(', '),
   );
 
@@ -113,27 +113,33 @@ async function main() {
     config.LOG_LEVEL,
   );
 
+  advisory(
+    !config.STICKERS.ALLOW_UNTRUSTED,
+    'stickers.allow_untrusted is valid',
+    'but stickers.allow_untrusted is on — anyone outside the channel whitelist can learn/send stickers',
+  );
+
   // ── 3. AI Provider ───────────────────────────────────────────────────────
   section('AI Provider');
 
   check(
     typeof config.AI.PARALLEL === 'boolean',
     'ai.parallel is valid',
-    'Set ai.parallel to true or false in settings.json',
+    'Set ai.parallel to true or false in koris.json',
     String(config.AI.PARALLEL),
   );
 
   check(
     typeof config.AI.SUBAGENTS_PARALLEL === 'boolean',
     'ai.subagents_parallel is valid',
-    'Set ai.subagents_parallel to true or false in settings.json',
+    'Set ai.subagents_parallel to true or false in koris.json',
     String(config.AI.SUBAGENTS_PARALLEL),
   );
 
   check(
     Number.isInteger(config.AI.BACKGROUND_GRACE_MS) && config.AI.BACKGROUND_GRACE_MS >= 0,
     'ai.background_grace_ms is valid',
-    'Set ai.background_grace_ms to a non-negative integer in settings.json',
+    'Set ai.background_grace_ms to a non-negative integer in koris.json',
     String(config.AI.BACKGROUND_GRACE_MS),
   );
 
@@ -156,7 +162,7 @@ async function main() {
   check(
     config.AI.MANAGER.MODEL.trim().length > 0,
     'ai.manager.model is not empty',
-    'Set ai.manager.model in settings.json',
+    'Set ai.manager.model in koris.json',
     config.AI.MANAGER.MODEL,
   );
 
@@ -177,7 +183,7 @@ async function main() {
   check(
     config.AI.WORKERS.MODEL.trim().length > 0,
     'ai.workers.model is not empty',
-    'Set ai.workers.model in settings.json',
+    'Set ai.workers.model in koris.json',
     config.AI.WORKERS.MODEL,
   );
 
@@ -228,7 +234,7 @@ async function main() {
     if (result.ok) {
       pass(`AI provider reachable (${profile.label})`, result.detail ? `v${result.detail}` : result.healthUrl);
     } else if (result.authFailed) {
-      fail(`AI provider auth failed (${profile.label})`, `HTTP ${result.status} — check ai.${profile.label}.api_token in settings.json`);
+      fail(`AI provider auth failed (${profile.label})`, `HTTP ${result.status} — check ai.${profile.label}.api_token in koris.json`);
       errors++;
     } else if (result.error) {
       warn(`AI provider unreachable (${profile.label})`, result.error);
@@ -246,7 +252,7 @@ async function main() {
     check(
       config.CHANNELS.TELEGRAM.BOT_TOKEN.trim().length > 0,
       'channels.telegram.bot_token is set',
-      'Set channels.telegram.bot_token in settings.json',
+      'Set channels.telegram.bot_token in koris.json',
     );
 
     advisory(
