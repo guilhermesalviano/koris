@@ -1,4 +1,5 @@
 import type { ILogger } from "../infrastructure/logger";
+import type { StickerReference } from "../../plugins/contracts";
 
 export interface ToolCall {
   id?: string;
@@ -19,6 +20,8 @@ export interface ToolExecutionContext {
   sessionId?: string;
   runId?: string;
   agentName?: string;
+  stickers?: StickerReference[];
+  target?: string;
 }
 
 export type CommandFn = (
