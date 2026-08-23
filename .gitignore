@@ -19,7 +19,7 @@ node_modules
 logs/
 
 koris.json
-searxng/config/
+**/settings.yml
 
 temp/*
 memory/*

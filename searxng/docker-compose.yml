@@ -13,7 +13,7 @@ services:
       # at that path for a missing file-mount, crashing the container's
       # startup script. A missing directory-mount is safe (Docker creates a
       # real directory, and the image falls back to its bundled defaults).
-      - ./config:/etc/searxng:Z
+      - ../config:/etc/searxng:Z
       - searxng-data:/var/cache/searxng/
 
 volumes:
