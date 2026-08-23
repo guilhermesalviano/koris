@@ -74,6 +74,38 @@ describe('channels/handler', () => {
     );
   });
 
+  it('includes quoted text in the prompt', async () => {
+    const { handler, gateway } = makeHandler();
+    gateway.handle.mockResolvedValue('pong');
+
+    await handler.handle('jid', message({ senderName: 'guilherme', text: 'hi', quotedText: 'the original message' }));
+
+    expect(gateway.handle).toHaveBeenCalledWith(
+      { text: '[Context] Chat: direct (untrusted sender). Sender: guilherme. Quoting: "the original message" Message: hi', images: undefined },
+      'jid',
+      expect.any(Object),
+    );
+  });
+
+  it('notes a quoted image in the prompt when there is no quoted text', async () => {
+    const { handler, gateway } = makeHandler();
+    gateway.handle.mockResolvedValue('pong');
+
+    await handler.handle('jid', message({
+      senderName: 'guilherme',
+      text: 'hi',
+      images: [{ data: 'abc', mimeType: 'image/jpeg', source: 'quoted' }],
+    }));
+
+    expect(gateway.handle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: '[Context] Chat: direct (untrusted sender). Sender: guilherme. Quoting an image. Message: hi',
+      }),
+      'jid',
+      expect.any(Object),
+    );
+  });
+
   it('does not prefix the sender name when prefixSenderName is disabled', async () => {
     const gateway = { handle: vi.fn().mockResolvedValue('pong') };
     const reply = { sendText: vi.fn(), sendError: vi.fn() };

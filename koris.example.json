@@ -42,6 +42,7 @@
       "embedding": true,
       "embed_model": "nomic-embed-text"
     },
+    "searxng_url": "http://localhost:8080",
     "search_api_key": "SERPAPI_KEY",
     "summarizer": true,
     "prompt_sanitizer": false,
@@ -50,6 +51,9 @@
       "hard_ms": 1200000,
       "health_ms": 5000
     }
+  },
+  "github": {
+    "token": "ghp_xxx"
   },
   "personal_information": {
     "name": "John Doe"

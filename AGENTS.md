@@ -95,7 +95,7 @@ Two independent flags control how LLM calls are ordered:
 ## Tools
 
 - Tool registry: `src/services/tools/index.ts` — `AgnosticExecutionTool` dispatches tool name → handler via `COMMAND_MAP`.
-- Tools: `execute-command`, `curl-request` (respects `allowed_domains` in settings), `search` (SerpAPI), `beats/*` (create/list/update/delete recurring beats). Shared helper: `src/services/tools/runtime.ts`.
+- Tools: `execute-command`, `curl-request` (respects `allowed_domains` in settings), `search` (`src/services/tools/search/` — `index.ts` orchestrates: SearXNG is the active provider (`searxng.ts`, self-hosted, `ai.searxng_url`), SerpAPI (`serpapi.ts`, `ai.search_api_key`) is kept as a fallback but is currently inactivated via a code-level flag), `beats/*` (create/list/update/delete recurring beats). Shared helper: `src/services/tools/runtime.ts`.
 - `src/services/tools-queue/` — throttling/serialization of tool calls.
 
 ## Security

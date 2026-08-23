@@ -21,6 +21,7 @@ class ToolsRepository implements IToolsRepository {
 
     tools.push(this.curlTool());
     tools.push(this.searchTool());
+    tools.push(this.issueTool());
 
     if (includeBeatTools) {
       tools.push(this.createBeatTool());
@@ -133,6 +134,39 @@ class ToolsRepository implements IToolsRepository {
             },
           },
           required: ['query'],
+        },
+      },
+    };
+  }
+
+  private issueTool(): AIToolDefinition {
+    return {
+      type: 'function',
+      function: {
+        name: 'issue',
+        description:
+          'Create a GitHub issue. Provides a title (required) and optional body. If GitHub API is configured with owner/repo and a token, creates the issue via the GitHub API. Otherwise returns formatted issue text for manual creation.',
+        parameters: {
+          type: 'object',
+          properties: {
+            title: {
+              type: 'string',
+              description: 'The issue title (required).',
+            },
+            body: {
+              type: 'string',
+              description: 'The issue body/description (optional).',
+            },
+            owner: {
+              type: 'string',
+              description: 'GitHub owner/organization (required if repo is provided).',
+            },
+            repo: {
+              type: 'string',
+              description: 'GitHub repository name (required if owner is provided).',
+            },
+          },
+          required: ['title'],
         },
       },
     };

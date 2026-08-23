@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Server: settings changes made through the wizard/Settings page apply immediately — the AI provider and Telegram/WhatsApp channels reload without restarting the process.
 - CLI: on startup, if no `koris.json` is found, prints instructions pointing to the web setup wizard or the `pnpm onboard` CLI flow.
 - Landing page: rewrote the "How it works" section as a step-by-step walkthrough for downloading a release zip and running it, replacing the `git clone`-oriented steps.
+- Tools: `search_engine` now uses a self-hosted SearXNG instance (`ai.searxng_url`) as its primary provider — free, no per-query cost. The existing SerpAPI implementation (`ai.search_api_key`) is kept in code as a fallback, currently inactivated.
 
 ### Changed
 

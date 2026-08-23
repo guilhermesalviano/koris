@@ -1,3 +1,5 @@
+import { NOT_AUTHORIZED_PERMISSION } from "./http-errors";
+
 export const TOOL_EXECUTION_CONTRACT = `
 # Tool Execution Contract
 
@@ -23,9 +25,9 @@ export const RESTRICTED_EXECUTION_CONTRACT = `
 
 - Tools are unavailable for this sender. Do not claim to run tools, fetch live data, or perform external actions.
 - Learned skills are unavailable for this sender.
-- If the request requires tools/external actions, reply exactly:
-  "I can only provide text-only help for this WhatsApp account. Tool-based actions are limited to authorized users."
 - If the request can be answered from general knowledge or direct reasoning, answer normally.
+- If the request requires tools/external actions, reply exactly:
+  ${NOT_AUTHORIZED_PERMISSION}
 `;
 // ### DECOMPOSITION
 // Break the human's message into atomic tasks. Each task that can be answered or acted on by a tool MUST trigger one.

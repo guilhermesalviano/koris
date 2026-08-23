@@ -17,27 +17,24 @@
   <img src="https://img.shields.io/badge/license-ISC-blue" alt="License: ISC">
 </p>
 
-<p align="left">
-  🌐 <a href="https://guilhermesalviano.github.io/koris"><b>Landing page</b></a>
-</p>
-
 ---
 
 ## Key Features
 
-- 🧩 **Modular architecture** — extend capabilities via a plugin system (channels) and a markdown-based skill system.
-- 💬 **Pluggable channels** — Telegram, WhatsApp, a Terminal UI, and a web dashboard, all driven by the same agent core.
-- 🧠 **Persistent memory** — long-term memories, session tracking, and short-term conversation history in SQLite.
-- ⏰ **Heartbeat agents** — scheduled, cron-driven sub-agents ("beats") that run autonomously in the background.
-- 🛠️ **Tool execution** — shell commands, HTTP requests (domain-gated), web search, and beat management, exposed to the LLM.
-- 🔌 **Multi-provider AI** — swap between Ollama, NVIDIA, or a mock provider per role (main agent vs. background workers).
-- 📺 **Web dashboard** — a React admin UI for chatting with the agent and managing sessions, memories, heartbeats, and skills.
-- 🦺 **Type-safe** — built end-to-end in strict TypeScript.
+- **Modular architecture** — extend capabilities via a plugin system (channels) and a markdown-based skill system.
+- **Pluggable channels** — Telegram, WhatsApp, a Terminal UI, and a web dashboard, all driven by the same agent core.
+- **Persistent memory** — long-term memories, session tracking, and short-term conversation history in SQLite.
+- **Heartbeat agents** — scheduled, cron-driven sub-agents ("beats") that run autonomously in the background.
+- **Tool execution** — shell commands, HTTP requests (domain-gated), web search, and beat management, exposed to the LLM.
+- **Multi-provider AI** — swap between Ollama, NVIDIA, or a mock provider per role (main agent vs. background workers).
+- **Web dashboard** — a React admin UI for chatting with the agent and managing sessions, memories, heartbeats, and skills.
+- **Type-safe** — built end-to-end in strict TypeScript.
 
 ## Prerequisites
 
 - Node.js
 - pnpm
+- some AI provider(ollama/nvidia)
 
 ## Setup & Configuration
 
@@ -63,7 +60,7 @@ You can run the agent in different modes depending on your interface preference.
 
 ### Web Interface
 
-Start the agent as a web service:
+Start the agent as a web service; you can still chat in installed channels.
 
 ```bash
 pnpm app
@@ -77,11 +74,28 @@ Once running, the dashboard will be available at: `http://localhost:3000`
 pnpm app --tui
 ```
 
-### Telegram
+## Web Search (SearXNG)
 
-```bash
-pnpm app telegram
-```
+The `search_engine` tool uses a self-hosted [SearXNG](https://docs.searxng.org/) instance — free, no per-query cost, no API key. It's optional: skip this if you don't need web search.
+
+1. **Configure and start SearXNG** (requires Docker):
+   ```bash
+   cd searxng
+   mkdir -p config
+   cp settings.example.yml config/settings.yml
+   openssl rand -hex 32   # paste the output as server.secret_key in config/settings.yml
+   docker compose up -d
+   ```
+   Make sure `config/settings.yml` exists as a **file** before running `docker compose up` — if it doesn't, Docker will happily start anyway but silently create an empty directory in its place, which crashes the container. If you ever see `is a directory` errors in `docker logs koris-searxng`, run `docker compose down -v`, `rm -rf config`, and redo the steps above.
+2. **Point the agent at it** — set `ai.searxng_url` in `koris.json`:
+   ```json
+   "ai": {
+     "searxng_url": "http://localhost:8080"
+   }
+   ```
+3. Restart the agent (or use the web Settings page, which reloads config live).
+
+`json` output format is enabled by `settings.example.yml` already (it's off by default on a fresh SearXNG install and the tool will get HTTP 403s otherwise) — no extra steps needed if you used the file as-is.
 
 ## Available Scripts
 

@@ -1,6 +1,7 @@
 import { CommandFn, ToolCall, ToolExecutionContext, ToolResult } from '../../types/tools';
 import { executeCurl } from './curl-request';
 import { executeSearch } from './search';
+import { executeIssue } from './issue';
 import { setBeat } from './beats/create';
 import { listBeats } from './beats/list';
 import { updateBeat } from './beats/update';
@@ -55,6 +56,7 @@ class AgnosticExecutionToolFactory {
     const COMMAND_MAP: Command = {
       'curl_request': executeCurl,
       'search_engine': executeSearch,
+      'issue': executeIssue,
       'set_beat': setBeat,
       'list_beats': listBeats,
       'update_beat': updateBeat,

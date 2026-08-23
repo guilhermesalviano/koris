@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TelegramMessage } from '@guilhermesalviano/telegram-bot';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../../src/constants/thinking';
+import { NOT_AUTHORIZED_MESSAGE } from '../../../../src/constants';
 import { ChannelHandlerFactory } from '../../../../src/channels';
 import {
   _setBotUsernameForTesting,
@@ -161,14 +162,14 @@ describe('channels/telegram', () => {
     expect(agent.handle).not.toHaveBeenCalled();
   });
 
-  it('ignores private messages from a non-whitelisted sender', async () => {
+  it('denies private messages from a non-whitelisted sender with the not-authorized message', async () => {
     _setTelegramWhitelistForTesting([123]);
     const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn() };
 
     await handleMessage(agent, createMessage('hello', 'private', [], 999));
 
     expect(agent.handle).not.toHaveBeenCalled();
-    expect(bot.sendMessage).not.toHaveBeenCalled();
+    expect(bot.sendMessage).toHaveBeenCalledWith(123, NOT_AUTHORIZED_MESSAGE);
   });
 
   it('processes private messages from a whitelisted sender', async () => {
@@ -188,10 +189,7 @@ describe('channels/telegram', () => {
     await handleMessage(agent, createMessage('hello', 'private', [], 999));
 
     expect(agent.handle).not.toHaveBeenCalled();
-    expect(bot.sendMessage).toHaveBeenCalledWith(
-      123,
-      'You need to allow this number to send messages on the server.',
-    );
+    expect(bot.sendMessage).toHaveBeenCalledWith(123, NOT_AUTHORIZED_MESSAGE);
   });
 
   it('processes private messages from a non-whitelisted sender when allow_untrusted is on', async () => {
@@ -223,13 +221,10 @@ describe('channels/telegram', () => {
     await handleMessage(agent, createMessage('hello', 'private', [], 999));
 
     expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct (untrusted sender). Message: hello', images: [] }, '123', { channel: 'telegram', toolsEnabled: false, learnedSkillsEnabled: false, stickersEnabled: true });
-    expect(bot.sendMessage).not.toHaveBeenCalledWith(
-      123,
-      'You need to allow this number to send messages on the server.',
-    );
+    expect(bot.sendMessage).not.toHaveBeenCalledWith(123, NOT_AUTHORIZED_MESSAGE);
   });
 
-  it('ignores group messages from a non-whitelisted sender even when mentioned', async () => {
+  it('denies group messages from a non-whitelisted sender even when mentioned', async () => {
     _setTelegramWhitelistForTesting([123]);
     _setBotUsernameForTesting(BOT_USERNAME);
     const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn() };
@@ -238,7 +233,7 @@ describe('channels/telegram', () => {
     await handleMessage(agent, createMessage(text, 'group', mentionEntity(text, BOT_USERNAME), 999));
 
     expect(agent.handle).not.toHaveBeenCalled();
-    expect(bot.sendMessage).not.toHaveBeenCalled();
+    expect(bot.sendMessage).toHaveBeenCalledWith(123, NOT_AUTHORIZED_MESSAGE);
   });
 
   it('does not send the deny message for unmentioned group messages when the whitelist is empty', async () => {
@@ -374,6 +369,121 @@ describe('channels/telegram photos', () => {
     await handleMessage(agent, createPhotoMessage([{ file_id: 'file-4' }], 'analyze'));
 
     expect(agent.handle).toHaveBeenCalledWith({ text: '[Context] Chat: direct. Message: analyze', images: [] }, '123', { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true });
+  });
+});
+
+describe('channels/telegram quoted replies', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    create(makeContext());
+    _setTelegramWhitelistForTesting([123]);
+    _setBotUsernameForTesting(null);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function createReplyMessage(text: string, replyTo: Record<string, unknown>): TelegramMessage {
+    return {
+      chat: { id: 123, type: 'private' },
+      from: { id: 123, is_bot: false, first_name: 'Test' },
+      text,
+      reply_to_message: replyTo,
+    } as TelegramMessage;
+  }
+
+  it('captures quoted text from reply_to_message and folds it into the prompt', async () => {
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    await handleMessage(agent, createReplyMessage('what does this mean?', { text: 'the original message' }));
+
+    expect(agent.handle).toHaveBeenCalledWith(
+      { text: '[Context] Chat: direct. Quoting: "the original message" Message: what does this mean?', images: [] },
+      '123',
+      { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true },
+    );
+  });
+
+  it('captures quoted caption when the replied-to message was a photo with a caption', async () => {
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    await handleMessage(agent, createReplyMessage('who is this?', { caption: 'a photo caption', photo: [] }));
+
+    expect(agent.handle).toHaveBeenCalledWith(
+      { text: '[Context] Chat: direct. Quoting: "a photo caption" Message: who is this?', images: [] },
+      '123',
+      { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true },
+    );
+  });
+
+  it('downloads a quoted photo and tags it as quoted', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, result: { file_path: 'photos/quoted.jpg' } }),
+      })
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => Buffer.from('quoted-image-bytes') });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    await handleMessage(agent, createReplyMessage('what is this?', { photo: [{ file_id: 'quoted-file' }] }));
+
+    expect(agent.handle).toHaveBeenCalledWith(
+      {
+        text: '[Context] Chat: direct. Quoting an image. Message: what is this?',
+        images: [{ data: Buffer.from('quoted-image-bytes').toString('base64'), mimeType: 'image/jpeg', source: 'quoted' }],
+      },
+      '123',
+      { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true },
+    );
+  });
+
+  it('combines a current photo and a quoted photo in the same images array', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, result: { file_path: 'photos/current.png' } }) })
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => Buffer.from('current-bytes') })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, result: { file_path: 'photos/quoted.jpg' } }) })
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => Buffer.from('quoted-bytes') });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    const message = {
+      chat: { id: 123, type: 'private' },
+      from: { id: 123, is_bot: false, first_name: 'Test' },
+      photo: [{ file_id: 'current-file' }],
+      reply_to_message: { photo: [{ file_id: 'quoted-file' }] },
+    } as TelegramMessage;
+
+    await handleMessage(agent, message);
+
+    expect(agent.handle).toHaveBeenCalledWith(
+      {
+        text: '[Context] Chat: direct. Quoting an image.',
+        images: [
+          { data: Buffer.from('current-bytes').toString('base64'), mimeType: 'image/png' },
+          { data: Buffer.from('quoted-bytes').toString('base64'), mimeType: 'image/jpeg', source: 'quoted' },
+        ],
+      },
+      '123',
+      { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true },
+    );
+  });
+
+  it('does not add quoting context when there is no reply_to_message', async () => {
+    const agent: Parameters<typeof handleMessage>[0] = { handle: vi.fn().mockResolvedValue('pong') };
+
+    await handleMessage(agent, createMessage('hello'));
+
+    expect(agent.handle).toHaveBeenCalledWith(
+      { text: '[Context] Chat: direct. Message: hello', images: [] },
+      '123',
+      { channel: 'telegram', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true },
+    );
   });
 });
 

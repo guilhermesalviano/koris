@@ -6,6 +6,8 @@ export type { Plugin } from './registry';
 export interface ImageAttachment {
   data: string;
   mimeType?: string;
+  /** Where this image came from: attached to the current message, or from a quoted/replied-to message. Absent means 'current'. */
+  source?: 'current' | 'quoted';
 }
 
 /**
@@ -63,6 +65,8 @@ export interface InboundChannelMessage {
   senderName?: string;
   images?: ImageAttachment[];
   stickers?: StickerReference[];
+  /** Text of the message being replied to/quoted, if any. */
+  quotedText?: string;
   isGroup: boolean;
   mentionsBot: boolean;
   isTrustedSender: boolean;
