@@ -74,9 +74,33 @@ describe('Command Handler', () => {
     it('should format responses differently for TUI vs Telegram', () => {
       const tuiResult = handleCommand('/help', { source: 'tui' });
       const telegramResult = handleCommand('/help', { source: 'telegram' });
-      
+
       expect(tuiResult.response).toBeTruthy();
       expect(telegramResult.response).toBeTruthy();
+    });
+
+    // Characterizes the `source === 'telegram'` branching called out in
+    // FINDINGS.md §2.8: today Telegram alone gets Markdown-styled command
+    // output, and every other channel (whatsapp, tui, web) gets the same
+    // copy with `*` stripped. Locking in the exact split before Phase 2's
+    // `ChannelCapabilities.markdown` replaces this identity check.
+    it('keeps literal * markdown markers only for telegram', () => {
+      const telegramHelp = handleCommand('/help', { source: 'telegram' });
+      const whatsappHelp = handleCommand('/help', { source: 'whatsapp' });
+      const tuiHelp = handleCommand('/help', { source: 'tui' });
+
+      expect(telegramHelp.response).toContain('*Available Commands:*');
+      expect(whatsappHelp.response).not.toContain('*');
+      expect(tuiHelp.response).not.toContain('*');
+    });
+
+    it('renders /start with bold markdown for telegram and plain text otherwise', () => {
+      const telegramStart = handleCommand('/start', { source: 'telegram' });
+      const whatsappStart = handleCommand('/start', { source: 'whatsapp' });
+
+      expect(telegramStart.response).toContain('*Welcome to koris!*');
+      expect(whatsappStart.response).toContain('Welcome to koris!');
+      expect(whatsappStart.response).not.toContain('*');
     });
   });
 

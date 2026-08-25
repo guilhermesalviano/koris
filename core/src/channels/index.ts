@@ -1,33 +1,72 @@
 import type { ILogger } from '../infrastructure/logger';
 import type { IMessageGateway } from '../services/agents/message-gateway';
 import type {
+  Attachment,
+  ChannelCapabilities,
   ChannelDefinition,
   ChannelHandlerOptions,
+  ChannelInstance,
   ChannelReply,
   IChannelHandler,
   IChannelHandlerFactory,
   InboundChannelMessage,
+  OutboundEvent,
   StickerReference,
 } from '../../../plugins/channels/contracts';
-import { ADAPTERS } from '../../../plugins/channels/contracts';
+import { ADAPTERS, assertNeverOutboundEvent } from '../../../plugins/channels/contracts';
 import { ChannelHandler, ChannelHandlerFactory } from './handler';
-import { resolveResponse, splitMessage } from './utils';
+import { resolveResponse, splitForCapabilities, splitMessage } from './utils';
+import type { ChannelOverride } from '../config/channel-overrides';
 
 export type {
+  Attachment,
+  ChannelCapabilities,
   ChannelDefinition,
   ChannelHandlerOptions,
+  ChannelInstance,
   ChannelReply,
   IChannelHandler,
   IChannelHandlerFactory,
   InboundChannelMessage,
+  OutboundEvent,
 };
-export { ADAPTERS, ChannelHandler, ChannelHandlerFactory, resolveResponse, splitMessage };
+export {
+  ADAPTERS,
+  assertNeverOutboundEvent,
+  ChannelHandler,
+  ChannelHandlerFactory,
+  resolveResponse,
+  splitForCapabilities,
+  splitMessage,
+};
 
 export type StopFn = () => void;
+
+/**
+ * Applies koris.json's optional `channels.overrides` onto an already-built
+ * `ChannelDefinition[]` (see `core/src/config/channel-overrides.ts` for the
+ * schema and its limits). Only wraps `enabled()` — it can flip an
+ * already-registered channel off (or back on), nothing more. A channel with
+ * no matching override is returned unchanged.
+ */
+export function applyChannelOverrides(
+  channels: ChannelDefinition[],
+  overrides: Record<string, ChannelOverride>,
+): ChannelDefinition[] {
+  return channels.map((channel) => {
+    const override = overrides[channel.name];
+    if (override?.enabled === undefined) {
+      return channel;
+    }
+    const enabled = override.enabled;
+    return { ...channel, enabled: () => enabled };
+  });
+}
 
 export interface IChannelsManager {
   startAll(): void;
   stopAll(): void;
+  stopChannel(name: string): void;
   sendMessage(channel: string, target: string, message: string): Promise<void>;
   sendSticker(channel: string, target: string, sticker: StickerReference): Promise<void>;
 }
@@ -35,7 +74,7 @@ export interface IChannelsManager {
 class ChannelsManager implements IChannelsManager {
   private logger: ILogger;
   private gateway: IMessageGateway;
-  private stopFns: StopFn[] = [];
+  private stopFnsByName = new Map<string, StopFn>();
   private channels: ChannelDefinition[];
 
   constructor(
@@ -53,13 +92,31 @@ class ChannelsManager implements IChannelsManager {
       if (!channel.enabled()) continue;
       this.logger.info(`Starting channel: ${channel.name}`);
       const stop = channel.start(this.logger, this.gateway);
-      if (typeof stop === 'function') this.stopFns.push(stop);
+      if (typeof stop === 'function') this.stopFnsByName.set(channel.name, stop);
     }
   }
 
   stopAll() {
     this.logger.info("\n👋 Shutting down gracefully...");
-    this.stopFns.forEach((stop) => stop());
+    this.stopFnsByName.forEach((stop) => stop());
+    this.stopFnsByName.clear();
+  }
+
+  /**
+   * Stops one channel (if it was started) and removes it from this manager
+   * entirely — later `sendMessage`/`sendSticker`/`stopAll` calls won't see
+   * it. Pairs with `PluginRegistry.extend`'s disposer: that removes a
+   * channel's *declaration* from the registry before it's ever started;
+   * this stops the *running instance* this manager already started,
+   * clearing whatever socket/timer/listener its `stop()` holds.
+   */
+  stopChannel(name: string): void {
+    const stop = this.stopFnsByName.get(name);
+    if (stop) {
+      stop();
+      this.stopFnsByName.delete(name);
+    }
+    this.channels = this.channels.filter((channel) => channel.name !== name);
   }
 
   async sendMessage(channel: string, target: string, message: string): Promise<void> {
@@ -118,6 +175,20 @@ class ChannelsSingleton {
 
   static getExistingInstance(): ChannelsManager | null {
     return ChannelsSingleton.instance;
+  }
+
+  /**
+   * `getInstance` only constructs on its first call — every later call
+   * silently ignores its `channels` argument and returns the original
+   * instance (see `core/src/channels/index.test.ts`, "ignores channels
+   * passed to getInstance after the first construction"). Fine for the one
+   * production call site (`core/src/app.ts`), but it means a Vitest suite
+   * that wants a second scenario with different channels in the same
+   * process needs an explicit reset. Mirrors the `_setBotUsernameForTesting`
+   * pattern already used in the Telegram plugin.
+   */
+  static resetForTesting(): void {
+    ChannelsSingleton.instance = undefined as unknown as ChannelsManager;
   }
 }
 

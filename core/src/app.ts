@@ -9,7 +9,8 @@ import { startTUI } from '../../apps/tui';
 import { LoggerFactory, ILogger } from './infrastructure/logger';
 import { MessageGatewayFactory, IMessageGateway } from './services/agents/message-gateway';
 import { IHeartbeatRunner, HeartbeatSingleton } from './services/agents/sub-agents/heartbeat/runner';
-import { ChannelsSingleton, ADAPTERS, ChannelHandlerFactory, type IChannelsManager } from './channels';
+import { ChannelsSingleton, ADAPTERS, ChannelHandlerFactory, applyChannelOverrides, type IChannelsManager } from './channels';
+import { loadChannelOverrides } from './config/channel-overrides';
 import { SHUTDOWN_SIGNALS } from './constants/tui';
 import { hasFlag, logError } from './utils/runtime';
 import { SessionManager } from './services/session-manager';
@@ -73,7 +74,8 @@ class Application implements IApplication {
     const sessionManager = new SessionManager(db);
     const gateway = MessageGatewayFactory.create(this.logger, this.source, db, sessionManager);
     const registry = buildRegistry(createPlugins({ context: createPluginContext(this.logger, gateway) }));
-    const channels = ChannelsSingleton.getInstance(this.logger, gateway, registry.collect(ADAPTERS));
+    const registeredChannels = applyChannelOverrides(registry.collect(ADAPTERS), loadChannelOverrides());
+    const channels = ChannelsSingleton.getInstance(this.logger, gateway, registeredChannels);
     const heartbeat = HeartbeatSingleton.getInstance(
       this.logger,
       HeartbeatRepositoryFactory.create(db),

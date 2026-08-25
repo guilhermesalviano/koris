@@ -1,6 +1,7 @@
 import type { InlineKeyboardMarkup, TelegramBot, TelegramMessage } from '@guilhermesalviano/telegram-bot';
 import { ADAPTERS, splitMessage } from '../contracts';
 import type {
+  ChannelCapabilities,
   ChannelDefinition,
   IChannelHandlerFactory,
   ILogger,
@@ -15,6 +16,27 @@ import { loadTelegramConfig, writeTelegramConfigPatch, type TelegramPluginConfig
 export const NOT_AUTHORIZED_MESSAGE = "You're not authorized to send messages here yet. Please ask the administrator to add you to the allowed list.";
 const TYPING_INTERVAL_MS = 5_000;
 const TELEGRAM_MESSAGE_LIMIT = 4_000;
+
+/**
+ * `streaming: true` reflects that the installed `@guilhermesalviano/telegram-bot`
+ * client genuinely exposes `editMessageText` (verified in `node_modules`, see
+ * FINDINGS.md §5) — not that this plugin currently edits messages in place.
+ * Nothing in the pipeline emits real per-token deltas yet (FINDINGS.md §3.7),
+ * so this capability is declared but unexercised until that lands.
+ *
+ * `interactive: false` despite `sendWithApproval`'s inline keyboard existing:
+ * the vendor client fetches `callback_query` updates but never dispatches
+ * them (no way to register a handler for them at all — FINDINGS.md §3.5), so
+ * a button press can't currently be received. `maxMessageChars` keeps the
+ * existing 4000 safety margin under Telegram's real 4096 limit, matching
+ * `TELEGRAM_MESSAGE_LIMIT` below rather than the raw API ceiling.
+ */
+const TELEGRAM_CAPABILITIES: ChannelCapabilities = {
+  streaming: true,
+  markdown: true,
+  interactive: false,
+  maxMessageChars: TELEGRAM_MESSAGE_LIMIT,
+};
 
 let botUsername: string | null = null;
 let botToken = '';
@@ -351,6 +373,7 @@ function createTelegramAdapter(options: TelegramPluginOptions): ChannelDefinitio
   return {
     name: 'telegram',
     enabled: () => options.enabled && options.token.length > 0,
+    capabilities: TELEGRAM_CAPABILITIES,
     start: (logger: ILogger, gateway: IMessageGateway) => {
       let stopFn: (() => void) | null = null;
 
@@ -434,6 +457,16 @@ export function create(context: PluginContext, configOverride?: TelegramPluginCo
   const cfg = configOverride ?? loadTelegramConfig();
   if (!cfg.enabled) {
     return null;
+  }
+
+  if (!cfg.token) {
+    // `enabled` alone doesn't start the channel — `createTelegramAdapter`'s
+    // `enabled()` also requires a non-empty token, so without this warning
+    // this misconfiguration fails silently (registered, never started).
+    context.logger.warn(
+      '[telegram] enabled but bot_token is empty — the channel will not start. ' +
+      'Set CHANNELS_TELEGRAM_BOT_TOKEN or bot_token in plugins/channels/telegram/config.yml.',
+    );
   }
 
   configureTelegramRuntime({
