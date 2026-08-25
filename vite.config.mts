@@ -6,7 +6,7 @@ import path from 'node:path';
 const rootDir = import.meta.dirname;
 
 export default defineConfig({
-  root: path.resolve(rootDir, 'web'),
+  root: path.resolve(rootDir, 'apps/web'),
   plugins: [react(), tailwindcss()],
   build: {
     outDir: path.resolve(rootDir, 'dist-web'),

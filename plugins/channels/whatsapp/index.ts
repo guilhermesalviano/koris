@@ -1,7 +1,7 @@
 import { ADAPTERS, splitMessage } from '../contracts';
 import { parseMentionTarget } from './jid';
-import { NOT_AUTHORIZED_MESSAGE } from '../../../src/constants';
 import type {
+  ChannelCapabilities,
   ChannelDefinition,
   IChannelHandlerFactory,
   ILogger,
@@ -15,14 +15,51 @@ import type { PluginRegistry } from '../registry';
 import type { WAMessage } from '@whiskeysockets/baileys';
 import { loadWhatsAppConfig, writeWhatsAppConfigPatch, type WhatsAppPluginConfig } from './config';
 
+export const NOT_AUTHORIZED_MESSAGE = "You're not authorized to send messages here yet. Please ask the administrator to add you to the allowed list.";
 const WHATSAPP_MESSAGE_LIMIT = 4_000;
 const TYPING_INTERVAL_MS = 5_000;
 const GROUP_NAME_TTL_MS = 60 * 60 * 1_000;
+const DEDUPE_CACHE_LIMIT = 500;
+
+/**
+ * `streaming`/`interactive` are false as-shipped: Baileys does support
+ * editing a sent message (`edit?: WAMessageKey` on the send-content options,
+ * verified in `node_modules` — FINDINGS.md §5) but this plugin never uses it,
+ * and WhatsApp has no button affordance at all today (no approval mechanism
+ * exists here, dead or otherwise, unlike Telegram's unreachable
+ * `sendWithApproval`). `maxMessageChars` matches the existing
+ * `WHATSAPP_MESSAGE_LIMIT` safety margin.
+ */
+const WHATSAPP_CAPABILITIES: ChannelCapabilities = {
+  streaming: false,
+  markdown: false,
+  interactive: false,
+  maxMessageChars: WHATSAPP_MESSAGE_LIMIT,
+};
 
 let channelHandler: IChannelHandlerFactory;
 let mentionId = '';
 let whitelist: string[] = [];
 let allowUntrusted = false;
+
+// Baileys replays recent `messages.upsert` events after a reconnect
+// (FINDINGS.md §3.4) — bounded FIFO of recently-seen `key.id`s so a replay
+// is dropped before it re-triggers the agent pipeline or a duplicate reply.
+const seenMessageIds = new Set<string>();
+const seenMessageIdsOrder: string[] = [];
+
+function isDuplicateMessage(externalId: string | null | undefined): boolean {
+  if (!externalId) return false;
+  if (seenMessageIds.has(externalId)) return true;
+
+  seenMessageIds.add(externalId);
+  seenMessageIdsOrder.push(externalId);
+  if (seenMessageIdsOrder.length > DEDUPE_CACHE_LIMIT) {
+    const oldest = seenMessageIdsOrder.shift();
+    if (oldest !== undefined) seenMessageIds.delete(oldest);
+  }
+  return false;
+}
 
 interface WhatsAppChannelStartOptions {
   authFolder: string;
@@ -44,7 +81,7 @@ interface IWhatsAppChannel {
     name: string,
     text: string,
     images?: ImageAttachment[],
-    options?: { isWhitelistedSender?: boolean; groupName?: string; stickers?: StickerReference[]; quotedText?: string },
+    options?: { isWhitelistedSender?: boolean; groupName?: string; stickers?: StickerReference[]; quotedText?: string; externalId?: string },
   ): Promise<void>;
   sendText(jid: string, text: string): Promise<void>;
   sendSticker(jid: string, sticker: StickerReference): Promise<void>;
@@ -57,11 +94,11 @@ interface SocketLike {
   end(err: Error | undefined): void;
   ev: {
     on(event: string, handler: (data: unknown) => void): void;
+    removeAllListeners(event: string): void;
   };
 }
 
 let activeSocket: SocketLike | null = null;
-let lastWhitelistedJid: string | null = null;
 
 const groupNameCache = new Map<string, { name: string; fetchedAt: number }>();
 
@@ -82,10 +119,6 @@ async function resolveGroupName(sock: SocketLike, jid: string, logger: ILogger):
     logger.warn(`Failed to fetch WhatsApp group metadata for ${jid}: ${err instanceof Error ? err.message : String(err)}`);
     return undefined;
   }
-}
-
-function getLastWhitelistedJid(): string | null {
-  return lastWhitelistedJid;
 }
 
 function isWhitelistedSender(msg: WAMessage): boolean {
@@ -155,15 +188,16 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
       options.logger.debug(`[whatsapp] raw message received: ${JSON.stringify(msg)}`);
 
       const { key, pushName: senderName } = msg;
-      const { fromMe, remoteJid: jid } = key;
+      const { fromMe, remoteJid: jid, id: externalId } = key;
+
+      if (isDuplicateMessage(externalId)) {
+        options.logger.debug(`[whatsapp] dropping duplicate message ${externalId} (already processed)`);
+        continue;
+      }
 
       if (fromMe) continue;
 
       const isWhitelisted = isWhitelistedSender(msg);
-
-      if (isWhitelisted && jid) {
-        lastWhitelistedJid = jid;
-      }
 
       if (!jid || !senderName) continue;
 
@@ -180,7 +214,7 @@ async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise
       const mentionsBot = isGroup && options.mentionId.length > 0 && text.includes(`@${options.mentionId}`);
       if (isGroup && !mentionsBot) continue;
 
-      void handleInboundMessage(options, sock, jid, senderName, text, image, sticker, quotedText, quotedImage, isWhitelisted).catch((err: Error) => {
+      void handleInboundMessage(options, sock, jid, senderName, text, image, sticker, quotedText, quotedImage, isWhitelisted, externalId ?? undefined).catch((err: Error) => {
         options.logger.warn(`WhatsApp message handling error: ${err.message}`);
       });
     }
@@ -369,6 +403,7 @@ function toStickerReference(jid: string, sticker: ExtractedSticker, logger: ILog
    quotedText: string | null,
    quotedImage: ExtractedQuotedImage | null,
    isWhitelistedSender: boolean,
+   externalId?: string,
  ): Promise<void> {
    const images: ImageAttachment[] = [];
    if (image) {
@@ -392,6 +427,7 @@ const channel = new WhatsAppChannel(sock);
      groupName,
      stickers,
      quotedText: quotedText ?? undefined,
+     externalId,
    });
   }
 
@@ -429,7 +465,7 @@ class WhatsAppChannel implements IWhatsAppChannel {
     name: string,
     text: string,
     images?: ImageAttachment[],
-    options?: { isWhitelistedSender?: boolean; groupName?: string; stickers?: StickerReference[]; quotedText?: string },
+    options?: { isWhitelistedSender?: boolean; groupName?: string; stickers?: StickerReference[]; quotedText?: string; externalId?: string },
   ): Promise<void> {
     const isTrustedSender = options?.isWhitelistedSender ?? false;
     if (!isTrustedSender && !allowUntrusted) {
@@ -458,6 +494,8 @@ class WhatsAppChannel implements IWhatsAppChannel {
         images,
         stickers: options?.stickers,
         quotedText: options?.quotedText,
+        externalId: options?.externalId,
+        conversationId: jid,
         isGroup,
         mentionsBot: isGroup && mentionId.length > 0 && text.includes(`@${mentionId}`),
         isTrustedSender,
@@ -529,6 +567,15 @@ class WhatsAppChannelFactory {
     return {
       channel,
       stop: () => {
+        // Detach listeners before ending the socket: `sock.end()` itself
+        // emits a `connection.update` close event, and the still-attached
+        // handler's reconnect logic (`shouldReconnect` — see
+        // FINDINGS.md §4) can't distinguish a deliberate stop from a real
+        // disconnect. Without this, calling `stop()` could spawn a brand
+        // new rogue socket right after intentionally shutting down.
+        sock.ev.removeAllListeners('creds.update');
+        sock.ev.removeAllListeners('connection.update');
+        sock.ev.removeAllListeners('messages.upsert');
         sock.end(undefined);
         activeSocket = null;
       },
@@ -560,6 +607,7 @@ function createWhatsAppAdapter(options: WhatsAppPluginOptions): ChannelDefinitio
   return {
     name: 'whatsapp',
     enabled: () => options.enabled,
+    capabilities: WHATSAPP_CAPABILITIES,
     start: (logger: ILogger, gateway: IMessageGateway) => {
       let stopFn: (() => void) | null = null;
 
@@ -610,7 +658,6 @@ export function configureWhatsAppRuntime(cfg: {
 
 export {
   createWhatsAppPlugin,
-  getLastWhitelistedJid,
   handleMessage,
   IWhatsAppChannel,
   loadWhatsAppConfig,
@@ -620,6 +667,12 @@ export {
   WhatsAppPluginConfig,
   writeWhatsAppConfigPatch,
 };
+
+/** @internal — only for use in tests */
+export function _resetWhatsAppDedupeForTesting(): void {
+  seenMessageIds.clear();
+  seenMessageIdsOrder.length = 0;
+}
 
 export function create(context: PluginContext, configOverride?: WhatsAppPluginConfig): Plugin {
   const cfg = configOverride ?? loadWhatsAppConfig();

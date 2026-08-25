@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SEARXNG_DIR="${PROJECT_DIR}/searxng"
+SEARXNG_DIR="${PROJECT_DIR}/plugins/search/searxng"
 CONFIG_DIR="${PROJECT_DIR}/config"
 SEARXNG_CONFIG="${SEARXNG_DIR}/config/settings.yml"
 SETTINGS_EXAMPLE="${SEARXNG_DIR}/settings.example.yml"

@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: ['./tests/setup/vitest.setup.ts'],
+    setupFiles: ['./core/tests/setup/vitest.setup.ts'],
     exclude: ['.stryker-tmp/**', 'node_modules/**'],
     coverage: {
       provider: 'v8',
@@ -23,7 +23,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(__dirname, './core/src'),
     },
   },
 });
