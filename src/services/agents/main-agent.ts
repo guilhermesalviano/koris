@@ -5,7 +5,7 @@ import type { IMessageService } from '../message-service';
 import type { ILogger } from '../../infrastructure/logger';
 import type { IChatService } from '../../types/chat';
 import type { ImageAttachment } from '../../types/messages';
-import type { StickerReference } from '../../../plugins/contracts';
+import type { StickerReference } from '../../../plugins/channels/contracts';
 import type { LoopContext } from '../../types/context';
 import { ChatServiceFactory } from '../chat/chat-service';
 import { IToolCallPipeline, ToolCallPipelineFactory } from './tool-call-pipeline';

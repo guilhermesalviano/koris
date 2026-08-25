@@ -10,7 +10,7 @@ import type {
   PluginContext,
 } from '../contracts';
 import type { PluginRegistry } from '../registry';
-import { NOT_AUTHORIZED_MESSAGE } from '../../src/constants';
+import { NOT_AUTHORIZED_MESSAGE } from '../../../src/constants';
 
 const TYPING_INTERVAL_MS = 5_000;
 const TELEGRAM_MESSAGE_LIMIT = 4_000;

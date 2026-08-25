@@ -1,5 +1,5 @@
 import type { ILogger } from "../infrastructure/logger";
-import type { StickerReference } from "../../plugins/contracts";
+import type { StickerReference } from "../../plugins/channels/contracts";
 
 export interface ToolCall {
   id?: string;

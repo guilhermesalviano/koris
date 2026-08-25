@@ -21,9 +21,9 @@ import { SkillsRepositoryFactory } from './repositories/skills';
 import { LearnedSkillsRepositoryFactory } from './repositories/learned-skills';
 import { SkillSyncSingleton } from './services/skills/skill-sync';
 import { DashboardServerFactory, WebServerHandle } from './dashboard';
-import { createPlugins, buildRegistry } from '../plugins';
+import { createPlugins, buildRegistry } from '../plugins/channels';
 import { config } from './config';
-import type { PluginContext } from '../plugins/contracts';
+import type { PluginContext } from '../plugins/channels/contracts';
 
 const logger = LoggerFactory.create();
 const MODES = ['tui', 'web'] as const;

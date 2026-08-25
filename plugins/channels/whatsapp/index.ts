@@ -1,6 +1,6 @@
 import { ADAPTERS, splitMessage } from '../contracts';
 import { parseMentionTarget } from './jid';
-import { NOT_AUTHORIZED_MESSAGE } from '../../src/constants';
+import { NOT_AUTHORIZED_MESSAGE } from '../../../src/constants';
 import type {
   ChannelDefinition,
   IChannelHandlerFactory,

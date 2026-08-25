@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TelegramMessage } from '@guilhermesalviano/telegram-bot';
-import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../../src/constants/thinking';
-import { NOT_AUTHORIZED_MESSAGE } from '../../../../src/constants';
-import { ChannelHandlerFactory } from '../../../../src/channels';
+import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../../../src/constants/thinking';
+import { NOT_AUTHORIZED_MESSAGE } from '../../../../../src/constants';
+import { ChannelHandlerFactory } from '../../../../../src/channels';
 import {
   _setBotUsernameForTesting,
   _setTelegramWhitelistForTesting,
@@ -12,8 +12,8 @@ import {
   sendText,
   sendWithApproval,
   TelegramChannelFactory,
-} from '../../../../plugins/telegram';
-import type { PluginContext } from '../../../../plugins/contracts';
+} from '../../../../../plugins/channels/telegram';
+import type { PluginContext } from '../../../../../plugins/channels/contracts';
 
 const BOT_USERNAME = 'KorisBot';
 

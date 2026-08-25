@@ -14,7 +14,7 @@ vi.mock('../../../../../src/repositories/sticker-rules', () => ({
 
 import { learnSticker } from '../../../../../src/services/tools/learn-sticker';
 import type { ILogger } from '../../../../../src/infrastructure/logger';
-import type { StickerReference } from '../../../../../plugins/contracts';
+import type { StickerReference } from '../../../../../plugins/channels/contracts';
 
 const logger: ILogger = { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
 

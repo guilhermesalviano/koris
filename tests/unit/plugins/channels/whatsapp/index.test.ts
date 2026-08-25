@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../../src/constants/thinking';
-import { NOT_AUTHORIZED_MESSAGE } from '../../../../src/constants';
-import { ChannelHandlerFactory } from '../../../../src/channels';
-import { create, handleMessage, sendText, WhatsAppChannel, WhatsAppChannelFactory } from '../../../../plugins/whatsapp';
-import type { PluginContext } from '../../../../plugins/contracts';
+import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../../../src/constants/thinking';
+import { NOT_AUTHORIZED_MESSAGE } from '../../../../../src/constants';
+import { ChannelHandlerFactory } from '../../../../../src/channels';
+import { create, handleMessage, sendText, WhatsAppChannel, WhatsAppChannelFactory } from '../../../../../plugins/channels/whatsapp';
+import type { PluginContext } from '../../../../../plugins/channels/contracts';
 
 const MENTION_ID = '162157312364643';
 

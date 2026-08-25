@@ -5,7 +5,7 @@ import type {
   IChannelHandlerFactory,
   InboundChannelMessage,
   IMessageGateway,
-} from '../../plugins/contracts';
+} from '../../plugins/channels/contracts';
 import { resolveResponse } from './utils';
 import { config } from '../config';
 

@@ -1,6 +1,6 @@
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { StickerRule, SaveStickerRuleInput } from '../types/stickers';
-import type { StickerReference } from '../../plugins/contracts';
+import type { StickerReference } from '../../plugins/channels/contracts';
 import { generateId } from '../utils/generate-id';
 
 interface StickerRuleRow {

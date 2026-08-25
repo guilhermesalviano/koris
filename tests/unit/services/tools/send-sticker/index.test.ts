@@ -21,7 +21,7 @@ vi.mock('../../../../../src/channels', () => ({
 import { sendSticker } from '../../../../../src/services/tools/send-sticker';
 import { ChannelsSingleton } from '../../../../../src/channels';
 import type { ILogger } from '../../../../../src/infrastructure/logger';
-import type { StickerReference } from '../../../../../plugins/contracts';
+import type { StickerReference } from '../../../../../plugins/channels/contracts';
 
 const logger: ILogger = { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
 const channelsManager = { sendSticker: vi.fn() };

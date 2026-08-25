@@ -2,8 +2,8 @@ import { config } from '../config';
 import { ChannelHandlerFactory } from '../channels';
 import type { ILogger } from '../infrastructure/logger';
 import type { IMessageGateway } from '../services/agents/message-gateway';
-import { configureWhatsAppRuntime, WhatsAppChannelFactory } from '../../plugins/whatsapp';
-import { configureTelegramRuntime, TelegramChannelFactory } from '../../plugins/telegram';
+import { configureWhatsAppRuntime, WhatsAppChannelFactory } from '../../plugins/channels/whatsapp';
+import { configureTelegramRuntime, TelegramChannelFactory } from '../../plugins/channels/telegram';
 
 type LiveChannelName = 'telegram' | 'whatsapp';
 

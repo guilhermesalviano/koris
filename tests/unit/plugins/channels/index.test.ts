@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ChannelDefinition } from '../../../src/channels';
-import { ADAPTERS } from '../../../src/channels';
-import { createPlugins, buildRegistry, type Plugin } from '../../../plugins';
-import type { PluginContext } from '../../../plugins/contracts';
+import type { ChannelDefinition } from '../../../../src/channels';
+import { ADAPTERS } from '../../../../src/channels';
+import { createPlugins, buildRegistry, type Plugin } from '../../../../plugins/channels';
+import type { PluginContext } from '../../../../plugins/channels/contracts';
 
 function makeEntry(name: string, isDir: boolean) {
   return { name, isDirectory: () => isDir };

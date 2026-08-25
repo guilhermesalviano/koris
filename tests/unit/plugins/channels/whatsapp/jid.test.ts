@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseMentionTarget } from '../../../../plugins/whatsapp/jid';
+import { parseMentionTarget } from '../../../../../plugins/channels/whatsapp/jid';
 
 describe('plugins/whatsapp/jid parseMentionTarget', () => {
   it('converts a numeric mention id to a lid jid', () => {
