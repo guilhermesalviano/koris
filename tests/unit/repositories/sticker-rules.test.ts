@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { StickerRulesRepository, StickerRulesRepositoryFactory } from '../../../src/repositories/sticker-rules';
-import type { StickerReference } from '../../../plugins/contracts';
+import type { StickerReference } from '../../../plugins/channels/contracts';
 
 function makeDb() {
   return { run: vi.fn(), get: vi.fn(), query: vi.fn() };

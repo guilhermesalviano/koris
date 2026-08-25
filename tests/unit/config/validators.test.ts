@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   isValidUrl,
   isValidLogLevel,
-  isValidTelegramTokenFormat,
   isSupportedProvider,
   checkAiProviderConnectivity,
 } from '../../../src/config/validators';
@@ -18,11 +17,6 @@ describe('config/validators', () => {
     expect(isValidLogLevel('debug')).toBe(true);
     expect(isValidLogLevel('verbose')).toBe(true);
     expect(isValidLogLevel('nonsense')).toBe(false);
-  });
-
-  it('validates telegram bot token format', () => {
-    expect(isValidTelegramTokenFormat('123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ab')).toBe(true);
-    expect(isValidTelegramTokenFormat('not-a-token')).toBe(false);
   });
 
   it('validates supported providers against the real provider registry', () => {

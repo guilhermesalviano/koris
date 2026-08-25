@@ -119,27 +119,9 @@ export function splitMessage(text: string, maxLength: number): string[] {
   return chunks;
 }
 
-export interface ChannelsConfig {
-  ALLOW_UNTRUSTED: boolean;
-  TELEGRAM: {
-    ENABLED: boolean;
-    BOT_TOKEN: string;
-    WHITELIST: string;
-  };
-  WHATSAPP: {
-    ENABLED: boolean;
-    AUTH_FOLDER: string;
-    WHITELIST: string;
-    MENTION_ID: string;
-  };
-}
-
-export interface AppConfig {
-  channels: ChannelsConfig;
-}
-
 export interface PluginContext {
-  config: AppConfig;
+  /** Cross-channel security policy: allow senders outside a channel's own whitelist. */
+  allowUntrusted: boolean;
   logger: ILogger;
   gateway: IMessageGateway;
   channelHandler: IChannelHandlerFactory;

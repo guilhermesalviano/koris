@@ -3,16 +3,12 @@ import { config } from '../../src/config';
 export interface TestConfigPatch {
   heartbeatEnabled?: boolean;
   summarizerEnabled?: boolean;
-  telegramEnabled?: boolean;
-  whatsappEnabled?: boolean;
   subagentsParallel?: boolean;
 }
 
 const DEFAULTS: Required<TestConfigPatch> = {
   heartbeatEnabled: true,
   summarizerEnabled: true,
-  telegramEnabled: true,
-  whatsappEnabled: false,
   subagentsParallel: false,
 };
 
@@ -33,18 +29,6 @@ export function applyTestConfigDefaults(patch: TestConfigPatch = {}): void {
 
   Object.defineProperty(config.AI, 'SUBAGENTS_PARALLEL', {
     value: values.subagentsParallel,
-    configurable: true,
-    writable: true,
-  });
-
-  Object.defineProperty(config.CHANNELS.TELEGRAM, 'ENABLED', {
-    value: values.telegramEnabled,
-    configurable: true,
-    writable: true,
-  });
-
-  Object.defineProperty(config.CHANNELS.WHATSAPP, 'ENABLED', {
-    value: values.whatsappEnabled,
     configurable: true,
     writable: true,
   });

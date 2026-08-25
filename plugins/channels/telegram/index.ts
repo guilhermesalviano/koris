@@ -10,7 +10,8 @@ import type {
   PluginContext,
 } from '../contracts';
 import type { PluginRegistry } from '../registry';
-import { NOT_AUTHORIZED_MESSAGE } from '../../src/constants';
+import { NOT_AUTHORIZED_MESSAGE } from '../../../src/constants';
+import { loadTelegramConfig, writeTelegramConfigPatch, type TelegramPluginConfig } from './config';
 
 const TYPING_INTERVAL_MS = 5_000;
 const TELEGRAM_MESSAGE_LIMIT = 4_000;
@@ -382,33 +383,40 @@ function createTelegramPlugin(options: TelegramPluginOptions): Plugin {
 
 /**
  * Primes the module-level runtime state (channel handler, whitelist, trust
- * policy) that `create()` normally sets once at boot — and skips entirely
- * when Telegram starts disabled — so a caller can (re)start Telegram live
- * (e.g. after the setup wizard enables it) without restarting the process.
+ * policy) that `create()` normally sets once at boot, so a caller can
+ * (re)start Telegram live (e.g. after the setup wizard enables it) without
+ * restarting the process. Re-reads `config.yml` from disk when no `config`
+ * is passed explicitly, mirroring `reloadConfig()`'s "re-read on demand"
+ * pattern. Returns the resolved config so callers don't need to know its
+ * shape ahead of time.
  */
 export function configureTelegramRuntime(cfg: {
   channelHandler: IChannelHandlerFactory;
-  token: string;
-  whitelist: string;
   allowUntrusted: boolean;
-}): void {
-  botToken = cfg.token;
+  config?: TelegramPluginConfig;
+}): TelegramPluginConfig {
+  const resolved = cfg.config ?? loadTelegramConfig();
+  botToken = resolved.token;
   channelHandler = cfg.channelHandler;
   telegramWhitelist = new Set(
-    cfg.whitelist.split(',').map((id) => id.trim()).filter(Boolean).map(Number),
+    resolved.whitelist.split(',').map((id) => id.trim()).filter(Boolean).map(Number),
   );
   allowUntrusted = cfg.allowUntrusted;
+  return resolved;
 }
 
 export {
   createTelegramPlugin,
   handleMessage,
   ITelegramChannel,
+  loadTelegramConfig,
   sendText,
   sendCode,
   sendWithApproval,
   TelegramChannel,
   TelegramChannelFactory,
+  TelegramPluginConfig,
+  writeTelegramConfigPatch,
 };
 
 /** @internal — only for use in tests */
@@ -422,24 +430,20 @@ export function _setTelegramWhitelistForTesting(ids: number[]): void {
   ids.forEach((id) => telegramWhitelist.add(id));
 }
 
-export function create(context: PluginContext): Plugin | null {
-  const cfg = context.config.channels.TELEGRAM;
-  if (!cfg.ENABLED) {
+export function create(context: PluginContext, configOverride?: TelegramPluginConfig): Plugin | null {
+  const cfg = configOverride ?? loadTelegramConfig();
+  if (!cfg.enabled) {
     return null;
   }
 
-  botToken = cfg.BOT_TOKEN;
-  channelHandler = context.channelHandler;
-  allowUntrusted = context.config.channels.ALLOW_UNTRUSTED;
-  telegramWhitelist = new Set(
-    cfg.WHITELIST.split(',')
-      .map((id) => id.trim())
-      .filter(Boolean)
-      .map(Number),
-  );
+  configureTelegramRuntime({
+    channelHandler: context.channelHandler,
+    allowUntrusted: context.allowUntrusted,
+    config: cfg,
+  });
 
   return createTelegramPlugin({
-    token: cfg.BOT_TOKEN,
+    token: cfg.token,
     enabled: true,
   });
 }

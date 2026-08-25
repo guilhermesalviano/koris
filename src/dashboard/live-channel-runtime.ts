@@ -2,8 +2,18 @@ import { config } from '../config';
 import { ChannelHandlerFactory } from '../channels';
 import type { ILogger } from '../infrastructure/logger';
 import type { IMessageGateway } from '../services/agents/message-gateway';
-import { configureWhatsAppRuntime, WhatsAppChannelFactory } from '../../plugins/whatsapp';
-import { configureTelegramRuntime, TelegramChannelFactory } from '../../plugins/telegram';
+import {
+  configureWhatsAppRuntime,
+  WhatsAppChannelFactory,
+  loadWhatsAppConfig,
+  writeWhatsAppConfigPatch,
+} from '../../plugins/channels/whatsapp';
+import {
+  configureTelegramRuntime,
+  TelegramChannelFactory,
+  loadTelegramConfig,
+  writeTelegramConfigPatch,
+} from '../../plugins/channels/telegram';
 
 type LiveChannelName = 'telegram' | 'whatsapp';
 
@@ -14,22 +24,20 @@ const starting = new Set<LiveChannelName>();
  * Starts (or, if already connecting/connected, no-ops on) the WhatsApp
  * channel outside the normal one-time boot registration in
  * `ChannelsManager`, so the setup wizard can bring it up live after saving
- * koris.json — without a process restart.
+ * its config — without a process restart.
  */
 export function startWhatsAppLive(logger: ILogger, gateway: IMessageGateway): void {
   if (stopFns.has('whatsapp') || starting.has('whatsapp')) return;
   starting.add('whatsapp');
 
-  configureWhatsAppRuntime({
+  const cfg = configureWhatsAppRuntime({
     channelHandler: ChannelHandlerFactory,
-    mentionId: config.CHANNELS.WHATSAPP.MENTION_ID,
-    whitelist: config.CHANNELS.WHATSAPP.WHITELIST,
     allowUntrusted: config.CHANNELS.ALLOW_UNTRUSTED,
   });
 
   WhatsAppChannelFactory.start({
-    authFolder: config.CHANNELS.WHATSAPP.AUTH_FOLDER,
-    mentionId: config.CHANNELS.WHATSAPP.MENTION_ID,
+    authFolder: cfg.authFolder,
+    mentionId: cfg.mentionId,
     gateway,
     logger,
   })
@@ -48,20 +56,18 @@ export function startWhatsAppLive(logger: ILogger, gateway: IMessageGateway): vo
  * Starts (or no-ops on) the Telegram channel live, mirroring
  * `startWhatsAppLive`. Needed because `plugins/telegram`'s `create()`
  * doesn't even register a channel definition when Telegram starts disabled
- * — which is the default on a fresh install with no koris.json.
+ * — which is the default on a fresh install with no config.yml.
  */
-export function startTelegramLive(logger: ILogger, gateway: IMessageGateway, token: string): void {
+export function startTelegramLive(logger: ILogger, gateway: IMessageGateway): void {
   if (stopFns.has('telegram') || starting.has('telegram')) return;
   starting.add('telegram');
 
-  configureTelegramRuntime({
+  const cfg = configureTelegramRuntime({
     channelHandler: ChannelHandlerFactory,
-    token,
-    whitelist: config.CHANNELS.TELEGRAM.WHITELIST,
     allowUntrusted: config.CHANNELS.ALLOW_UNTRUSTED,
   });
 
-  TelegramChannelFactory.start({ token, gateway, logger })
+  TelegramChannelFactory.start({ token: cfg.token, gateway, logger })
     .then(({ stop }) => {
       stopFns.set('telegram', stop);
     })
@@ -76,3 +82,5 @@ export function startTelegramLive(logger: ILogger, gateway: IMessageGateway, tok
 export function isChannelLiveStarted(name: LiveChannelName): boolean {
   return stopFns.has(name);
 }
+
+export { loadTelegramConfig, loadWhatsAppConfig, writeTelegramConfigPatch, writeWhatsAppConfigPatch };

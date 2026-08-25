@@ -49,14 +49,13 @@ describe('config/index reloadConfig', () => {
     const dir = createTempDir();
     writeFileSync(join(dir, 'koris.json'), JSON.stringify({
       ai: { manager: { base_url: 'http://example.invalid:1234', model: 'reload-model' } },
-      channels: { telegram: { enabled: true, bot_token: '123:abc' } },
+      channels: { allow_untrusted: true },
     }));
 
     reloadConfig({ cwd: dir, dirname: dir });
 
     expect(config.AI.MANAGER.BASE_URL).toBe('http://example.invalid:1234');
     expect(config.AI.MANAGER.MODEL).toBe('reload-model');
-    expect(config.CHANNELS.TELEGRAM.ENABLED).toBe(true);
-    expect(config.CHANNELS.TELEGRAM.BOT_TOKEN).toBe('123:abc');
+    expect(config.CHANNELS.ALLOW_UNTRUSTED).toBe(true);
   });
 });

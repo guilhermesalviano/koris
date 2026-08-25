@@ -1,0 +1,4 @@
+enabled: false
+auth_folder: ./.whatsapp_auth
+whitelist: "NUMBER1,NUMBER2"
+mention_id: "THE_BOT_MENTION_ID"

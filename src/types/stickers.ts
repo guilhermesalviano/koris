@@ -1,4 +1,4 @@
-import type { StickerReference } from '../../plugins/contracts';
+import type { StickerReference } from '../../plugins/channels/contracts';
 
 export interface StickerRule {
   id: string;

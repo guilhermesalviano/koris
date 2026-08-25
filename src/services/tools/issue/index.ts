@@ -10,14 +10,15 @@ export async function executeIssue(logger: ILogger, args: Record<string, unknown
   }
 
   const body = getOptionalStringArg(args, 'body');
-  const owner = getOptionalStringArg(args, 'owner');
+  const owner = getOptionalStringArg(args, 'owner') || config.GITHUB.OWNER || undefined;
   const repo = getOptionalStringArg(args, 'repo');
 
   if (!owner || !repo) {
+    const missing = [!owner && 'owner', !repo && 'repo'].filter(Boolean).join(' and ');
     return {
       toolName: 'issue',
       success: false,
-      error: 'Missing required parameters: owner and repo are required to create a GitHub issue.',
+      error: `Missing required parameter(s): ${missing} required to create a GitHub issue.`,
     };
   }
 
