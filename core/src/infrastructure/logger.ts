@@ -6,7 +6,7 @@ import fs from 'fs';
 import { config } from '../config';
 import { sanitizeLogText, sanitizeMeta } from '../utils/sanitize-log-text';
 import { nowISO } from '../utils/date';
-import type { ILogger } from '../../plugins/channels/contracts';
+import type { ILogger } from '../../../plugins/channels/contracts';
 
 export type { ILogger };
 

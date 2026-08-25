@@ -26,6 +26,6 @@
       "@constants": ["core/src/constants"]
     }
   },
-  "include": ["src/**/*", "plugins/**/*", "apps/tui"],
+  "include": ["core/src/**/*", "plugins/**/*", "apps/tui"],
   "exclude": ["node_modules", "dist", "dist-web", "apps/web", "website", "**/*.test.ts", "**/*.spec.ts"]
 }

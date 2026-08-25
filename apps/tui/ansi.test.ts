@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { defaultColors } from '../../../src/tui/colors';
-import { visibleWidth, wrapSingleLineForWidth } from '../../../src/tui/ansi';
+import { defaultColors } from './colors';
+import { visibleWidth, wrapSingleLineForWidth } from './ansi';
 
 describe('ansi helpers', () => {
   it('strips ANSI sequences when measuring visible width', () => {

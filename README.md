@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="web/public/logo.png" width="120" alt="Koris Assistant logo" />
+  <img src="apps/web/public/logo.png" width="120" alt="Koris Assistant logo" />
 </p>
 
 <h1 align="center">Koris Assistant</h1>
@@ -46,7 +46,7 @@
 2. **Configure settings:**
    Copy the example settings file to `koris.json` and adjust as necessary:
    ```bash
-   cp koris.example.json koris.json
+   cp core/koris.example.json core/koris.json
    ```
 
 3. **Build the project:**
@@ -80,7 +80,7 @@ The `search_engine` tool uses a self-hosted [SearXNG](https://docs.searxng.org/)
 
 1. **Configure and start SearXNG** (requires Docker):
    ```bash
-   cd searxng
+   cd plugins/search/searxng
    mkdir -p config
    cp settings.example.yml config/settings.yml
    openssl rand -hex 32   # paste the output as server.secret_key in config/settings.yml
@@ -119,8 +119,8 @@ All commands are run via `pnpm` (or `pnpm run <script>`).
 | `clean` | Removes the `dist/` and `dist-web/` build output. |
 | `lint` | Type-checks the server with `tsc --noEmit`. |
 | `lint:client` | Type-checks the web frontend. |
-| `lint:landing` | Type-checks the landing page. |
-| `clear:memory` | Wipes the local SQLite database files under `memory/` (fresh state). |
+| `lint:website` | Type-checks the marketing website. |
+| `clear:memory` | Wipes the local SQLite database files under `core/memory/` (fresh state). |
 
 ### Testing
 
@@ -132,13 +132,13 @@ All commands are run via `pnpm` (or `pnpm run <script>`).
 | `test:coverage` | Runs the tests and reports code coverage. |
 | `test:mutation` | Runs mutation testing with Stryker to assess test-suite quality. |
 
-### Landing Page
+### Website
 
 | Script | Description |
 | --- | --- |
-| `landing:dev` | Runs the Next.js dev server for the marketing landing page. |
-| `landing:build` | Statically exports the landing page to `landing/out/`. |
-| `landing:preview` | Serves the built landing page locally. |
+| `website:dev` | Runs the Next.js dev server for the marketing website. |
+| `website:build` | Statically exports the website to `website/out/`. |
+| `website:preview` | Serves the built website locally. |
 
 ## Learn More
 

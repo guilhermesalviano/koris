@@ -7,13 +7,13 @@ import {
   WhatsAppChannelFactory,
   loadWhatsAppConfig,
   writeWhatsAppConfigPatch,
-} from '../../plugins/channels/whatsapp';
+} from '../../../plugins/channels/whatsapp';
 import {
   configureTelegramRuntime,
   TelegramChannelFactory,
   loadTelegramConfig,
   writeTelegramConfigPatch,
-} from '../../plugins/channels/telegram';
+} from '../../../plugins/channels/telegram';
 
 type LiveChannelName = 'telegram' | 'whatsapp';
 

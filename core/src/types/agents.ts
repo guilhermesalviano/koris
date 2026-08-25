@@ -1,4 +1,4 @@
-import type { ProcessedMessage, ProcessOptions } from '../../plugins/channels/contracts';
+import type { ProcessedMessage, ProcessOptions } from '../../../plugins/channels/contracts';
 
 export type { ProcessedMessage, ProcessOptions };
 

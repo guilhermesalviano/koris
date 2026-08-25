@@ -3,10 +3,10 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import { createAutocomplete } from '../../../src/tui/autocomplete';
-import { ansi } from '../../../src/tui/ansi';
-import { defaultColors } from '../../../src/tui/colors';
-import type { CommandSuggestion } from '../../../src/tui/types';
+import { createAutocomplete } from './autocomplete';
+import { ansi } from './ansi';
+import { defaultColors } from './colors';
+import type { CommandSuggestion } from './types';
 
 function createHarness(options?: {
   line?: string;

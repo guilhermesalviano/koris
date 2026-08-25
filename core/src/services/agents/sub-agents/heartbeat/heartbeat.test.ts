@@ -5,7 +5,7 @@ import { nextCronFire } from '../../../../utils/heartbeat';
 import type { ILogger } from '../../../../infrastructure/logger';
 
 // Mock everything
-vi.mock('../../src/utils/heartbeat', async (importOriginal) => {
+vi.mock('../../../../utils/heartbeat', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../utils/heartbeat')>();
   return {
     ...actual,
@@ -16,7 +16,7 @@ vi.mock('../../src/utils/heartbeat', async (importOriginal) => {
 });
 
 const handlerMock = vi.fn().mockResolvedValue(undefined);
-vi.mock('../../src/services/agents/sub-agents/heartbeat/sub-agent', () => ({
+vi.mock('./sub-agent', () => ({
   HeartbeatFactory: {
     create: vi.fn(() => ({ handler: handlerMock })),
   },

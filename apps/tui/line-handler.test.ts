@@ -1,11 +1,11 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ansi } from '../../../src/tui/ansi';
-import { defaultColors } from '../../../src/tui/colors';
-import { getSigintAction, resolveSubmittedInput, setupLineHandlers } from '../../../src/tui/line-handler';
-import type { TuiContext } from '../../../src/tui/types';
-import type { TuiInternalState } from '../../../src/tui/renderer';
+import { ansi } from './ansi';
+import { defaultColors } from './colors';
+import { getSigintAction, resolveSubmittedInput, setupLineHandlers } from './line-handler';
+import type { TuiContext } from './types';
+import type { TuiInternalState } from './renderer';
 
 afterEach(() => {
   vi.useRealTimers();

@@ -8,8 +8,8 @@ import type {
   IChannelHandlerFactory,
   InboundChannelMessage,
   StickerReference,
-} from '../../plugins/channels/contracts';
-import { ADAPTERS } from '../../plugins/channels/contracts';
+} from '../../../plugins/channels/contracts';
+import { ADAPTERS } from '../../../plugins/channels/contracts';
 import { ChannelHandler, ChannelHandlerFactory } from './handler';
 import { resolveResponse, splitMessage } from './utils';
 

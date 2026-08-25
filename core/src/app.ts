@@ -5,7 +5,7 @@ if (process.argv.includes('tui') || process.argv.includes('--tui')) {
   process.env.LOG_SILENCE_CONSOLE = 'true';
 }
 
-import { startTUI } from '../apps/tui';
+import { startTUI } from '../../apps/tui';
 import { LoggerFactory, ILogger } from './infrastructure/logger';
 import { MessageGatewayFactory, IMessageGateway } from './services/agents/message-gateway';
 import { IHeartbeatRunner, HeartbeatSingleton } from './services/agents/sub-agents/heartbeat/runner';
@@ -21,9 +21,9 @@ import { SkillsRepositoryFactory } from './repositories/skills';
 import { LearnedSkillsRepositoryFactory } from './repositories/learned-skills';
 import { SkillSyncSingleton } from './services/skills/skill-sync';
 import { DashboardServerFactory, WebServerHandle } from './dashboard';
-import { createPlugins, buildRegistry } from '../plugins/channels';
+import { createPlugins, buildRegistry } from '../../plugins/channels';
 import { config } from './config';
-import type { PluginContext } from '../plugins/channels/contracts';
+import type { PluginContext } from '../../plugins/channels/contracts';
 
 const logger = LoggerFactory.create();
 const MODES = ['tui', 'web'] as const;

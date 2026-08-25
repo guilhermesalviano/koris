@@ -2,9 +2,9 @@
   "name": "/koris",
   "version": "1.0.1",
   "description": "Autonomous AI agent framework with pluggable channels, skills, persistent memory, and a web dashboard.",
-  "main": "dist/src/app.js",
+  "main": "dist/core/src/app.js",
   "bin": {
-    "/koris": "dist/src/app.js"
+    "/koris": "dist/core/src/app.js"
   },
   "files": [
     "dist",
@@ -16,16 +16,16 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "validate": "tsx src/validate-settings.ts",
-    "onboard": "node dist/src/onboard.js",
-    "app": "node dist/src/app.js",
+    "validate": "tsx core/src/validate-settings.ts",
+    "onboard": "node dist/core/src/onboard.js",
+    "app": "node dist/core/src/app.js",
     "clean": "rm -rf dist dist-web",
-    "clear:memory": "rm memory/database.*",
+    "clear:memory": "rm core/memory/database.*",
     "build": "pnpm run clean && tsc --project tsconfig.json && vite build",
     "build:client": "vite build",
     "dev:client": "vite",
     "lint": "tsc --noEmit -p tsconfig.json",
-    "lint:client": "tsc --noEmit -p web/tsconfig.json",
+    "lint:client": "tsc --noEmit -p apps/web/tsconfig.json",
     "lint:website": "tsc --noEmit -p website/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",

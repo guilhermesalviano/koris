@@ -1,4 +1,4 @@
-import type { ImageAttachment } from '../../plugins/channels/contracts';
+import type { ImageAttachment } from '../../../plugins/channels/contracts';
 
 export type { ImageAttachment };
 

@@ -13,7 +13,7 @@ import {
   mergeSettingsPayload,
 } from './settings-writer';
 
-const REAL_EXAMPLE_SETTINGS_PATH = join(__dirname, '..', '..', '..', 'koris.example.json');
+const REAL_EXAMPLE_SETTINGS_PATH = join(__dirname, '..', '..', 'koris.example.json');
 
 const tempDirs: string[] = [];
 

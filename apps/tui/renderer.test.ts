@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ansi } from '../../../src/tui/ansi';
-import { defaultColors } from '../../../src/tui/colors';
-import { createRenderer, type TuiInternalState } from '../../../src/tui/renderer';
-import type { TuiContext } from '../../../src/tui/types';
+import { ansi } from './ansi';
+import { defaultColors } from './colors';
+import { createRenderer, type TuiInternalState } from './renderer';
+import type { TuiContext } from './types';
 
 const stripAnsi = (value: string) => value.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '');
 

@@ -10,7 +10,7 @@ import { generateId } from '../../utils/generate-id';
 import { ISessionContextFactory, SessionContextFactory } from './session-context';
 import { IBackgroundDispatcher, BackgroundDispatcherFactory } from './background-dispatcher';
 import { IChannelService, ChannelServiceFactory } from '../channel-service';
-import type { InboundInput, IMessageGateway, StickerReference } from '../../../plugins/channels/contracts';
+import type { InboundInput, IMessageGateway, StickerReference } from '../../../../plugins/channels/contracts';
 
 export type { InboundInput, IMessageGateway };
 

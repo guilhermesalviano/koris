@@ -1,7 +1,7 @@
 dist
 dist-web
-landing/.next
-landing/out
+website/.next
+website/out
 next-env.d.ts
 *.tsbuildinfo
 
@@ -26,6 +26,9 @@ core/temp/*
 core/memory/*
 !core/memory/.gitkeep
 !core/temp/.gitkeep
+
+memory/*
+!memory/.gitkeep
 
 reports/
 .stryker-tmp/

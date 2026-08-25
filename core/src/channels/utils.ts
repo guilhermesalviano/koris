@@ -1,5 +1,5 @@
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
-import { splitMessage } from '../../plugins/channels/contracts';
+import { splitMessage } from '../../../plugins/channels/contracts';
 
 export { splitMessage };
 
