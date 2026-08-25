@@ -53,7 +53,8 @@
     }
   },
   "github": {
-    "token": "ghp_xxx"
+    "token": "ghp_xxx",
+    "owner": "your-github-username-or-org"
   },
   "personal_information": {
     "name": "John Doe"

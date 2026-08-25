@@ -87,6 +87,7 @@ export interface AppConfig {
   };
   GITHUB: {
     TOKEN: string;
+    OWNER: string;
   };
   PERSONAL_INFORMATION: Record<string, string>;
 }
@@ -159,6 +160,7 @@ function buildConfig(): AppConfig {
   },
   GITHUB: {
     TOKEN: get('github.token', ''),
+    OWNER: get('github.owner', ''),
   },
   PERSONAL_INFORMATION: getPersonalInformation(),
   };

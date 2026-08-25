@@ -35,6 +35,14 @@ function setGithubToken(value: string): void {
   });
 }
 
+function setGithubOwner(value: string): void {
+  Object.defineProperty(config.GITHUB, 'OWNER', {
+    value,
+    configurable: true,
+    writable: true,
+  });
+}
+
 applyTestConfigDefaults({ telegramEnabled: true });
 
 describe('issue tool (orchestrator)', () => {
@@ -44,6 +52,7 @@ describe('issue tool (orchestrator)', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    setGithubOwner('');
   });
 
   it('returns error when title is missing', async () => {
@@ -62,8 +71,52 @@ describe('issue tool (orchestrator)', () => {
     expect(result).toEqual({
       toolName: 'issue',
       success: false,
-      error: 'Missing required parameters: owner and repo are required to create a GitHub issue.',
+      error: 'Missing required parameter(s): owner and repo required to create a GitHub issue.',
     });
+  });
+
+  it('returns error naming only repo when owner falls back to config.GITHUB.OWNER', async () => {
+    setGithubOwner('default-owner');
+
+    const result = await executeIssue(mockLogger, { title: 'Test issue' });
+
+    expect(result).toEqual({
+      toolName: 'issue',
+      success: false,
+      error: 'Missing required parameter(s): repo required to create a GitHub issue.',
+    });
+  });
+
+  it('uses config.GITHUB.OWNER as the owner when not provided in args', async () => {
+    setGithubOwner('default-owner');
+    setGithubToken('gh-token');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({ html_url: 'https://github.com/default-owner/repo/issues/1', number: 1 }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await executeIssue(mockLogger, { title: 'Test issue', repo: 'repo' });
+
+    const [calledUrl] = fetchMock.mock.calls[0];
+    expect(calledUrl).toBe('https://api.github.com/repos/default-owner/repo/issues');
+  });
+
+  it('prefers an explicit owner arg over config.GITHUB.OWNER', async () => {
+    setGithubOwner('default-owner');
+    setGithubToken('gh-token');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({ html_url: 'https://github.com/explicit-owner/repo/issues/1', number: 1 }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await executeIssue(mockLogger, { title: 'Test issue', owner: 'explicit-owner', repo: 'repo' });
+
+    const [calledUrl] = fetchMock.mock.calls[0];
+    expect(calledUrl).toBe('https://api.github.com/repos/explicit-owner/repo/issues');
   });
 
   it('returns formatted issue text when no GitHub token is configured', async () => {
