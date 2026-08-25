@@ -339,6 +339,7 @@ describe('onboarding settings draft', () => {
     expect(destination).toBe(join(appRoot, SETTINGS_FILENAME));
     expect(JSON.parse(readFileSync(destination, 'utf-8'))).toEqual({
       heartbeat: true,
+      channels: {},
       ai: {
         manager: {
           provider: 'ollama',

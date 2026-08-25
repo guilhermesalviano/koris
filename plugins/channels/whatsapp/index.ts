@@ -13,6 +13,7 @@ import type {
 } from '../contracts';
 import type { PluginRegistry } from '../registry';
 import type { WAMessage } from '@whiskeysockets/baileys';
+import { loadWhatsAppConfig, writeWhatsAppConfigPatch, type WhatsAppPluginConfig } from './config';
 
 const WHATSAPP_MESSAGE_LIMIT = 4_000;
 const TYPING_INTERVAL_MS = 5_000;
@@ -590,18 +591,21 @@ function createWhatsAppPlugin(options: WhatsAppPluginOptions): Plugin {
  * Primes the module-level runtime state (channel handler, mention id,
  * whitelist, trust policy) that `create()` normally sets once at boot, so a
  * caller can (re)start WhatsApp live — e.g. after the setup wizard changes
- * these values — without restarting the process.
+ * these values — without restarting the process. Re-reads `config.yml` from
+ * disk when no `config` is passed explicitly. Returns the resolved config so
+ * callers don't need to know its shape ahead of time.
  */
 export function configureWhatsAppRuntime(cfg: {
   channelHandler: IChannelHandlerFactory;
-  mentionId: string;
-  whitelist: string;
   allowUntrusted: boolean;
-}): void {
+  config?: WhatsAppPluginConfig;
+}): WhatsAppPluginConfig {
+  const resolved = cfg.config ?? loadWhatsAppConfig();
   channelHandler = cfg.channelHandler;
-  mentionId = cfg.mentionId;
-  whitelist = cfg.whitelist.split(',').map((num) => num.trim()).filter(Boolean);
+  mentionId = resolved.mentionId;
+  whitelist = resolved.whitelist.split(',').map((num) => num.trim()).filter(Boolean);
   allowUntrusted = cfg.allowUntrusted;
+  return resolved;
 }
 
 export {
@@ -609,21 +613,26 @@ export {
   getLastWhitelistedJid,
   handleMessage,
   IWhatsAppChannel,
+  loadWhatsAppConfig,
   sendText,
   WhatsAppChannel,
   WhatsAppChannelFactory,
+  WhatsAppPluginConfig,
+  writeWhatsAppConfigPatch,
 };
 
-export function create(context: PluginContext): Plugin {
-  const cfg = context.config.channels.WHATSAPP;
-  channelHandler = context.channelHandler;
-  mentionId = cfg.MENTION_ID;
-  whitelist = cfg.WHITELIST.split(',').map((num) => num.trim()).filter(Boolean);
-  allowUntrusted = context.config.channels.ALLOW_UNTRUSTED;
+export function create(context: PluginContext, configOverride?: WhatsAppPluginConfig): Plugin {
+  const cfg = configOverride ?? loadWhatsAppConfig();
+
+  configureWhatsAppRuntime({
+    channelHandler: context.channelHandler,
+    allowUntrusted: context.allowUntrusted,
+    config: cfg,
+  });
 
   return createWhatsAppPlugin({
-    enabled: cfg.ENABLED,
-    authFolder: cfg.AUTH_FOLDER,
-    mentionId,
+    enabled: cfg.enabled,
+    authFolder: cfg.authFolder,
+    mentionId: cfg.mentionId,
   });
 }
