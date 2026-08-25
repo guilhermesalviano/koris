@@ -10,9 +10,9 @@ import type {
   PluginContext,
 } from '../contracts';
 import type { PluginRegistry } from '../registry';
-import { NOT_AUTHORIZED_MESSAGE } from '../../../src/constants';
 import { loadTelegramConfig, writeTelegramConfigPatch, type TelegramPluginConfig } from './config';
 
+export const NOT_AUTHORIZED_MESSAGE = "You're not authorized to send messages here yet. Please ask the administrator to add you to the allowed list.";
 const TYPING_INTERVAL_MS = 5_000;
 const TELEGRAM_MESSAGE_LIMIT = 4_000;
 

@@ -6,6 +6,7 @@
     "outDir": "./dist",
     "rootDir": ".",
     "strict": true,
+    "ignoreDeprecations": "6.0",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -20,8 +21,11 @@
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "bundler",
     "types": ["node"],
-    "paths": {}
+    "baseUrl": ".",
+    "paths": {
+      "@constants": ["core/src/constants"]
+    }
   },
-  "include": ["src/**/*", "plugins/**/*"],
-  "exclude": ["node_modules", "dist", "dist-web", "web", "landing", "**/*.test.ts", "**/*.spec.ts"]
+  "include": ["src/**/*", "plugins/**/*", "apps/tui"],
+  "exclude": ["node_modules", "dist", "dist-web", "apps/web", "website", "**/*.test.ts", "**/*.spec.ts"]
 }

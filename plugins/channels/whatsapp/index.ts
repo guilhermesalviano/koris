@@ -1,6 +1,5 @@
 import { ADAPTERS, splitMessage } from '../contracts';
 import { parseMentionTarget } from './jid';
-import { NOT_AUTHORIZED_MESSAGE } from '../../../src/constants';
 import type {
   ChannelDefinition,
   IChannelHandlerFactory,
@@ -15,6 +14,7 @@ import type { PluginRegistry } from '../registry';
 import type { WAMessage } from '@whiskeysockets/baileys';
 import { loadWhatsAppConfig, writeWhatsAppConfigPatch, type WhatsAppPluginConfig } from './config';
 
+export const NOT_AUTHORIZED_MESSAGE = "You're not authorized to send messages here yet. Please ask the administrator to add you to the allowed list.";
 const WHATSAPP_MESSAGE_LIMIT = 4_000;
 const TYPING_INTERVAL_MS = 5_000;
 const GROUP_NAME_TTL_MS = 60 * 60 * 1_000;

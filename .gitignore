@@ -22,10 +22,11 @@ koris.json
 plugins/channels/*/config.yml
 **/settings.yml
 
-temp/*
-memory/*
-!memory/.gitkeep
-!temp/.gitkeep
+core/temp/*
+core/memory/*
+!core/memory/.gitkeep
+!core/temp/.gitkeep
+
 reports/
 .stryker-tmp/
 
