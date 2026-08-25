@@ -16,10 +16,8 @@ import {
   VALID_LOG_LEVELS,
   isValidUrl,
   isValidLogLevel,
-  isValidTelegramTokenFormat,
   isSupportedProvider,
   checkAiProviderConnectivity,
-  checkTelegramToken,
 } from './config/validators';
 
 // ── ANSI helpers ──────────────────────────────────────────────────────────────
@@ -249,48 +247,6 @@ async function main() {
       warn(`AI provider unreachable (${profile.label})`, `HTTP ${result.status} from ${result.healthUrl}`);
       warnings++;
     }
-  }
-
-  // ── 4. Channels ──────────────────────────────────────────────────────────
-  section('Channels › Telegram');
-
-  if (config.CHANNELS.TELEGRAM.ENABLED) {
-    check(
-      config.CHANNELS.TELEGRAM.BOT_TOKEN.trim().length > 0,
-      'channels.telegram.bot_token is set',
-      'Set channels.telegram.bot_token in koris.json',
-    );
-
-    advisory(
-      config.CHANNELS.TELEGRAM.WHITELIST.trim().length > 0 || config.CHANNELS.ALLOW_UNTRUSTED,
-      'channels.telegram.whitelist is set (or channels.allow_untrusted is enabled)',
-      config.CHANNELS.ALLOW_UNTRUSTED
-        ? 'channels.telegram.whitelist is empty — anyone can chat with the bot (allow_untrusted is on)'
-        : 'channels.telegram.whitelist is empty — no one can chat with the bot',
-    );
-
-    if (config.CHANNELS.TELEGRAM.BOT_TOKEN.trim().length > 0) {
-      advisory(
-        isValidTelegramTokenFormat(config.CHANNELS.TELEGRAM.BOT_TOKEN),
-        'channels.telegram.bot_token format looks valid',
-        'Expected format: <numeric_id>:<35+ alphanumeric chars>',
-      );
-
-      process.stdout.write(`  ${c.gray}⟳ Verifying Telegram bot token …${c.reset}\r`);
-      const tgResult = await checkTelegramToken(config.CHANNELS.TELEGRAM.BOT_TOKEN);
-
-      if (tgResult.ok) {
-        pass('Telegram bot token is valid', tgResult.username ? `@${tgResult.username}` : undefined);
-      } else if (tgResult.networkError) {
-        warn('Could not reach Telegram API to verify token', tgResult.error);
-        warnings++;
-      } else {
-        fail('Telegram bot token is invalid', tgResult.error ?? 'Telegram API rejected the token — generate a new one with @BotFather');
-        errors++;
-      }
-    }
-  } else {
-    pass('Telegram channel', 'disabled — skipping');
   }
 
   // ── Summary ──────────────────────────────────────────────────────────────

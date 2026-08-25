@@ -6,14 +6,19 @@ import {
   VALID_LOG_LEVELS,
   isValidUrl,
   isValidLogLevel,
-  isValidTelegramTokenFormat,
   isSupportedProvider,
   checkAiProviderConnectivity,
-  checkTelegramToken,
 } from '../config/validators';
 import { loadCurrentOrExampleSettings, mergeSettingsPayload, writeSettingsFile } from '../config/settings-writer';
 import { getSupportedProviders, clearProviderCache } from '../services/providers';
-import { startWhatsAppLive, startTelegramLive } from './live-channel-runtime';
+import {
+  startWhatsAppLive,
+  startTelegramLive,
+  loadTelegramConfig,
+  loadWhatsAppConfig,
+  writeTelegramConfigPatch,
+  writeWhatsAppConfigPatch,
+} from './live-channel-runtime';
 import { ILogger } from '../infrastructure/logger';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { healthCheck } from '../services/provider-health-service';
@@ -68,6 +73,31 @@ function maskSecret(value: string): string {
   return `${value.slice(0, 2)}••••${value.slice(-2)}`;
 }
 
+/**
+ * Reassembles the legacy `CHANNELS.TELEGRAM`/`WHATSAPP` shape the frontend
+ * already expects, sourcing ALLOW_UNTRUSTED from the central config and
+ * telegram/whatsapp from each plugin's own config.yml — so the API contract
+ * (and thus the web Settings UI) doesn't need to change.
+ */
+function buildChannelsSnapshot() {
+  const telegram = loadTelegramConfig();
+  const whatsapp = loadWhatsAppConfig();
+  return {
+    ALLOW_UNTRUSTED: config.CHANNELS.ALLOW_UNTRUSTED,
+    TELEGRAM: { ENABLED: telegram.enabled, BOT_TOKEN: telegram.token, WHITELIST: telegram.whitelist },
+    WHATSAPP: {
+      ENABLED: whatsapp.enabled,
+      AUTH_FOLDER: whatsapp.authFolder,
+      WHITELIST: whatsapp.whitelist,
+      MENTION_ID: whatsapp.mentionId,
+    },
+  };
+}
+
+function buildSettingsResponse(): Record<string, unknown> {
+  return { ...config, CHANNELS: buildChannelsSnapshot() };
+}
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -117,8 +147,6 @@ function collectSettingsPayloadErrors(payload: Record<string, unknown>): string[
     const token = typeof telegram.bot_token === 'string' ? telegram.bot_token.trim() : '';
     if (!token) {
       errors.push('channels.telegram.bot_token is required when channels.telegram.enabled is true.');
-    } else if (!isValidTelegramTokenFormat(token)) {
-      errors.push('channels.telegram.bot_token format looks invalid (expected <numeric_id>:<35+ alphanumeric chars>).');
     }
   }
 
@@ -199,9 +227,10 @@ class AdminRouterFactory {
         principal: channel.isPrincipal,
       }));
 
+      const channelsSnapshot = buildChannelsSnapshot();
       const enabledChannels: { type: ChannelType; enabled: boolean }[] = [
-        { type: 'telegram', enabled: config.CHANNELS.TELEGRAM.ENABLED },
-        { type: 'whatsapp', enabled: config.CHANNELS.WHATSAPP.ENABLED },
+        { type: 'telegram', enabled: channelsSnapshot.TELEGRAM.ENABLED },
+        { type: 'whatsapp', enabled: channelsSnapshot.WHATSAPP.ENABLED },
       ];
 
       const recentErrors = auditRepo.findAll({
@@ -673,7 +702,7 @@ class AdminRouterFactory {
     });
 
     router.get('/settings', (_req: Request, res: Response) => {
-      res.json(maskDeep(config));
+      res.json(maskDeep(buildSettingsResponse()));
     });
 
     router.get('/settings/status', (_req: Request, res: Response) => {
@@ -700,25 +729,43 @@ class AdminRouterFactory {
         return;
       }
 
+      const rawPatch = patch as Record<string, unknown>;
+      const channelsPatch = asRecord(rawPatch.channels);
+      const { telegram: telegramPatch, whatsapp: whatsappPatch, ...coreChannelsPatch } = channelsPatch ?? {};
+      const corePatch: Record<string, unknown> = { ...rawPatch };
+      if (channelsPatch) {
+        corePatch.channels = coreChannelsPatch;
+      }
+
       const current = loadCurrentOrExampleSettings();
-      const merged = mergeSettingsPayload(current, patch as Record<string, unknown>);
+      const merged = mergeSettingsPayload(current, corePatch);
       const writtenPath = writeSettingsFile(merged);
+
+      const telegramPatchRecord = asRecord(telegramPatch);
+      if (telegramPatchRecord) {
+        writeTelegramConfigPatch(telegramPatchRecord);
+      }
+
+      const whatsappPatchRecord = asRecord(whatsappPatch);
+      if (whatsappPatchRecord) {
+        writeWhatsAppConfigPatch(whatsappPatchRecord);
+      }
 
       reloadConfig();
       clearProviderCache();
 
-      const telegramPatch = asRecord(asRecord((patch as Record<string, unknown>).channels)?.telegram);
-      if (config.CHANNELS.TELEGRAM.ENABLED && telegramPatch?.enabled === true) {
-        startTelegramLive(logger, gateway, config.CHANNELS.TELEGRAM.BOT_TOKEN);
+      const telegramConfig = loadTelegramConfig();
+      if (telegramConfig.enabled && telegramPatchRecord?.enabled === true) {
+        startTelegramLive(logger, gateway);
       }
 
-      const whatsappPatch = asRecord(asRecord((patch as Record<string, unknown>).channels)?.whatsapp);
-      if (config.CHANNELS.WHATSAPP.ENABLED && whatsappPatch?.enabled === true) {
+      const whatsappConfig = loadWhatsAppConfig();
+      if (whatsappConfig.enabled && whatsappPatchRecord?.enabled === true) {
         startWhatsAppLive(logger, gateway);
       }
 
       logger.info(`Settings saved to ${writtenPath}`);
-      res.json({ success: true, settings: maskDeep(config) });
+      res.json({ success: true, settings: maskDeep(buildSettingsResponse()) });
     });
 
     router.post('/ai/test-connection', async (req: Request, res: Response) => {
@@ -736,18 +783,6 @@ class AdminRouterFactory {
         apiToken: typeof apiToken === 'string' ? apiToken : '',
       });
 
-      res.json(result);
-    });
-
-    router.post('/telegram/test-token', async (req: Request, res: Response) => {
-      const { bot_token: botToken } = (req.body ?? {}) as Record<string, unknown>;
-
-      if (typeof botToken !== 'string' || !botToken.trim()) {
-        res.status(400).json({ error: 'bot_token is required.' });
-        return;
-      }
-
-      const result = await checkTelegramToken(botToken);
       res.json(result);
     });
 

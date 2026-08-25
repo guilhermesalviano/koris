@@ -1,0 +1,3 @@
+enabled: false
+bot_token: "YOUR_BOT_TOKEN"
+whitelist: "NUMBER1"

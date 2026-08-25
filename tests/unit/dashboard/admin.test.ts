@@ -48,6 +48,10 @@ const {
   liveChannelRuntime: {
     startWhatsAppLive: vi.fn(),
     startTelegramLive: vi.fn(),
+    loadTelegramConfig: vi.fn(() => ({ enabled: false, token: '', whitelist: '' })),
+    loadWhatsAppConfig: vi.fn(() => ({ enabled: false, authFolder: '', whitelist: '', mentionId: '' })),
+    writeTelegramConfigPatch: vi.fn(),
+    writeWhatsAppConfigPatch: vi.fn(),
   },
 }));
 
@@ -650,14 +654,6 @@ describe('AdminRouterFactory /settings', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(res.json).toHaveBeenCalledWith({ ok: true, skipped: true });
-  });
-
-  it('POST /telegram/test-token requires a bot_token', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
-    const res = makeResponse();
-    callRoute(router, makeRequest('POST', '/telegram/test-token'), res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
   });
 
   it('POST /whatsapp/connect triggers a live connection attempt', () => {

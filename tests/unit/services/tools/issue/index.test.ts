@@ -43,7 +43,7 @@ function setGithubOwner(value: string): void {
   });
 }
 
-applyTestConfigDefaults({ telegramEnabled: true });
+applyTestConfigDefaults();
 
 describe('issue tool (orchestrator)', () => {
   beforeEach(() => {

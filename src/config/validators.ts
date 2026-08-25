@@ -3,8 +3,6 @@ import { getSupportedProviders } from '../services/providers';
 export const VALID_LOG_LEVELS = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'] as const;
 export type LogLevel = (typeof VALID_LOG_LEVELS)[number];
 
-const TELEGRAM_TOKEN_PATTERN = /^\d+:[A-Za-z0-9_-]{35,}$/;
-
 export function isValidUrl(value: string): boolean {
   try {
     new URL(value);
@@ -16,10 +14,6 @@ export function isValidUrl(value: string): boolean {
 
 export function isValidLogLevel(value: string): value is LogLevel {
   return (VALID_LOG_LEVELS as readonly string[]).includes(value);
-}
-
-export function isValidTelegramTokenFormat(value: string): boolean {
-  return TELEGRAM_TOKEN_PATTERN.test(value.trim());
 }
 
 export function isSupportedProvider(value: string): boolean {
@@ -105,33 +99,4 @@ export async function checkAiProviderConnectivity(
   }
 
   return { ok: false, status: result.status, healthUrl };
-}
-
-export interface TelegramTokenCheckResult {
-  ok: boolean;
-  username?: string;
-  error?: string;
-  networkError?: boolean;
-}
-
-export async function checkTelegramToken(token: string, timeoutMs = 8000): Promise<TelegramTokenCheckResult> {
-  const result = await httpGet(`https://api.telegram.org/bot${token.trim()}/getMe`, timeoutMs);
-
-  if (result.ok) {
-    try {
-      const data = JSON.parse(result.body ?? '{}') as { ok?: boolean; result?: { username?: string } };
-      if (data.ok === false) {
-        return { ok: false, error: 'Telegram API rejected the token' };
-      }
-      return { ok: true, username: data.result?.username };
-    } catch {
-      return { ok: true };
-    }
-  }
-
-  if (result.error) {
-    return { ok: false, networkError: true, error: result.error };
-  }
-
-  return { ok: false, error: `HTTP ${result.status} from Telegram API` };
 }

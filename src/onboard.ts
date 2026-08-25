@@ -1278,11 +1278,9 @@ export function buildOnboardingSettings(
 ): Record<string, unknown> {
   const payload = structuredClone(options?.baseSettings ?? loadOnboardingExampleSettings(options));
   const channels = getOrCreateRecord(payload, 'channels');
-  const telegram = getOrCreateRecord(channels, 'telegram');
-  const usesTelegram = usesTelegramChannel(answers);
-
-  telegram.enabled = usesTelegram;
-  telegram.bot_token = usesTelegram ? (answers.telegramToken ?? '') : '';
+  if (Object.prototype.hasOwnProperty.call(channels, 'telegram')) {
+    delete channels.telegram;
+  }
 
   if (answers.channels.includes('discord')) {
     const discord = getOrCreateRecord(channels, 'discord');
@@ -1314,6 +1312,14 @@ export function buildOnboardingSettings(
     : {};
 
   return payload;
+}
+
+export function buildOnboardingTelegramConfig(answers: OnboardingAnswers): Record<string, unknown> {
+  const usesTelegram = usesTelegramChannel(answers);
+  return {
+    enabled: usesTelegram,
+    bot_token: usesTelegram ? (answers.telegramToken ?? '') : '',
+  };
 }
 
 export function resolveOnboardingSettingsPath(options?: {

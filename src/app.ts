@@ -30,7 +30,7 @@ const MODES = ['tui', 'web'] as const;
 
 function createPluginContext(logger: ILogger, gateway: IMessageGateway): PluginContext {
   return {
-    config: { channels: config.CHANNELS },
+    allowUntrusted: config.CHANNELS.ALLOW_UNTRUSTED,
     logger,
     gateway,
     channelHandler: ChannelHandlerFactory,

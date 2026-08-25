@@ -249,10 +249,6 @@ describe('onboarding settings draft', () => {
       },
     })).toEqual({
       channels: {
-        telegram: {
-          enabled: true,
-          bot_token: 'YOUR_BOT_TOKEN',
-        },
         discord: {
           enabled: true,
         },
@@ -343,12 +339,6 @@ describe('onboarding settings draft', () => {
     expect(destination).toBe(join(appRoot, SETTINGS_FILENAME));
     expect(JSON.parse(readFileSync(destination, 'utf-8'))).toEqual({
       heartbeat: true,
-      channels: {
-        telegram: {
-          enabled: true,
-          bot_token: 'YOUR_BOT_TOKEN',
-        },
-      },
       ai: {
         manager: {
           provider: 'ollama',

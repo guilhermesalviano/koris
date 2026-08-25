@@ -19,6 +19,7 @@ node_modules
 logs/
 
 koris.json
+plugins/channels/*/config.yml
 **/settings.yml
 
 temp/*

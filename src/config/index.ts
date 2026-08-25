@@ -1,8 +1,6 @@
 import 'dotenv/config';
 import { deepGet, getConfigValue, loadConfigFile } from './helpers';
 
-const isTest = process.env.NODE_ENV === 'test';
-
 let fileConfig = loadConfigFile({
   onParseError: (message) => console.warn(message),
 });
@@ -73,17 +71,6 @@ export interface AppConfig {
   };
   CHANNELS: {
     ALLOW_UNTRUSTED: boolean;
-    TELEGRAM: {
-      ENABLED: boolean;
-      BOT_TOKEN: string;
-      WHITELIST: string;
-    };
-    WHATSAPP: {
-      ENABLED: boolean;
-      AUTH_FOLDER: string;
-      WHITELIST: string;
-      MENTION_ID: string;
-    };
   };
   GITHUB: {
     TOKEN: string;
@@ -146,17 +133,6 @@ function buildConfig(): AppConfig {
   },
   CHANNELS: {
     ALLOW_UNTRUSTED: get('channels.allow_untrusted', 'false') === 'true',
-    TELEGRAM: {
-      ENABLED:    get('channels.telegram.enabled', 'false') === 'true',
-      BOT_TOKEN:  get('channels.telegram.bot_token', ''),
-      WHITELIST:  get('channels.telegram.whitelist', ''),
-    },
-    WHATSAPP: {
-      ENABLED:     get('channels.whatsapp.enabled', 'false') === 'true',
-      AUTH_FOLDER: get('channels.whatsapp.auth_folder', './.whatsapp_auth'),
-      WHITELIST:   get('channels.whatsapp.whitelist', ''),
-      MENTION_ID:  get('channels.whatsapp.mention_id', ''),
-    },
   },
   GITHUB: {
     TOKEN: get('github.token', ''),
@@ -182,11 +158,4 @@ export function reloadConfig(options?: { cwd?: string; dirname?: string }): void
     onParseError: (message) => console.warn(message),
   });
   Object.assign(config, buildConfig());
-}
-
-const isTelegramMode = process.argv.includes('telegram') || process.argv.includes('--telegram');
-if (!isTest && isTelegramMode && !config.CHANNELS.TELEGRAM.BOT_TOKEN) {
-  console.error('ERROR: channels.telegram.bot_token is required');
-  console.error('Please set channels.telegram.bot_token in koris.json or CHANNELS_TELEGRAM_BOT_TOKEN as an environment variable');
-  process.exit(1);
 }

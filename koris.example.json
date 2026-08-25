@@ -11,18 +11,7 @@
   },
   "heartbeat": false,
   "channels": {
-    "allow_untrusted": false,
-    "telegram": {
-      "enabled": false,
-      "bot_token": "YOUR_BOT_TOKEN",
-      "whitelist": "NUMBER1"
-    },
-    "whatsapp": {
-      "enabled": false,
-      "auth_folder": "./.whatsapp_auth",
-      "whitelist": "NUMBER1,NUMBER2",
-      "mention_id": "THE_BOT_MENTION_ID"
-    }
+    "allow_untrusted": false
   },
   "ai": {
     "parallel": false,
