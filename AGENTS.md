@@ -59,7 +59,7 @@ Guidance for AI coding agents working in this repository.
 - `apps/tui/` — terminal UI wrapper (flat module, one file per concern, co-located `*.test.ts`).
 - `apps/web/` — the web frontend (React 19 SPA; see "Web frontend" below).
 - `plugins/channels/` — the plugin system with inverted dependencies. `registry.ts` (ExtensionPoint/PluginRegistry) + `contracts.ts` (the dependency-free plugin SDK: `PluginContext`, channel/gateway/logger interfaces, `ADAPTERS`, `splitMessage`) + one folder per channel plugin (`telegram/`, `whatsapp/`), each exposing `create(context)`.
-- `plugins/search/searxng/` — self-hosted SearXNG config/compose for the `search_engine` tool (`docker-compose.yml`, `settings.example.yml`).
+- `external/search/searxng/` — self-hosted SearXNG config/compose for the `search_engine` tool (`docker-compose.yml`, `settings.example.yml`).
 - `skills/` — markdown skill definitions, one folder per skill with a `SKILL.md` (front-matter `name`/`description` + body). Synced into the `learned_skills` table at startup and on file changes by `core/src/services/skills/skill-sync.ts`.
 - `website/` — the public marketing website, a statically-exported Next.js site (see "Website" below).
 - `scripts/` — helper scripts (`init.ts`, `release.ts`, `run_search_engine.sh`).
