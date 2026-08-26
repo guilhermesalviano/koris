@@ -13,6 +13,9 @@
   "channels": {
     "allow_untrusted": false
   },
+  "session": {
+    "summarizer_mode": "manual"
+  },
   "ai": {
     "parallel": false,
     "background_grace_ms": 5000,
@@ -33,7 +36,6 @@
     },
     "searxng_url": "http://localhost:8080",
     "search_api_key": "SERPAPI_KEY",
-    "summarizer": true,
     "prompt_sanitizer": false,
     "timeouts": {
       "idle_ms": 360000,
