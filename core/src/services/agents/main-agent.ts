@@ -41,6 +41,11 @@ class MainAgent implements IMainAgent {
       ? [RESTRICTED_EXECUTION_CONTRACT]
       : [TOOL_EXECUTION_CONTRACT];
 
+    const compactSummary = message.getSessionMetadata().compactSummary;
+    if (typeof compactSummary === 'string' && compactSummary) {
+      toolContracts.push(`# Resumed From Previous Session\n${compactSummary}`);
+    }
+
     const ctx: LoopContext = {
       channel,
       message,

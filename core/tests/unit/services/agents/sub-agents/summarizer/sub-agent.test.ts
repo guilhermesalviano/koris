@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Summarizer } from '../../../../../../src/services/agents/sub-agents/summarizer/sub-agent';
-import { SUMMARIZATION_INSTRUCTIONS } from '../../../../../../src/constants';
+import { SUMMARIZATION_INSTRUCTIONS, COMPACT_INSTRUCTIONS } from '../../../../../../src/constants';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
 import * as providerRegistry from '../../../../../../src/services/providers';
 import { config } from '../../../../../../src/config';
@@ -276,5 +276,94 @@ it('logs an error when completion fails', async () => {
     expect(queue.snapshot()).toEqual({ queued: 0, active: 0, concurrency: 1, queuedLabels: [], activeLabels: [] });
 
     (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = originalEmbeddingEnabled;
+  });
+
+  describe('compact', () => {
+    function makeCompactProps(overrides: Partial<{
+      sessionId: string;
+      messages: Array<{ role: string; content: string }>;
+      channel: string;
+      memoryService: { save: ReturnType<typeof vi.fn> };
+    }> = {}) {
+      return {
+        sessionId: 'session-1',
+        messages: [
+          { role: 'user', content: 'Help me plan a trip.' },
+          { role: 'assistant', content: 'Sure, where to?' },
+        ],
+        channel: 'tui',
+        memoryService: { save: vi.fn() },
+        ...overrides,
+      } as never;
+    }
+
+    it('summarizes the full transcript and saves the parsed memory', async () => {
+      vi.spyOn(providerRegistry, 'getAIProvider').mockReturnValue({
+        embed: vi.fn().mockResolvedValue([0.3]),
+      } as any);
+      (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = true;
+
+      const logger = makeLogger();
+      const completionService = {
+        complete: vi.fn().mockResolvedValue({
+          kind: 'message',
+          text: '{"type":"summary","content":"Planned a trip together."}',
+        }),
+      };
+      const summarizer = new Summarizer(logger, completionService as never, makeAuditService());
+      const props = makeCompactProps();
+
+      const result = await summarizer.compact(props);
+
+      expect(completionService.complete).toHaveBeenCalledWith(
+        {
+          messages: [
+            { role: 'system', content: COMPACT_INSTRUCTIONS },
+            { role: 'user', content: expect.stringContaining('Help me plan a trip.') },
+          ],
+        },
+        { audit: { sessionId: 'session-1', channel: 'tui' } },
+      );
+      expect(props.memoryService.save).toHaveBeenCalledWith({
+        type: 'summary',
+        content: 'Planned a trip together.',
+        embedding: [0.3],
+      });
+      expect(result).toEqual({ type: 'summary', content: 'Planned a trip together.' });
+    });
+
+    it('throws and records an audit entry when completion fails', async () => {
+      const logger = makeLogger();
+      const auditService = makeAuditService();
+      const completionService = {
+        complete: vi.fn().mockRejectedValue(new Error('provider offline')),
+      };
+      const summarizer = new Summarizer(logger, completionService as never, auditService);
+      const props = makeCompactProps();
+
+      await expect(summarizer.compact(props)).rejects.toThrow('provider offline');
+
+      expect(props.memoryService.save).not.toHaveBeenCalled();
+      const entry = auditService.record.mock.calls[0][0];
+      expect(entry).toMatchObject({
+        agentName: 'summarizer',
+        sessionId: 'session-1',
+        channel: 'tui',
+        status: 'error',
+        errorMessage: 'provider offline',
+      });
+    });
+
+    it('throws when the model returns tool calls instead of a message', async () => {
+      const logger = makeLogger();
+      const completionService = {
+        complete: vi.fn().mockResolvedValue({ kind: 'tool_calls', calls: [] }),
+      };
+      const summarizer = new Summarizer(logger, completionService as never, makeAuditService());
+      const props = makeCompactProps();
+
+      await expect(summarizer.compact(props)).rejects.toThrow();
+      expect(props.memoryService.save).not.toHaveBeenCalled();
+    });
   });
 });

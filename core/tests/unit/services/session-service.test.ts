@@ -132,8 +132,8 @@ describe('SessionService', () => {
       const session = new Session({
         id: 'old-session',
         entryChannel: 'tui',
-        startedAt: '2024-06-01T10:00:00.000Z',
-        metadata: { lastActivityAt: '2024-06-01T10:00:00.000Z' },
+        startedAt: '2024-06-01T08:00:00.000Z',
+        metadata: { lastActivityAt: '2024-06-01T08:00:00.000Z' },
       });
       const svc = new SessionService(repo as any, session, { persistOnConstruct: false });
 
@@ -168,6 +168,49 @@ describe('SessionService', () => {
       expect(result.id).toBe('old-session');
       expect(repo.update).not.toHaveBeenCalled();
       expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('forceRotate', () => {
+    it('ends the current session and starts a new one', () => {
+      const repo = makeRepo();
+      const session = new Session({ id: 'old-session', entryChannel: 'tui' });
+      const svc = new SessionService(repo as any, session, { persistOnConstruct: false });
+
+      const result = svc.forceRotate();
+
+      expect(repo.update).toHaveBeenCalledWith('old-session', expect.objectContaining({ endedAt: expect.any(String) }));
+      expect(repo.save).toHaveBeenCalledTimes(1);
+      expect(result.id).not.toBe('old-session');
+      expect(result.entryChannel).toBe('tui');
+      expect(svc.getSession()).toBe(result);
+    });
+
+    it('rotates even when the session is not expired', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-06-01T12:00:00.000Z'));
+
+      const repo = makeRepo();
+      const session = new Session({
+        id: 'fresh-session',
+        entryChannel: 'tui',
+        metadata: { lastActivityAt: '2024-06-01T11:59:00.000Z' },
+      });
+      const svc = new SessionService(repo as any, session, { persistOnConstruct: false });
+
+      const result = svc.forceRotate();
+
+      expect(result.id).not.toBe('fresh-session');
+    });
+
+    it('seeds the new session with the given metadata', () => {
+      const repo = makeRepo();
+      const session = new Session({ id: 'old-session', entryChannel: 'tui' });
+      const svc = new SessionService(repo as any, session, { persistOnConstruct: false });
+
+      const result = svc.forceRotate({ compactSummary: 'we discussed the roadmap' });
+
+      expect(result.metadata.compactSummary).toBe('we discussed the roadmap');
     });
   });
 });
@@ -215,8 +258,8 @@ describe('SessionServiceFactory', () => {
     const expired = new Session({
       id: 'expired',
       entryChannel: 'tui',
-      startedAt: '2024-06-01T09:00:00.000Z',
-      metadata: { lastActivityAt: '2024-06-01T09:00:00.000Z' },
+      startedAt: '2024-06-01T08:00:00.000Z',
+      metadata: { lastActivityAt: '2024-06-01T08:00:00.000Z' },
     });
 
     const repo = makeRepo();

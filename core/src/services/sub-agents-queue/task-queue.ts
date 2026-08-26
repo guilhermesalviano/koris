@@ -7,7 +7,7 @@ export interface TaskQueueSnapshot {
 }
 
 interface TaskQueueEntry {
-  fn: () => Promise<void>;
+  fn: () => Promise<unknown>;
   label: string;
 }
 
@@ -17,8 +17,8 @@ export class TaskQueue {
 
   constructor(private concurrency: number) {}
 
-  add(task: () => Promise<void>, label = 'task'): Promise<void> {
-    return new Promise((resolve, reject) => {
+  add<T>(task: () => Promise<T>, label = 'task'): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
       this.queue.push({
         fn: () =>
           Promise.resolve()

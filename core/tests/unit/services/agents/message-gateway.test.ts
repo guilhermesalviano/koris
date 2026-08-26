@@ -8,8 +8,11 @@ function makeLogger(): ILogger {
 }
 
 function makeDeps() {
-  const sessionService = { getSession: vi.fn().mockReturnValue({ id: 'session-1' }) };
-  const messageService = { getHistory: vi.fn(), getSessionId: vi.fn().mockReturnValue('session-1'), save: vi.fn() };
+  const sessionService = {
+    getSession: vi.fn().mockReturnValue({ id: 'session-1' }),
+    forceRotate: vi.fn(),
+  };
+  const messageService = { getHistory: vi.fn().mockReturnValue([]), getSessionId: vi.fn().mockReturnValue('session-1'), save: vi.fn() };
   const memoryService = { upsert: vi.fn() };
 
   return {
@@ -19,6 +22,7 @@ function makeDeps() {
     backgroundDispatcher: {
       persistConversation: vi.fn(),
       summarizeConversation: vi.fn(),
+      compactConversation: vi.fn().mockResolvedValue({ type: 'summary', content: 'we covered X' }),
     },
     mainAgent: { run: vi.fn().mockResolvedValue('assistant reply') },
     channelService: { record: vi.fn() },
@@ -208,5 +212,53 @@ describe('MessageGateway', () => {
     expect(deps.backgroundDispatcher.summarizeConversation).toHaveBeenCalledWith(
       expect.objectContaining({ channel: 'whatsapp' }),
     );
+  });
+
+  describe('/compact', () => {
+    it('compacts the session, rotates it, and persists the exchange under the new session', async () => {
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'hi' }] as never);
+      deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
+      deps.sessionService.getSession
+        .mockReturnValueOnce({ id: 'session-1' })
+        .mockReturnValue({ id: 'session-2' });
+
+      const result = await gateway.handle('/compact', 'origin-1');
+
+      expect(deps.mainAgent.run).not.toHaveBeenCalled();
+      expect(deps.backgroundDispatcher.compactConversation).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        messages: [{ role: 'user', content: 'hi' }],
+        channel: 'tui',
+        memoryService: deps.memoryService,
+      });
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith({ compactSummary: 'we covered X' });
+      expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'session-2', ask: '/compact' }),
+      );
+      expect(result).toContain('Compacting');
+    });
+
+    it('does nothing and skips rotation when there is no history to compact', async () => {
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([]);
+
+      const result = await gateway.handle('/compact', 'origin-1');
+
+      expect(deps.backgroundDispatcher.compactConversation).not.toHaveBeenCalled();
+      expect(deps.sessionService.forceRotate).not.toHaveBeenCalled();
+      expect(result).toBe('Nothing to compact yet.');
+    });
+
+    it('still rotates without a summary when compaction fails', async () => {
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'hi' }] as never);
+      deps.backgroundDispatcher.compactConversation.mockResolvedValue(null);
+      deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
+
+      await gateway.handle('/compact', 'origin-1');
+
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith(undefined);
+    });
   });
 });

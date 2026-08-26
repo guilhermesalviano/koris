@@ -27,6 +27,9 @@ export function handleCommand(command: string, context: CommandContext): Command
     case '/reset':
       return handleReset(context);
 
+    case '/compact':
+      return handleCompact(context);
+
     case '/exit':
     case '/quit':
     case '/bye':
@@ -81,6 +84,7 @@ function handleHelp(context: CommandContext): CommandResult {
 /status - Check bot status
 /usage - Token usage report (/usage 7, /usage today)
 /clear - Clear conversation history
+/compact - Summarize this session into memory and start a fresh one
 
 Send me any message to interact!`;
 
@@ -181,6 +185,22 @@ function handleReset(context: CommandContext): CommandResult {
   };
 }
 
+function handleCompact(context: CommandContext): CommandResult {
+  if (context.source === 'telegram') {
+    return {
+      response: '🗜️ Compacting session — starting a fresh one with a summary of what we covered.',
+      action: 'compact',
+      handled: true,
+    };
+  }
+
+  return {
+    response: 'Compacting session — starting a fresh one with a summary of what we covered.',
+    action: 'compact',
+    handled: true,
+  };
+}
+
 function handleExit(context: CommandContext): CommandResult {
   if (context.source === 'telegram') {
     return {
@@ -225,8 +245,8 @@ export function isCommand(message: string): boolean {
  * Get list of available commands
  */
 export function getAvailableCommands(channel: string): string[] {
-  const commonCommands = ['/start', '/help', '/usage', '/clear'];
-  
+  const commonCommands = ['/start', '/help', '/usage', '/clear', '/compact'];
+
   if (channel === 'tui') {
     return [...commonCommands, '/stats', '/status', '/reset', '/exit', '/quit', '/bye'];
   }

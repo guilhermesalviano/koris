@@ -23,6 +23,8 @@ function getPersonalInformation(): Record<string, string> {
   }, {});
 }
 
+export type SummarizerMode = 'auto' | 'manual';
+
 export interface AppConfig {
   LOG_LEVEL: string;
   TIMEZONE: string;
@@ -37,7 +39,15 @@ export interface AppConfig {
     ALLOW_UNTRUSTED: boolean;
   };
   SESSION: {
+    /** Sessions auto-rotate once idle past this long, regardless of mode. */
     TTL_MS: number;
+    /**
+     * 'auto': the per-turn summarizer runs after every reply, distilling
+     * each exchange into a memory as it happens.
+     * 'manual': the per-turn summarizer is off — the `/compact` command is
+     * the sole way a session gets summarized (and rotated on demand).
+     */
+    SUMMARIZER_MODE: SummarizerMode;
   };
   HEARTBEAT: boolean;
   AI: {
@@ -66,7 +76,6 @@ export interface AppConfig {
       HARD_MS: number;
       HEALTH_MS: number;
     };
-    SUMMARIZER: boolean;
     PROMPT_SANITIZER: boolean;
   };
   CHANNELS: {
@@ -99,7 +108,8 @@ function buildConfig(): AppConfig {
     ALLOW_UNTRUSTED: get('stickers.allow_untrusted', 'true') === 'true',
   },
   SESSION: {
-    TTL_MS: Number(get('session.ttl_ms', String(30 * 60 * 1000))),
+    TTL_MS: Number(get('session.ttl_ms', String(3 * 60 * 60 * 1000))),
+    SUMMARIZER_MODE: get('session.summarizer_mode', 'auto') === 'manual' ? 'manual' : 'auto',
   },
   HEARTBEAT: get('heartbeat', 'true') === 'true',
   AI: {
@@ -128,7 +138,6 @@ function buildConfig(): AppConfig {
       HARD_MS:   Number(get('ai.timeouts.hard_ms', String(20 * 60_000))),
       HEALTH_MS: Number(get('ai.timeouts.health_ms', String(5_000))),
     },
-    SUMMARIZER: get('ai.summarizer', 'true') === 'true',
     PROMPT_SANITIZER: get('ai.prompt_sanitizer', 'false') === 'true',
   },
   CHANNELS: {

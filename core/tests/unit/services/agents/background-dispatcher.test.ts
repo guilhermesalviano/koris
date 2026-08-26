@@ -10,6 +10,7 @@ function makeLogger(): ILogger {
 function makeDispatcher(overrides: {
   conversationRun?: ReturnType<typeof vi.fn>;
   summarizerHandler?: ReturnType<typeof vi.fn>;
+  compact?: ReturnType<typeof vi.fn>;
 } = {}) {
   const logger = makeLogger();
   const conversationWorker = {
@@ -17,6 +18,7 @@ function makeDispatcher(overrides: {
   };
   const summarizerWorker = {
     handler: overrides.summarizerHandler ?? vi.fn().mockResolvedValue(undefined),
+    compact: overrides.compact ?? vi.fn().mockResolvedValue({ type: 'summary', content: 'a summary' }),
   };
 
   const dispatcher = new BackgroundDispatcher(
@@ -63,7 +65,7 @@ describe('BackgroundDispatcher', () => {
   });
 
   it('summarizes the conversation when the summarizer is enabled', () => {
-    applyTestConfigDefaults({ summarizerEnabled: true });
+    applyTestConfigDefaults({ summarizerMode: 'auto' });
     const { dispatcher, summarizerWorker } = makeDispatcher();
     const memoryService = { upsert: vi.fn() };
 
@@ -75,7 +77,7 @@ describe('BackgroundDispatcher', () => {
   });
 
   it('does not summarize when the summarizer is disabled', () => {
-    applyTestConfigDefaults({ summarizerEnabled: false });
+    applyTestConfigDefaults({ summarizerMode: 'manual' });
     const { dispatcher, summarizerWorker } = makeDispatcher();
 
     dispatcher.summarizeConversation({ ...persistProps, memoryService: { upsert: vi.fn() } as never });
@@ -84,7 +86,7 @@ describe('BackgroundDispatcher', () => {
   });
 
   it('does not summarize when the agent response is empty', () => {
-    applyTestConfigDefaults({ summarizerEnabled: true });
+    applyTestConfigDefaults({ summarizerMode: 'auto' });
     const { dispatcher, summarizerWorker } = makeDispatcher();
 
     dispatcher.summarizeConversation({ ...persistProps, answer: '   ', memoryService: { upsert: vi.fn() } as never });
@@ -93,7 +95,7 @@ describe('BackgroundDispatcher', () => {
   });
 
   it('logs when summarization fails', async () => {
-    applyTestConfigDefaults({ summarizerEnabled: true });
+    applyTestConfigDefaults({ summarizerMode: 'auto' });
     const { dispatcher, logger } = makeDispatcher({
       summarizerHandler: vi.fn().mockRejectedValue(new Error('summarizer down')),
     });
@@ -102,6 +104,42 @@ describe('BackgroundDispatcher', () => {
     await vi.waitFor(() => {
       expect(logger.error).toHaveBeenCalledWith(
         'Background summarizer failed',
+        expect.objectContaining({ err: expect.any(Error) }),
+      );
+    });
+  });
+
+  describe('compactConversation', () => {
+    const compactProps = { sessionId: 'session-1', messages: [{ role: 'user', content: 'hi' }] as never, channel: 'tui', memoryService: { save: vi.fn() } as never };
+
+    it('returns the compacted result from the summarizer', async () => {
+      const { dispatcher, summarizerWorker } = makeDispatcher();
+
+      const result = await dispatcher.compactConversation(compactProps);
+
+      expect(summarizerWorker.compact).toHaveBeenCalledWith(compactProps);
+      expect(result).toEqual({ type: 'summary', content: 'a summary' });
+    });
+
+    it('returns null without calling the summarizer when there is no history', async () => {
+      const { dispatcher, summarizerWorker } = makeDispatcher();
+
+      const result = await dispatcher.compactConversation({ ...compactProps, messages: [] as never });
+
+      expect(summarizerWorker.compact).not.toHaveBeenCalled();
+      expect(result).toBeNull();
+    });
+
+    it('returns null and logs when compaction fails', async () => {
+      const { dispatcher, logger } = makeDispatcher({
+        compact: vi.fn().mockRejectedValue(new Error('compaction down')),
+      });
+
+      const result = await dispatcher.compactConversation(compactProps);
+
+      expect(result).toBeNull();
+      expect(logger.error).toHaveBeenCalledWith(
+        'Compaction failed',
         expect.objectContaining({ err: expect.any(Error) }),
       );
     });

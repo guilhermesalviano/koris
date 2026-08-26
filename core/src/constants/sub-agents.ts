@@ -57,6 +57,37 @@ Human: {v1}
 Assistant: {v2}
 `.trim();
 
+export const COMPACT_INSTRUCTIONS = `
+## Session Compaction
+
+The human asked to compact this session: it is ending now and a new one is about to start. Distill the ENTIRE conversation transcript below into the single most useful memory to carry forward. It will be re-read at the start of the next session, without any of this transcript, so keep it short, high-level, and self-contained.
+
+### Memory types (choose one based on context):
+- summary: general distillation of what happened across the session (default when nothing else fits)
+- fact: concrete factual information worth remembering (names, preferences, IDs, settings)
+- lesson: insight, rule, or how-to learned from the session
+- reminder: something the user should be reminded about later
+
+### Rules:
+- Capture the overall arc: what the human wanted, what was done, and where things were left off.
+- Drop intermediate steps, tool output, and anything superseded by a later turn.
+- Do not reproduce quotes, codes, numbers, URLs, or verbatim text unless essential to a \`fact\`.
+- Never invent, extrapolate, or complete details that were not clearly stated.
+
+### Output format:
+Respond with **only** a valid JSON object. No markdown fences, no explanation.
+
+{
+  "type": "<summary|fact|lesson|reminder>",
+  "content": "<a few sentences at most>"
+}
+`.trim();
+
+export const COMPACT_DATA = `
+### SESSION TRANSCRIPT TO COMPACT
+{v1}
+`.trim();
+
 export const PLAN_INSTRUCTIONS = `
 ## Planning instructions
 

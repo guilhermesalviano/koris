@@ -52,6 +52,13 @@ describe('Command Handler', () => {
       expect(result.action).toBe('reset');
     });
 
+    it('should handle /compact command', () => {
+      const result = handleCommand('/compact', { source: 'tui' });
+      expect(result.handled).toBe(true);
+      expect(result.action).toBe('compact');
+      expect(result.response).toBeTruthy();
+    });
+
     it('should handle /exit command for TUI', () => {
       const result = handleCommand('/exit', { source: 'tui' });
       expect(result.handled).toBe(true);
@@ -123,9 +130,11 @@ describe('Command Handler', () => {
       
       expect(tuiCommands).toContain('/start');
       expect(tuiCommands).toContain('/help');
-      
+      expect(tuiCommands).toContain('/compact');
+
       expect(telegramCommands).toContain('/start');
       expect(telegramCommands).toContain('/help');
+      expect(telegramCommands).toContain('/compact');
     });
   });
 

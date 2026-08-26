@@ -256,7 +256,7 @@ class AdminRouterFactory {
         environment: config.ENVIRONMENT,
         timezone: config.TIMEZONE,
         heartbeatEnabled: config.HEARTBEAT,
-        summarizerEnabled: config.AI.SUMMARIZER,
+        summarizerEnabled: config.SESSION.SUMMARIZER_MODE === 'auto',
         aiParallel: config.AI.PARALLEL,
         aiSubagentsParallel: config.AI.SUBAGENTS_PARALLEL,
         channels: enabledChannels,
