@@ -36,7 +36,7 @@ vi.mock('qrcode-terminal', () => ({ generate: vi.fn() }));
 
 import { WhatsAppChannelFactory, configureWhatsAppRuntime, _resetWhatsAppDedupeForTesting, create } from './index';
 import type { ChannelDefinition } from '../contracts';
-import type { PluginRegistry } from '../registry';
+import type { PluginRegistry } from '../../registry';
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };

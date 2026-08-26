@@ -23,8 +23,18 @@ import { LearnedSkillsRepositoryFactory } from './repositories/learned-skills';
 import { SkillSyncSingleton } from './services/skills/skill-sync';
 import { DashboardServerFactory, WebServerHandle } from './dashboard';
 import { createPlugins, buildRegistry } from '../../plugins/channels';
+import { createToolPlugins } from '../../plugins/tools';
+import { COMMANDS } from '../../plugins/tools/contracts';
+import { ToolPluginsSingleton } from './services/tools/registry-singleton';
 import { config } from './config';
 import type { PluginContext } from '../../plugins/channels/contracts';
+import type { ToolPluginContext } from '../../plugins/tools/contracts';
+import { IDatabaseService } from './infrastructure/db-sqlite';
+import { Heartbeat } from './entities/heartbeat';
+import type { BeatType } from './types/beat';
+import { StickerRulesRepositoryFactory } from './repositories/sticker-rules';
+import { OutboundMessageServiceFactory } from './services/outbound/outbound-message-service';
+import { gateErrorForUrl } from './services/security/gate';
 
 const logger = LoggerFactory.create();
 const MODES = ['tui', 'web'] as const;
@@ -35,6 +45,69 @@ function createPluginContext(logger: ILogger, gateway: IMessageGateway): PluginC
     logger,
     gateway,
     channelHandler: ChannelHandlerFactory,
+  };
+}
+
+function createToolPluginContext(logger: ILogger, db: IDatabaseService): ToolPluginContext {
+  return {
+    logger,
+    heartbeats: {
+      create: (input) => {
+        const repo = HeartbeatRepositoryFactory.create(db);
+        const heartbeat = new Heartbeat({
+          beat: input.beat,
+          type: input.type as BeatType,
+          cronExpression: input.cronExpression,
+          channel: input.channel,
+          target: input.target,
+        });
+        repo.save(heartbeat);
+        return heartbeat;
+      },
+      getById: (id) => HeartbeatRepositoryFactory.create(db).getById(id),
+      getAll: () => HeartbeatRepositoryFactory.create(db).getAll(),
+      update: (id, input) => HeartbeatRepositoryFactory.create(db).update(id, {
+        beat: input.beat,
+        type: input.type as BeatType | undefined,
+        cronExpression: input.cronExpression,
+        channel: input.channel,
+        target: input.target,
+      }),
+      deleteById: (id) => HeartbeatRepositoryFactory.create(db).deleteById(id),
+      reschedule: () => { HeartbeatSingleton.getExistingInstance()?.reschedule(); },
+    },
+    channels: {
+      sendMessage: async (channel, target, content) => {
+        const channelsManager = ChannelsSingleton.getExistingInstance();
+        if (!channelsManager) {
+          throw new Error('Outbound messaging is not available: no channel manager is running.');
+        }
+        const service = OutboundMessageServiceFactory.create(logger, channelsManager, db);
+        return service.send({ content, channel, target });
+      },
+      sendSticker: async (channel, target, sticker) => {
+        const channelsManager = ChannelsSingleton.getExistingInstance();
+        if (!channelsManager) {
+          throw new Error('Outbound messaging is not available: no channel manager is running.');
+        }
+        await channelsManager.sendSticker(channel, target, sticker);
+      },
+    },
+    stickerRules: {
+      save: (input) => StickerRulesRepositoryFactory.create(db).save(input),
+      getById: (id) => StickerRulesRepositoryFactory.create(db).getById(id),
+      deleteById: (id) => StickerRulesRepositoryFactory.create(db).deleteById(id),
+    },
+    security: {
+      gateUrl: gateErrorForUrl,
+    },
+    config: {
+      searxngUrl: config.AI.SEARXNG_URL,
+      searchApiKey: config.AI.SEARCH_API_KEY,
+      allowedDomains: config.ALLOWED_DOMAINS,
+      githubOwner: config.GITHUB.OWNER,
+      githubToken: config.GITHUB.TOKEN,
+    },
   };
 }
 
@@ -73,7 +146,11 @@ class Application implements IApplication {
     seedDefaultBeats(db, this.logger);
     const sessionManager = new SessionManager(db);
     const gateway = MessageGatewayFactory.create(this.logger, this.source, db, sessionManager);
-    const registry = buildRegistry(createPlugins({ context: createPluginContext(this.logger, gateway) }));
+    const registry = buildRegistry([
+      ...createPlugins({ context: createPluginContext(this.logger, gateway) }),
+      ...createToolPlugins({ context: createToolPluginContext(this.logger, db) }),
+    ]);
+    ToolPluginsSingleton.getInstance(registry.collect(COMMANDS));
     const registeredChannels = applyChannelOverrides(registry.collect(ADAPTERS), loadChannelOverrides());
     const channels = ChannelsSingleton.getInstance(this.logger, gateway, registeredChannels);
     const heartbeat = HeartbeatSingleton.getInstance(

@@ -1,6 +1,6 @@
 import { ADAPTERS } from '../contracts';
 import type { ChannelDefinition, ILogger, IMessageGateway, Plugin } from '../contracts';
-import type { PluginRegistry } from '../registry';
+import type { PluginRegistry } from '../../registry';
 import { TELEGRAM_CAPABILITIES } from './constants';
 import { TelegramChannelFactory } from './factory';
 import type { TelegramPluginOptions } from './types';

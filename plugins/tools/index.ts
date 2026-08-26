@@ -1,26 +1,26 @@
 import * as fs from 'node:fs';
 import path from 'node:path';
-import { PluginRegistry, buildRegistry, type Plugin } from '../registry';
-import type { PluginContext } from './contracts';
+import type { Plugin } from '../registry';
+import type { ToolPluginContext } from './contracts';
 
 type PluginDirectoryEntry = Pick<fs.Dirent, 'name' | 'isDirectory'>;
 
-interface PluginModule {
-  create?(context?: PluginContext): Plugin | null;
+interface ToolPluginModule {
+  create?(context?: ToolPluginContext): Plugin | null;
 }
 
-interface CreatePluginsOptions {
+interface CreateToolPluginsOptions {
   directory?: string;
   readdirSync?: (directory: string, options: { withFileTypes: true }) => PluginDirectoryEntry[];
-  loadModule?: (modulePath: string) => PluginModule;
-  context?: PluginContext;
+  loadModule?: (modulePath: string) => ToolPluginModule;
+  context?: ToolPluginContext;
 }
 
-function createPlugins(options: CreatePluginsOptions = {}): Plugin[] {
+function createToolPlugins(options: CreateToolPluginsOptions = {}): Plugin[] {
   const {
     directory = __dirname,
-    readdirSync = fs.readdirSync as CreatePluginsOptions['readdirSync'],
-    loadModule = (modulePath: string) => require(modulePath) as PluginModule,
+    readdirSync = fs.readdirSync as CreateToolPluginsOptions['readdirSync'],
+    loadModule = (modulePath: string) => require(modulePath) as ToolPluginModule,
     context,
   } = options;
 
@@ -34,5 +34,6 @@ function createPlugins(options: CreatePluginsOptions = {}): Plugin[] {
     });
 }
 
-export { createPlugins, buildRegistry, PluginRegistry };
+export { createToolPlugins };
+export { buildRegistry, PluginRegistry } from '../registry';
 export type { Plugin };

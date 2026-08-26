@@ -1,6 +1,6 @@
 import { ADAPTERS } from '../contracts';
 import type { ChannelDefinition, ILogger, IMessageGateway, Plugin, StickerReference } from '../contracts';
-import type { PluginRegistry } from '../registry';
+import type { PluginRegistry } from '../../registry';
 import { WHATSAPP_CAPABILITIES } from './constants';
 import { WhatsAppChannelFactory } from './factory';
 import type { WhatsAppPluginOptions } from './types';
