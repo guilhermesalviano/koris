@@ -8,10 +8,11 @@ function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
 }
 
-function makeMessageService(history: Message[] = []) {
+function makeMessageService(history: Message[] = [], sessionMetadata: Record<string, unknown> = {}) {
   return {
     getHistory: vi.fn().mockReturnValue(history),
     getSessionId: vi.fn().mockReturnValue('session-1'),
+    getSessionMetadata: vi.fn().mockReturnValue(sessionMetadata),
     save: vi.fn(),
   };
 }
@@ -146,6 +147,50 @@ describe('MainAgent', () => {
       [],
       'session-1',
       [RESTRICTED_EXECUTION_CONTRACT],
+      undefined,
+      undefined,
+    );
+  });
+
+  it('injects the compact summary as an extra system block when present', async () => {
+    const { mainAgent, chatComplete } = makeMainAgent();
+    const message = makeMessageService([], { compactSummary: 'Discussed the roadmap.' });
+
+    await mainAgent.run({
+      userMessage: 'what were we saying',
+      channel: 'tui',
+      message: message as never,
+    });
+
+    expect(chatComplete).toHaveBeenCalledWith(
+      'what were we saying',
+      'tui',
+      undefined,
+      [],
+      'session-1',
+      [TOOL_EXECUTION_CONTRACT, '# Resumed From Previous Session\nDiscussed the roadmap.'],
+      undefined,
+      undefined,
+    );
+  });
+
+  it('does not inject an extra block when there is no compact summary', async () => {
+    const { mainAgent, chatComplete } = makeMainAgent();
+    const message = makeMessageService();
+
+    await mainAgent.run({
+      userMessage: 'hello',
+      channel: 'tui',
+      message: message as never,
+    });
+
+    expect(chatComplete).toHaveBeenCalledWith(
+      'hello',
+      'tui',
+      undefined,
+      [],
+      'session-1',
+      [TOOL_EXECUTION_CONTRACT],
       undefined,
       undefined,
     );

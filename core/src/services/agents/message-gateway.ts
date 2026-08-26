@@ -7,7 +7,7 @@ import { IMainAgent, MainAgentFactory } from './main-agent';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import { ImageAttachment } from '../../types/messages';
 import { generateId } from '../../utils/generate-id';
-import { ISessionContextFactory, SessionContextFactory } from './session-context';
+import { ISessionContextFactory, SessionContextFactory, SessionContext } from './session-context';
 import { IBackgroundDispatcher, BackgroundDispatcherFactory } from './background-dispatcher';
 import { IChannelService, ChannelServiceFactory } from '../channel-service';
 import type { InboundInput, IMessageGateway, StickerReference } from '../../../../plugins/channels/contracts';
@@ -46,7 +46,19 @@ class MessageGateway implements IMessageGateway {
     this.channelService.record(channel, originId);
 
     if (isCommand(safeMessage)) {
-      const response = handleCommand(safeMessage, { source: channel }).response || '';
+      const commandResult = handleCommand(safeMessage, { source: channel });
+
+      if (commandResult.action === 'compact') {
+        return this.handleCompact(
+          { sessionService, messageService, memoryService },
+          safeMessage,
+          images,
+          channel,
+          commandResult.response || '',
+        );
+      }
+
+      const response = commandResult.response || '';
       this.backgroundDispatcher.persistConversation({
         sessionId: sessionService.getSession().id,
         ask: safeMessage,
@@ -80,6 +92,39 @@ class MessageGateway implements IMessageGateway {
     });
 
     return response;
+  }
+
+  private async handleCompact(
+    { sessionService, messageService, memoryService }: SessionContext,
+    safeMessage: string,
+    images: ImageAttachment[] | undefined,
+    channel: string,
+    confirmation: string,
+  ): Promise<ProcessedMessage> {
+    const history = messageService.getHistory();
+    if (history.length === 0) {
+      return 'Nothing to compact yet.';
+    }
+
+    const sessionId = sessionService.getSession().id;
+    const result = await this.backgroundDispatcher.compactConversation({
+      sessionId,
+      messages: history,
+      channel,
+      memoryService,
+    });
+
+    sessionService.forceRotate(result ? { compactSummary: result.content } : undefined);
+
+    this.backgroundDispatcher.persistConversation({
+      sessionId: sessionService.getSession().id,
+      ask: safeMessage,
+      askImages: images,
+      answer: confirmation,
+      channel,
+    });
+
+    return confirmation;
   }
 }
 

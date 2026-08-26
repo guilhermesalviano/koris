@@ -11,6 +11,6 @@ export interface CommandContext {
 
 export interface CommandResult {
   response?: string;
-  action?: 'exit' | 'clear' | 'reset' | 'none';
+  action?: 'exit' | 'clear' | 'reset' | 'compact' | 'none';
   handled: boolean;
 }

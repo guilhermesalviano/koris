@@ -100,4 +100,18 @@ describe('MessageService', () => {
       expect(svc.getHistory()).toEqual([]);
     });
   });
+
+  describe('getSessionMetadata', () => {
+    it('returns the current session metadata', () => {
+      const repo = makeRepo();
+      const session = {
+        getSession: vi.fn().mockReturnValue({ id: 'sess-1', metadata: { compactSummary: 'x' } }),
+        ensureActiveSession: vi.fn(),
+        updateCount: vi.fn(),
+      };
+      const svc = new MessageService(repo as any, session as any);
+
+      expect(svc.getSessionMetadata()).toEqual({ compactSummary: 'x' });
+    });
+  });
 });

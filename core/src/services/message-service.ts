@@ -8,6 +8,7 @@ interface IMessageService {
   save(props: { role: MessageRole; content: string; images?: ImageAttachment[] }): void;
   getHistory(): Message[];
   getSessionId(): string;
+  getSessionMetadata(): Record<string, unknown>;
 }
 
 class MessageService implements IMessageService {
@@ -39,6 +40,10 @@ class MessageService implements IMessageService {
 
   getSessionId(): string {
     return this.session.getSession().id;
+  }
+
+  getSessionMetadata(): Record<string, unknown> {
+    return this.session.getSession().metadata;
   }
 }
 

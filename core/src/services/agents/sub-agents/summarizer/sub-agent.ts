@@ -2,7 +2,7 @@ import { IMemoryService } from "../../../memory-service";
 import type { ILogger } from "../../../../infrastructure/logger";
 import { getAIProvider } from "../../../providers";
 import { AICompletionService, AIServiceError, IAICompletionService } from "../../../ai-completion-service";
-import { SUMMARIZATION_INSTRUCTIONS, SUMMARIZATION_DATA } from "../../../../constants";
+import { SUMMARIZATION_INSTRUCTIONS, SUMMARIZATION_DATA, COMPACT_INSTRUCTIONS, COMPACT_DATA } from "../../../../constants";
 import { replacePlaceholders } from "../../../../utils/prompt";
 import { beginFooterActivity } from "../../../../utils/footer-activity";
 import { parseSummarizerResponse } from "../../../../utils/summarizer-response";
@@ -14,6 +14,8 @@ import { AuditLogLlm } from "../../../../entities/audit-log";
 import { IAuditService, AuditServiceFactory } from "../../../audit/audit-service";
 import { generateId } from "../../../../utils/generate-id";
 import type { Message } from "../../../../types/messages";
+import type { Message as MessageEntity } from "../../../../entities/message";
+import type { MemoryType } from "../../../../types/memory";
 
 export interface SummarizerWorkerProps {
   sessionId: string,
@@ -21,6 +23,18 @@ export interface SummarizerWorkerProps {
   answer: string,
   channel: string,
   memoryService: IMemoryService,
+}
+
+export interface CompactWorkerProps {
+  sessionId: string,
+  messages: MessageEntity[],
+  channel: string,
+  memoryService: IMemoryService,
+}
+
+export interface CompactResult {
+  type: MemoryType,
+  content: string,
 }
 
 class Summarizer implements ISubAgent<SummarizerWorkerProps> {
@@ -39,6 +53,10 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
     props: SummarizerWorkerProps
   ): Promise<void> {
     return this.queue.add(() => this.run(props), 'summarizer');
+  }
+
+  async compact(props: CompactWorkerProps): Promise<CompactResult> {
+    return this.queue.add(() => this.runCompact(props), 'summarizer-compact');
   }
 
   private async run(props: SummarizerWorkerProps): Promise<void> {
@@ -87,8 +105,60 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
     }
   }
 
+  private async runCompact(props: CompactWorkerProps): Promise<CompactResult> {
+    const endFooterActivity = beginFooterActivity('summarizer');
+    this.logger.info(`Compacting session ${props.sessionId} in ${props.channel}`);
+    const startedAt = Date.now();
+    const transcript = this.formatTranscript(props.messages);
+    const messages: Message[] = [
+      { role: "system", content: COMPACT_INSTRUCTIONS },
+      { role: "user", content: replacePlaceholders(COMPACT_DATA, { v1: transcript }) },
+    ];
+
+    try {
+      const response = await this.completionService.complete(
+        { messages },
+        { audit: { sessionId: props.sessionId, channel: props.channel } },
+      );
+      if (response.kind !== 'message') {
+        throw new Error('Compaction received an unexpected tool-call response');
+      }
+
+      const parsedMemory = parseSummarizerResponse(response.text);
+
+      let embedding: number[] | undefined;
+      if (config.AI.WORKERS.EMBEDDING_ENABLED) {
+        try {
+          const provider = getAIProvider(this.logger, 'worker', { background: true });
+          embedding = await provider.embed(parsedMemory.content);
+        } catch (error) {
+          this.logger.error(`Failed to generate embedding for compacted memory`, { error });
+        }
+      }
+
+      props.memoryService.save({ ...parsedMemory, embedding });
+      this.logger.info(`Compaction completed for session ${props.sessionId}`);
+      return parsedMemory;
+    } catch (error) {
+      this.logger.error(`Failed to compact session ${props.sessionId}`, { error });
+      this.recordErrorAudit({ sessionId: props.sessionId, channel: props.channel }, messages, startedAt, error);
+      throw error;
+    } finally {
+      endFooterActivity();
+    }
+  }
+
+  private formatTranscript(messages: MessageEntity[]): string {
+    const transcript = messages
+      .map((m) => `${m.role}: ${m.content}`)
+      .join('\n');
+
+    const TRANSCRIPT_LIMIT = 20000;
+    return transcript.length > TRANSCRIPT_LIMIT ? transcript.slice(-TRANSCRIPT_LIMIT) : transcript;
+  }
+
   private recordErrorAudit(
-    props: SummarizerWorkerProps,
+    props: Pick<SummarizerWorkerProps, 'sessionId' | 'channel'>,
     messages: Message[],
     startedAt: number,
     error: unknown,

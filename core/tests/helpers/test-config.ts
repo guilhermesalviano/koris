@@ -1,14 +1,14 @@
-import { config } from '../../src/config';
+import { config, SummarizerMode } from '../../src/config';
 
 export interface TestConfigPatch {
   heartbeatEnabled?: boolean;
-  summarizerEnabled?: boolean;
+  summarizerMode?: SummarizerMode;
   subagentsParallel?: boolean;
 }
 
 const DEFAULTS: Required<TestConfigPatch> = {
   heartbeatEnabled: true,
-  summarizerEnabled: true,
+  summarizerMode: 'auto',
   subagentsParallel: false,
 };
 
@@ -21,8 +21,8 @@ export function applyTestConfigDefaults(patch: TestConfigPatch = {}): void {
     writable: true,
   });
 
-  Object.defineProperty(config.AI, 'SUMMARIZER', {
-    value: values.summarizerEnabled,
+  Object.defineProperty(config.SESSION, 'SUMMARIZER_MODE', {
+    value: values.summarizerMode,
     configurable: true,
     writable: true,
   });

@@ -9,6 +9,7 @@ interface ISessionService {
   getSession(): Session;
   ensureActiveSession(): Session;
   updateCount(): void;
+  forceRotate(newMetadata?: Record<string, unknown>): Session;
 }
 
 class SessionService implements ISessionService {
@@ -67,6 +68,12 @@ class SessionService implements ISessionService {
     this.session = updatedSession;
   }
 
+  forceRotate(newMetadata?: Record<string, unknown>): Session {
+    this.endSession(this.session);
+    this.session = this.startNewSession(this.entryChannel, newMetadata);
+    return this.session;
+  }
+
   private isExpired(session: Session): boolean {
     return isSessionExpired(
       getLastActivityAt(session),
@@ -79,8 +86,8 @@ class SessionService implements ISessionService {
     this.sessionRepository.update(session.id, { endedAt });
   }
 
-  private startNewSession(entryChannel: string): Session {
-    const session = new Session({ entryChannel });
+  private startNewSession(entryChannel: string, metadata?: Record<string, unknown>): Session {
+    const session = new Session({ entryChannel, metadata });
     this.sessionRepository.save(session);
     return session;
   }
