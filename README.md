@@ -80,7 +80,7 @@ The `search_engine` tool uses a self-hosted [SearXNG](https://docs.searxng.org/)
 
 1. **Configure and start SearXNG** (requires Docker):
    ```bash
-   cd plugins/search/searxng
+   cd external/search/searxng
    mkdir -p config
    cp settings.example.yml config/settings.yml
    openssl rand -hex 32   # paste the output as server.secret_key in config/settings.yml

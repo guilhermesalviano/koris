@@ -1,11 +1,30 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { ToolsQueue, ToolsQueueFactory } from '../../../../src/services/tools-queue';
 import { AgnosticExecutionTool } from '../../../../src/services/tools';
+import { ToolPluginsSingleton } from '../../../../src/services/tools/registry-singleton';
 import { ILogger } from '../../../../src/infrastructure/logger';
+import type { ToolDefinition } from '../../../../../plugins/tools/contracts';
 
 vi.mock('../../../../src/services/audit/audit-service', () => ({
   AuditServiceFactory: { create: () => ({ record: vi.fn() }) },
 }));
+
+vi.mock('../../../../src/services/tools/registry-singleton', () => ({
+  ToolPluginsSingleton: { getExistingInstance: vi.fn().mockReturnValue([]) },
+}));
+
+/** Registers a fake `ToolDefinition` for the duration of one test, since
+ * `AgnosticExecutionTool` now reads exclusively from `ToolPluginsSingleton`
+ * instead of taking a command map in its constructor. */
+function stubRegisteredTools(handlers: Record<string, ToolDefinition['handler']>): void {
+  const definitions: ToolDefinition[] = Object.entries(handlers).map(([name, handler]) => ({
+    name,
+    schema: { description: '', parameters: {} },
+    handler,
+    enabled: () => true,
+  }));
+  vi.mocked(ToolPluginsSingleton.getExistingInstance).mockReturnValue(definitions);
+}
 
 const mockLogger: ILogger = {
   info: vi.fn(),
@@ -19,6 +38,7 @@ describe('ToolsQueue', () => {
   let abortController: AbortController;
 
   beforeEach(() => {
+    vi.mocked(ToolPluginsSingleton.getExistingInstance).mockReturnValue([]);
     orchestrator = ToolsQueueFactory.create(mockLogger, 2);
     abortController = new AbortController();
     vi.clearAllMocks();
@@ -174,9 +194,10 @@ describe('ToolsQueue', () => {
 
     it('records a tool audit entry for each executed tool', async () => {
       const auditService = { record: vi.fn() };
-      const agnosticExecutionTool = new AgnosticExecutionTool({
+      stubRegisteredTools({
         echo: vi.fn().mockResolvedValue({ toolName: 'echo', success: true, result: 'hi' }),
-      } as any);
+      });
+      const agnosticExecutionTool = new AgnosticExecutionTool();
       const queue = new ToolsQueue(mockLogger, agnosticExecutionTool, 2, auditService as never);
 
       const toolCall = { name: 'echo', arguments: { text: 'hello' } };
@@ -207,9 +228,10 @@ describe('ToolsQueue', () => {
 
     it('records a failed tool audit entry when execution throws', async () => {
       const auditService = { record: vi.fn() };
-      const agnosticExecutionTool = new AgnosticExecutionTool({
+      stubRegisteredTools({
         boom: vi.fn().mockRejectedValue(new Error('kaboom')),
-      } as any);
+      });
+      const agnosticExecutionTool = new AgnosticExecutionTool();
       const queue = new ToolsQueue(mockLogger, agnosticExecutionTool, 2, auditService as never);
 
       const toolCall = { name: 'boom', arguments: {} };
@@ -240,7 +262,7 @@ describe('ToolsQueue', () => {
 
   describe('AgnosticExecutionTool', () => {
     it('logs tool execution', async () => {
-      const tool = new AgnosticExecutionTool({ execute_command: vi.fn().mockResolvedValue({ toolName: 'execute_command', success: true, result: '' }) } as any);
+      const tool = new AgnosticExecutionTool();
       const toolCall = { name: 'execute_command', arguments: { command: 'echo "test"' } };
 
       await tool.handle(mockLogger, toolCall);
@@ -252,7 +274,8 @@ describe('ToolsQueue', () => {
 
     it('forwards the execution context to the command', async () => {
       const command = vi.fn().mockResolvedValue({ toolName: 'execute_command', success: true, result: '' });
-      const tool = new AgnosticExecutionTool({ execute_command: command } as any);
+      stubRegisteredTools({ execute_command: command });
+      const tool = new AgnosticExecutionTool();
       const toolCall = { name: 'execute_command', arguments: { command: 'echo "test"' } };
       const context = { channel: 'whatsapp', sessionId: 's1', runId: 'r1', agentName: 'executorWorker' };
 

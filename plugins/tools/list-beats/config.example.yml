@@ -1,0 +1,2 @@
+# Tools default to enabled=true (unlike channel plugins, which default to false).
+enabled: true

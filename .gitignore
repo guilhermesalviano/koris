@@ -20,6 +20,7 @@ logs/
 
 koris.json
 plugins/channels/*/config.yml
+plugins/tools/*/config.yml
 **/settings.yml
 
 core/temp/*

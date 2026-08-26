@@ -58,11 +58,14 @@ Guidance for AI coding agents working in this repository.
 - `core/tests/` — Vitest suites: `unit/`, `integration/`, plus `helpers/test-config.ts` and `setup/vitest.setup.ts`.
 - `apps/tui/` — terminal UI wrapper (flat module, one file per concern, co-located `*.test.ts`).
 - `apps/web/` — the web frontend (React 19 SPA; see "Web frontend" below).
-- `plugins/channels/` — the plugin system with inverted dependencies. `registry.ts` (ExtensionPoint/PluginRegistry) + `contracts.ts` (the dependency-free plugin SDK: `PluginContext`, channel/gateway/logger interfaces, `ADAPTERS`, `splitMessage`) + one folder per channel plugin (`telegram/`, `whatsapp/`), each exposing `create(context)`.
-- `plugins/search/searxng/` — self-hosted SearXNG config/compose for the `search_engine` tool (`docker-compose.yml`, `settings.example.yml`).
+- `plugins/registry.ts` — the shared, family-agnostic plugin kernel (`ExtensionPoint`, `PluginRegistry`, `buildRegistry`) used by both `plugins/channels/` and `plugins/tools/`.
+- `plugins/config/` — shared per-plugin `config.yml` helpers (`definePluginConfig`, loader, writer), parameterized by `family: 'channels' | 'tools'`. `plugins/channels/channel-config.ts` is a thin `family: 'channels'` preset wrapper over it.
+- `plugins/channels/` — the channel plugin system with inverted dependencies. `contracts.ts` (the dependency-free plugin SDK: `PluginContext`, channel/gateway/logger interfaces, `ADAPTERS`, `splitMessage`) + one folder per channel plugin (`telegram/`, `whatsapp/`), each exposing `create(context)`.
+- `plugins/tools/` — the AI-agent tool plugin system, same shape as `plugins/channels/`. `contracts.ts` (the dependency-free SDK: `ToolPluginContext`, `ToolDefinition`, `COMMANDS`) + one folder per tool (`curl-request/`, `set-beat/`, `list-beats/`, `update-beat/`, `delete-beat/`, `search-engine/`, `issue/`, `send-message/`, `learn-sticker/`, `send-sticker/`, `unlearn-sticker/`, `create-tool/`), each exposing `create(context): Plugin | null`. Shared helpers: `runtime.ts` (arg coercion, safe child-process exec), `cron.ts` (cron validation for the beat tools).
+- `external/search/searxng/` — self-hosted SearXNG config/compose for the `search_engine` tool (`docker-compose.yml`, `settings.example.yml`).
 - `skills/` — markdown skill definitions, one folder per skill with a `SKILL.md` (front-matter `name`/`description` + body). Synced into the `learned_skills` table at startup and on file changes by `core/src/services/skills/skill-sync.ts`.
 - `website/` — the public marketing website, a statically-exported Next.js site (see "Website" below).
-- `scripts/` — helper scripts (`init.ts`, `release.ts`, `run_search_engine.sh`).
+- `scripts/` — helper scripts (`init.ts`, `release.ts`, `run_search_engine.sh`, `scaffold-tool.ts` + `scaffold-tool-cli.ts` for `pnpm scaffold:tool`).
 - `dist/` — build output (never edit).
 - `dist-web/` — built web frontend (never edit).
 - `website/out/` — built website (never edit).
@@ -95,14 +98,18 @@ Two independent flags control how LLM calls are ordered:
 
 ## Tools
 
-- Tool registry: `core/src/services/tools/index.ts` — `AgnosticExecutionTool` dispatches tool name → handler via `COMMAND_MAP`.
-- Tools: `curl_request` (`curl-request/`, respects `allowed_domains` in settings), `search_engine` (`search/` — `index.ts` orchestrates: SearXNG is the active provider (`searxng.ts`, self-hosted, `ai.searxng_url`), SerpAPI (`serpapi.ts`, `ai.search_api_key`) is kept as a fallback but is currently inactivated via a code-level flag), `issue` (`issue/`), `set_beat`/`list_beats`/`update_beat`/`delete_beat` (`beats/*`), `send_message` (`send-message/`), `learn_sticker`/`send_sticker`/`unlearn_sticker` (`learn-sticker/`, `send-sticker/`, `unlearn-sticker/`). Shared helper: `core/src/services/tools/runtime.ts`.
-- `core/src/services/tools-queue/` — throttling/serialization of tool calls.
+Tools are plugins under `plugins/tools/` — see "Plugins & skills" below for the full architecture. The pieces on the `core/src/` side are thin seam adapters, not the tool implementations:
+
+- `core/src/services/tools/index.ts` — `AgnosticExecutionTool` dispatches a tool call by name-matching against `ToolPluginsSingleton.getExistingInstance()` (the collected `ToolDefinition[]`, populated once at boot — `core/src/services/tools/registry-singleton.ts`) and calling its `handler`.
+- `core/src/repositories/tools.ts` — `ToolsRepository` turns that same collected `ToolDefinition[]` into the `AIToolDefinition[]` schema array sent to the AI provider, applying each definition's own `enabled(opts)` filter (trust, sticker-config, heartbeat-exclusion for beats — see `ToolFilterOptions` in `plugins/tools/contracts.ts`).
+- `core/src/services/tools-queue/` — throttling/serialization of tool calls, unaffected by the plugin split.
+- Tools: `curl_request`, `search_engine` (SearXNG is the active provider, self-hosted via `ai.searxng_url`; SerpAPI, `ai.search_api_key`, is kept in code as a fallback but currently inactivated via a code-level flag), `issue`, `set_beat`/`list_beats`/`update_beat`/`delete_beat`, `send_message`, `learn_sticker`/`send_sticker`/`unlearn_sticker`, and `create_tool` (scaffolds a new tool plugin from chat — disabled by default, REQUIRES CONFIRMATION, and never usable immediately since the plugin loader only discovers plugins at process startup). Each lives in its own `plugins/tools/<name>/` folder with its own `config.yml` (`enabled`, default `true` except `create_tool`, which defaults `false`).
+- `pnpm scaffold:tool <name> --description "..."` (`scripts/scaffold-tool.ts`) generates a new `plugins/tools/<name>/` folder from a template — the same generator function the `create_tool` plugin calls into.
 
 ## Security
 
-- `core/src/services/security/gate.ts` — domain allowlist gate for tools. `gateErrorForUrl(input)` returns an error string when a URL's hostname is not in `koris.json` `allowed_domains`, or `null` when permitted; `extractHostname(input)` parses and validates a hostname; `getAllowedDomains()` reads the configured allowlist. Used by `curl-request` to block requests outside the allowlist.
-- `core/src/services/tools/runtime.ts` — child-process execution helpers with output-size limits and no-shell `spawn`/`execFile` (structural defense against shell injection).
+- `core/src/services/security/gate.ts` — domain allowlist gate for tools. `gateErrorForUrl(input)` returns an error string when a URL's hostname is not in `koris.json` `allowed_domains`, or `null` when permitted; `extractHostname(input)` parses and validates a hostname; `getAllowedDomains()` reads the configured allowlist. The `curl-request` plugin never imports it directly (plugins don't import `core/src/`) — `core/src/app.ts`'s `createToolPluginContext()` injects it as `context.security.gateUrl`.
+- `plugins/tools/runtime.ts` — child-process execution helpers with output-size limits and no-shell `spawn`/`execFile` (structural defense against shell injection), shared by tool plugins.
 
 ## Workers & sub-agents
 
@@ -112,7 +119,8 @@ Two independent flags control how LLM calls are ordered:
 
 ## Plugins & skills (extension mechanisms)
 
-- **Plugins** (`plugins/channels/`): the plugin SDK lives in `plugins/channels/contracts.ts` (dependency-free: `PluginContext`, `ChannelDefinition`, `ADAPTERS`, `ILogger`/`IMessageGateway`, channel-handler types, `splitMessage`). Plugins never import from `core/src/` — the app injects concrete services via a `PluginContext` built in `core/src/app.ts` (`createPluginContext`) and passed to `createPlugins({ context })` → each plugin folder's `create(context): Plugin | null`. The scanner loads every subdirectory of `plugins/channels/` (contract/registry are files, not dirs, so they're skipped). Channel plugins register a `ChannelDefinition` (`name`, `enabled`, `start`, optional `sendMessage`) on the `ADAPTERS` extension point in `setup(registry)`. Add/remove a channel by adding/removing a folder under `plugins/channels/` — no core changes needed.
+- **Channel plugins** (`plugins/channels/`): the plugin SDK lives in `plugins/channels/contracts.ts` (dependency-free: `PluginContext`, `ChannelDefinition`, `ADAPTERS`, `ILogger`/`IMessageGateway`, channel-handler types, `splitMessage`), built on the shared kernel in `plugins/registry.ts`. Plugins never import from `core/src/` — the app injects concrete services via a `PluginContext` built in `core/src/app.ts` (`createPluginContext`) and passed to `createPlugins({ context })` → each plugin folder's `create(context): Plugin | null`. The scanner loads every subdirectory of `plugins/channels/` (`contracts.ts`, `channel-config.ts`, etc. are files, not dirs, so they're skipped). Channel plugins register a `ChannelDefinition` (`name`, `enabled`, `start`, optional `sendMessage`) on the `ADAPTERS` extension point in `setup(registry)`. Add/remove a channel by adding/removing a folder under `plugins/channels/` — no core changes needed.
+- **Tool plugins** (`plugins/tools/`): the same architecture applied to the AI agent's tools, on the same shared kernel. SDK in `plugins/tools/contracts.ts` (dependency-free: `ToolPluginContext`, `ToolDefinition`, `ToolHandler`, `ToolFilterOptions`, the `COMMANDS` extension point, and narrow per-concern gateways — `IHeartbeatGateway`, `IChannelsGateway`, `IStickerRulesGateway`, `security.gateUrl`, `config`). `core/src/app.ts`'s `createToolPluginContext()` is the composition root, adapting concrete core services (heartbeat repo + `HeartbeatSingleton`, `ChannelsSingleton` + `OutboundMessageService`, sticker-rules repo, `gateErrorForUrl`, `config.AI`/`config.GITHUB`) into that narrow context; `createToolPlugins({ context })` scans `plugins/tools/`'s subdirectories the same way `createPlugins` scans `plugins/channels/`. `core/src/app.ts` builds **one shared `PluginRegistry`** from both families (`buildRegistry([...channelPlugins, ...toolPlugins])`) and stores the collected `ToolDefinition[]` in `ToolPluginsSingleton` (`core/src/services/tools/registry-singleton.ts`) once at boot — `ToolsQueue`/`ToolsRepository`/the heartbeat sub-agent are constructed per-message deep in the call graph, not once at startup, so they read the singleton rather than taking a registry parameter. Add a tool by adding a folder under `plugins/tools/` (or `pnpm scaffold:tool <name> --description "..."`) — no core changes needed; each folder owns its own LLM-facing schema, handler, and `config.yml` together, fixing the pre-plugin design where a tool's schema (`core/src/repositories/tools.ts`) and its dispatcher entry (`core/src/services/tools/index.ts`'s `COMMAND_MAP`) were two hand-typed strings in unrelated files with no compiler-enforced link.
 - **Skills** (`skills/`): markdown files synced into the `learned_skills` table at startup and on file changes by `SkillSyncService` (`core/src/services/skills/skill-sync.ts`), which wraps each `SKILL.md` body in `SKILL_LEARNING_PROMPT` (with `<GATEWAY_HOST>` resolved to `config.GATEWAY_HOST`) and prunes rows whose folder was removed. To add a skill, add a `skills/<name>/SKILL.md` with front-matter + body.
 
 ## Database schema (`core/src/infrastructure/db-sqlite.ts`)
@@ -142,7 +150,7 @@ Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/l
 ## Conventions to follow
 
 - **Interfaces prefixed `I`** (`IMessageGateway`, `ILogger`, `IChatService`); implementations are classes; creation is via `XxxFactory.create()` and singletons via `XxxSingleton.getInstance()`.
-- **Dependency inversion for plugins**: plugins import **only** from `plugins/channels/contracts.ts` (the SDK) and `plugins/channels/registry.ts` — never from `core/src/`. Core depends on the SDK too (via re-export shims like `core/src/infrastructure/logger.ts` and `core/src/channels/`), and injects concrete services through `PluginContext` at the composition root (`core/src/app.ts`).
+- **Dependency inversion for plugins**: a plugin imports **only** from its own family's SDK (`plugins/channels/contracts.ts` or `plugins/tools/contracts.ts`) and the shared `plugins/registry.ts` — never from `core/src/`, and never from the other family's `contracts.ts`. Core depends on the SDKs too (via re-export shims like `core/src/infrastructure/logger.ts` and `core/src/channels/`), and injects concrete services through `PluginContext`/`ToolPluginContext` at the composition root (`core/src/app.ts`). The one documented exception is `plugins/tools/create-tool/`, which reaches into `scripts/scaffold-tool.ts` to scaffold new tool plugins — noted in that file's own top comment.
 - **No code comments** in source files unless asked. Code should be self-explanatory.
 - **Relative imports only** (the `@` alias exists only in Vitest config, not tsconfig — tests can use `@/`, source should not).
 - Config values come from the `config` object, never hard-coded secrets or paths.
@@ -152,7 +160,7 @@ Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/l
 
 ## Testing
 
-- Unit tests: `core/tests/unit/**`, mirroring `core/src/` structure. Integration: `core/tests/integration/`.
+- Unit tests: `core/tests/unit/**`, mirroring `core/src/` structure. Integration: `core/tests/integration/`. Everything under `plugins/` (`plugins/channels/`, `plugins/tools/`) instead colocates each `*.test.ts` next to the file it tests (e.g. `plugins/tools/curl-request/index.test.ts`) — don't look for those under `core/tests/`.
 - Run `pnpm test` and `pnpm lint` before considering a change done. Vitest suppresses `console.log` output (see `vitest.config.ts`).
 - `core/tests/helpers/test-config.ts` provides a test settings fixture; `core/tests/setup/vitest.setup.ts` runs globally.
 - Mutation testing config in `stryker.config.json`.

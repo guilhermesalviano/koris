@@ -33,6 +33,7 @@
     "test:coverage": "vitest run --coverage",
     "test:mutation": "stryker run",
     "release": "tsx scripts/release.ts",
+    "scaffold:tool": "tsx scripts/scaffold-tool-cli.ts",
     "website:dev": "next dev website",
     "website:build": "next build website",
     "website:preview": "pnpm dlx serve website/out",

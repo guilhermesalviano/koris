@@ -1,28 +1,19 @@
-import { CommandFn, ToolCall, ToolExecutionContext, ToolResult } from '../../types/tools';
-import { executeCurl } from './curl-request';
-import { executeSearch } from './search';
-import { executeIssue } from './issue';
-import { setBeat } from './beats/create';
-import { listBeats } from './beats/list';
-import { updateBeat } from './beats/update';
-import { deleteBeat } from './beats/delete';
-import { sendMessage } from './send-message';
-import { learnSticker } from './learn-sticker';
-import { sendSticker } from './send-sticker';
-import { unlearnSticker } from './unlearn-sticker';
+import { ToolCall, ToolExecutionContext, ToolResult } from '../../types/tools';
 import { ILogger } from '../../infrastructure/logger';
-
-type Command = { [key: string]: CommandFn };
+import { ToolPluginsSingleton } from './registry-singleton';
 
 interface IAgnosticExecutionTool {
   handle(logger: ILogger, toolCall: ToolCall, context?: ToolExecutionContext): Promise<ToolResult>;
 }
 
-class AgnosticExecutionTool {
-  constructor(
-    private COMMAND_MAP: Command
-  ) { }
-
+/**
+ * All 11 tools now live as plugins under `plugins/tools/`, registered into
+ * `ToolPluginsSingleton` once at boot (`core/src/app.ts`). This class is the
+ * seam `ToolsQueue` (the LLM tool-call dispatch path) and the heartbeat
+ * sub-agent depend on — a plain name lookup against the collected
+ * `ToolDefinition[]`.
+ */
+class AgnosticExecutionTool implements IAgnosticExecutionTool {
   async handle(logger: ILogger, toolCall: ToolCall, context?: ToolExecutionContext): Promise<ToolResult> {
     const { name, arguments: args } = toolCall;
     logger.debug('Executing tool', {
@@ -31,8 +22,8 @@ class AgnosticExecutionTool {
     });
 
     try {
-      const command = this.COMMAND_MAP[name];
-      if (command) return await command(logger, args, context);
+      const plugin = ToolPluginsSingleton.getExistingInstance().find((def) => def.name === name);
+      if (plugin) return await plugin.handler(logger, args, context);
 
       return {
         toolName: name,
@@ -53,21 +44,7 @@ class AgnosticExecutionTool {
 
 class AgnosticExecutionToolFactory {
   static create(): AgnosticExecutionTool {
-    const COMMAND_MAP: Command = {
-      'curl_request': executeCurl,
-      'search_engine': executeSearch,
-      'issue': executeIssue,
-      'set_beat': setBeat,
-      'list_beats': listBeats,
-      'update_beat': updateBeat,
-      'delete_beat': deleteBeat,
-      'send_message': sendMessage,
-      'learn_sticker': learnSticker,
-      'send_sticker': sendSticker,
-      'unlearn_sticker': unlearnSticker,
-    };
-
-    return new AgnosticExecutionTool(COMMAND_MAP);
+    return new AgnosticExecutionTool();
   }
 }
 

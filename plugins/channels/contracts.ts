@@ -1,7 +1,7 @@
-import { ExtensionPoint } from './registry';
+import { ExtensionPoint } from '../registry';
 
 export { ExtensionPoint };
-export type { Plugin } from './registry';
+export type { Plugin } from '../registry';
 
 export interface ImageAttachment {
   data: string;
