@@ -10,6 +10,7 @@ import {
   MenuIcon,
   MoonIcon,
   OverviewIcon,
+  PluginsIcon,
   PlusIcon,
   QueueIcon,
   SessionsIcon,
@@ -17,6 +18,7 @@ import {
   SkillsIcon,
   SunIcon,
 } from '../../components/Icons';
+import PluginsModal from './PluginsModal';
 import ChatPage from './ChatPage';
 import OverviewPage from './OverviewPage';
 import SessionsPage from './SessionsPage';
@@ -348,13 +350,30 @@ function ConfigButton({ onOpen, collapsed = false }: { onOpen: () => void; colla
   );
 }
 
+function PluginsButton({ onOpen, collapsed = false }: { onOpen: () => void; collapsed?: boolean }) {
+  return (
+    <button
+      onClick={onOpen}
+      title={collapsed ? 'Plugins' : undefined}
+      className={`flex w-full items-center rounded-lg border border-transparent py-2.5 text-[13px] text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt ${
+        collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'
+      }`}
+    >
+      <PluginsIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
+      {!collapsed && <span>Plugins</span>}
+    </button>
+  );
+}
+
 function SidebarContent({
   collapsed = false,
   onOpenConfig,
+  onOpenPlugins,
   onNavigate,
 }: {
   collapsed?: boolean;
   onOpenConfig: () => void;
+  onOpenPlugins: () => void;
   onNavigate?: () => void;
 }) {
   return (
@@ -366,21 +385,30 @@ function SidebarContent({
       <div className="min-h-0 flex-1">
         <ChatsPanel collapsed={collapsed} onNavigate={onNavigate} />
       </div>
-      <div className="flex-shrink-0 border-t border-subtle p-2">
+      <div className="flex-shrink-0 space-y-0.5 border-t border-subtle p-2">
+        <PluginsButton collapsed={collapsed} onOpen={onOpenPlugins} />
         <ConfigButton collapsed={collapsed} onOpen={onOpenConfig} />
       </div>
     </>
   );
 }
 
-function Sidebar({ collapsed, onOpenConfig }: { collapsed: boolean; onOpenConfig: () => void }) {
+function Sidebar({
+  collapsed,
+  onOpenConfig,
+  onOpenPlugins,
+}: {
+  collapsed: boolean;
+  onOpenConfig: () => void;
+  onOpenPlugins: () => void;
+}) {
   return (
     <aside
       className={`relative hidden flex-shrink-0 flex-col border-r border-subtle bg-bg-2 transition-[width] duration-200 md:flex ${
         collapsed ? 'w-16' : 'w-60'
       }`}
     >
-      <SidebarContent collapsed={collapsed} onOpenConfig={onOpenConfig} />
+      <SidebarContent collapsed={collapsed} onOpenConfig={onOpenConfig} onOpenPlugins={onOpenPlugins} />
     </aside>
   );
 }
@@ -403,6 +431,7 @@ function DrawerHeader({ title, onClose }: { title: string; onClose: () => void }
 export default function AdminLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const [pluginsOpen, setPluginsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const [isDark, setIsDark] = useState(getInitialDark);
 
@@ -434,7 +463,7 @@ export default function AdminLayout() {
           onToggleTheme={() => setIsDark((d) => !d)}
         />
         <div className="flex min-h-0 flex-1">
-          <Sidebar collapsed={collapsed} onOpenConfig={() => setConfigOpen(true)} />
+          <Sidebar collapsed={collapsed} onOpenConfig={() => setConfigOpen(true)} onOpenPlugins={() => setPluginsOpen(true)} />
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <Routes>
               <Route index element={<Navigate to="/admin/chat" replace />} />
@@ -464,6 +493,10 @@ export default function AdminLayout() {
                 setNavOpen(false);
                 setConfigOpen(true);
               }}
+              onOpenPlugins={() => {
+                setNavOpen(false);
+                setPluginsOpen(true);
+              }}
             />
           </div>
         </Drawer>
@@ -474,6 +507,8 @@ export default function AdminLayout() {
             <NavItems items={CONFIG_ITEMS} vertical onNavigate={() => setConfigOpen(false)} />
           </div>
         </Drawer>
+
+        <PluginsModal open={pluginsOpen} onClose={() => setPluginsOpen(false)} />
       </div>
     </ChatProvider>
   );

@@ -35,8 +35,8 @@ export interface SettingsFormState {
   manager: AiProfileForm;
   workers: AiProfileForm;
   search_api_key: string;
-  telegram: { enabled: boolean; bot_token: string; whitelist: string };
-  whatsapp: { enabled: boolean; mention_id: string; whitelist: string };
+  telegram: { bot_token: string; whitelist: string };
+  whatsapp: { mention_id: string; whitelist: string };
   allowed_domains: string[];
   personal_information: Record<string, string>;
 }
@@ -48,8 +48,8 @@ export const DEFAULT_FORM: SettingsFormState = {
   manager: { ...EMPTY_PROFILE },
   workers: { ...EMPTY_PROFILE },
   search_api_key: '',
-  telegram: { enabled: false, bot_token: '', whitelist: '' },
-  whatsapp: { enabled: false, mention_id: '', whitelist: '' },
+  telegram: { bot_token: '', whitelist: '' },
+  whatsapp: { mention_id: '', whitelist: '' },
   allowed_domains: [],
   personal_information: {},
 };
@@ -85,12 +85,10 @@ export function mapRuntimeToForm(data: RuntimeSettings): SettingsFormState {
     workers,
     search_api_key: secretFieldDefault(data.AI?.SEARCH_API_KEY),
     telegram: {
-      enabled: data.CHANNELS?.TELEGRAM?.ENABLED ?? false,
       bot_token: secretFieldDefault(data.CHANNELS?.TELEGRAM?.BOT_TOKEN),
       whitelist: data.CHANNELS?.TELEGRAM?.WHITELIST ?? '',
     },
     whatsapp: {
-      enabled: data.CHANNELS?.WHATSAPP?.ENABLED ?? false,
       mention_id: data.CHANNELS?.WHATSAPP?.MENTION_ID ?? '',
       whitelist: data.CHANNELS?.WHATSAPP?.WHITELIST ?? '',
     },
@@ -120,11 +118,9 @@ export function buildSettingsPatch(form: SettingsFormState): Record<string, unkn
     },
     channels: {
       telegram: {
-        enabled: form.telegram.enabled,
         whitelist: form.telegram.whitelist,
       },
       whatsapp: {
-        enabled: form.whatsapp.enabled,
         mention_id: form.whatsapp.mention_id,
         whitelist: form.whatsapp.whitelist,
       },

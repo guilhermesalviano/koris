@@ -64,6 +64,14 @@ export function SkillsIcon({ className }: IconProps) {
   );
 }
 
+export function PluginsIcon({ className }: IconProps) {
+  return (
+    <svg className={className} style={svgStyle(1.7)} viewBox="0 0 24 24">
+      <path d="M9 2v4M15 2v4M7 6h10l-1 6H8L7 6zM6 12h12v3a6 6 0 0 1-12 0v-3zM12 21v-3" />
+    </svg>
+  );
+}
+
 export function AuditIcon({ className }: IconProps) {
   return (
     <svg className={className} style={svgStyle(1.7)} viewBox="0 0 24 24">

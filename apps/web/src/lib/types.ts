@@ -138,6 +138,16 @@ export interface SkillsResponse {
   limit: number;
 }
 
+export interface PluginItem {
+  family: 'tools' | 'channels';
+  name: string;
+  enabled: boolean;
+}
+
+export interface PluginsResponse {
+  items: PluginItem[];
+}
+
 export interface ActiveRun {
   id: string;
   sessionId: string;
