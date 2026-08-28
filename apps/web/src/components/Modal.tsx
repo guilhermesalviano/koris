@@ -6,9 +6,10 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   children: ReactNode;
+  maxWidthClassName?: string;
 }
 
-export default function Modal({ open, onClose, title, children }: ModalProps) {
+export default function Modal({ open, onClose, title, children, maxWidthClassName = 'max-w-lg' }: ModalProps) {
   useEffect(() => {
     if (!open) return;
 
@@ -38,7 +39,7 @@ export default function Modal({ open, onClose, title, children }: ModalProps) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-card border border-subtle bg-bg-2 p-6 shadow-2xl"
+        className={`max-h-[85vh] w-full ${maxWidthClassName} overflow-y-auto rounded-card border border-subtle bg-bg-2 px-4 py-2 shadow-2xl`}
       >
         <div className="mb-4 flex items-center justify-between gap-3">
           {title && <h2 className="text-sm font-medium">{title}</h2>}

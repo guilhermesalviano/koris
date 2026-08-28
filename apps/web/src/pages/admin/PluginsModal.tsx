@@ -6,7 +6,7 @@ export default function PluginsModal({ open, onClose }: { open: boolean; onClose
   const api = usePlugins();
 
   return (
-    <Modal open={open} onClose={onClose} title="Plugins">
+    <Modal open={open} onClose={onClose} title="Plugins" maxWidthClassName="max-w-2xl">
       <PluginsList api={api} />
     </Modal>
   );

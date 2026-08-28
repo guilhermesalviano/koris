@@ -11,7 +11,7 @@ function humanize(name: string): string {
 
 function PluginRow({ item, onToggle }: { item: PluginItem; onToggle: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+    <div className="flex items-center justify-between gap-3 py-2.5">
       <span className="text-sm">{humanize(item.name)}</span>
       <Toggle checked={item.enabled} onChange={onToggle} label={`Toggle ${humanize(item.name)}`} />
     </div>
@@ -42,7 +42,7 @@ export default function PluginsList({ api }: { api: UsePluginsApi }) {
         <>
           <div>
             <div className="mb-2 font-mono text-[11px] uppercase tracking-wide text-txt-3">Tools</div>
-            <Card className="divide-y divide-subtle p-4">
+            <Card className="grid grid-cols-1 gap-x-6 p-4 sm:grid-cols-2">
               {tools.map((item) => (
                 <PluginRow key={item.name} item={item} onToggle={() => handleToggle(item)} />
               ))}
@@ -50,7 +50,7 @@ export default function PluginsList({ api }: { api: UsePluginsApi }) {
           </div>
           <div>
             <div className="mb-2 font-mono text-[11px] uppercase tracking-wide text-txt-3">Channels</div>
-            <Card className="divide-y divide-subtle p-4">
+            <Card className="grid grid-cols-1 gap-x-6 p-4 sm:grid-cols-2">
               {channels.map((item) => (
                 <PluginRow key={item.name} item={item} onToggle={() => handleToggle(item)} />
               ))}
