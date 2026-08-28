@@ -163,6 +163,11 @@ export interface ToolPluginConfigValues {
   githubToken: string;
 }
 
+/** Copied from `plugins/channels/contracts.ts` — same shape, not imported, so no plugin family depends on another. */
+export interface IPluginEnablementGateway {
+  isEnabled(name: string): boolean;
+}
+
 export interface ToolPluginContext {
   logger: ILogger;
   heartbeats: IHeartbeatGateway;
@@ -173,6 +178,7 @@ export interface ToolPluginContext {
     gateUrl: (url: string) => string | null;
   };
   config: ToolPluginConfigValues;
+  pluginEnablement: IPluginEnablementGateway;
 }
 
 export { ExtensionPoint };

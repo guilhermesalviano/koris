@@ -1,7 +1,6 @@
 import type { ILogger, IHeartbeatGateway, Plugin, ToolDefinition, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
 import { getRequiredStringArg } from '../runtime';
-import { loadDeleteBeatConfig } from './config';
 
 export const TOOL_NAME = 'delete_beat' as const;
 
@@ -52,12 +51,7 @@ const SCHEMA = {
   },
 };
 
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadDeleteBeatConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'delete-beat',
     setup(registry) {
@@ -65,7 +59,7 @@ export function create(context: ToolPluginContext): Plugin | null {
         name: TOOL_NAME,
         schema: SCHEMA,
         handler: (logger, args) => deleteBeat(logger, args, context.heartbeats),
-        enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat',
+        enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat' && context.pluginEnablement.isEnabled('delete-beat'),
       };
       registry.extend(COMMANDS, definition);
     },

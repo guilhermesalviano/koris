@@ -3,7 +3,6 @@ import { COMMANDS } from '../contracts';
 import { executeSearchViaSearxng } from './searxng';
 import { executeSearchViaSerpApi } from './serpapi';
 import { TOOL_NAME } from './constants';
-import { loadSearchEngineConfig } from './config';
 
 export { TOOL_NAME };
 
@@ -67,12 +66,7 @@ const SCHEMA = {
   },
 };
 
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadSearchEngineConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'search-engine',
     setup(registry) {
@@ -80,7 +74,7 @@ export function create(context: ToolPluginContext): Plugin | null {
         name: TOOL_NAME,
         schema: SCHEMA,
         handler: (logger, args) => executeSearch(logger, args, context.config.searxngUrl, context.config.searchApiKey),
-        enabled: (opts) => opts.trusted,
+        enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('search-engine'),
       };
       registry.extend(COMMANDS, definition);
     },

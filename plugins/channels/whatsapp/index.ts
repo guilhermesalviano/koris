@@ -43,7 +43,7 @@ export function create(context: PluginContext, configOverride?: WhatsAppPluginCo
   });
 
   return createWhatsAppPlugin({
-    enabled: cfg.enabled,
+    isEnabled: () => context.pluginEnablement.isEnabled('whatsapp'),
     authFolder: cfg.authFolder,
     mentionId: cfg.mentionId,
   });

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { listBeats } from './index';
-import type { HeartbeatRecord, IHeartbeatGateway, ILogger } from '../contracts';
+import { listBeats, create } from './index';
+import type { HeartbeatRecord, IHeartbeatGateway, ILogger, ToolDefinition, ToolPluginContext } from '../contracts';
+import type { PluginRegistry } from '../../registry';
 
 const logger: ILogger = { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
 
@@ -49,5 +50,27 @@ describe('listBeats', () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe('db fail');
     expect(result.toolName).toBe('list_beats');
+  });
+});
+
+describe('create', () => {
+  function register(isEnabled: () => boolean): ToolDefinition {
+    const context = { pluginEnablement: { isEnabled } } as unknown as ToolPluginContext;
+    let registered: ToolDefinition | undefined;
+    const fakeRegistry = {
+      extend: vi.fn((_point, value: ToolDefinition) => { registered = value; }),
+    } as unknown as PluginRegistry;
+    create(context).setup(fakeRegistry);
+    return registered!;
+  }
+
+  it('is disabled when the plugin is administratively disabled, even when trusted', () => {
+    const definition = register(() => false);
+    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(false);
+  });
+
+  it('is enabled when trusted, not the heartbeat agent, and the plugin is enabled', () => {
+    const definition = register(() => true);
+    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(true);
   });
 });

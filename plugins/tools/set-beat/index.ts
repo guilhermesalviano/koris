@@ -2,7 +2,6 @@ import type { ILogger, IHeartbeatGateway, Plugin, ToolDefinition, ToolPluginCont
 import { COMMANDS } from '../contracts';
 import { getRequiredStringArg, getOptionalStringArg, isAllowedValue } from '../runtime';
 import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../cron';
-import { loadSetBeatConfig } from './config';
 
 export const TOOL_NAME = 'set_beat' as const;
 
@@ -128,12 +127,7 @@ const SCHEMA = {
   },
 };
 
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadSetBeatConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'set-beat',
     setup(registry) {
@@ -142,7 +136,7 @@ export function create(context: ToolPluginContext): Plugin | null {
         schema: SCHEMA,
         handler: (logger, args) => setBeat(logger, args, context.heartbeats),
         // Excludes the heartbeat sub-agent to avoid a beat recursively scheduling more beats.
-        enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat',
+        enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat' && context.pluginEnablement.isEnabled('set-beat'),
       };
       registry.extend(COMMANDS, definition);
     },

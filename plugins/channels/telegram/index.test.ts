@@ -69,7 +69,7 @@ function setupRuntime(replyText = 'Assistant reply', opts: { allowUntrusted?: bo
   configureTelegramRuntime({
     channelHandler: factory,
     allowUntrusted: opts.allowUntrusted ?? true,
-    config: { enabled: true, token: 'TEST_TOKEN', whitelist: '' },
+    config: { token: 'TEST_TOKEN', whitelist: '' },
   });
   if (opts.whitelist) {
     _setTelegramWhitelistForTesting(opts.whitelist);
@@ -206,10 +206,16 @@ describe('telegram plugin', () => {
     const fakeRegistry = { extend: vi.fn((_point, value: ChannelDefinition) => { registered = value; }) } as unknown as PluginRegistry;
 
     const plugin = create(
-      { allowUntrusted: true, logger: makeLogger(), gateway, channelHandler: makeChannelHandlerFactory('n/a').factory },
-      { enabled: true, token: 'TEST_TOKEN', whitelist: '' },
+      {
+        allowUntrusted: true,
+        logger: makeLogger(),
+        gateway,
+        channelHandler: makeChannelHandlerFactory('n/a').factory,
+        pluginEnablement: { isEnabled: () => true },
+      },
+      { token: 'TEST_TOKEN', whitelist: '' },
     );
-    plugin?.setup(fakeRegistry);
+    plugin.setup(fakeRegistry);
 
     expect(registered?.capabilities).toEqual({
       streaming: true,
@@ -224,15 +230,26 @@ describe('telegram plugin', () => {
     const factory = makeChannelHandlerFactory('n/a').factory;
 
     const plugin = create(
-      { allowUntrusted: true, logger, gateway, channelHandler: factory },
-      { enabled: true, token: '', whitelist: '' },
+      { allowUntrusted: true, logger, gateway, channelHandler: factory, pluginEnablement: { isEnabled: () => true } },
+      { token: '', whitelist: '' },
     );
 
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('[telegram]'));
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('bot_token is empty'));
     // The channel still registers, but `enabled()` reflects reality (no token, no start):
     let registered: ChannelDefinition | undefined;
-    plugin?.setup({ extend: vi.fn((_point, value: ChannelDefinition) => { registered = value; }) } as unknown as PluginRegistry);
+    plugin.setup({ extend: vi.fn((_point, value: ChannelDefinition) => { registered = value; }) } as unknown as PluginRegistry);
+    expect(registered?.enabled()).toBe(false);
+  });
+
+  it('is disabled when administratively disabled, even with a valid token', () => {
+    const plugin = create(
+      { allowUntrusted: true, logger: makeLogger(), gateway, channelHandler: makeChannelHandlerFactory('n/a').factory, pluginEnablement: { isEnabled: () => false } },
+      { token: 'TEST_TOKEN', whitelist: '' },
+    );
+
+    let registered: ChannelDefinition | undefined;
+    plugin.setup({ extend: vi.fn((_point, value: ChannelDefinition) => { registered = value; }) } as unknown as PluginRegistry);
     expect(registered?.enabled()).toBe(false);
   });
 

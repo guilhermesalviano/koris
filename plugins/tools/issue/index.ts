@@ -1,7 +1,6 @@
 import type { ILogger, Plugin, ToolDefinition, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
 import { getRequiredStringArg, getOptionalStringArg } from '../runtime';
-import { loadIssueConfig } from './config';
 
 export const TOOL_NAME = 'issue' as const;
 
@@ -122,12 +121,7 @@ function buildSchema(defaultOwner: string) {
   };
 }
 
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadIssueConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'issue',
     setup(registry) {
@@ -135,7 +129,7 @@ export function create(context: ToolPluginContext): Plugin | null {
         name: TOOL_NAME,
         schema: buildSchema(context.config.githubOwner),
         handler: (logger, args) => executeIssue(logger, args, context.config.githubOwner, context.config.githubToken),
-        enabled: (opts) => opts.trusted,
+        enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('issue'),
       };
       registry.extend(COMMANDS, definition);
     },

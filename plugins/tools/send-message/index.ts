@@ -1,7 +1,6 @@
 import type { IChannelsGateway, ILogger, Plugin, ToolDefinition, ToolExecutionContext, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
 import { getOptionalStringArg, getRequiredStringArg, isAllowedValue } from '../runtime';
-import { loadSendMessageConfig } from './config';
 
 export const TOOL_NAME = 'send_message' as const;
 
@@ -77,12 +76,7 @@ const SCHEMA = {
   },
 };
 
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadSendMessageConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'send-message',
     setup(registry) {
@@ -90,7 +84,7 @@ export function create(context: ToolPluginContext): Plugin | null {
         name: TOOL_NAME,
         schema: SCHEMA,
         handler: (logger, args, execContext) => sendMessage(logger, args, execContext, context.channels),
-        enabled: (opts) => opts.trusted,
+        enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('send-message'),
       };
       registry.extend(COMMANDS, definition);
     },

@@ -11,7 +11,9 @@ vi.mock('./serpapi', () => ({
   executeSearchViaSerpApi: mockSerpApi,
 }));
 
-import { executeSearch } from './index';
+import { executeSearch, create } from './index';
+import type { ToolDefinition, ToolPluginContext } from '../contracts';
+import type { PluginRegistry } from '../../registry';
 
 const mockLogger = {
   info: vi.fn(),
@@ -44,5 +46,30 @@ describe('search_engine tool (orchestrator)', () => {
     expect(mockSerpApi).not.toHaveBeenCalled();
     expect(result.success).toBe(false);
     expect(result.error).toBe('SearXNG URL is not configured');
+  });
+});
+
+describe('create', () => {
+  function register(isEnabled: () => boolean): ToolDefinition {
+    const context = {
+      config: { searxngUrl: '', searchApiKey: '' },
+      pluginEnablement: { isEnabled },
+    } as unknown as ToolPluginContext;
+    let registered: ToolDefinition | undefined;
+    const fakeRegistry = {
+      extend: vi.fn((_point, value: ToolDefinition) => { registered = value; }),
+    } as unknown as PluginRegistry;
+    create(context).setup(fakeRegistry);
+    return registered!;
+  }
+
+  it('is enabled when trusted and the plugin is enabled', () => {
+    const definition = register(() => true);
+    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(true);
+  });
+
+  it('is disabled when the plugin is administratively disabled, even when trusted', () => {
+    const definition = register(() => false);
+    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(false);
   });
 });

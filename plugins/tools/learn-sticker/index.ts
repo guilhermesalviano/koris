@@ -1,7 +1,6 @@
 import type { ILogger, IStickerRulesGateway, Plugin, ToolDefinition, ToolExecutionContext, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
 import { getRequiredStringArg } from '../runtime';
-import { loadLearnStickerConfig } from './config';
 
 export const TOOL_NAME = 'learn_sticker' as const;
 
@@ -70,12 +69,7 @@ const SCHEMA = {
   },
 };
 
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadLearnStickerConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'learn-sticker',
     setup(registry) {
@@ -83,7 +77,7 @@ export function create(context: ToolPluginContext): Plugin | null {
         name: TOOL_NAME,
         schema: SCHEMA,
         handler: (logger, args, execContext) => learnSticker(logger, args, execContext, context.stickerRules),
-        enabled: (opts) => opts.trusted && opts.stickersEnabled,
+        enabled: (opts) => opts.trusted && opts.stickersEnabled && context.pluginEnablement.isEnabled('learn-sticker'),
       };
       registry.extend(COMMANDS, definition);
     },

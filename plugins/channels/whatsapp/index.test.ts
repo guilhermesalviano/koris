@@ -76,7 +76,6 @@ async function start(replyText: string, opts: { allowUntrusted?: boolean; whitel
     channelHandler: factory,
     allowUntrusted: opts.allowUntrusted ?? true,
     config: {
-      enabled: true,
       authFolder: '.test-wa-auth',
       whitelist: opts.whitelist ?? '',
       mentionId: opts.mentionId ?? 'korisbot',
@@ -236,7 +235,7 @@ describe('whatsapp plugin', () => {
 
   it('detaches all listeners before ending the socket on stop(), so end() cannot trigger a reconnect', async () => {
     const { factory } = makeChannelHandlerFactory('n/a');
-    configureWhatsAppRuntime({ channelHandler: factory, allowUntrusted: true, config: { enabled: true, authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot' } });
+    configureWhatsAppRuntime({ channelHandler: factory, allowUntrusted: true, config: { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot' } });
     const gateway = { handle: vi.fn() };
     const { stop } = await WhatsAppChannelFactory.start({ authFolder: '.test-wa-auth', mentionId: 'korisbot', gateway, logger: makeLogger() });
 
@@ -257,8 +256,14 @@ describe('whatsapp plugin', () => {
     const fakeRegistry = { extend: vi.fn((_point, value: ChannelDefinition) => { registered = value; }) } as unknown as PluginRegistry;
 
     const plugin = create(
-      { allowUntrusted: true, logger: makeLogger(), gateway: { handle: vi.fn() }, channelHandler: makeChannelHandlerFactory('n/a').factory },
-      { enabled: true, authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot' },
+      {
+        allowUntrusted: true,
+        logger: makeLogger(),
+        gateway: { handle: vi.fn() },
+        channelHandler: makeChannelHandlerFactory('n/a').factory,
+        pluginEnablement: { isEnabled: () => true },
+      },
+      { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot' },
     );
     plugin.setup(fakeRegistry);
 
@@ -268,5 +273,24 @@ describe('whatsapp plugin', () => {
       interactive: false,
       maxMessageChars: 4_000,
     });
+  });
+
+  it('is disabled when administratively disabled', () => {
+    let registered: ChannelDefinition | undefined;
+    const fakeRegistry = { extend: vi.fn((_point, value: ChannelDefinition) => { registered = value; }) } as unknown as PluginRegistry;
+
+    const plugin = create(
+      {
+        allowUntrusted: true,
+        logger: makeLogger(),
+        gateway: { handle: vi.fn() },
+        channelHandler: makeChannelHandlerFactory('n/a').factory,
+        pluginEnablement: { isEnabled: () => false },
+      },
+      { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot' },
+    );
+    plugin.setup(fakeRegistry);
+
+    expect(registered?.enabled()).toBe(false);
   });
 });

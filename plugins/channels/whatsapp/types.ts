@@ -9,7 +9,7 @@ export interface WhatsAppChannelStartOptions {
 }
 
 export interface WhatsAppPluginOptions {
-  enabled: boolean;
+  isEnabled: () => boolean;
   authFolder: string;
   mentionId: string;
 }

@@ -15,6 +15,9 @@ const {
   skillSync,
   settingsWriter,
   liveChannelRuntime,
+  pluginSettingsRepo,
+  pluginCatalog,
+  channelsManager,
 } = vi.hoisted(() => ({
   auditRepo: {
     count: vi.fn(),
@@ -48,11 +51,14 @@ const {
   liveChannelRuntime: {
     startWhatsAppLive: vi.fn(),
     startTelegramLive: vi.fn(),
-    loadTelegramConfig: vi.fn(() => ({ enabled: false, token: '', whitelist: '' })),
-    loadWhatsAppConfig: vi.fn(() => ({ enabled: false, authFolder: '', whitelist: '', mentionId: '' })),
+    loadTelegramConfig: vi.fn(() => ({ token: '', whitelist: '' })),
+    loadWhatsAppConfig: vi.fn(() => ({ authFolder: '', whitelist: '', mentionId: '' })),
     writeTelegramConfigPatch: vi.fn(),
     writeWhatsAppConfigPatch: vi.fn(),
   },
+  pluginSettingsRepo: { getEnabled: vi.fn(), setEnabled: vi.fn(), getAll: vi.fn() },
+  pluginCatalog: { getInstance: vi.fn(), getExistingInstance: vi.fn(() => []) },
+  channelsManager: { getExistingInstance: vi.fn(() => undefined as { stopChannel: (name: string) => void } | undefined) },
 }));
 
 vi.mock('../../../src/repositories/audit-log', () => ({
@@ -98,6 +104,18 @@ vi.mock('../../../src/services/skills/skill-sync', () => ({
 vi.mock('../../../src/config/settings-writer', () => settingsWriter);
 
 vi.mock('../../../src/dashboard/live-channel-runtime', () => liveChannelRuntime);
+
+vi.mock('../../../src/repositories/plugin-settings', () => ({
+  PluginSettingsRepositoryFactory: { create: () => pluginSettingsRepo },
+}));
+
+vi.mock('../../../src/services/plugins/plugin-catalog-singleton', () => ({
+  PluginCatalogSingleton: pluginCatalog,
+}));
+
+vi.mock('../../../src/channels', () => ({
+  ChannelsSingleton: channelsManager,
+}));
 
 import { AdminRouterFactory } from '../../../src/dashboard/admin';
 import { config } from '../../../src/config';
@@ -532,6 +550,102 @@ describe('AdminRouterFactory /skills', () => {
   });
 });
 
+describe('AdminRouterFactory /plugins', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    pluginCatalog.getExistingInstance.mockReturnValue([
+      { family: 'tools', name: 'curl-request' },
+      { family: 'channels', name: 'telegram' },
+    ]);
+  });
+
+  it('GET /plugins lists every catalog entry with its resolved enabled state', () => {
+    pluginSettingsRepo.getEnabled.mockImplementation((family: string, name: string) =>
+      family === 'tools' && name === 'curl-request' ? false : null);
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/plugins'), res);
+
+    expect(res.json).toHaveBeenCalledWith({
+      items: [
+        { family: 'tools', name: 'curl-request', enabled: false },
+        { family: 'channels', name: 'telegram', enabled: false },
+      ],
+    });
+  });
+
+  it('PATCH /plugins/:family/:name rejects an invalid family', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/plugins/bogus/curl-request');
+    req.body = { enabled: true };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(pluginSettingsRepo.setEnabled).not.toHaveBeenCalled();
+  });
+
+  it('PATCH /plugins/:family/:name rejects a non-boolean enabled value', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/plugins/tools/curl-request');
+    req.body = { enabled: 'yes' };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(pluginSettingsRepo.setEnabled).not.toHaveBeenCalled();
+  });
+
+  it('PATCH /plugins/:family/:name returns 404 for a plugin not in the catalog', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/plugins/tools/does-not-exist');
+    req.body = { enabled: true };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(pluginSettingsRepo.setEnabled).not.toHaveBeenCalled();
+  });
+
+  it('PATCH /plugins/:family/:name toggles a tool and does not touch live channels', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/plugins/tools/curl-request');
+    req.body = { enabled: false };
+    callRoute(router, req, res);
+
+    expect(pluginSettingsRepo.setEnabled).toHaveBeenCalledWith('tools', 'curl-request', false);
+    expect(liveChannelRuntime.startTelegramLive).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ success: true, item: { family: 'tools', name: 'curl-request', enabled: false } });
+  });
+
+  it('PATCH /plugins/:family/:name starts a channel live when enabling it', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/plugins/channels/telegram');
+    req.body = { enabled: true };
+    callRoute(router, req, res);
+
+    expect(pluginSettingsRepo.setEnabled).toHaveBeenCalledWith('channels', 'telegram', true);
+    expect(liveChannelRuntime.startTelegramLive).toHaveBeenCalledTimes(1);
+  });
+
+  it('PATCH /plugins/:family/:name stops a running channel live when disabling it', () => {
+    const stopChannel = vi.fn();
+    channelsManager.getExistingInstance.mockReturnValue({ stopChannel });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/plugins/channels/telegram');
+    req.body = { enabled: false };
+    callRoute(router, req, res);
+
+    expect(pluginSettingsRepo.setEnabled).toHaveBeenCalledWith('channels', 'telegram', false);
+    expect(stopChannel).toHaveBeenCalledWith('telegram');
+  });
+});
+
 describe('AdminRouterFactory /settings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -610,11 +724,12 @@ describe('AdminRouterFactory /settings', () => {
     expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
   });
 
-  it('POST /settings rejects enabling Telegram without a bot token', () => {
+  it('POST /settings rejects blanking the Telegram bot token while Telegram is enabled', () => {
+    pluginSettingsRepo.getEnabled.mockImplementation((family: string, name: string) => family === 'channels' && name === 'telegram');
     const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
-    req.body = { channels: { telegram: { enabled: true, bot_token: '' } } };
+    req.body = { channels: { telegram: { bot_token: '' } } };
     callRoute(router, req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);

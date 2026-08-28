@@ -35,20 +35,28 @@ import type { BeatType } from './types/beat';
 import { StickerRulesRepositoryFactory } from './repositories/sticker-rules';
 import { OutboundMessageServiceFactory } from './services/outbound/outbound-message-service';
 import { gateErrorForUrl } from './services/security/gate';
+import { PluginSettingsRepositoryFactory } from './repositories/plugin-settings';
+import { migrateLegacyPluginEnabledFlags, resolvePluginEnabled, type PluginIdentity } from './services/plugins/plugin-enablement';
+import { PluginCatalogSingleton } from './services/plugins/plugin-catalog-singleton';
 
 const logger = LoggerFactory.create();
 const MODES = ['tui', 'web'] as const;
 
-function createPluginContext(logger: ILogger, gateway: IMessageGateway): PluginContext {
+function createPluginContext(logger: ILogger, gateway: IMessageGateway, db: IDatabaseService): PluginContext {
+  const pluginSettingsRepo = PluginSettingsRepositoryFactory.create(db);
   return {
     allowUntrusted: config.CHANNELS.ALLOW_UNTRUSTED,
     logger,
     gateway,
     channelHandler: ChannelHandlerFactory,
+    pluginEnablement: {
+      isEnabled: (name) => resolvePluginEnabled(pluginSettingsRepo, 'channels', name),
+    },
   };
 }
 
 function createToolPluginContext(logger: ILogger, db: IDatabaseService): ToolPluginContext {
+  const pluginSettingsRepo = PluginSettingsRepositoryFactory.create(db);
   return {
     logger,
     heartbeats: {
@@ -108,6 +116,9 @@ function createToolPluginContext(logger: ILogger, db: IDatabaseService): ToolPlu
       githubOwner: config.GITHUB.OWNER,
       githubToken: config.GITHUB.TOKEN,
     },
+    pluginEnablement: {
+      isEnabled: (name) => resolvePluginEnabled(pluginSettingsRepo, 'tools', name),
+    },
   };
 }
 
@@ -146,10 +157,15 @@ class Application implements IApplication {
     seedDefaultBeats(db, this.logger);
     const sessionManager = new SessionManager(db);
     const gateway = MessageGatewayFactory.create(this.logger, this.source, db, sessionManager);
-    const registry = buildRegistry([
-      ...createPlugins({ context: createPluginContext(this.logger, gateway) }),
-      ...createToolPlugins({ context: createToolPluginContext(this.logger, db) }),
-    ]);
+    const channelPlugins = createPlugins({ context: createPluginContext(this.logger, gateway, db) });
+    const toolPlugins = createToolPlugins({ context: createToolPluginContext(this.logger, db) });
+    const pluginIdentities: PluginIdentity[] = [
+      ...channelPlugins.map((plugin) => ({ family: 'channels' as const, name: plugin.name })),
+      ...toolPlugins.map((plugin) => ({ family: 'tools' as const, name: plugin.name })),
+    ];
+    migrateLegacyPluginEnabledFlags(PluginSettingsRepositoryFactory.create(db), pluginIdentities, this.logger);
+    PluginCatalogSingleton.getInstance(pluginIdentities);
+    const registry = buildRegistry([...channelPlugins, ...toolPlugins]);
     ToolPluginsSingleton.getInstance(registry.collect(COMMANDS));
     const registeredChannels = applyChannelOverrides(registry.collect(ADAPTERS), loadChannelOverrides());
     const channels = ChannelsSingleton.getInstance(this.logger, gateway, registeredChannels);

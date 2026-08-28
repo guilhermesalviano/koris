@@ -40,7 +40,7 @@ describe('scaffoldToolPlugin', () => {
       .toThrow(/already exists/);
   });
 
-  it('creates the expected 4 files under the plugin folder', () => {
+  it('creates the expected 2 files under the plugin folder', () => {
     const io = makeIO();
     const result = scaffoldToolPlugin(
       { name: 'weather-lookup', description: 'Look up the weather.', parameters: [{ name: 'city', type: 'string', description: 'City name', required: true }] },
@@ -51,12 +51,10 @@ describe('scaffoldToolPlugin', () => {
     expect(result.toolName).toBe('weather_lookup');
     expect(result.createdFiles).toEqual([
       'weather-lookup/index.ts',
-      'weather-lookup/config.ts',
-      'weather-lookup/config.example.yml',
       'weather-lookup/index.test.ts',
     ]);
     expect(io.mkdir).toHaveBeenCalledWith(path.join(BASE_DIR, 'weather-lookup'));
-    expect(io.written.size).toBe(4);
+    expect(io.written.size).toBe(2);
   });
 
   it('derives the tool name from the plugin name by default (hyphens to underscores)', () => {
@@ -79,15 +77,7 @@ describe('scaffoldToolPlugin', () => {
     expect(indexContent).toContain("TOOL_NAME = 'weather_lookup'");
     expect(indexContent).toContain('Look up the weather.');
     expect(indexContent).toContain('export function create(');
-  });
-
-  it('generated config.ts derives a PascalCase interface name and an env key', () => {
-    const io = makeIO();
-    scaffoldToolPlugin({ name: 'weather-lookup', description: 'x' }, { baseDir: BASE_DIR, io });
-
-    const configContent = io.written.get(path.join(BASE_DIR, 'weather-lookup', 'config.ts'))!;
-    expect(configContent).toContain('WeatherLookupPluginConfig');
-    expect(configContent).toContain('TOOLS_WEATHER_LOOKUP_ENABLED');
+    expect(indexContent).toContain("context.pluginEnablement.isEnabled('weather-lookup')");
   });
 
   it('generated parameters schema includes each param and marks required ones', () => {

@@ -1,7 +1,6 @@
 import type { IChannelsGateway, ILogger, IStickerRulesGateway, Plugin, ToolDefinition, ToolExecutionContext, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
 import { getOptionalStringArg, getRequiredStringArg } from '../runtime';
-import { loadSendStickerConfig } from './config';
 
 export const TOOL_NAME = 'send_sticker' as const;
 
@@ -74,12 +73,7 @@ const SCHEMA = {
   },
 };
 
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadSendStickerConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'send-sticker',
     setup(registry) {
@@ -87,7 +81,7 @@ export function create(context: ToolPluginContext): Plugin | null {
         name: TOOL_NAME,
         schema: SCHEMA,
         handler: (logger, args, execContext) => sendSticker(logger, args, execContext, context.stickerRules, context.channels),
-        enabled: (opts) => opts.trusted && opts.stickersEnabled,
+        enabled: (opts) => opts.trusted && opts.stickersEnabled && context.pluginEnablement.isEnabled('send-sticker'),
       };
       registry.extend(COMMANDS, definition);
     },

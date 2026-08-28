@@ -13,7 +13,6 @@ import {
   isAllowedValue,
 } from '../runtime';
 import { toCurlCommand } from './curl-command';
-import { loadCurlRequestConfig } from './config';
 
 export const TOOL_NAME = 'curl_request' as const;
 
@@ -302,12 +301,7 @@ const SCHEMA = {
   },
 };
 
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadCurlRequestConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'curl-request',
     setup(registry) {
@@ -315,7 +309,7 @@ export function create(context: ToolPluginContext): Plugin | null {
         name: TOOL_NAME,
         schema: SCHEMA,
         handler: (logger, args) => executeCurl(logger, args, context.security.gateUrl),
-        enabled: (opts) => opts.trusted,
+        enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('curl-request'),
       };
       registry.extend(COMMANDS, definition);
     },

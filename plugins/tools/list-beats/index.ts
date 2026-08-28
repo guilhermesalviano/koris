@@ -1,6 +1,5 @@
 import type { ILogger, IHeartbeatGateway, Plugin, ToolDefinition, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
-import { loadListBeatsConfig } from './config';
 
 export const TOOL_NAME = 'list_beats' as const;
 
@@ -35,12 +34,7 @@ const SCHEMA = {
   },
 };
 
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadListBeatsConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'list-beats',
     setup(registry) {
@@ -48,7 +42,7 @@ export function create(context: ToolPluginContext): Plugin | null {
         name: TOOL_NAME,
         schema: SCHEMA,
         handler: (logger, args) => listBeats(logger, args, context.heartbeats),
-        enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat',
+        enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat' && context.pluginEnablement.isEnabled('list-beats'),
       };
       registry.extend(COMMANDS, definition);
     },

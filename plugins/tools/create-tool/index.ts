@@ -8,7 +8,6 @@ import { scaffoldToolPlugin, type ScaffoldParameterSpec } from '../../../scripts
 import type { ILogger, Plugin, ToolDefinition, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
 import { getRequiredStringArg } from '../runtime';
-import { loadCreateToolConfig } from './config';
 
 export const TOOL_NAME = 'create_tool' as const;
 
@@ -110,12 +109,7 @@ const SCHEMA = {
   },
 };
 
-export function create(_context: ToolPluginContext): Plugin | null {
-  const cfg = loadCreateToolConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'create-tool',
     setup(registry) {
@@ -123,7 +117,7 @@ export function create(_context: ToolPluginContext): Plugin | null {
         name: TOOL_NAME,
         schema: SCHEMA,
         handler: (logger, args) => executeCreateTool(logger, args),
-        enabled: (opts) => opts.trusted,
+        enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('create-tool'),
       };
       registry.extend(COMMANDS, definition);
     },

@@ -294,6 +294,20 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_audit_logs_status ON audit_logs(status);
       `);
 
+      /**
+       * Plugin on/off state, DB-backed so toggling a plugin doesn't require a
+       * process restart (see AGENTS.md's "Plugins & skills" section).
+       */
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS plugin_settings (
+          family TEXT NOT NULL CHECK(family IN ('tools', 'channels')),
+          name TEXT NOT NULL,
+          enabled INTEGER NOT NULL,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (family, name)
+        );
+      `);
+
       this.migrateAuditToolsEnabled();
     } catch (error) {
       logger.error('[database] Failed to initialize database schema', { error });
