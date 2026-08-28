@@ -1,5 +1,6 @@
-import type { ILogger, Plugin, ToolDefinition, ToolPluginContext, ToolResult } from '../contracts';
+import type { ILogger, Plugin, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
+import { defineTool } from '../define-tool';
 import { getRequiredStringArg, getOptionalStringArg } from '../runtime';
 
 export const TOOL_NAME = 'issue' as const;
@@ -83,54 +84,40 @@ export async function executeIssue(
   }
 }
 
-function buildSchema(defaultOwner: string) {
-  const ownerDescription = defaultOwner
-    ? `GitHub owner/organization. Defaults to "${defaultOwner}" if omitted — only provide/ask for this if the human wants a different owner.`
-    : 'GitHub owner/organization (required if repo is provided).';
-  const confirmationNote = defaultOwner
-    ? `Before calling this tool, show the human the title/body/repo you derived (and the owner, defaulting to "${defaultOwner}" unless the human specifies otherwise) and ask them to confirm — if repo was not provided, ask for it explicitly as part of that same question instead of guessing or omitting it.`
-    : 'Before calling this tool, show the human the title/body/owner/repo you derived and ask them to confirm — if owner or repo was not provided, ask for them explicitly as part of that same question instead of guessing or omitting them.';
-
-  return {
-    description:
-      'Create a GitHub issue. If GitHub API is configured with owner/repo and a token, creates the issue via the GitHub API. Otherwise returns formatted issue text for manual creation. ' +
-      "The human will usually describe the issue in free-form text, not as an explicit title/body — derive both from that description yourself: title is a short, clear summary (a few words); body is the fuller description, expanded from what the human said, without inventing details they didn't mention. " +
-      `REQUIRES CONFIRMATION: this is a state-changing action. ${confirmationNote} Only call this tool after the human has explicitly confirmed in a follow-up message.`,
-    parameters: {
-      type: 'object',
-      properties: {
-        title: {
-          type: 'string',
-          description: 'The issue title (required). Derive a short, clear summary from the human\'s description — do not require them to phrase it as a title.',
-        },
-        body: {
-          type: 'string',
-          description: 'The issue body/description (optional). Derive it from the human\'s description, expanding on what they said without inventing new details.',
-        },
-        owner: {
-          type: 'string',
-          description: ownerDescription,
-        },
-        repo: {
-          type: 'string',
-          description: 'GitHub repository name (required if owner is provided).',
-        },
-      },
-      required: ['title'],
-    },
-  };
-}
-
 export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'issue',
     setup(registry) {
-      const definition: ToolDefinition = {
+      const defaultOwner = context.config.githubOwner;
+      const ownerDescription = defaultOwner
+        ? `GitHub owner/organization. Defaults to "${defaultOwner}" if omitted — only provide/ask for this if the human wants a different owner.`
+        : 'GitHub owner/organization (required if repo is provided).';
+      const confirmationNote = defaultOwner
+        ? `Before calling this tool, show the human the title/body/repo you derived (and the owner, defaulting to "${defaultOwner}" unless the human specifies otherwise) and ask them to confirm — if repo was not provided, ask for it explicitly as part of that same question instead of guessing or omitting it.`
+        : 'Before calling this tool, show the human the title/body/owner/repo you derived and ask them to confirm — if owner or repo was not provided, ask for them explicitly as part of that same question instead of guessing or omitting them.';
+
+      const definition = defineTool({
         name: TOOL_NAME,
-        schema: buildSchema(context.config.githubOwner),
+        description:
+          'Create a GitHub issue. If GitHub API is configured with owner/repo and a token, creates the issue via the GitHub API. Otherwise returns formatted issue text for manual creation. ' +
+          "The human will usually describe the issue in free-form text, not as an explicit title/body — derive both from that description yourself: title is a short, clear summary (a few words); body is the fuller description, expanded from what the human said, without inventing details they didn't mention. " +
+          `REQUIRES CONFIRMATION: this is a state-changing action. ${confirmationNote} Only call this tool after the human has explicitly confirmed in a follow-up message.`,
+        parameters: {
+          title: {
+            type: 'string',
+            required: true,
+            description: 'The issue title. Derive a short, clear summary from the human\'s description — do not require them to phrase it as a title.',
+          },
+          body: {
+            type: 'string',
+            description: 'The issue body/description (optional). Derive it from the human\'s description, expanding on what they said without inventing new details.',
+          },
+          owner: { type: 'string', description: ownerDescription },
+          repo: { type: 'string', description: 'GitHub repository name (required if owner is provided).' },
+        },
         handler: (logger, args) => executeIssue(logger, args, context.config.githubOwner, context.config.githubToken),
         enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('issue'),
-      };
+      });
       registry.extend(COMMANDS, definition);
     },
   };

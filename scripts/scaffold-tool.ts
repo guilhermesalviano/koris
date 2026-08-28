@@ -58,27 +58,28 @@ function toPascalCase(kebab: string): string {
   return kebab.split('-').map((part) => part[0]!.toUpperCase() + part.slice(1)).join('');
 }
 
-function buildParametersSchema(parameters: ScaffoldParameterSpec[]): string {
-  if (parameters.length === 0) {
-    return `{\n      type: 'object',\n      properties: {},\n      required: [],\n    }`;
-  }
+function buildParametersBlock(parameters: ScaffoldParameterSpec[]): string {
+  if (parameters.length === 0) return '';
 
-  const properties = parameters
-    .map((p) => `      ${p.name}: {\n        type: '${p.type}',\n        description: ${JSON.stringify(p.description)},\n      },`)
+  const entries = parameters
+    .map((p) => {
+      const requiredLine = p.required ? `\n        required: true,` : '';
+      return `      ${p.name}: {\n        type: '${p.type}',${requiredLine}\n        description: ${JSON.stringify(p.description)},\n      },`;
+    })
     .join('\n');
-  const required = parameters.filter((p) => p.required).map((p) => JSON.stringify(p.name));
 
-  return `{\n      type: 'object',\n      properties: {\n${properties}\n      },\n      required: [${required.join(', ')}],\n    }`;
+  return `\n    parameters: {\n${entries}\n    },`;
 }
 
 function buildIndexFile(input: ScaffoldToolInput, toolName: string, pluginClassName: string): string {
-  return `import type { ILogger, Plugin, ToolDefinition, ToolPluginContext, ToolResult } from '../contracts';
+  return `import type { ILogger, Plugin, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
+import { defineTool } from '../define-tool';
 
 export const TOOL_NAME = '${toolName}' as const;
 
 // TODO: implement the actual tool logic. args are whatever the LLM passed,
-// matching the "parameters" schema below.
+// matching the "parameters" spec below.
 export async function execute${pluginClassName}(
   logger: ILogger,
   args: Record<string, unknown>,
@@ -91,21 +92,16 @@ export async function execute${pluginClassName}(
   };
 }
 
-const SCHEMA = {
-  description: ${JSON.stringify(input.description)},
-  parameters: ${buildParametersSchema(input.parameters ?? [])},
-};
-
 export function create(context: ToolPluginContext): Plugin {
   return {
     name: '${input.name}',
     setup(registry) {
-      const definition: ToolDefinition = {
+      const definition = defineTool({
         name: TOOL_NAME,
-        schema: SCHEMA,
+        description: ${JSON.stringify(input.description)},${buildParametersBlock(input.parameters ?? [])}
         handler: (logger, args) => execute${pluginClassName}(logger, args),
         enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('${input.name}'),
-      };
+      });
       registry.extend(COMMANDS, definition);
     },
   };

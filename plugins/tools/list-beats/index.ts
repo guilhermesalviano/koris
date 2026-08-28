@@ -1,5 +1,6 @@
-import type { ILogger, IHeartbeatGateway, Plugin, ToolDefinition, ToolPluginContext, ToolResult } from '../contracts';
+import type { ILogger, IHeartbeatGateway, Plugin, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
+import { defineTool } from '../define-tool';
 
 export const TOOL_NAME = 'list_beats' as const;
 
@@ -25,25 +26,16 @@ export async function listBeats(
   }
 }
 
-const SCHEMA = {
-  description: 'List all saved beats and scheduled beats. Call this when the user asks to see, check, or review their beats.',
-  parameters: {
-    type: 'object',
-    properties: {},
-    required: [],
-  },
-};
-
 export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'list-beats',
     setup(registry) {
-      const definition: ToolDefinition = {
+      const definition = defineTool({
         name: TOOL_NAME,
-        schema: SCHEMA,
+        description: 'List all saved beats and scheduled beats. Call this when the user asks to see, check, or review their beats.',
         handler: (logger, args) => listBeats(logger, args, context.heartbeats),
         enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat' && context.pluginEnablement.isEnabled('list-beats'),
-      };
+      });
       registry.extend(COMMANDS, definition);
     },
   };

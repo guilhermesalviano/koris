@@ -1,5 +1,6 @@
-import type { IChannelsGateway, ILogger, Plugin, ToolDefinition, ToolExecutionContext, ToolPluginContext, ToolResult } from '../contracts';
+import type { IChannelsGateway, ILogger, Plugin, ToolExecutionContext, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
+import { defineTool } from '../define-tool';
 import { getOptionalStringArg, getRequiredStringArg, isAllowedValue } from '../runtime';
 
 export const TOOL_NAME = 'send_message' as const;
@@ -50,42 +51,36 @@ export async function sendMessage(
   }
 }
 
-const SCHEMA = {
-  description:
-    'Start a new outbound message to someone through a channel (Telegram or WhatsApp). ' +
-    'Provide the target (Telegram chat id or WhatsApp JID). "channel" is inferred from the current chat when messaging from a Telegram/WhatsApp chat; ' +
-    'provide it explicitly otherwise. "content" must be the exact message body to send.',
-  parameters: {
-    type: 'object',
-    properties: {
-      channel: {
-        type: 'string',
-        enum: ['telegram', 'whatsapp'],
-        description: 'Channel to send through. Optional when messaging from a Telegram or WhatsApp chat (inferred); required otherwise.',
-      },
-      target: {
-        type: 'string',
-        description: 'Recipient address on the channel (Telegram chat id or WhatsApp JID) (required).',
-      },
-      content: {
-        type: 'string',
-        description: 'Exact message body to send (required).',
-      },
-    },
-    required: ['content', 'target'],
-  },
-};
-
 export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'send-message',
     setup(registry) {
-      const definition: ToolDefinition = {
+      const definition = defineTool({
         name: TOOL_NAME,
-        schema: SCHEMA,
+        description:
+          'Start a new outbound message to someone through a channel (Telegram or WhatsApp). ' +
+          'Provide the target (Telegram chat id or WhatsApp JID). "channel" is inferred from the current chat when messaging from a Telegram/WhatsApp chat; ' +
+          'provide it explicitly otherwise. "content" must be the exact message body to send.',
+        parameters: {
+          channel: {
+            type: 'string',
+            enum: ['telegram', 'whatsapp'],
+            description: 'Channel to send through. Optional when messaging from a Telegram or WhatsApp chat (inferred); required otherwise.',
+          },
+          target: {
+            type: 'string',
+            required: true,
+            description: 'Recipient address on the channel (Telegram chat id or WhatsApp JID).',
+          },
+          content: {
+            type: 'string',
+            required: true,
+            description: 'Exact message body to send.',
+          },
+        },
         handler: (logger, args, execContext) => sendMessage(logger, args, execContext, context.channels),
         enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('send-message'),
-      };
+      });
       registry.extend(COMMANDS, definition);
     },
   };

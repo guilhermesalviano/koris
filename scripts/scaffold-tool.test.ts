@@ -97,7 +97,8 @@ describe('scaffoldToolPlugin', () => {
     const indexContent = io.written.get(path.join(BASE_DIR, 'weather-lookup', 'index.ts'))!;
     expect(indexContent).toContain('city:');
     expect(indexContent).toContain('units:');
-    expect(indexContent).toContain('required: ["city"]');
+    expect(indexContent).toMatch(/city: \{\n\s+type: 'string',\n\s+required: true,/);
+    expect(indexContent).not.toMatch(/units: \{\n\s+type: 'string',\n\s+required: true,/);
   });
 
   it('generated index.test.ts imports from the sibling index.ts and asserts the stub fails', () => {
