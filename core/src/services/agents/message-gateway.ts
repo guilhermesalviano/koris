@@ -1,6 +1,7 @@
 import { handleCommand, isCommand } from '../commands';
 import { previewMessage, toSafeMessage } from '../../utils/message';
 import { config } from '../../config';
+import { AIServiceError } from '../ai-completion-service';
 import { findGateBlocks, formatGateBlockNotice } from '../security/gate-blocks';
 import { AuditLogRepositoryFactory, type IAuditLogRepository } from '../../repositories/audit-log';
 import { ILogger } from '../../infrastructure/logger';
@@ -74,15 +75,33 @@ class MessageGateway implements IMessageGateway {
     }
 
     const runId = options?.runId ?? generateId();
-    const response = await this.mainAgent.run({
-      userMessage: safeMessage,
-      channel,
-      message: messageService,
-      images,
-      stickers,
-      target: originId,
-      options: { ...options, runId },
-    });
+    let response: ProcessedMessage;
+    try {
+      response = await this.mainAgent.run({
+        userMessage: safeMessage,
+        channel,
+        message: messageService,
+        images,
+        stickers,
+        target: originId,
+        options: { ...options, runId },
+      });
+    } catch (err) {
+      // A provider error (auth, rate limit, unavailable, …) is still an outcome:
+      // persist the turn so it survives a reload and the web can offer "Resend".
+      if (err instanceof AIServiceError && err.code !== 'aborted') {
+        this.logger.warn(`Provider error on ${channel} turn (${err.code}): ${err.message}`);
+        this.backgroundDispatcher.persistConversation({
+          sessionId: messageService.getSessionId(),
+          ask: safeMessage,
+          askImages: images,
+          answer: err.message,
+          answerErrorCode: err.code,
+          channel,
+        });
+      }
+      throw err;
+    }
 
     this.logger.info(`Processed message from ${channel}: "${previewMessage(safeMessage)}" => "${previewMessage(response)}"`);
 

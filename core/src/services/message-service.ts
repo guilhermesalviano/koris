@@ -5,7 +5,7 @@ import { MessageRole, ImageAttachment } from "../types/messages";
 import { ISessionService } from "./session-service";
 
 interface IMessageService {
-  save(props: { role: MessageRole; content: string; images?: ImageAttachment[] }): void;
+  save(props: { role: MessageRole; content: string; images?: ImageAttachment[]; errorCode?: string }): void;
   getHistory(): Message[];
   getSessionId(): string;
   getSessionMetadata(): Record<string, unknown>;
@@ -20,13 +20,14 @@ class MessageService implements IMessageService {
     this.session = session;
   }
 
-  save(props: { role: MessageRole; content: string; images?: ImageAttachment[] }) {
+  save(props: { role: MessageRole; content: string; images?: ImageAttachment[]; errorCode?: string }) {
     this.session.ensureActiveSession();
     const message = new Message({
       sessionId: this.session.getSession().id,
       role: props.role,
       content: props.content,
       images: props.images,
+      errorCode: props.errorCode,
     });
     this.messageRepository.save(message);
     this.session.updateCount();

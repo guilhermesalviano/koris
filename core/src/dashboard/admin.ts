@@ -346,6 +346,7 @@ class AdminRouterFactory {
           content: m.content,
           images: m.images,
           missingImages: m.missingImages,
+          errorCode: m.errorCode,
           createdAt: m.createdAt,
         })),
         memories: memories.map((m) => ({
@@ -483,6 +484,7 @@ class AdminRouterFactory {
           content: m.content,
           images: m.images,
           missingImages: m.missingImages,
+          errorCode: m.errorCode,
           createdAt: m.createdAt,
         })),
       });

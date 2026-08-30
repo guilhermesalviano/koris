@@ -56,6 +56,7 @@ export interface MessageItem {
   content: string;
   images?: ImageAttachment[];
   missingImages?: number;
+  errorCode?: string;
   createdAt: string;
 }
 

@@ -5,7 +5,7 @@ import { useChat } from '../../lib/chat-context';
 import { usePageTitle } from '../../lib/use-page-title';
 import ImageLightbox from '../../components/ImageLightbox';
 import ProviderPicker from '../../components/ProviderPicker';
-import { AttachIcon, BrokenImageIcon, CloseIcon, PlusIcon, SendIcon } from '../../components/Icons';
+import { AttachIcon, BrokenImageIcon, CloseIcon, PlusIcon, RetryIcon, SendIcon } from '../../components/Icons';
 import type { ImageAttachment } from '../../lib/types';
 
 const MAX_CHARS = 4000;
@@ -17,7 +17,7 @@ function imageSrc(image: ImageAttachment): string {
 export default function ChatPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
-  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, openSession, sessions, activeSessionId, newChat, gateBlocks, allowDomain, dismissGateBlock } = useChat();
+  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, resendLast, openSession, sessions, activeSessionId, newChat, gateBlocks, allowDomain, dismissGateBlock } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +99,7 @@ export default function ChatPage() {
   const showEmptyState = historyLoaded && messages.length === 0;
   const footerHint = '↵ send · ⇧↵ newline';
   const charCount = input.length;
+  const lastMessageId = messages.length ? messages[messages.length - 1].id : -1;
 
   // A fresh chat centers the composer — put the cursor in it straight away.
   useEffect(() => {
@@ -250,9 +251,21 @@ export default function ChatPage() {
                 </div>
               ) : (
                 <div
-                  className="bubble relative break-words rounded-card rounded-bl-[5px] border border-subtle bg-bg-3 px-3.5 py-2.5 text-sm leading-relaxed text-txt"
+                  className={`bubble relative break-words rounded-card rounded-bl-[5px] border px-3.5 py-2.5 text-sm leading-relaxed ${
+                    m.error ? 'border-red-500/40 bg-red-500/10 text-txt' : 'border-subtle bg-bg-3 text-txt'
+                  }`}
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
                 />
+              )}
+              {m.role === 'assistant' && m.error && m.id === lastMessageId && !streaming && (
+                <button
+                  onClick={resendLast}
+                  title="Send the last message again"
+                  className="mt-0.5 flex items-center gap-1 self-start rounded-lg border border-strong bg-bg-3 px-2 py-1 font-mono text-[11px] text-txt-2 transition-colors duration-150 hover:border-accent hover:text-accent-2"
+                >
+                  <RetryIcon className="h-3 w-3 fill-none stroke-current" />
+                  Resend
+                </button>
               )}
               {m.timestamp && <span className="px-1 font-mono text-[11px] text-txt-3">{m.timestamp}</span>}
             </div>

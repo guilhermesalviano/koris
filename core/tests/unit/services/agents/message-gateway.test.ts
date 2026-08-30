@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MessageGateway } from '../../../../src/services/agents/message-gateway';
+import { AIServiceError } from '../../../../src/services/ai-completion-service';
 import { applyTestConfigDefaults } from '../../../helpers/test-config';
 import type { ILogger } from '../../../../src/infrastructure/logger';
 
@@ -129,6 +130,38 @@ describe('MessageGateway', () => {
       channel: 'tui',
       memoryService: deps.memoryService,
     });
+  });
+
+  it('persists a failed provider turn (with error code) and rethrows', async () => {
+    const { gateway, deps } = makeGateway('whatsapp');
+    deps.mainAgent.run.mockRejectedValueOnce(new AIServiceError('rate_limited', 'Rate limit exceeded'));
+
+    await expect(gateway.handle('question', 'origin-1')).rejects.toThrow('Rate limit exceeded');
+
+    expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      ask: 'question',
+      answer: 'Rate limit exceeded',
+      answerErrorCode: 'rate_limited',
+      channel: 'whatsapp',
+    });
+    expect(deps.backgroundDispatcher.summarizeConversation).not.toHaveBeenCalled();
+  });
+
+  it('does not persist an aborted turn, but still rethrows', async () => {
+    const { gateway, deps } = makeGateway('web');
+    deps.mainAgent.run.mockRejectedValueOnce(new AIServiceError('aborted', 'Aborted'));
+
+    await expect(gateway.handle('question', 'origin-1')).rejects.toThrow('Aborted');
+    expect(deps.backgroundDispatcher.persistConversation).not.toHaveBeenCalled();
+  });
+
+  it('does not persist a non-provider error, but still rethrows', async () => {
+    const { gateway, deps } = makeGateway();
+    deps.mainAgent.run.mockRejectedValueOnce(new Error('boom'));
+
+    await expect(gateway.handle('question', 'origin-1')).rejects.toThrow('boom');
+    expect(deps.backgroundDispatcher.persistConversation).not.toHaveBeenCalled();
   });
 
   it('appends a domain-gate notice to a channel reply when a tool call was blocked', async () => {

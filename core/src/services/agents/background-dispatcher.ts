@@ -14,6 +14,8 @@ interface PersistConversationProps {
   ask: string;
   askImages?: ImageAttachment[];
   answer: string;
+  /** When set, `answer` is a failed provider turn — flags the assistant row. */
+  answerErrorCode?: string;
   channel: string;
 }
 
@@ -43,6 +45,7 @@ class BackgroundDispatcher implements IBackgroundDispatcher {
 
   summarizeConversation(props: SummarizeConversationProps): void {
     if (config.SESSION.SUMMARIZER_MODE !== 'auto') return;
+    if (props.answerErrorCode) return;
     if (!props.answer || !props.answer.trim()) return;
 
     this.summarizerWorker.handler(props)

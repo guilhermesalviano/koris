@@ -9,6 +9,8 @@ export class Message {
   public readonly content: string;
   public readonly images?: ImageAttachment[];
   public readonly missingImages?: number;
+  /** Set when this (assistant) message records a failed provider turn. */
+  public readonly errorCode?: string;
   public readonly createdAt: string;
 
   constructor(data: {
@@ -18,6 +20,7 @@ export class Message {
     content: string;
     images?: ImageAttachment[];
     missingImages?: number;
+    errorCode?: string;
     createdAt?: string;
   }) {
     this.id = data.id || generateId();
@@ -26,6 +29,7 @@ export class Message {
     this.content = data.content;
     this.images = data.images;
     this.missingImages = data.missingImages;
+    this.errorCode = data.errorCode;
     this.createdAt = data.createdAt || nowISO();
   }
 }
