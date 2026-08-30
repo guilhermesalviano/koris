@@ -1,3 +1,0 @@
-# Defaults to enabled=false, unlike the other tool plugins — this tool lets
-# the agent scaffold new executable code onto the server. Opt in deliberately.
-enabled: false

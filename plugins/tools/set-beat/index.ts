@@ -1,8 +1,8 @@
-import type { ILogger, IHeartbeatGateway, Plugin, ToolDefinition, ToolPluginContext, ToolResult } from '../contracts';
+import type { ILogger, IHeartbeatGateway, Plugin, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
+import { defineTool } from '../define-tool';
 import { getRequiredStringArg, getOptionalStringArg, isAllowedValue } from '../runtime';
 import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../cron';
-import { loadSetBeatConfig } from './config';
 
 export const TOOL_NAME = 'set_beat' as const;
 
@@ -100,50 +100,39 @@ export async function setBeat(
   }
 }
 
-const SCHEMA = {
-  description:
-    'Save a reminder or scheduled beat for the user. DEFAULT BEHAVIOR: always create a one-time beat by pinning the exact minute, hour, day-of-month, and month — NEVER use * for day-of-month or month unless the user explicitly asks for a recurring schedule (e.g. "every day", "every Monday", "every month"). Only use wildcard (*) fields when the user clearly requests a recurring pattern.',
-  parameters: {
-    type: 'object',
-    properties: {
-      beat: {
-        type: 'string',
-        description: 'Clear description of what the user wants to be reminded about or the beat to schedule.',
-      },
-      type: {
-        type: 'string',
-        enum: ['reminder', 'scheduled_beat'],
-        description: 'Type of the beat (optional, defaults to "reminder"): "reminder" for one-time or recurring reminders to the user, "scheduled_beat" for automated background beats to be executed by the agent.',
-      },
-      cron_expression: {
-        type: 'string',
-        description:
-          'Standard 5-field cron expression. Format: "minute hour day-of-month month day-of-week". ' +
-          'DEFAULT — one-time: always pin minute, hour, day-of-month and month to specific values (e.g. "30 9 15 6 *" = once on June 15th at 9:30am). ' +
-          'ONLY use wildcards (*) when the user explicitly requests recurrence: ' +
-          '"0 9 * * *" (every day at 9am), "0 9 * * 1" (every Monday at 9am), "0 8 1 * *" (1st of every month at 8am), "*/30 * * * *" (every 30 min).',
-      },
-    },
-    required: ['beat', 'cron_expression'],
-  },
-};
-
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadSetBeatConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'set-beat',
     setup(registry) {
-      const definition: ToolDefinition = {
+      const definition = defineTool({
         name: TOOL_NAME,
-        schema: SCHEMA,
+        description:
+          'Save a reminder or scheduled beat for the user. DEFAULT BEHAVIOR: always create a one-time beat by pinning the exact minute, hour, day-of-month, and month — NEVER use * for day-of-month or month unless the user explicitly asks for a recurring schedule (e.g. "every day", "every Monday", "every month"). Only use wildcard (*) fields when the user clearly requests a recurring pattern.',
+        parameters: {
+          beat: {
+            type: 'string',
+            required: true,
+            description: 'Clear description of what the user wants to be reminded about or the beat to schedule.',
+          },
+          type: {
+            type: 'string',
+            enum: ['reminder', 'scheduled_beat'],
+            description: 'Type of the beat (optional, defaults to "reminder"): "reminder" for one-time or recurring reminders to the user, "scheduled_beat" for automated background beats to be executed by the agent.',
+          },
+          cron_expression: {
+            type: 'string',
+            required: true,
+            description:
+              'Standard 5-field cron expression. Format: "minute hour day-of-month month day-of-week". ' +
+              'DEFAULT — one-time: always pin minute, hour, day-of-month and month to specific values (e.g. "30 9 15 6 *" = once on June 15th at 9:30am). ' +
+              'ONLY use wildcards (*) when the user explicitly requests recurrence: ' +
+              '"0 9 * * *" (every day at 9am), "0 9 * * 1" (every Monday at 9am), "0 8 1 * *" (1st of every month at 8am), "*/30 * * * *" (every 30 min).',
+          },
+        },
         handler: (logger, args) => setBeat(logger, args, context.heartbeats),
         // Excludes the heartbeat sub-agent to avoid a beat recursively scheduling more beats.
-        enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat',
-      };
+        enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat' && context.pluginEnablement.isEnabled('set-beat'),
+      });
       registry.extend(COMMANDS, definition);
     },
   };

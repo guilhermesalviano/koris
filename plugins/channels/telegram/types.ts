@@ -16,7 +16,7 @@ export interface TelegramChannelStartOptions {
 
 export interface TelegramPluginOptions {
   token: string;
-  enabled: boolean;
+  isEnabled: () => boolean;
 }
 
 export interface TelegramPhotoSize {

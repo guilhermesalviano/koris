@@ -62,16 +62,22 @@ describe('channels/handler', () => {
   });
 
   it('prefixes the prompt with the sender name', async () => {
-    const { handler, gateway, reply } = makeHandler();
-    gateway.handle.mockResolvedValue('pong');
+    const original = config.STICKERS.ALLOW_UNTRUSTED;
+    (config.STICKERS as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = true;
+    try {
+      const { handler, gateway, reply } = makeHandler();
+      gateway.handle.mockResolvedValue('pong');
 
-    await handler.handle('jid', message({ senderName: 'guilherme', text: 'hi' }));
+      await handler.handle('jid', message({ senderName: 'guilherme', text: 'hi' }));
 
-    expect(gateway.handle).toHaveBeenCalledWith(
-      { text: '[Context] Chat: direct (untrusted sender). Sender: guilherme. Message: hi', images: undefined },
-      'jid',
-      { channel: 'test-channel', toolsEnabled: false, learnedSkillsEnabled: false, stickersEnabled: true },
-    );
+      expect(gateway.handle).toHaveBeenCalledWith(
+        { text: '[Context] Chat: direct (untrusted sender). Sender: guilherme. Message: hi', images: undefined, stickers: undefined },
+        'jid',
+        { channel: 'test-channel', toolsEnabled: false, learnedSkillsEnabled: false, stickersEnabled: true },
+      );
+    } finally {
+      (config.STICKERS as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = original;
+    }
   });
 
   it('includes quoted text in the prompt', async () => {
@@ -202,16 +208,22 @@ describe('channels/handler', () => {
   });
 
   it('enables sticker tools for untrusted senders when stickers.allow_untrusted is on', async () => {
-    const { handler, gateway } = makeHandler();
-    gateway.handle.mockResolvedValue('pong');
+    const original = config.STICKERS.ALLOW_UNTRUSTED;
+    (config.STICKERS as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = true;
+    try {
+      const { handler, gateway } = makeHandler();
+      gateway.handle.mockResolvedValue('pong');
 
-    await handler.handle('jid', message({ isTrustedSender: false }));
+      await handler.handle('jid', message({ isTrustedSender: false }));
 
-    expect(gateway.handle).toHaveBeenCalledWith(
-      expect.anything(),
-      'jid',
-      expect.objectContaining({ toolsEnabled: false, stickersEnabled: true }),
-    );
+      expect(gateway.handle).toHaveBeenCalledWith(
+        expect.anything(),
+        'jid',
+        expect.objectContaining({ toolsEnabled: false, stickersEnabled: true }),
+      );
+    } finally {
+      (config.STICKERS as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = original;
+    }
   });
 
   it('disables sticker tools for untrusted senders when stickers.allow_untrusted is off', async () => {

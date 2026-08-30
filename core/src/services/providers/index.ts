@@ -1,21 +1,45 @@
 import type { AIProvider, AIProviderOptions } from '../../types/chat';
 import { config } from '../../config';
 import { ILogger } from '../../infrastructure/logger';
-import { OllamaAIProviderFactory } from './ollama';
-import { MockAIProviderFactory } from './mock';
-import { NvidiaAIProviderFactory } from './nvidia';
 import { SerialAIProvider } from './serial-provider';
+import type { ProviderRegistration } from './manifest';
+import { providerManifest as ollamaManifest } from './ollama';
+import { providerManifest as mockManifest } from './mock';
+import { providerManifest as openAICompatibleManifest } from './openai-compatible';
 
 /**
- * Registry of available AI provider factories
+ * Provider discovery: every provider folder exposes `providerManifest()`
+ * returning one or more `ProviderRegistration`s (the `openai-compatible` folder
+ * registers the whole preset table). Adding a native provider is a folder plus
+ * one line here; adding an OpenAI-compatible service is a single row in
+ * `openai-compatible/presets.ts`.
  */
-const PROVIDER_FACTORIES = {
-  ollama: OllamaAIProviderFactory,
-  mock: MockAIProviderFactory,
-  nvidia: NvidiaAIProviderFactory,
-} as const;
+const PROVIDER_MANIFESTS: ReadonlyArray<() => ProviderRegistration[]> = [
+  ollamaManifest,
+  mockManifest,
+  openAICompatibleManifest,
+];
 
-type ProviderType = keyof typeof PROVIDER_FACTORIES;
+export function buildProviderRegistry(
+  manifests: ReadonlyArray<() => ProviderRegistration[]> = PROVIDER_MANIFESTS,
+): Map<string, ProviderRegistration> {
+  const registry = new Map<string, ProviderRegistration>();
+  for (const manifest of manifests) {
+    for (const registration of manifest()) {
+      registry.set(registration.name, registration);
+    }
+  }
+  return registry;
+}
+
+let registryCache: Map<string, ProviderRegistration> | null = null;
+
+function providerRegistry(): Map<string, ProviderRegistration> {
+  if (!registryCache) {
+    registryCache = buildProviderRegistry();
+  }
+  return registryCache;
+}
 
 export type AIProviderRole = 'manager' | 'worker';
 
@@ -95,14 +119,16 @@ export function getAIProvider(
 export function createAIProvider(logger: ILogger, role: AIProviderRole = 'manager'): AIProvider {
   const profile = role === 'worker' ? config.AI.WORKERS : config.AI.MANAGER;
   const providerType = profile.PROVIDER as string;
+  const registry = providerRegistry();
 
-  if (!isValidProvider(providerType)) {
+  const registration = registry.get(providerType);
+  if (!registration) {
     logger.warn(`Unknown provider "${providerType}", falling back to mock`);
-    return PROVIDER_FACTORIES.mock.create(logger);
+    return registry.get('mock')!.create(logger);
   }
 
   const opts: AIProviderOptions = {
-    baseUrl: profile.BASE_URL,
+    baseUrl: resolveProviderBaseUrl(providerType, profile.BASE_URL),
     model: profile.MODEL,
     apiToken: profile.API_TOKEN,
     embeddingEnabled: config.AI.WORKERS.EMBEDDING_ENABLED,
@@ -111,14 +137,14 @@ export function createAIProvider(logger: ILogger, role: AIProviderRole = 'manage
   };
 
   logger.info(`Initializing AI provider: ${providerType} (${role})`);
-  return PROVIDER_FACTORIES[providerType].create(logger, opts);
+  return registration.create(logger, opts);
 }
 
 /**
- * Type guard to validate provider type
+ * Whether a provider name is known to the discovered registry.
  */
-function isValidProvider(provider: string): provider is ProviderType {
-  return provider in PROVIDER_FACTORIES;
+export function isValidProvider(provider: string): boolean {
+  return providerRegistry().has(provider);
 }
 
 /**
@@ -129,8 +155,65 @@ export function clearProviderCache(): void {
 }
 
 /**
+ * Reset the discovered provider registry (useful for testing).
+ */
+export function clearProviderRegistry(): void {
+  registryCache = null;
+}
+
+/**
  * Get list of supported provider types
  */
-export function getSupportedProviders(): readonly ProviderType[] {
-  return Object.keys(PROVIDER_FACTORIES) as ProviderType[];
+export function getSupportedProviders(): readonly string[] {
+  return [...providerRegistry().keys()];
+}
+
+/**
+ * The default base URL a provider ships with (undefined for providers that
+ * require an explicit `base_url`).
+ */
+export function getProviderDefaultBaseUrl(name: string): string | undefined {
+  return providerRegistry().get(name)?.defaultBaseUrl;
+}
+
+export function isOpenAICompatibleProvider(name: string): boolean {
+  return providerRegistry().get(name)?.isOpenAICompatible === true;
+}
+
+/**
+ * Resolve the base URL for a provider: an explicitly-configured value wins,
+ * otherwise fall back to the provider's shipped default.
+ */
+export function resolveProviderBaseUrl(name: string, configuredBaseUrl?: string): string {
+  return (configuredBaseUrl?.trim() || getProviderDefaultBaseUrl(name)) ?? '';
+}
+
+export interface ProviderCatalogEntry {
+  name: string;
+  label: string;
+  defaultBaseUrl?: string;
+  isOpenAICompatible: boolean;
+  embeddings: boolean;
+  recommendedModel?: string;
+  apiKeyUrl?: string;
+  docsUrl?: string;
+}
+
+/**
+ * The user-facing connector catalogue: every selectable provider (minus the
+ * internal `mock`) with its presentational metadata.
+ */
+export function getProviderCatalog(): ProviderCatalogEntry[] {
+  return [...providerRegistry().values()]
+    .filter((registration) => registration.name !== 'mock')
+    .map((registration) => ({
+      name: registration.name,
+      label: registration.label ?? registration.name,
+      defaultBaseUrl: registration.defaultBaseUrl,
+      isOpenAICompatible: registration.isOpenAICompatible === true,
+      embeddings: registration.embeddings === true,
+      recommendedModel: registration.recommendedModel,
+      apiKeyUrl: registration.apiKeyUrl,
+      docsUrl: registration.docsUrl,
+    }));
 }

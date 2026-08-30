@@ -50,14 +50,11 @@ export {
   _setTelegramWhitelistForTesting,
 };
 
-export function create(context: PluginContext, configOverride?: TelegramPluginConfig): Plugin | null {
+export function create(context: PluginContext, configOverride?: TelegramPluginConfig): Plugin {
   const cfg = configOverride ?? loadTelegramConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
 
-  if (!cfg.token) {
-    // `enabled` alone doesn't start the channel — `createTelegramAdapter`'s
+  if (context.pluginEnablement.isEnabled('telegram') && !cfg.token) {
+    // Enabled alone doesn't start the channel — `createTelegramAdapter`'s
     // `enabled()` also requires a non-empty token, so without this warning
     // this misconfiguration fails silently (registered, never started).
     context.logger.warn(
@@ -74,6 +71,6 @@ export function create(context: PluginContext, configOverride?: TelegramPluginCo
 
   return createTelegramPlugin({
     token: cfg.token,
-    enabled: true,
+    isEnabled: () => context.pluginEnablement.isEnabled('telegram'),
   });
 }

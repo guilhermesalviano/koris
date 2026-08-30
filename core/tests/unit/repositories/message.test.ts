@@ -109,6 +109,52 @@ describe('MessageRepository', () => {
     expect(params[4]).toBeNull();
   });
 
+  it('stores error_code on save and reads it back as errorCode', () => {
+    const db = makeDb([
+      {
+        id: 'm1',
+        session_id: 'sess-1',
+        role: 'assistant',
+        content: 'Rate limit exceeded',
+        error_code: 'rate_limited',
+        created_at: '2026-05-01T12:00:00.000Z',
+      },
+      {
+        id: 'm2',
+        session_id: 'sess-1',
+        role: 'assistant',
+        content: 'ok',
+        created_at: '2026-05-01T12:00:01.000Z',
+      },
+    ]);
+    const repository = makeRepository(db);
+
+    repository.save(new Message({
+      sessionId: 'sess-1',
+      role: 'assistant',
+      content: 'Rate limit exceeded',
+      errorCode: 'rate_limited',
+      id: 'm1',
+      createdAt: '2026-05-01T12:00:00.000Z',
+    }));
+    const [, params] = db.run.mock.calls[0];
+    expect(params[5]).toBe('rate_limited');
+
+    const [errored, normal] = repository.getBySessionId('sess-1', 2);
+    expect(errored.errorCode).toBe('rate_limited');
+    expect(normal.errorCode).toBeUndefined();
+  });
+
+  it('writes null error_code for a normal message', () => {
+    const db = makeDb([]);
+    const repository = makeRepository(db);
+
+    repository.save(new Message({ sessionId: 'sess-1', role: 'user', content: 'hi', id: 'm1', createdAt: '2026-05-01T12:00:00.000Z' }));
+
+    const [, params] = db.run.mock.calls[0];
+    expect(params[5]).toBeNull();
+  });
+
   it('resolves image ids back into image attachments when reading history', () => {
     const db = makeDb([
       {

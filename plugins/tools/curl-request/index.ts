@@ -1,7 +1,8 @@
 import { URL } from 'node:url';
 import { spawn } from 'node:child_process';
-import type { ILogger, Plugin, ToolDefinition, ToolPluginContext, ToolResult } from '../contracts';
+import type { ILogger, Plugin, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
+import { defineTool } from '../define-tool';
 import {
   execFilePromise,
   getOptionalBooleanArg,
@@ -13,7 +14,6 @@ import {
   isAllowedValue,
 } from '../runtime';
 import { toCurlCommand } from './curl-command';
-import { loadCurlRequestConfig } from './config';
 
 export const TOOL_NAME = 'curl_request' as const;
 
@@ -259,64 +259,36 @@ export async function executeCurl(
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH'] as const;
 
-const SCHEMA = {
-  description:
-    'Execute HTTP requests using curl. Use only parameters explicitly required by the selected skill. Do not invent extra shell transformations.',
-  parameters: {
-    type: 'object',
-    properties: {
-      url: {
-        type: 'string',
-        description: 'URL to request (required). Keep values exactly as required by the skill.',
-      },
-      method: {
-        type: 'string',
-        enum: HTTP_METHODS,
-        description: 'HTTP method (default: GET)',
-      },
-      headers: {
-        type: 'object',
-        description:
-          'Custom HTTP headers. Example: {"Authorization": "Bearer token", "Content-Type": "application/json"}',
-      },
-      data: {
-        type: ['string', 'object'],
-        description:
-          'Request body for POST/PUT/PATCH. Can be a JSON object (e.g. {"id": 1, "checked": 1}), a JSON string, or form data.',
-      },
-      follow_redirects: {
-        type: 'boolean',
-        description: 'Follow HTTP redirects (default: true)',
-      },
-      timeout: {
-        type: 'number',
-        description: 'Request timeout in seconds (default: 30)',
-      },
-      pipe: {
-        type: 'string',
-        description:
-          'Optional: pipe the response through a command. Examples: "| jq \'.fact\'", "| grep search_term", "| head -5". Useful for extracting specific data from JSON or text responses.',
-      },
-    },
-    required: ['url'],
-  },
-};
-
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadCurlRequestConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'curl-request',
     setup(registry) {
-      const definition: ToolDefinition = {
+      const definition = defineTool({
         name: TOOL_NAME,
-        schema: SCHEMA,
+        description:
+          'Execute HTTP requests using curl. Use only parameters explicitly required by the selected skill. Do not invent extra shell transformations.',
+        parameters: {
+          url: { type: 'string', required: true, description: 'URL to request. Keep values exactly as required by the skill.' },
+          method: { type: 'string', enum: HTTP_METHODS, description: 'HTTP method (default: GET)' },
+          headers: {
+            type: 'object',
+            description: 'Custom HTTP headers. Example: {"Authorization": "Bearer token", "Content-Type": "application/json"}',
+          },
+          data: {
+            type: ['string', 'object'],
+            description: 'Request body for POST/PUT/PATCH. Can be a JSON object (e.g. {"id": 1, "checked": 1}), a JSON string, or form data.',
+          },
+          follow_redirects: { type: 'boolean', description: 'Follow HTTP redirects (default: true)' },
+          timeout: { type: 'number', description: 'Request timeout in seconds (default: 30)' },
+          pipe: {
+            type: 'string',
+            description:
+              'Optional: pipe the response through a command. Examples: "| jq \'.fact\'", "| grep search_term", "| head -5". Useful for extracting specific data from JSON or text responses.',
+          },
+        },
         handler: (logger, args) => executeCurl(logger, args, context.security.gateUrl),
-        enabled: (opts) => opts.trusted,
-      };
+        enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('curl-request'),
+      });
       registry.extend(COMMANDS, definition);
     },
   };

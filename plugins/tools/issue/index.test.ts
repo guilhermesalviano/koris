@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { executeIssue } from './index';
+import { executeIssue, create } from './index';
+import type { ToolDefinition, ToolPluginContext } from '../contracts';
+import type { PluginRegistry } from '../../registry';
 
 const mockLogger = {
   info: vi.fn(),
@@ -178,5 +180,30 @@ describe('issue tool (orchestrator)', () => {
       success: false,
       error: 'network down',
     });
+  });
+});
+
+describe('create', () => {
+  function register(isEnabled: () => boolean): ToolDefinition {
+    const context = {
+      config: { githubOwner: '', githubToken: '' },
+      pluginEnablement: { isEnabled },
+    } as unknown as ToolPluginContext;
+    let registered: ToolDefinition | undefined;
+    const fakeRegistry = {
+      extend: vi.fn((_point, value: ToolDefinition) => { registered = value; }),
+    } as unknown as PluginRegistry;
+    create(context).setup(fakeRegistry);
+    return registered!;
+  }
+
+  it('is enabled when trusted and the plugin is enabled', () => {
+    const definition = register(() => true);
+    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(true);
+  });
+
+  it('is disabled when the plugin is administratively disabled, even when trusted', () => {
+    const definition = register(() => false);
+    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(false);
   });
 });

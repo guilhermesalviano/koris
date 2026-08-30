@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSettingsForm, type SettingsFormApi } from '../../lib/use-settings-form';
 import { ProviderStep } from './steps/ProviderStep';
 import { ChannelsStep } from './steps/ChannelsStep';
+import { PluginsStep } from './steps/PluginsStep';
 import { SearchStep } from './steps/SearchStep';
 import { DomainsStep } from './steps/DomainsStep';
 import { PersonalInfoStep } from './steps/PersonalInfoStep';
@@ -11,6 +12,7 @@ import { ReviewStep } from './steps/ReviewStep';
 const STEPS: { title: string; render: ComponentType<{ api: SettingsFormApi }> }[] = [
   { title: 'AI provider', render: ProviderStep },
   { title: 'Channels', render: ChannelsStep },
+  { title: 'Plugins', render: PluginsStep },
   { title: 'Web search', render: SearchStep },
   { title: 'Allowed domains', render: DomainsStep },
   { title: 'Personal info', render: PersonalInfoStep },

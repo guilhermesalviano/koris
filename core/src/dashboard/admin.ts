@@ -10,7 +10,9 @@ import {
   checkAiProviderConnectivity,
 } from '../config/validators';
 import { loadCurrentOrExampleSettings, mergeSettingsPayload, writeSettingsFile } from '../config/settings-writer';
-import { getSupportedProviders, clearProviderCache } from '../services/providers';
+import { addAllowedDomain } from '../services/security/allowed-domains';
+import { findGateBlocks } from '../services/security/gate-blocks';
+import { getSupportedProviders, getProviderCatalog, getProviderDefaultBaseUrl, clearProviderCache } from '../services/providers';
 import {
   startWhatsAppLive,
   startTelegramLive,
@@ -47,6 +49,9 @@ import { OutboundMessageRepositoryFactory } from '../repositories/outbound-messa
 import { ChannelsSingleton } from '../channels';
 import { OutboundMessageServiceFactory } from '../services/outbound/outbound-message-service';
 import { IMessageGateway } from '../services/agents/message-gateway';
+import { PluginSettingsRepositoryFactory, type IPluginSettingsRepository } from '../repositories/plugin-settings';
+import { resolvePluginEnabled } from '../services/plugins/plugin-enablement';
+import { PluginCatalogSingleton } from '../services/plugins/plugin-catalog-singleton';
 
 const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN', 'SERPAPI_KEY', 'SEARCH_API_KEY']);
 
@@ -79,14 +84,18 @@ function maskSecret(value: string): string {
  * telegram/whatsapp from each plugin's own config.yml — so the API contract
  * (and thus the web Settings UI) doesn't need to change.
  */
-function buildChannelsSnapshot() {
+function buildChannelsSnapshot(pluginSettingsRepo: IPluginSettingsRepository) {
   const telegram = loadTelegramConfig();
   const whatsapp = loadWhatsAppConfig();
   return {
     ALLOW_UNTRUSTED: config.CHANNELS.ALLOW_UNTRUSTED,
-    TELEGRAM: { ENABLED: telegram.enabled, BOT_TOKEN: telegram.token, WHITELIST: telegram.whitelist },
+    TELEGRAM: {
+      ENABLED: resolvePluginEnabled(pluginSettingsRepo, 'channels', 'telegram'),
+      BOT_TOKEN: telegram.token,
+      WHITELIST: telegram.whitelist,
+    },
     WHATSAPP: {
-      ENABLED: whatsapp.enabled,
+      ENABLED: resolvePluginEnabled(pluginSettingsRepo, 'channels', 'whatsapp'),
       AUTH_FOLDER: whatsapp.authFolder,
       WHITELIST: whatsapp.whitelist,
       MENTION_ID: whatsapp.mentionId,
@@ -94,8 +103,8 @@ function buildChannelsSnapshot() {
   };
 }
 
-function buildSettingsResponse(): Record<string, unknown> {
-  return { ...config, CHANNELS: buildChannelsSnapshot() };
+function buildSettingsResponse(pluginSettingsRepo: IPluginSettingsRepository): Record<string, unknown> {
+  return { ...config, CHANNELS: buildChannelsSnapshot(pluginSettingsRepo) };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -104,7 +113,10 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function collectSettingsPayloadErrors(payload: Record<string, unknown>): string[] {
+function collectSettingsPayloadErrors(
+  payload: Record<string, unknown>,
+  pluginSettingsRepo: IPluginSettingsRepository,
+): string[] {
   const errors: string[] = [];
 
   if ('web_port' in payload) {
@@ -143,10 +155,10 @@ function collectSettingsPayloadErrors(payload: Record<string, unknown>): string[
   }
 
   const telegram = asRecord(asRecord(payload.channels)?.telegram);
-  if (telegram?.enabled === true) {
+  if (telegram && 'bot_token' in telegram && resolvePluginEnabled(pluginSettingsRepo, 'channels', 'telegram')) {
     const token = typeof telegram.bot_token === 'string' ? telegram.bot_token.trim() : '';
     if (!token) {
-      errors.push('channels.telegram.bot_token is required when channels.telegram.enabled is true.');
+      errors.push('channels.telegram.bot_token cannot be blanked out while Telegram is enabled. Disable it first from the Plugins panel.');
     }
   }
 
@@ -210,6 +222,7 @@ class AdminRouterFactory {
     const learnedSkillsRepo = LearnedSkillsRepositoryFactory.create(db);
     const skillsRepo = SkillsRepositoryFactory.create(logger);
     const auditRepo = AuditLogRepositoryFactory.create(db);
+    const pluginSettingsRepo = PluginSettingsRepositoryFactory.create(db);
 
     router.get('/overview', async (_req: Request, res: Response) => {
       const health = await healthCheck(logger);
@@ -227,7 +240,7 @@ class AdminRouterFactory {
         principal: channel.isPrincipal,
       }));
 
-      const channelsSnapshot = buildChannelsSnapshot();
+      const channelsSnapshot = buildChannelsSnapshot(pluginSettingsRepo);
       const enabledChannels: { type: ChannelType; enabled: boolean }[] = [
         { type: 'telegram', enabled: channelsSnapshot.TELEGRAM.ENABLED },
         { type: 'whatsapp', enabled: channelsSnapshot.WHATSAPP.ENABLED },
@@ -333,6 +346,7 @@ class AdminRouterFactory {
           content: m.content,
           images: m.images,
           missingImages: m.missingImages,
+          errorCode: m.errorCode,
           createdAt: m.createdAt,
         })),
         memories: memories.map((m) => ({
@@ -470,6 +484,7 @@ class AdminRouterFactory {
           content: m.content,
           images: m.images,
           missingImages: m.missingImages,
+          errorCode: m.errorCode,
           createdAt: m.createdAt,
         })),
       });
@@ -701,8 +716,52 @@ class AdminRouterFactory {
       res.json({ success: true });
     });
 
+    router.get('/plugins', (_req: Request, res: Response) => {
+      const items = PluginCatalogSingleton.getExistingInstance().map(({ family, name }) => ({
+        family,
+        name,
+        enabled: resolvePluginEnabled(pluginSettingsRepo, family, name),
+      }));
+
+      res.json({ items });
+    });
+
+    router.patch('/plugins/:family/:name', (req: Request, res: Response) => {
+      const family = req.params.family;
+      if (family !== 'tools' && family !== 'channels') {
+        res.status(400).json({ error: "family must be 'tools' or 'channels'." });
+        return;
+      }
+
+      const enabled = req.body?.enabled;
+      if (typeof enabled !== 'boolean') {
+        res.status(400).json({ error: 'enabled must be a boolean' });
+        return;
+      }
+
+      const name = String(req.params.name);
+      const catalog = PluginCatalogSingleton.getExistingInstance();
+      if (!catalog.some((p) => p.family === family && p.name === name)) {
+        res.status(404).json({ error: 'Plugin not found' });
+        return;
+      }
+
+      pluginSettingsRepo.setEnabled(family, name, enabled);
+
+      if (family === 'channels') {
+        if (enabled) {
+          if (name === 'telegram') startTelegramLive(logger, gateway);
+          if (name === 'whatsapp') startWhatsAppLive(logger, gateway);
+        } else {
+          ChannelsSingleton.getExistingInstance()?.stopChannel(name);
+        }
+      }
+
+      res.json({ success: true, item: { family, name, enabled } });
+    });
+
     router.get('/settings', (_req: Request, res: Response) => {
-      res.json(maskDeep(buildSettingsResponse()));
+      res.json(maskDeep(buildSettingsResponse(pluginSettingsRepo)));
     });
 
     router.get('/settings/status', (_req: Request, res: Response) => {
@@ -716,6 +775,27 @@ class AdminRouterFactory {
       res.json({ providers, channels: CHANNEL_TYPES });
     });
 
+    router.get('/connectors', (_req: Request, res: Response) => {
+      const activeProfile = (profile: typeof config.AI.MANAGER) => ({
+        provider: profile.PROVIDER,
+        model: profile.MODEL,
+        baseUrl: profile.BASE_URL,
+        hasToken: !!profile.API_TOKEN?.trim(),
+      });
+      const configured = new Set([config.AI.MANAGER.PROVIDER, config.AI.WORKERS.PROVIDER]);
+      const connectors = getProviderCatalog().map((entry) => ({
+        ...entry,
+        configured: configured.has(entry.name),
+      }));
+      res.json({
+        connectors,
+        active: {
+          manager: activeProfile(config.AI.MANAGER),
+          workers: activeProfile(config.AI.WORKERS),
+        },
+      });
+    });
+
     router.post('/settings', (req: Request, res: Response) => {
       const patch = req.body;
       if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
@@ -723,7 +803,7 @@ class AdminRouterFactory {
         return;
       }
 
-      const errors = collectSettingsPayloadErrors(patch as Record<string, unknown>);
+      const errors = collectSettingsPayloadErrors(patch as Record<string, unknown>, pluginSettingsRepo);
       if (errors.length > 0) {
         res.status(400).json({ error: 'Invalid settings.', details: errors });
         return;
@@ -741,37 +821,55 @@ class AdminRouterFactory {
       const merged = mergeSettingsPayload(current, corePatch);
       const writtenPath = writeSettingsFile(merged);
 
+      // `enabled` is DB-backed now (see PATCH /plugins/:family/:name) — strip it
+      // defensively so a stale cached frontend can't write it back into config.yml.
       const telegramPatchRecord = asRecord(telegramPatch);
       if (telegramPatchRecord) {
-        writeTelegramConfigPatch(telegramPatchRecord);
+        const { enabled: _enabled, ...rest } = telegramPatchRecord;
+        writeTelegramConfigPatch(rest);
       }
 
       const whatsappPatchRecord = asRecord(whatsappPatch);
       if (whatsappPatchRecord) {
-        writeWhatsAppConfigPatch(whatsappPatchRecord);
+        const { enabled: _enabled, ...rest } = whatsappPatchRecord;
+        writeWhatsAppConfigPatch(rest);
       }
 
       reloadConfig();
       clearProviderCache();
 
-      const telegramConfig = loadTelegramConfig();
-      if (telegramConfig.enabled && telegramPatchRecord?.enabled === true) {
-        startTelegramLive(logger, gateway);
-      }
-
-      const whatsappConfig = loadWhatsAppConfig();
-      if (whatsappConfig.enabled && whatsappPatchRecord?.enabled === true) {
-        startWhatsAppLive(logger, gateway);
-      }
-
       logger.info(`Settings saved to ${writtenPath}`);
-      res.json({ success: true, settings: maskDeep(buildSettingsResponse()) });
+      res.json({ success: true, settings: maskDeep(buildSettingsResponse(pluginSettingsRepo)) });
+    });
+
+    router.get('/allowed-domains', (_req: Request, res: Response) => {
+      res.json({ allowedDomains: config.ALLOWED_DOMAINS });
+    });
+
+    router.post('/allowed-domains', (req: Request, res: Response) => {
+      const raw = typeof req.body?.domain === 'string' ? req.body.domain : '';
+      const result = addAllowedDomain(raw);
+      if (!result.ok) {
+        res.status(400).json({ error: result.error });
+        return;
+      }
+      if (result.added) {
+        logger.info(`allowed_domains: added "${result.hostname}"`);
+      }
+      res.json({ ok: true, added: result.added, allowedDomains: result.allowedDomains });
+    });
+
+    router.get('/chat/gate-blocks', (req: Request, res: Response) => {
+      const sessionId = typeof req.query.sessionId === 'string' ? req.query.sessionId : '';
+      const blocks = findGateBlocks(auditRepo, { sessionId, allowed: config.ALLOWED_DOMAINS });
+      res.json({ blocks });
     });
 
     router.post('/ai/test-connection', async (req: Request, res: Response) => {
       const { provider, base_url: baseUrl, api_token: apiToken } = (req.body ?? {}) as Record<string, unknown>;
 
-      if (typeof provider !== 'string' || typeof baseUrl !== 'string' || !baseUrl) {
+      const baseUrlStr = typeof baseUrl === 'string' ? baseUrl : '';
+      if (typeof provider !== 'string' || (!baseUrlStr && !getProviderDefaultBaseUrl(provider))) {
         res.status(400).json({ error: 'provider and base_url are required.' });
         return;
       }
@@ -779,7 +877,7 @@ class AdminRouterFactory {
       const result = await checkAiProviderConnectivity({
         label: 'test',
         provider,
-        baseUrl,
+        baseUrl: baseUrlStr,
         apiToken: typeof apiToken === 'string' ? apiToken : '',
       });
 

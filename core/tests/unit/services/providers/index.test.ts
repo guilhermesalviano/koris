@@ -1,6 +1,16 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { config } from '../../../../src/config';
-import { getAIProvider, clearProviderCache } from '../../../../src/services/providers';
+import {
+  getAIProvider,
+  createAIProvider,
+  clearProviderCache,
+  clearProviderRegistry,
+  getSupportedProviders,
+  getProviderDefaultBaseUrl,
+  getProviderCatalog,
+  isOpenAICompatibleProvider,
+  resolveProviderBaseUrl,
+} from '../../../../src/services/providers';
 import { SerialAIProvider } from '../../../../src/services/providers/serial-provider';
 import type { ILogger } from '../../../../src/infrastructure/logger';
 
@@ -61,5 +71,80 @@ describe('getAIProvider', () => {
     expect(interactive).toBeInstanceOf(SerialAIProvider);
     expect(background).toBeInstanceOf(SerialAIProvider);
     expect(interactive).not.toBe(background);
+  });
+});
+
+describe('provider registry', () => {
+  function withManagerProvider(value: string, run: () => void): void {
+    const original = Object.getOwnPropertyDescriptor(config.AI.MANAGER, 'PROVIDER');
+    Object.defineProperty(config.AI.MANAGER, 'PROVIDER', { value, configurable: true, writable: true });
+    try {
+      run();
+    } finally {
+      if (original) Object.defineProperty(config.AI.MANAGER, 'PROVIDER', original);
+      clearProviderCache();
+      clearProviderRegistry();
+    }
+  }
+
+  afterEach(() => {
+    clearProviderCache();
+    clearProviderRegistry();
+  });
+
+  it('discovers ollama, mock and every openai-compatible preset', () => {
+    const supported = getSupportedProviders();
+    for (const name of [
+      'ollama', 'mock', 'openai', 'deepseek', 'groq', 'openrouter',
+      'xai', 'mistral', 'together', 'gemini', 'nvidia',
+    ]) {
+      expect(supported).toContain(name);
+    }
+  });
+
+  it('exposes shipped default base URLs and openai-compatibility', () => {
+    expect(getProviderDefaultBaseUrl('ollama')).toBe('http://localhost:11434');
+    expect(getProviderDefaultBaseUrl('deepseek')).toBe('https://api.deepseek.com/v1');
+    expect(getProviderDefaultBaseUrl('unknown-provider')).toBeUndefined();
+    expect(isOpenAICompatibleProvider('deepseek')).toBe(true);
+    expect(isOpenAICompatibleProvider('ollama')).toBe(false);
+  });
+
+  it('resolves a configured base URL over the shipped default', () => {
+    expect(resolveProviderBaseUrl('deepseek', ' https://proxy.local/v1 ')).toBe('https://proxy.local/v1');
+    expect(resolveProviderBaseUrl('deepseek', '')).toBe('https://api.deepseek.com/v1');
+    expect(resolveProviderBaseUrl('deepseek', undefined)).toBe('https://api.deepseek.com/v1');
+  });
+
+  it('builds the selected preset provider with its base URL', () => {
+    withManagerProvider('deepseek', () => {
+      const provider = createAIProvider(logger, 'manager');
+      expect(provider.name).toBe('deepseek');
+    });
+  });
+
+  it('falls back to mock for an unknown provider', () => {
+    withManagerProvider('does-not-exist', () => {
+      const provider = createAIProvider(logger, 'manager');
+      expect(provider.name).toBe('mock');
+    });
+  });
+
+  it('exposes a connector catalogue with presentational metadata, excluding mock', () => {
+    const catalog = getProviderCatalog();
+    expect(catalog.map((c) => c.name)).not.toContain('mock');
+
+    const openrouter = catalog.find((c) => c.name === 'openrouter');
+    expect(openrouter).toMatchObject({
+      label: 'OpenRouter',
+      defaultBaseUrl: 'https://openrouter.ai/api/v1',
+      apiKeyUrl: 'https://openrouter.ai/keys',
+      isOpenAICompatible: true,
+      embeddings: false,
+    });
+
+    const ollama = catalog.find((c) => c.name === 'ollama');
+    expect(ollama).toMatchObject({ label: 'Ollama (local)', embeddings: true });
+    expect(ollama?.apiKeyUrl).toBeUndefined();
   });
 });

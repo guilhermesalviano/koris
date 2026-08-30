@@ -64,6 +64,22 @@ export function SkillsIcon({ className }: IconProps) {
   );
 }
 
+export function PluginsIcon({ className }: IconProps) {
+  return (
+    <svg className={className} style={svgStyle(1.7)} viewBox="0 0 24 24">
+      <path d="M9 2v4M15 2v4M7 6h10l-1 6H8L7 6zM6 12h12v3a6 6 0 0 1-12 0v-3zM12 21v-3" />
+    </svg>
+  );
+}
+
+export function ConnectorsIcon({ className }: IconProps) {
+  return (
+    <svg className={className} style={svgStyle(1.7)} viewBox="0 0 24 24">
+      <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5" />
+    </svg>
+  );
+}
+
 export function AuditIcon({ className }: IconProps) {
   return (
     <svg className={className} style={svgStyle(1.7)} viewBox="0 0 24 24">
@@ -144,6 +160,14 @@ export function SendIcon({ className }: IconProps) {
   );
 }
 
+export function StopIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24">
+      <rect x="6" y="6" width="12" height="12" rx="2.5" />
+    </svg>
+  );
+}
+
 export function ChevronLeftIcon({ className }: IconProps) {
   return (
     <svg className={className} style={svgStyle(2)} viewBox="0 0 24 24">
@@ -156,6 +180,23 @@ export function ChevronRightIcon({ className }: IconProps) {
   return (
     <svg className={className} style={svgStyle(2)} viewBox="0 0 24 24">
       <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
+export function ChevronDownIcon({ className }: IconProps) {
+  return (
+    <svg className={className} style={svgStyle(2)} viewBox="0 0 24 24">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+export function RetryIcon({ className }: IconProps) {
+  return (
+    <svg className={className} style={svgStyle(1.9)} viewBox="0 0 24 24">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5" />
     </svg>
   );
 }

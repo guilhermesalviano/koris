@@ -56,6 +56,7 @@ export interface MessageItem {
   content: string;
   images?: ImageAttachment[];
   missingImages?: number;
+  errorCode?: string;
   createdAt: string;
 }
 
@@ -138,12 +139,64 @@ export interface SkillsResponse {
   limit: number;
 }
 
+export interface PluginItem {
+  family: 'tools' | 'channels';
+  name: string;
+  enabled: boolean;
+}
+
+export interface PluginsResponse {
+  items: PluginItem[];
+}
+
+export interface ConnectorCatalogEntry {
+  name: string;
+  label: string;
+  defaultBaseUrl?: string;
+  isOpenAICompatible: boolean;
+  embeddings: boolean;
+  recommendedModel?: string;
+  apiKeyUrl?: string;
+  docsUrl?: string;
+  configured: boolean;
+}
+
+export interface ActiveConnector {
+  provider: string;
+  model: string;
+  baseUrl: string;
+  hasToken: boolean;
+}
+
+export type ConnectorRole = 'manager' | 'workers';
+
+export interface ConnectorsResponse {
+  connectors: ConnectorCatalogEntry[];
+  active: Record<ConnectorRole, ActiveConnector>;
+}
+
 export interface ActiveRun {
   id: string;
   sessionId: string;
   question: string;
   startedAt: string;
   channel: string;
+}
+
+export interface GateBlock {
+  domain: string;
+  toolName: string | null;
+  at: string;
+}
+
+export interface GateBlocksResponse {
+  blocks: GateBlock[];
+}
+
+export interface AllowedDomainsResponse {
+  ok?: boolean;
+  added?: boolean;
+  allowedDomains: string[];
 }
 
 export interface ActiveRunsResponse {
@@ -217,12 +270,4 @@ export interface UsageStats {
   outputTokens: number;
   totalTokens: number;
   durationMs: number;
-}
-
-export interface UsageReport {
-  days: number | null;
-  total: UsageStats;
-  byAgent: Record<string, UsageStats>;
-  byChannel: Record<string, UsageStats>;
-  byTool: Record<string, UsageStats>;
 }

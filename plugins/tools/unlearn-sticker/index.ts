@@ -1,7 +1,7 @@
-import type { ILogger, IStickerRulesGateway, Plugin, ToolDefinition, ToolExecutionContext, ToolPluginContext, ToolResult } from '../contracts';
+import type { ILogger, IStickerRulesGateway, Plugin, ToolExecutionContext, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
+import { defineTool } from '../define-tool';
 import { getRequiredStringArg } from '../runtime';
-import { loadUnlearnStickerConfig } from './config';
 
 export const TOOL_NAME = 'unlearn_sticker' as const;
 
@@ -49,36 +49,20 @@ export async function unlearnSticker(
   }
 }
 
-const SCHEMA = {
-  description:
-    'Forget a previously learned sticker so it stops being suggested or sent. Call this when the user asks to remove, forget, or stop using a sticker rule, or says a learned sticker no longer fits. Use the id from the "Learned Stickers" list — do not invent one.',
-  parameters: {
-    type: 'object',
-    properties: {
-      id: {
-        type: 'string',
-        description: 'The id of the learned sticker to forget, from the "Learned Stickers" list (required).',
-      },
-    },
-    required: ['id'],
-  },
-};
-
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadUnlearnStickerConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'unlearn-sticker',
     setup(registry) {
-      const definition: ToolDefinition = {
+      const definition = defineTool({
         name: TOOL_NAME,
-        schema: SCHEMA,
+        description:
+          'Forget a previously learned sticker so it stops being suggested or sent. Call this when the user asks to remove, forget, or stop using a sticker rule, or says a learned sticker no longer fits. Use the id from the "Learned Stickers" list — do not invent one.',
+        parameters: {
+          id: { type: 'string', required: true, description: 'The id of the learned sticker to forget, from the "Learned Stickers" list.' },
+        },
         handler: (logger, args, execContext) => unlearnSticker(logger, args, execContext, context.stickerRules),
-        enabled: (opts) => opts.trusted && opts.stickersEnabled,
-      };
+        enabled: (opts) => opts.trusted && opts.stickersEnabled && context.pluginEnablement.isEnabled('unlearn-sticker'),
+      });
       registry.extend(COMMANDS, definition);
     },
   };

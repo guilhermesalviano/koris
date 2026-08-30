@@ -60,8 +60,10 @@ import {
   shellWords,
   buildCurlArgs,
   executeCurl,
+  create,
 } from './index';
-import type { ILogger } from '../contracts';
+import type { ILogger, ToolDefinition, ToolPluginContext } from '../contracts';
+import type { PluginRegistry } from '../../registry';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -972,5 +974,33 @@ describe('executeCurl — URL normalization from shell command', () => {
   it('handles combined flags and method before URL without misidentification', async () => {
     await execute({ url: 'curl -s -X POST https://api.example.com/items' });
     expect(capturedUrl()).toBe('https://api.example.com/items');
+  });
+});
+
+describe('create', () => {
+  function fakeContext(isEnabled: () => boolean): ToolPluginContext {
+    return {
+      security: { gateUrl: fakeGateUrl },
+      pluginEnablement: { isEnabled },
+    } as unknown as ToolPluginContext;
+  }
+
+  function register(context: ToolPluginContext): ToolDefinition {
+    let registered: ToolDefinition | undefined;
+    const fakeRegistry = {
+      extend: vi.fn((_point, value: ToolDefinition) => { registered = value; }),
+    } as unknown as PluginRegistry;
+    create(context).setup(fakeRegistry);
+    return registered!;
+  }
+
+  it('is enabled when trusted and the plugin is enabled', () => {
+    const definition = register(fakeContext(() => true));
+    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(true);
+  });
+
+  it('is disabled when the plugin is administratively disabled, even when trusted', () => {
+    const definition = register(fakeContext(() => false));
+    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(false);
   });
 });

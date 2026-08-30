@@ -1,7 +1,7 @@
-import type { ILogger, IHeartbeatGateway, Plugin, ToolDefinition, ToolPluginContext, ToolResult } from '../contracts';
+import type { ILogger, IHeartbeatGateway, Plugin, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
+import { defineTool } from '../define-tool';
 import { getRequiredStringArg } from '../runtime';
-import { loadDeleteBeatConfig } from './config';
 
 export const TOOL_NAME = 'delete_beat' as const;
 
@@ -38,35 +38,19 @@ export async function deleteBeat(
   }
 }
 
-const SCHEMA = {
-  description: 'Delete a beat by ID. Call this when the user wants to remove or cancel a beat. Use list_beats first if the ID is not known.',
-  parameters: {
-    type: 'object',
-    properties: {
-      id: {
-        type: 'string',
-        description: 'The UUID of the beat to delete.',
-      },
-    },
-    required: ['id'],
-  },
-};
-
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadDeleteBeatConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'delete-beat',
     setup(registry) {
-      const definition: ToolDefinition = {
+      const definition = defineTool({
         name: TOOL_NAME,
-        schema: SCHEMA,
+        description: 'Delete a beat by ID. Call this when the user wants to remove or cancel a beat. Use list_beats first if the ID is not known.',
+        parameters: {
+          id: { type: 'string', required: true, description: 'The UUID of the beat to delete.' },
+        },
         handler: (logger, args) => deleteBeat(logger, args, context.heartbeats),
-        enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat',
-      };
+        enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat' && context.pluginEnablement.isEnabled('delete-beat'),
+      });
       registry.extend(COMMANDS, definition);
     },
   };

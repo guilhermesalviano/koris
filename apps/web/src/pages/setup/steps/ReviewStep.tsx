@@ -12,8 +12,8 @@ export function ReviewStep({ api }: { api: SettingsFormApi }) {
         <div className={rowClass}><span className="text-txt-3">Manager provider</span><span className="font-mono">{form.manager.provider} · {form.manager.model || '—'}</span></div>
         <div className={rowClass}><span className="text-txt-3">Worker provider</span><span className="font-mono">{workers.provider} · {workers.model || '—'}</span></div>
         <div className={rowClass}><span className="text-txt-3">Web search</span><span>{form.search_api_key ? 'key provided' : 'not set'}</span></div>
-        <div className={rowClass}><span className="text-txt-3">Telegram</span><span>{form.telegram.enabled ? 'enabled' : 'disabled'}</span></div>
-        <div className={rowClass}><span className="text-txt-3">WhatsApp</span><span>{form.whatsapp.enabled ? 'enabled' : 'disabled'}</span></div>
+        <div className={rowClass}><span className="text-txt-3">Telegram</span><span>{api.original?.CHANNELS?.TELEGRAM?.ENABLED ? 'enabled' : 'disabled'}</span></div>
+        <div className={rowClass}><span className="text-txt-3">WhatsApp</span><span>{api.original?.CHANNELS?.WHATSAPP?.ENABLED ? 'enabled' : 'disabled'}</span></div>
         <div className={rowClass}><span className="text-txt-3">Allowed domains</span><span>{form.allowed_domains.length || 'none'}</span></div>
         <div className={rowClass}><span className="text-txt-3">Personal info fields</span><span>{Object.keys(form.personal_information).length || 'none'}</span></div>
       </div>

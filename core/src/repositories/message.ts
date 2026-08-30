@@ -25,14 +25,15 @@ class MessageRepository implements IMessageRepository {
     }) ?? [];
 
     this.db.run(
-      `INSERT INTO messages (id, session_id, role, content, image_ids, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO messages (id, session_id, role, content, image_ids, error_code, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         message.id,
         message.sessionId,
         message.role,
         message.content,
         imageIds.length ? JSON.stringify(imageIds) : null,
+        message.errorCode ?? null,
         message.createdAt
       ]
     );
@@ -44,8 +45,8 @@ class MessageRepository implements IMessageRepository {
 
   getBySessionId(sessionId: string, limit = 15): Message[] {
     const rows = this.db.query<any>(
-      `SELECT id, session_id, role, content, image_ids, created_at FROM (
-         SELECT id, session_id, role, content, image_ids, created_at FROM messages
+      `SELECT id, session_id, role, content, image_ids, error_code, created_at FROM (
+         SELECT id, session_id, role, content, image_ids, error_code, created_at FROM messages
          WHERE session_id = ?
          ORDER BY created_at DESC
          LIMIT ?
@@ -66,6 +67,7 @@ class MessageRepository implements IMessageRepository {
         content: row.content,
         images: images.length ? images : undefined,
         missingImages: missingImages > 0 ? missingImages : undefined,
+        errorCode: row.error_code ?? undefined,
         createdAt: row.created_at
       });
     });

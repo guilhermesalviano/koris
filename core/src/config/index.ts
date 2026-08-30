@@ -118,13 +118,13 @@ function buildConfig(): AppConfig {
     BACKGROUND_GRACE_MS: Number(get('ai.background_grace_ms', '5000')),
     MANAGER: {
       PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.manager.provider', 'ollama'),
-      BASE_URL: get('ai.manager.base_url', 'http://localhost:11434'),
+      BASE_URL: get('ai.manager.base_url', ''),
       API_TOKEN: get('ai.manager.api_token', ''),
       MODEL:   get('ai.manager.model', 'gemma4:e2b'),
     },
     WORKERS: {
       PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.workers.provider', 'ollama'),
-      BASE_URL: get('ai.workers.base_url', 'http://localhost:11434'),
+      BASE_URL: get('ai.workers.base_url', ''),
       API_TOKEN: get('ai.workers.api_token', ''),
       MODEL:   get('ai.workers.model', 'qwen:3.5:2b'),
       EMBEDDING_ENABLED: get('ai.workers.embedding', 'false') === 'true',

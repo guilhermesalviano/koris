@@ -85,6 +85,15 @@ describe('BackgroundDispatcher', () => {
     expect(summarizerWorker.handler).not.toHaveBeenCalled();
   });
 
+  it('does not summarize a failed provider turn', () => {
+    applyTestConfigDefaults({ summarizerMode: 'auto' });
+    const { dispatcher, summarizerWorker } = makeDispatcher();
+
+    dispatcher.summarizeConversation({ ...persistProps, answerErrorCode: 'unavailable', memoryService: { upsert: vi.fn() } as never });
+
+    expect(summarizerWorker.handler).not.toHaveBeenCalled();
+  });
+
   it('does not summarize when the agent response is empty', () => {
     applyTestConfigDefaults({ summarizerMode: 'auto' });
     const { dispatcher, summarizerWorker } = makeDispatcher();

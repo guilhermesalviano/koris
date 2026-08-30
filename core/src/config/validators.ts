@@ -1,4 +1,4 @@
-import { getSupportedProviders } from '../services/providers';
+import { getSupportedProviders, resolveProviderBaseUrl } from '../services/providers';
 
 export const VALID_LOG_LEVELS = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'] as const;
 export type LogLevel = (typeof VALID_LOG_LEVELS)[number];
@@ -70,11 +70,16 @@ export async function checkAiProviderConnectivity(
     return { ok: true, skipped: true };
   }
 
+  const baseUrl = resolveProviderBaseUrl(profile.provider, profile.baseUrl).replace(/\/+$/, '');
+  if (!baseUrl) {
+    return { ok: false, error: `no base URL configured for provider "${profile.provider}"` };
+  }
+
   const healthUrl = profile.provider === 'ollama'
-    ? `${profile.baseUrl.replace(/\/+$/, '')}/api/version`
-    : `${profile.baseUrl.replace(/\/+$/, '')}/models`;
+    ? `${baseUrl}/api/version`
+    : `${baseUrl}/models`;
   const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (profile.provider === 'nvidia' && profile.apiToken) headers['Authorization'] = `Bearer ${profile.apiToken}`;
+  if (profile.provider !== 'ollama' && profile.apiToken) headers['Authorization'] = `Bearer ${profile.apiToken}`;
 
   const result = await httpGet(healthUrl, timeoutMs, headers);
 

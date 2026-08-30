@@ -6,8 +6,9 @@ vi.mock('../../../scripts/scaffold-tool', () => ({
   scaffoldToolPlugin: mockScaffold,
 }));
 
-import { executeCreateTool } from './index';
-import type { ILogger } from '../contracts';
+import { executeCreateTool, create } from './index';
+import type { ILogger, ToolDefinition, ToolPluginContext } from '../contracts';
+import type { PluginRegistry } from '../../registry';
 
 const logger: ILogger = { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
 
@@ -89,5 +90,27 @@ describe('create_tool', () => {
     await executeCreateTool(logger, { name: 'x', description: 'x' });
 
     expect(mockScaffold).toHaveBeenCalledWith({ name: 'x', description: 'x', parameters: [] });
+  });
+});
+
+describe('create', () => {
+  function register(isEnabled: () => boolean): ToolDefinition {
+    const context = { pluginEnablement: { isEnabled } } as unknown as ToolPluginContext;
+    let registered: ToolDefinition | undefined;
+    const fakeRegistry = {
+      extend: vi.fn((_point, value: ToolDefinition) => { registered = value; }),
+    } as unknown as PluginRegistry;
+    create(context).setup(fakeRegistry);
+    return registered!;
+  }
+
+  it('is enabled when trusted and the plugin is enabled', () => {
+    const definition = register(() => true);
+    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(true);
+  });
+
+  it('is disabled when the plugin is administratively disabled, even when trusted', () => {
+    const definition = register(() => false);
+    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(false);
   });
 });

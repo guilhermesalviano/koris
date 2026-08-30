@@ -2,6 +2,7 @@ import type { AIChatOptions, AIChatRequest, AIProvider, AIProviderOptions, AIRes
 import { config } from '../../../config';
 import { ILogger } from '../../../infrastructure/logger';
 import { validateBaseUrl } from '../../../utils/provider';
+import type { ProviderRegistration } from '../manifest';
 import { THINK_START, THINK_END } from '../../../constants/thinking';
 import { extractToolCalls } from '../../../utils/tool-calls';
 
@@ -31,7 +32,7 @@ class OllamaAIProvider implements AIProvider {
   private readonly numCtx: number;
 
   constructor(private readonly logger: ILogger, opts?: AIProviderOptions) {
-    const resolvedBaseUrl = (opts?.baseUrl ?? config.AI.MANAGER.BASE_URL).replace(/\/+$/, '');
+    const resolvedBaseUrl = (opts?.baseUrl?.trim() || config.AI.MANAGER.BASE_URL || 'http://localhost:11434').replace(/\/+$/, '');
     this.baseUrl = validateBaseUrl(resolvedBaseUrl);
     this.defaultModel = opts?.model ?? config.AI.MANAGER.MODEL;
     this.embeddingModel = opts?.embeddingModel ?? config.AI.WORKERS.EMBED_MODEL;
@@ -391,6 +392,18 @@ class OllamaAIProviderFactory {
   static create(logger: ILogger, opts?: AIProviderOptions): AIProvider {
     return new OllamaAIProvider(logger, opts);
   }
+}
+
+export function providerManifest(): ProviderRegistration[] {
+  return [{
+    name: 'ollama',
+    label: 'Ollama (local)',
+    defaultBaseUrl: 'http://localhost:11434',
+    docsUrl: 'https://ollama.com/library',
+    embeddings: true,
+    recommendedModel: 'gemma4:e4b',
+    create: (logger: ILogger, opts?: AIProviderOptions) => OllamaAIProviderFactory.create(logger, opts),
+  }];
 }
 
 export { OllamaAIProvider, OllamaAIProviderFactory };

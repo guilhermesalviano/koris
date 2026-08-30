@@ -283,6 +283,20 @@ describe('ToolsQueue', () => {
 
       expect(command).toHaveBeenCalledWith(mockLogger, { command: 'echo "test"' }, context);
     });
+
+    it('refuses to invoke a known but administratively disabled tool', async () => {
+      const command = vi.fn().mockResolvedValue({ toolName: 'execute_command', success: true, result: '' });
+      vi.mocked(ToolPluginsSingleton.getExistingInstance).mockReturnValue([
+        { name: 'execute_command', schema: { description: '', parameters: {} }, handler: command, enabled: () => false },
+      ]);
+      const tool = new AgnosticExecutionTool();
+      const toolCall = { name: 'execute_command', arguments: {} };
+
+      const result = await tool.handle(mockLogger, toolCall);
+
+      expect(command).not.toHaveBeenCalled();
+      expect(result).toEqual({ toolName: 'execute_command', success: false, error: 'Unknown tool: execute_command' });
+    });
   });
 });
 

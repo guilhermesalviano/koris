@@ -1,20 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
 import { usePageTitle } from '../../lib/use-page-title';
 import ImageLightbox from '../../components/ImageLightbox';
-import { AttachIcon, BrokenImageIcon, ChatIcon, CloseIcon, SendIcon } from '../../components/Icons';
+import ProviderPicker from '../../components/ProviderPicker';
+import { AttachIcon, BrokenImageIcon, CloseIcon, PlusIcon, RetryIcon, SendIcon, StopIcon } from '../../components/Icons';
 import type { ImageAttachment } from '../../lib/types';
 
 const MAX_CHARS = 4000;
-
-const PROMPTS = [
-  'Explain how streaming works in the Fetch API',
-  'Write a Python function to parse JSON safely',
-  'What is the difference between RAG and fine-tuning?',
-  'How do I center a div in CSS?',
-];
 
 function imageSrc(image: ImageAttachment): string {
   return `data:${image.mimeType ?? 'image/png'};base64,${image.data}`;
@@ -22,7 +16,8 @@ function imageSrc(image: ImageAttachment): string {
 
 export default function ChatPage() {
   const { sessionId } = useParams();
-  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, fillPrompt, openSession, sessions, activeSessionId } = useChat();
+  const navigate = useNavigate();
+  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, resendLast, cancel, openSession, sessions, activeSessionId, newChat, gateBlocks, allowDomain, dismissGateBlock } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -54,15 +49,18 @@ export default function ChatPage() {
 
   const canSend = !streaming && (input.trim().length > 0 || attachments.length > 0);
 
-  function handlePromptClick(text: string) {
-    fillPrompt(text);
-    textareaRef.current?.focus();
+  async function handleNewChat() {
+    await newChat();
+    navigate('/admin/chat');
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (canSend) submit();
+    } else if (e.key === 'Escape' && streaming) {
+      e.preventDefault();
+      cancel();
     }
   }
 
@@ -104,31 +102,122 @@ export default function ChatPage() {
   const showEmptyState = historyLoaded && messages.length === 0;
   const footerHint = '↵ send · ⇧↵ newline';
   const charCount = input.length;
+  const lastMessageId = messages.length ? messages[messages.length - 1].id : -1;
+
+  // A fresh chat centers the composer — put the cursor in it straight away.
+  useEffect(() => {
+    if (showEmptyState) textareaRef.current?.focus();
+  }, [showEmptyState]);
+
+  const composerBody = (
+    <>
+      {attachments.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {attachments.map((img, i) => (
+            <div key={i} className="relative">
+              <button
+                type="button"
+                onClick={() => setPreview({ images: attachments, index: i })}
+                title="View image"
+                className="block h-16 w-16 overflow-hidden rounded-lg border border-strong transition-transform duration-150 hover:scale-[1.03] focus:outline-none focus:ring-2 focus:ring-accent"
+              >
+                <img src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-full w-full cursor-zoom-in object-cover" />
+              </button>
+              <button
+                onClick={() => removeAttachment(i)}
+                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-strong bg-bg text-txt-2 hover:text-red-400"
+                title="Remove image"
+              >
+                <CloseIcon className="h-3 w-3 fill-none stroke-current" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex items-start gap-2 rounded-card border border-strong bg-bg-3 px-4 py-2.5 pr-2.5 transition-colors duration-200 focus-within:border-accent">
+        <button
+          type="button"
+          disabled={streaming}
+          onClick={() => fileInputRef.current?.click()}
+          title="Attach image"
+          className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[10px] border-none bg-transparent text-txt-3 transition-all duration-150 hover:bg-bg-2 hover:text-accent-2 disabled:opacity-35 disabled:cursor-default"
+        >
+          <AttachIcon className="h-[16px] w-[16px] fill-none stroke-current" />
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            handleFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+        <textarea
+          ref={textareaRef}
+          rows={1}
+          placeholder="Ask something…"
+          autoComplete="off"
+          value={input}
+          maxLength={MAX_CHARS}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3"
+        />
+        {streaming ? (
+          <button
+            type="button"
+            title="Stop generating"
+            onClick={cancel}
+            className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:opacity-90 active:scale-95"
+          >
+            <StopIcon className="relative z-10 h-3.5 w-3.5 fill-white" />
+          </button>
+        ) : (
+          <button
+            disabled={!canSend}
+            title="Send message"
+            onClick={submit}
+            className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:enabled:opacity-90 active:enabled:scale-95 disabled:opacity-35 disabled:cursor-default"
+          >
+            <SendIcon className="relative z-10 h-[15px] w-[15px] fill-none stroke-white" />
+          </button>
+        )}
+      </div>
+      <div className="mt-1.5 flex items-center justify-between gap-2 px-1 font-mono text-[11px] text-txt-3">
+        <ProviderPicker />
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="hidden shrink-0 sm:inline">{footerHint}</span>
+          <span className={`shrink-0 ${charCount > MAX_CHARS * 0.85 ? 'text-amber-500' : ''}`}>{charCount}</span>
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col w-full">
+      <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-subtle px-4 py-2">
+        <span className="truncate font-mono text-[11px] text-txt-3">{activeTitle || 'New chat'}</span>
+        <button
+          onClick={handleNewChat}
+          title="Start a new chat"
+          className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-strong bg-bg-3 px-2.5 py-1.5 text-[13px] text-txt transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2"
+        >
+          <PlusIcon className="h-3.5 w-3.5 fill-none stroke-current" />
+          New chat
+        </button>
+      </div>
+      {showEmptyState ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 px-4">
+          <h2 className="text-center text-xl font-medium">What can I help with?</h2>
+          <div className="w-full max-w-2xl">{composerBody}</div>
+        </div>
+      ) : (
+        <>
       <div ref={chatRef} className="flex flex-1 flex-col gap-5 overflow-y-auto scroll-smooth px-5 py-6">
-        {showEmptyState && (
-          <div className="m-auto max-w-sm px-6 py-10 text-center">
-            <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-strong bg-bg-3">
-              <ChatIcon className="h-6 w-6 fill-none stroke-txt-3" />
-            </div>
-            <h2 className="mb-2 text-base font-medium">What can I help with?</h2>
-            <p className="text-[13px] leading-relaxed text-txt-2">Ask anything — code, concepts, writing, analysis. I&apos;ll think it through with you.</p>
-            <div className="mt-5 flex flex-wrap justify-center gap-1.5">
-              {PROMPTS.map((p) => (
-                <button
-                  key={p}
-                  onClick={() => handlePromptClick(p)}
-                  className="rounded-full border border-strong bg-bg-3 px-3.5 py-1.5 font-mono text-xs text-txt-2 transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2"
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {messages.map((m) => (
           <div key={m.id} className={`flex gap-2.5 animate-msg-in ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
             {m.role === 'assistant' && (
@@ -176,9 +265,21 @@ export default function ChatPage() {
                 </div>
               ) : (
                 <div
-                  className="bubble relative break-words rounded-card rounded-bl-[5px] border border-subtle bg-bg-3 px-3.5 py-2.5 text-sm leading-relaxed text-txt"
+                  className={`bubble relative break-words rounded-card rounded-bl-[5px] border px-3.5 py-2.5 text-sm leading-relaxed ${
+                    m.error ? 'border-red-500/40 bg-red-500/10 text-txt' : 'border-subtle bg-bg-3 text-txt'
+                  }`}
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
                 />
+              )}
+              {m.role === 'assistant' && m.error && m.id === lastMessageId && !streaming && (
+                <button
+                  onClick={resendLast}
+                  title="Send the last message again"
+                  className="mt-0.5 flex items-center gap-1 self-start rounded-lg border border-strong bg-bg-3 px-2 py-1 font-mono text-[11px] text-txt-2 transition-colors duration-150 hover:border-accent hover:text-accent-2"
+                >
+                  <RetryIcon className="h-3 w-3 fill-none stroke-current" />
+                  Resend
+                </button>
               )}
               {m.timestamp && <span className="px-1 font-mono text-[11px] text-txt-3">{m.timestamp}</span>}
             </div>
@@ -186,77 +287,40 @@ export default function ChatPage() {
         ))}
       </div>
 
+      {gateBlocks.length > 0 && (
+        <div className="flex-shrink-0 space-y-1.5 border-t border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
+          {gateBlocks.map((b) => (
+            <div key={b.domain} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-txt">
+              <span aria-hidden className="text-amber-500">⚠</span>
+              <span className="min-w-0">
+                A tool call was blocked — <span className="font-mono text-amber-500">{b.domain}</span> is not in{' '}
+                <span className="font-mono">allowed_domains</span>. Add it to koris.json to allow it.
+              </span>
+              <span className="ml-auto flex flex-shrink-0 items-center gap-1.5">
+                <button
+                  onClick={() => allowDomain(b.domain)}
+                  className="rounded-lg border border-amber-500/50 bg-amber-500/15 px-2 py-1 font-mono text-[11px] text-amber-500 transition-colors duration-150 hover:bg-amber-500/25"
+                >
+                  Add {b.domain}
+                </button>
+                <button
+                  onClick={() => dismissGateBlock(b.domain)}
+                  title="Dismiss"
+                  className="rounded-lg border border-strong bg-bg-3 px-2 py-1 font-mono text-[11px] text-txt-3 transition-colors duration-150 hover:text-txt"
+                >
+                  Dismiss
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex-shrink-0 border-t border-subtle bg-bg/90 px-4 pb-4 pt-3 backdrop-blur-md">
-        {attachments.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {attachments.map((img, i) => (
-              <div key={i} className="relative">
-                <button
-                  type="button"
-                  onClick={() => setPreview({ images: attachments, index: i })}
-                  title="View image"
-                  className="block h-16 w-16 overflow-hidden rounded-lg border border-strong transition-transform duration-150 hover:scale-[1.03] focus:outline-none focus:ring-2 focus:ring-accent"
-                >
-                  <img src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-full w-full cursor-zoom-in object-cover" />
-                </button>
-                <button
-                  onClick={() => removeAttachment(i)}
-                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-strong bg-bg text-txt-2 hover:text-red-400"
-                  title="Remove image"
-                >
-                  <CloseIcon className="h-3 w-3 fill-none stroke-current" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex items-start gap-2 rounded-card border border-strong bg-bg-3 px-4 py-2.5 pr-2.5 transition-colors duration-200 focus-within:border-accent">
-          <button
-            type="button"
-            disabled={streaming}
-            onClick={() => fileInputRef.current?.click()}
-            title="Attach image"
-            className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[10px] border-none bg-transparent text-txt-3 transition-all duration-150 hover:bg-bg-2 hover:text-accent-2 disabled:opacity-35 disabled:cursor-default"
-          >
-            <AttachIcon className="h-[16px] w-[16px] fill-none stroke-current" />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              handleFiles(e.target.files);
-              e.target.value = '';
-            }}
-          />
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            placeholder="Ask something…"
-            autoComplete="off"
-            value={input}
-            maxLength={MAX_CHARS}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3"
-          />
-          <button
-            disabled={!canSend}
-            title="Send message"
-            onClick={submit}
-            className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:enabled:opacity-90 active:enabled:scale-95 disabled:opacity-35 disabled:cursor-default"
-          >
-            <SendIcon className="relative z-10 h-[15px] w-[15px] fill-none stroke-white" />
-          </button>
-        </div>
-        <div className="mt-1.5 flex items-center justify-between px-1 font-mono text-[11px] text-txt-3">
-          <span>{footerHint}</span>
-          <span className={charCount > MAX_CHARS * 0.85 ? 'text-amber-500' : ''}>{charCount}</span>
-        </div>
+        {composerBody}
       </div>
+        </>
+      )}
 
       {toast && (
         <div className="pointer-events-none fixed bottom-20 left-1/2 z-[100] -translate-x-1/2 whitespace-nowrap rounded-[10px] border border-red-500/30 bg-[#2a1212] px-4 py-2 text-[13px] font-mono text-red-300 animate-toast-in">

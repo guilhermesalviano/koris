@@ -1,7 +1,7 @@
-import type { ILogger, IStickerRulesGateway, Plugin, ToolDefinition, ToolExecutionContext, ToolPluginContext, ToolResult } from '../contracts';
+import type { ILogger, IStickerRulesGateway, Plugin, ToolExecutionContext, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
+import { defineTool } from '../define-tool';
 import { getRequiredStringArg } from '../runtime';
-import { loadLearnStickerConfig } from './config';
 
 export const TOOL_NAME = 'learn_sticker' as const;
 
@@ -55,36 +55,24 @@ export async function learnSticker(
   }
 }
 
-const SCHEMA = {
-  description:
-    'Remember a sticker so it can be reused later. Only call this when the human\'s message is a reply that quotes a sticker (e.g. quoting a sticker and saying "use this one when I\'m happy" or "remember this for goodbyes") — WhatsApp cannot attach a caption to a sticker, so this is always taught by quoting it in a separate text reply, never by sending the sticker and text together. Fails if the message being answered did not quote a sticker.',
-  parameters: {
-    type: 'object',
-    properties: {
-      description: {
-        type: 'string',
-        description: 'Clear description of the situation in which this sticker should be reused later (e.g. "when the user is happy or celebrating").',
-      },
-    },
-    required: ['description'],
-  },
-};
-
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadLearnStickerConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'learn-sticker',
     setup(registry) {
-      const definition: ToolDefinition = {
+      const definition = defineTool({
         name: TOOL_NAME,
-        schema: SCHEMA,
+        description:
+          'Remember a sticker so it can be reused later. Only call this when the human\'s message is a reply that quotes a sticker (e.g. quoting a sticker and saying "use this one when I\'m happy" or "remember this for goodbyes") — WhatsApp cannot attach a caption to a sticker, so this is always taught by quoting it in a separate text reply, never by sending the sticker and text together. Fails if the message being answered did not quote a sticker.',
+        parameters: {
+          description: {
+            type: 'string',
+            required: true,
+            description: 'Clear description of the situation in which this sticker should be reused later (e.g. "when the user is happy or celebrating").',
+          },
+        },
         handler: (logger, args, execContext) => learnSticker(logger, args, execContext, context.stickerRules),
-        enabled: (opts) => opts.trusted && opts.stickersEnabled,
-      };
+        enabled: (opts) => opts.trusted && opts.stickersEnabled && context.pluginEnablement.isEnabled('learn-sticker'),
+      });
       registry.extend(COMMANDS, definition);
     },
   };

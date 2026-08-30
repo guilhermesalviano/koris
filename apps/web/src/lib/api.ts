@@ -18,6 +18,7 @@ export async function streamChat(
   images: { data: string; mimeType?: string }[],
   onStatus: OnStatus,
   onText: OnText,
+  signal?: AbortSignal,
 ): Promise<void> {
   const payload: Record<string, unknown> = { message };
   if (sessionId) payload.sessionId = sessionId;
@@ -27,6 +28,7 @@ export async function streamChat(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    signal,
   });
 
   if (!res.ok) {
@@ -90,6 +92,19 @@ export async function streamChat(
 
   if (streamError) {
     throw streamError;
+  }
+}
+
+/** Asks the server to abort the in-progress AI run for a session. Best-effort. */
+export async function cancelChat(sessionId: string): Promise<void> {
+  try {
+    await fetch('/api/chat/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    });
+  } catch {
+    // best-effort — the local stream is already aborted by the caller
   }
 }
 

@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { NvidiaAIProvider } from '../../../../../src/services/providers/nvidia';
+import {
+  OpenAICompatibleAIProvider,
+} from '../../../../../src/services/providers/openai-compatible';
+import { findOpenAICompatiblePreset } from '../../../../../src/services/providers/openai-compatible/presets';
 import { config } from '../../../../../src/config';
 import { LoggerFactory } from '../../../../../src/infrastructure/logger';
 
 const logger = LoggerFactory.create();
+const nvidiaPreset = findOpenAICompatiblePreset('nvidia')!;
+const deepseekPreset = findOpenAICompatiblePreset('deepseek')!;
 
 function makeSSE(chunks: unknown[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -19,7 +24,7 @@ function makeSSE(chunks: unknown[]): ReadableStream<Uint8Array> {
   });
 }
 
-describe('NvidiaAIProvider', () => {
+describe('OpenAICompatibleAIProvider', () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
@@ -37,10 +42,7 @@ describe('NvidiaAIProvider', () => {
       new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
     ) as unknown as typeof fetch;
 
-    const provider = new NvidiaAIProvider(logger, {
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      model: 'test-model',
-    });
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
 
     let out = '';
     for await (const chunk of provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] })) {
@@ -54,22 +56,19 @@ describe('NvidiaAIProvider', () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
-          choices: [{ message: { role: 'assistant', content: 'Hello from NVIDIA' }, finish_reason: 'stop' }],
+          choices: [{ message: { role: 'assistant', content: 'Hello from the model' }, finish_reason: 'stop' }],
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       ),
     ) as unknown as typeof fetch;
 
-    const provider = new NvidiaAIProvider(logger, {
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      model: 'test-model',
-    });
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
 
     const out = await provider.chat({ messages: [{ role: 'user', content: 'hi' }] });
-    expect(out).toBe('Hello from NVIDIA');
+    expect(out).toBe('Hello from the model');
   });
 
-  it('forwards tools to NVIDIA chat payload with Authorization header', async () => {
+  it('forwards tools to the chat payload with Authorization header', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -81,8 +80,7 @@ describe('NvidiaAIProvider', () => {
 
     globalThis.fetch = fetchMock;
 
-    const provider = new NvidiaAIProvider(logger, {
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, {
       model: 'test-model',
       apiToken: 'nvapi-secret',
     });
@@ -106,7 +104,57 @@ describe('NvidiaAIProvider', () => {
     expect(headers.get('authorization')).toBe('Bearer nvapi-secret');
   });
 
-  it('transforms message images into OpenAI content blocks in the NVIDIA payload', async () => {
+  it('sends the openrouter attribution headers, other presets do not', async () => {
+    const openrouterPreset = findOpenAICompatiblePreset('openrouter')!;
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    ) as unknown as typeof fetch;
+    globalThis.fetch = fetchMock;
+
+    await new OpenAICompatibleAIProvider(logger, openrouterPreset, { model: 'openai/gpt-4o-mini' })
+      .chat({ messages: [{ role: 'user', content: 'hi' }] });
+    let headers = new Headers((fetchMock as any).mock.calls[0][1].headers);
+    expect(headers.get('http-referer')).toBe('https://github.com/guilhermesalviano/koris');
+    expect(headers.get('x-title')).toBe('koris');
+
+    fetchMock.mockClear();
+    await new OpenAICompatibleAIProvider(logger, deepseekPreset, { model: 'deepseek-chat' })
+      .chat({ messages: [{ role: 'user', content: 'hi' }] });
+    headers = new Headers((fetchMock as any).mock.calls[0][1].headers);
+    expect(headers.get('http-referer')).toBeNull();
+    expect(headers.get('x-title')).toBeNull();
+  });
+
+  it('routes a preset to its own base URL', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    ) as unknown as typeof fetch;
+
+    globalThis.fetch = fetchMock;
+
+    const provider = new OpenAICompatibleAIProvider(logger, deepseekPreset, {
+      model: 'deepseek-chat',
+      apiToken: 'sk-deepseek',
+    });
+    expect(provider.name).toBe('deepseek');
+
+    await provider.chat({ messages: [{ role: 'user', content: 'hi' }] });
+
+    const calledUrl = (fetchMock as any).mock.calls[0]?.[0];
+    expect(calledUrl).toBe('https://api.deepseek.com/v1/chat/completions');
+  });
+
+  it('transforms message images into OpenAI content blocks in the payload', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -118,10 +166,7 @@ describe('NvidiaAIProvider', () => {
 
     globalThis.fetch = fetchMock;
 
-    const provider = new NvidiaAIProvider(logger, {
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      model: 'test-model',
-    });
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
 
     await provider.chat({
       messages: [
@@ -149,7 +194,7 @@ describe('NvidiaAIProvider', () => {
     });
   });
 
-  it('leaves messages without images untouched in the NVIDIA payload', async () => {
+  it('leaves messages without images untouched in the payload', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -161,10 +206,7 @@ describe('NvidiaAIProvider', () => {
 
     globalThis.fetch = fetchMock;
 
-    const provider = new NvidiaAIProvider(logger, {
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      model: 'test-model',
-    });
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
 
     await provider.chat({ messages: [{ role: 'user', content: 'hi' }] });
 
@@ -187,10 +229,7 @@ describe('NvidiaAIProvider', () => {
       ),
     ) as unknown as typeof fetch;
 
-    const provider = new NvidiaAIProvider(logger, {
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      model: 'test-model',
-    });
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
 
     const out = await provider.chat({ messages: [{ role: 'user', content: 'use a skill' }] });
     const parsed = JSON.parse(out);
@@ -208,10 +247,7 @@ describe('NvidiaAIProvider', () => {
       new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
     ) as unknown as typeof fetch;
 
-    const provider = new NvidiaAIProvider(logger, {
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      model: 'test-model',
-    });
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
 
     let out = '';
     for await (const chunk of provider.chatStream({ messages: [{ role: 'user', content: 'use a skill' }] })) {
@@ -235,10 +271,7 @@ describe('NvidiaAIProvider', () => {
       new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
     ) as unknown as typeof fetch;
 
-    const provider = new NvidiaAIProvider(logger, {
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      model: 'test-model',
-    });
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
 
     const chunks: string[] = [];
     for await (const chunk of provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] })) {
@@ -256,10 +289,7 @@ describe('NvidiaAIProvider', () => {
       new Response(JSON.stringify({ data: [] }), { status: 200 }),
     ) as unknown as typeof fetch;
 
-    const provider = new NvidiaAIProvider(logger, {
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      model: 'test-model',
-    });
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
 
     const result = await provider.healthCheck();
     expect(result.ok).toBe(true);
@@ -270,10 +300,7 @@ describe('NvidiaAIProvider', () => {
       new Response('Unauthorized', { status: 401 }),
     ) as unknown as typeof fetch;
 
-    const provider = new NvidiaAIProvider(logger, {
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      model: 'test-model',
-    });
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
 
     const result = await provider.healthCheck();
     expect(result.ok).toBe(false);
@@ -296,10 +323,7 @@ describe('NvidiaAIProvider', () => {
       return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
     }) as unknown as typeof fetch;
 
-    const provider = new NvidiaAIProvider(logger, {
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      model: 'test-model',
-    });
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
 
     const outer = new AbortController();
     const iterator = provider.chatStream(
@@ -315,16 +339,15 @@ describe('NvidiaAIProvider', () => {
     expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), config.AI.TIMEOUTS.IDLE_MS);
 
     outer.abort();
-    await expect(nextChunk).rejects.toThrow('NVIDIA request aborted');
+    await expect(nextChunk).rejects.toThrow('nvidia request aborted');
   });
 
-  it('throws a helpful error when model is missing namespace prefix (404 page not found)', async () => {
+  it('throws a helpful error when an nvidia model is missing its namespace prefix (404 page not found)', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       new Response('404 page not found', { status: 404 }),
     ) as unknown as typeof fetch;
 
-    const provider = new NvidiaAIProvider(logger, {
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, {
       model: 'gemma-4-31b-it', // missing "google/" prefix
     });
 
@@ -333,7 +356,35 @@ describe('NvidiaAIProvider', () => {
     ).rejects.toThrow('namespace prefix');
   });
 
-  it('uses default NVIDIA base URL and model from config', async () => {
+  it('emits a generic (404) error for a namespaced nvidia model', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response('nope', { status: 404 }),
+    ) as unknown as typeof fetch;
+
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, {
+      model: 'google/gemma-4-31b-it',
+    });
+
+    await expect(
+      provider.chat({ messages: [{ role: 'user', content: 'hi' }] }),
+    ).rejects.toThrow(/nvidia \/chat\/completions failed \(404\)/);
+  });
+
+  it('emits a generic (404) error for a non-nvidia preset with no namespace hint', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response('404 page not found', { status: 404 }),
+    ) as unknown as typeof fetch;
+
+    const provider = new OpenAICompatibleAIProvider(logger, deepseekPreset, {
+      model: 'deepseek-chat',
+    });
+
+    await expect(
+      provider.chat({ messages: [{ role: 'user', content: 'hi' }] }),
+    ).rejects.toThrow(/deepseek \/chat\/completions failed \(404\)/);
+  });
+
+  it('uses the preset base URL and config model when no opts are given', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -345,7 +396,7 @@ describe('NvidiaAIProvider', () => {
 
     globalThis.fetch = fetchMock;
 
-    const provider = new NvidiaAIProvider(logger);
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset);
     expect(provider.name).toBe('nvidia');
 
     await provider.chat({ messages: [{ role: 'user', content: 'hi' }] });
@@ -354,7 +405,7 @@ describe('NvidiaAIProvider', () => {
     const fetchArgs = (fetchMock as any).mock.calls[0]?.[1];
     const body = JSON.parse(fetchArgs.body);
 
-    expect(calledUrl).toBe(`${config.AI.MANAGER.BASE_URL.replace(/\/+$/, '')}/chat/completions`);
+    expect(calledUrl).toBe('https://integrate.api.nvidia.com/v1/chat/completions');
     expect(body.model).toBe(config.AI.MANAGER.MODEL);
   });
 });

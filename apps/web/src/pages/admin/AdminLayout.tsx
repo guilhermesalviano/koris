@@ -2,46 +2,36 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import type { SessionSummary } from '../../lib/types';
 import {
-  AuditIcon,
-  ChannelsIcon,
   CloseIcon,
   HeartbeatsIcon,
   MemoriesIcon,
   MenuIcon,
   MoonIcon,
   OverviewIcon,
+  PluginsIcon,
   PlusIcon,
   QueueIcon,
-  SessionsIcon,
   SettingsIcon,
   SkillsIcon,
   SunIcon,
 } from '../../components/Icons';
+import PluginsModal from './PluginsModal';
+import ConfigModal from './ConfigModal';
 import ChatPage from './ChatPage';
 import OverviewPage from './OverviewPage';
-import SessionsPage from './SessionsPage';
 import MemoriesPage from './MemoriesPage';
 import HeartbeatsPage from './HeartbeatsPage';
-import ChannelsPage from './ChannelsPage';
-import OutboundPage from './OutboundPage';
 import SkillsPage from './SkillsPage';
-import SettingsPage from './SettingsPage';
-import AuditPage from './AuditPage';
-import UsagePage from './UsagePage';
 import QueuePage from './QueuePage';
 import { ChatProvider, useChat } from '../../lib/chat-context';
+import { UiProvider } from '../../lib/ui-context';
 
 const NAV_ICONS = {
   overview: OverviewIcon,
-  sessions: SessionsIcon,
   memories: MemoriesIcon,
   heartbeats: HeartbeatsIcon,
-  channels: ChannelsIcon,
   skills: SkillsIcon,
-  audit: AuditIcon,
-  usage: OverviewIcon,
   queue: QueueIcon,
-  settings: SettingsIcon,
 };
 
 const MAIN_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] = [
@@ -50,15 +40,6 @@ const MAIN_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] 
   { to: '/admin/heartbeats', label: 'Beats', icon: 'heartbeats' },
   { to: '/admin/skills', label: 'Skills', icon: 'skills' },
   { to: '/admin/queue', label: 'Queue', icon: 'queue' },
-];
-
-const CONFIG_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] = [
-  { to: '/admin/sessions', label: 'Sessions', icon: 'sessions' },
-  { to: '/admin/channels', label: 'Channels', icon: 'channels' },
-  { to: '/admin/outbound', label: 'Outbound', icon: 'sessions' },
-  { to: '/admin/audit', label: 'Audit', icon: 'audit' },
-  { to: '/admin/usage', label: 'Usage', icon: 'usage' },
-  { to: '/admin/settings', label: 'Settings', icon: 'settings' },
 ];
 
 function navItemClass({ isActive }: { isActive: boolean }, vertical: boolean, collapsed: boolean): string {
@@ -348,13 +329,30 @@ function ConfigButton({ onOpen, collapsed = false }: { onOpen: () => void; colla
   );
 }
 
+function PluginsButton({ onOpen, collapsed = false }: { onOpen: () => void; collapsed?: boolean }) {
+  return (
+    <button
+      onClick={onOpen}
+      title={collapsed ? 'Plugins' : undefined}
+      className={`flex w-full items-center rounded-lg border border-transparent py-2.5 text-[13px] text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt ${
+        collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'
+      }`}
+    >
+      <PluginsIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
+      {!collapsed && <span>Plugins</span>}
+    </button>
+  );
+}
+
 function SidebarContent({
   collapsed = false,
   onOpenConfig,
+  onOpenPlugins,
   onNavigate,
 }: {
   collapsed?: boolean;
   onOpenConfig: () => void;
+  onOpenPlugins: () => void;
   onNavigate?: () => void;
 }) {
   return (
@@ -366,21 +364,30 @@ function SidebarContent({
       <div className="min-h-0 flex-1">
         <ChatsPanel collapsed={collapsed} onNavigate={onNavigate} />
       </div>
-      <div className="flex-shrink-0 border-t border-subtle p-2">
+      <div className="flex-shrink-0 space-y-0.5 border-t border-subtle p-2">
+        <PluginsButton collapsed={collapsed} onOpen={onOpenPlugins} />
         <ConfigButton collapsed={collapsed} onOpen={onOpenConfig} />
       </div>
     </>
   );
 }
 
-function Sidebar({ collapsed, onOpenConfig }: { collapsed: boolean; onOpenConfig: () => void }) {
+function Sidebar({
+  collapsed,
+  onOpenConfig,
+  onOpenPlugins,
+}: {
+  collapsed: boolean;
+  onOpenConfig: () => void;
+  onOpenPlugins: () => void;
+}) {
   return (
     <aside
       className={`relative hidden flex-shrink-0 flex-col border-r border-subtle bg-bg-2 transition-[width] duration-200 md:flex ${
         collapsed ? 'w-16' : 'w-60'
       }`}
     >
-      <SidebarContent collapsed={collapsed} onOpenConfig={onOpenConfig} />
+      <SidebarContent collapsed={collapsed} onOpenConfig={onOpenConfig} onOpenPlugins={onOpenPlugins} />
     </aside>
   );
 }
@@ -403,6 +410,7 @@ function DrawerHeader({ title, onClose }: { title: string; onClose: () => void }
 export default function AdminLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const [pluginsOpen, setPluginsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const [isDark, setIsDark] = useState(getInitialDark);
 
@@ -425,6 +433,7 @@ export default function AdminLayout() {
 
   return (
     <ChatProvider>
+      <UiProvider value={{ openConfig: () => setConfigOpen(true) }}>
       <div className="relative z-10 flex h-screen w-full flex-col supports-[height:100dvh]:h-dvh">
         <Header
           navOpen={navOpen}
@@ -434,23 +443,18 @@ export default function AdminLayout() {
           onToggleTheme={() => setIsDark((d) => !d)}
         />
         <div className="flex min-h-0 flex-1">
-          <Sidebar collapsed={collapsed} onOpenConfig={() => setConfigOpen(true)} />
+          <Sidebar collapsed={collapsed} onOpenConfig={() => setConfigOpen(true)} onOpenPlugins={() => setPluginsOpen(true)} />
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <Routes>
               <Route index element={<Navigate to="/admin/chat" replace />} />
               <Route path="chat" element={<ChatPage />} />
               <Route path="chat/:sessionId" element={<ChatPage />} />
               <Route path="overview" element={<OverviewPage />} />
-              <Route path="sessions" element={<SessionsPage />} />
               <Route path="memories" element={<MemoriesPage />} />
               <Route path="heartbeats" element={<HeartbeatsPage />} />
-              <Route path="channels" element={<ChannelsPage />} />
-              <Route path="outbound" element={<OutboundPage />} />
               <Route path="skills" element={<SkillsPage />} />
-              <Route path="audit" element={<AuditPage />} />
-              <Route path="usage" element={<UsagePage />} />
               <Route path="queue" element={<QueuePage />} />
-              <Route path="settings" element={<SettingsPage />} />
+              <Route path="*" element={<Navigate to="/admin/chat" replace />} />
             </Routes>
           </main>
         </div>
@@ -464,17 +468,19 @@ export default function AdminLayout() {
                 setNavOpen(false);
                 setConfigOpen(true);
               }}
+              onOpenPlugins={() => {
+                setNavOpen(false);
+                setPluginsOpen(true);
+              }}
             />
           </div>
         </Drawer>
 
-        <Drawer open={configOpen} onClose={() => setConfigOpen(false)} label="Config">
-          <DrawerHeader title="Config" onClose={() => setConfigOpen(false)} />
-          <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
-            <NavItems items={CONFIG_ITEMS} vertical onNavigate={() => setConfigOpen(false)} />
-          </div>
-        </Drawer>
+        <ConfigModal open={configOpen} onClose={() => setConfigOpen(false)} />
+
+        <PluginsModal open={pluginsOpen} onClose={() => setPluginsOpen(false)} />
       </div>
+      </UiProvider>
     </ChatProvider>
   );
 }

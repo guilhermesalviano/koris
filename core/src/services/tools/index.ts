@@ -23,7 +23,9 @@ class AgnosticExecutionTool implements IAgnosticExecutionTool {
 
     try {
       const plugin = ToolPluginsSingleton.getExistingInstance().find((def) => def.name === name);
-      if (plugin) return await plugin.handler(logger, args, context);
+      if (plugin && plugin.enabled({ trusted: true, stickersEnabled: true })) {
+        return await plugin.handler(logger, args, context);
+      }
 
       return {
         toolName: name,

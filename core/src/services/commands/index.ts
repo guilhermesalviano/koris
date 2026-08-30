@@ -1,5 +1,6 @@
 import { config } from '../../config';
 import { handleUsageCommand } from './usage';
+import { addAllowedDomain } from '../security/allowed-domains';
 import type { CommandContext, CommandResult } from '../../types/commands';
 
 export function handleCommand(command: string, context: CommandContext): CommandResult {
@@ -29,6 +30,9 @@ export function handleCommand(command: string, context: CommandContext): Command
 
     case '/compact':
       return handleCompact(context);
+
+    case '/allow':
+      return handleAllow(command, context);
 
     case '/exit':
     case '/quit':
@@ -85,6 +89,7 @@ function handleHelp(context: CommandContext): CommandResult {
 /usage - Token usage report (/usage 7, /usage today)
 /clear - Clear conversation history
 /compact - Summarize this session into memory and start a fresh one
+/allow <domain> - Add a domain to allowed_domains so I can reach it
 
 Send me any message to interact!`;
 
@@ -201,6 +206,31 @@ function handleCompact(context: CommandContext): CommandResult {
   };
 }
 
+function handleAllow(command: string, context: CommandContext): CommandResult {
+  const domain = command.trim().split(/\s+/)[1] ?? '';
+
+  if (!context.trusted) {
+    return formatCommandResult('Only trusted senders can change allowed_domains.', context.source);
+  }
+
+  if (!domain) {
+    return formatCommandResult(
+      'Usage: /allow <domain> — adds a domain to allowed_domains in koris.json so I can reach it.',
+      context.source,
+    );
+  }
+
+  const result = addAllowedDomain(domain);
+  if (!result.ok) {
+    return formatCommandResult(result.error, context.source);
+  }
+
+  const message = result.added
+    ? `Added ${result.hostname} to allowed_domains. I can reach it now.`
+    : `${result.hostname} is already in allowed_domains.`;
+  return formatCommandResult(message, context.source);
+}
+
 function handleExit(context: CommandContext): CommandResult {
   if (context.source === 'telegram') {
     return {
@@ -245,7 +275,7 @@ export function isCommand(message: string): boolean {
  * Get list of available commands
  */
 export function getAvailableCommands(channel: string): string[] {
-  const commonCommands = ['/start', '/help', '/usage', '/clear', '/compact'];
+  const commonCommands = ['/start', '/help', '/usage', '/clear', '/compact', '/allow'];
 
   if (channel === 'tui') {
     return [...commonCommands, '/stats', '/status', '/reset', '/exit', '/quit', '/bye'];

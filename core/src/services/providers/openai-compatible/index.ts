@@ -4,6 +4,8 @@ import { config } from '../../../config';
 import { ILogger } from '../../../infrastructure/logger';
 import { THINK_START, THINK_END } from '../../../constants/thinking';
 import { extractToolCalls } from '../../../utils/tool-calls';
+import type { ProviderRegistration } from '../manifest';
+import { OPENAI_COMPATIBLE_PRESETS, type OpenAICompatiblePreset } from './presets';
 
 type OpenAIContentBlock =
   | { type: 'text'; text: string }
@@ -60,8 +62,8 @@ type ToolCallAccumulator = {
   function: { name: string; arguments: string };
 };
 
-class NvidiaAIProvider implements AIProvider {
-  readonly name = 'nvidia';
+class OpenAICompatibleAIProvider implements AIProvider {
+  readonly name: string;
   private readonly baseUrl: string;
   private readonly defaultModel: string;
   private readonly embeddingModel: string;
@@ -70,9 +72,11 @@ class NvidiaAIProvider implements AIProvider {
 
   constructor(
     private readonly logger: ILogger,
+    private readonly preset: OpenAICompatiblePreset,
     opts?: AIProviderOptions,
   ) {
-    this.baseUrl = (opts?.baseUrl ?? config.AI.MANAGER.BASE_URL).replace(/\/+$/, '');
+    this.name = preset.name;
+    this.baseUrl = (opts?.baseUrl?.trim() || preset.baseUrl).replace(/\/+$/, '');
     this.defaultModel = opts?.model ?? config.AI.MANAGER.MODEL;
     this.embeddingModel = opts?.embeddingModel ?? config.AI.WORKERS.EMBED_MODEL;
     this.embeddingEnabled = opts?.embeddingEnabled ?? config.AI.WORKERS.EMBEDDING_ENABLED;
@@ -90,7 +94,7 @@ class NvidiaAIProvider implements AIProvider {
   async chat(request: AIChatRequest, options?: AIChatOptions): Promise<string> {
     const { controller, cleanup } = this.makeController(options?.signal);
     try {
-      this.logger.debug('NVIDIA chat request', {
+      this.logger.debug(`${this.name} chat request`, {
         model: request.model ?? this.defaultModel,
         messagesCount: request.messages.length,
         hasTools: !!request.tools?.length,
@@ -99,7 +103,7 @@ class NvidiaAIProvider implements AIProvider {
       const res = await this.post(request, controller.signal, false);
       const data = await res.json() as OpenAIChatResponse;
 
-      if (data.error) throw new Error(`NVIDIA API error: ${data.error.message}`);
+      if (data.error) throw new Error(`${this.name} API error: ${data.error.message}`);
 
       if (data.usage) {
         options?.onUsage?.({
@@ -109,22 +113,22 @@ class NvidiaAIProvider implements AIProvider {
       }
 
       const choice = data.choices?.[0];
-      if (!choice) throw new Error('NVIDIA response missing choices');
+      if (!choice) throw new Error(`${this.name} response missing choices`);
 
       const msg = choice.message;
       // Use finish_reason to detect tool calls — model may return both content and tool_calls.
       if (choice.finish_reason === 'tool_calls' && msg?.tool_calls?.length) {
-        this.logger.debug('Tool calls in NVIDIA non-stream response', { count: msg.tool_calls.length });
+        this.logger.debug(`Tool calls in ${this.name} non-stream response`, { count: msg.tool_calls.length });
         return JSON.stringify({ tool_calls: msg.tool_calls });
       }
 
       const content = typeof msg?.content === 'string' ? msg.content : null;
-      if (!content) throw new Error('NVIDIA response missing content');
+      if (!content) throw new Error(`${this.name} response missing content`);
       return content;
     } catch (err) {
-      this.logger.error('NVIDIA chat error', { error: err instanceof Error ? err.message : String(err) });
+      this.logger.error(`${this.name} chat error`, { error: err instanceof Error ? err.message : String(err) });
       if (this.isAbortError(err)) {
-        throw new Error(options?.signal?.aborted ? 'NVIDIA request aborted' : 'NVIDIA request timed out');
+        throw new Error(options?.signal?.aborted ? `${this.name} request aborted` : `${this.name} request timed out`);
       }
       throw err;
     } finally {
@@ -144,7 +148,7 @@ class NvidiaAIProvider implements AIProvider {
     let totalChunksReceived = 0;
     let totalCharsYielded = 0;
 
-    this.logger.debug('NVIDIA chatStream started', {
+    this.logger.debug(`${this.name} chatStream started`, {
       model: request.model ?? this.defaultModel,
       messagesCount: request.messages.length,
       hasTools: !!request.tools?.length,
@@ -155,7 +159,7 @@ class NvidiaAIProvider implements AIProvider {
       const body = res.body;
 
       if (!body) {
-        this.logger.debug('NVIDIA stream body is null, falling back to non-stream');
+        this.logger.debug(`${this.name} stream body is null, falling back to non-stream`);
         const full = await this.chatFallback(request, controller.signal, options);
         totalCharsYielded = full.length;
         yield full;
@@ -170,14 +174,14 @@ class NvidiaAIProvider implements AIProvider {
       bumpIdle();
       for await (const chunk of this.readSSE(body, bumpIdle)) {
         totalChunksReceived++;
-        if (chunk.error) throw new Error(`NVIDIA stream error: ${chunk.error.message}`);
+        if (chunk.error) throw new Error(`${this.name} stream error: ${chunk.error.message}`);
 
         const choice = chunk.choices?.[0];
         if (!choice) continue;
 
         const delta = choice.delta ?? {};
 
-        // Reasoning/thinking content (some NVIDIA models)
+        // Reasoning/thinking content (some models)
         if (delta.reasoning_content) {
           if (!streamInThinking) {
             streamInThinking = true;
@@ -247,7 +251,7 @@ class NvidiaAIProvider implements AIProvider {
       if (streamInThinking) yield THINK_END;
 
       if (!producedAnswer) {
-        this.logger.debug('No answer parsed from NVIDIA stream, retrying in non-stream mode');
+        this.logger.debug(`No answer parsed from ${this.name} stream, retrying in non-stream mode`);
         const full = await this.chatFallback(request, controller.signal, options);
         if (full) {
           totalCharsYielded += full.length;
@@ -255,21 +259,21 @@ class NvidiaAIProvider implements AIProvider {
         }
       }
 
-      this.logger.info('NVIDIA chatStream complete', {
+      this.logger.info(`${this.name} chatStream complete`, {
         model: request.model ?? this.defaultModel,
         chunksReceived: totalChunksReceived,
         charsYielded: totalCharsYielded,
       });
     } catch (err) {
-      this.logger.error('NVIDIA chatStream error', {
+      this.logger.error(`${this.name} chatStream error`, {
         error: err instanceof Error ? err.message : String(err),
         chunksReceived: totalChunksReceived,
         charsYielded: totalCharsYielded,
       });
 
       if (this.isAbortError(err)) {
-        if (options?.signal?.aborted) throw new Error('NVIDIA request aborted');
-        throw new Error('NVIDIA request timed out while streaming');
+        if (options?.signal?.aborted) throw new Error(`${this.name} request aborted`);
+        throw new Error(`${this.name} request timed out while streaming`);
       }
       throw err;
     } finally {
@@ -313,7 +317,7 @@ class NvidiaAIProvider implements AIProvider {
     });
 
     if (!res.ok) {
-      throw new Error(`NVIDIA /embeddings failed (${res.status})`);
+      throw new Error(`${this.name} /embeddings failed (${res.status})`);
     }
 
     const data = await res.json() as { data: Array<{ embedding: number[] }> };
@@ -324,7 +328,7 @@ class NvidiaAIProvider implements AIProvider {
     const res = await this.post(request, signal, false);
     const data = await res.json() as OpenAIChatResponse;
 
-    if (data.error) throw new Error(`NVIDIA API error: ${data.error.message}`);
+    if (data.error) throw new Error(`${this.name} API error: ${data.error.message}`);
 
     if (data.usage) {
       options?.onUsage?.({
@@ -334,7 +338,7 @@ class NvidiaAIProvider implements AIProvider {
     }
 
     const choice = data.choices?.[0];
-    if (!choice) throw new Error('NVIDIA response missing choices');
+    if (!choice) throw new Error(`${this.name} response missing choices`);
 
     const msg = choice.message;
     if (choice.finish_reason === 'tool_calls' && msg?.tool_calls?.length) {
@@ -342,7 +346,7 @@ class NvidiaAIProvider implements AIProvider {
     }
 
     const content = typeof msg?.content === 'string' ? msg.content : null;
-    if (!content) throw new Error('NVIDIA response missing content');
+    if (!content) throw new Error(`${this.name} response missing content`);
     return content;
   }
 
@@ -418,6 +422,7 @@ class NvidiaAIProvider implements AIProvider {
   private authHeaders(): Record<string, string> {
     const headers: Record<string, string> = { 'content-type': 'application/json' };
     if (this.apiToken) headers['Authorization'] = `Bearer ${this.apiToken}`;
+    if (this.preset.extraHeaders) Object.assign(headers, this.preset.extraHeaders);
     return headers;
   }
 
@@ -438,7 +443,7 @@ class NvidiaAIProvider implements AIProvider {
       signal,
     });
 
-    this.logger.debug('NVIDIA /chat/completions response', {
+    this.logger.debug(`${this.name} /chat/completions response`, {
       status: res.status,
       stream,
       url: `${this.baseUrl}/chat/completions`,
@@ -447,13 +452,12 @@ class NvidiaAIProvider implements AIProvider {
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       const model = String(body['model'] ?? '');
-      if (res.status === 404 && text.includes('page not found') && !model.includes('/')) {
-        throw new Error(
-          `NVIDIA model not found: "${model}". NVIDIA models require a namespace prefix (e.g., "google/gemma-4-31b-it"). ` +
-          `Check available models at ${this.baseUrl}/models`,
-        );
+      if (res.status === 404 && this.preset.notFoundHint) {
+        const hint = this.preset.notFoundHint({ model, baseUrl: this.baseUrl, body: text });
+        if (hint) throw new Error(hint);
       }
-      throw new Error(`NVIDIA /chat/completions failed (${res.status}): ${text}`);
+      const suffix = this.preset.hint ? ` — ${this.preset.hint}` : '';
+      throw new Error(`${this.name} /chat/completions failed (${res.status}): ${text}${suffix}`);
     }
 
     return res;
@@ -482,10 +486,25 @@ class NvidiaAIProvider implements AIProvider {
   }
 }
 
-class NvidiaAIProviderFactory {
-  static create(logger: ILogger, opts?: AIProviderOptions): AIProvider {
-    return new NvidiaAIProvider(logger, opts);
+class OpenAICompatibleAIProviderFactory {
+  static create(logger: ILogger, preset: OpenAICompatiblePreset, opts?: AIProviderOptions): AIProvider {
+    return new OpenAICompatibleAIProvider(logger, preset, opts);
   }
 }
 
-export { NvidiaAIProvider, NvidiaAIProviderFactory };
+export function providerManifest(): ProviderRegistration[] {
+  return OPENAI_COMPATIBLE_PRESETS.map((preset) => ({
+    name: preset.name,
+    defaultBaseUrl: preset.baseUrl,
+    isOpenAICompatible: true,
+    label: preset.label,
+    docsUrl: preset.docsUrl,
+    apiKeyUrl: preset.apiKeyUrl,
+    embeddings: preset.embeddings,
+    recommendedModel: preset.recommendedModel,
+    create: (logger: ILogger, opts?: AIProviderOptions) =>
+      OpenAICompatibleAIProviderFactory.create(logger, preset, opts),
+  }));
+}
+
+export { OpenAICompatibleAIProvider, OpenAICompatibleAIProviderFactory };

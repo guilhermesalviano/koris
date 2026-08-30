@@ -207,10 +207,16 @@ export function splitMessage(text: string, maxLength: number): string[] {
   return chunks;
 }
 
+/** Copied from `plugins/tools/contracts.ts` — same shape, not imported, so no plugin family depends on another. */
+export interface IPluginEnablementGateway {
+  isEnabled(name: string): boolean;
+}
+
 export interface PluginContext {
   /** Cross-channel security policy: allow senders outside a channel's own whitelist. */
   allowUntrusted: boolean;
   logger: ILogger;
   gateway: IMessageGateway;
   channelHandler: IChannelHandlerFactory;
+  pluginEnablement: IPluginEnablementGateway;
 }

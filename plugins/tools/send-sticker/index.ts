@@ -1,7 +1,7 @@
-import type { IChannelsGateway, ILogger, IStickerRulesGateway, Plugin, ToolDefinition, ToolExecutionContext, ToolPluginContext, ToolResult } from '../contracts';
+import type { IChannelsGateway, ILogger, IStickerRulesGateway, Plugin, ToolExecutionContext, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
+import { defineTool } from '../define-tool';
 import { getOptionalStringArg, getRequiredStringArg } from '../runtime';
-import { loadSendStickerConfig } from './config';
 
 export const TOOL_NAME = 'send_sticker' as const;
 
@@ -58,37 +58,21 @@ export async function sendSticker(
   }
 }
 
-const SCHEMA = {
-  description:
-    'Send a previously learned sticker in the current chat as part of replying. Only use a sticker whose "Learned Stickers" description clearly matches the current situation. Do not invent an id. ' +
-    'WhatsApp cannot attach a caption to a sticker: this always sends it as its own standalone message, separate from any text you also return. If the sticker alone answers the request, return an empty final message instead of also describing it in words.',
-  parameters: {
-    type: 'object',
-    properties: {
-      id: {
-        type: 'string',
-        description: 'The id of the learned sticker to send, from the "Learned Stickers" list (required).',
-      },
-    },
-    required: ['id'],
-  },
-};
-
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadSendStickerConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'send-sticker',
     setup(registry) {
-      const definition: ToolDefinition = {
+      const definition = defineTool({
         name: TOOL_NAME,
-        schema: SCHEMA,
+        description:
+          'Send a previously learned sticker in the current chat as part of replying. Only use a sticker whose "Learned Stickers" description clearly matches the current situation. Do not invent an id. ' +
+          'WhatsApp cannot attach a caption to a sticker: this always sends it as its own standalone message, separate from any text you also return. If the sticker alone answers the request, return an empty final message instead of also describing it in words.',
+        parameters: {
+          id: { type: 'string', required: true, description: 'The id of the learned sticker to send, from the "Learned Stickers" list.' },
+        },
         handler: (logger, args, execContext) => sendSticker(logger, args, execContext, context.stickerRules, context.channels),
-        enabled: (opts) => opts.trusted && opts.stickersEnabled,
-      };
+        enabled: (opts) => opts.trusted && opts.stickersEnabled && context.pluginEnablement.isEnabled('send-sticker'),
+      });
       registry.extend(COMMANDS, definition);
     },
   };

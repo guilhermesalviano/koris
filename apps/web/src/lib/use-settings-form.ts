@@ -35,21 +35,21 @@ export interface SettingsFormState {
   manager: AiProfileForm;
   workers: AiProfileForm;
   search_api_key: string;
-  telegram: { enabled: boolean; bot_token: string; whitelist: string };
-  whatsapp: { enabled: boolean; mention_id: string; whitelist: string };
+  telegram: { bot_token: string; whitelist: string };
+  whatsapp: { mention_id: string; whitelist: string };
   allowed_domains: string[];
   personal_information: Record<string, string>;
 }
 
-const EMPTY_PROFILE: AiProfileForm = { provider: 'ollama', base_url: 'http://localhost:11434', api_token: '', model: '' };
+const EMPTY_PROFILE: AiProfileForm = { provider: 'ollama', base_url: '', api_token: '', model: '' };
 
 export const DEFAULT_FORM: SettingsFormState = {
   sameForBoth: true,
   manager: { ...EMPTY_PROFILE },
   workers: { ...EMPTY_PROFILE },
   search_api_key: '',
-  telegram: { enabled: false, bot_token: '', whitelist: '' },
-  whatsapp: { enabled: false, mention_id: '', whitelist: '' },
+  telegram: { bot_token: '', whitelist: '' },
+  whatsapp: { mention_id: '', whitelist: '' },
   allowed_domains: [],
   personal_information: {},
 };
@@ -66,7 +66,7 @@ function secretFieldDefault(value: string | undefined): string {
 function mapProfile(profile: RuntimeAiProfile | undefined): AiProfileForm {
   return {
     provider: profile?.PROVIDER ?? EMPTY_PROFILE.provider,
-    base_url: profile?.BASE_URL ?? EMPTY_PROFILE.base_url,
+    base_url: profile?.BASE_URL ?? '',
     api_token: secretFieldDefault(profile?.API_TOKEN),
     model: profile?.MODEL ?? '',
   };
@@ -85,12 +85,10 @@ export function mapRuntimeToForm(data: RuntimeSettings): SettingsFormState {
     workers,
     search_api_key: secretFieldDefault(data.AI?.SEARCH_API_KEY),
     telegram: {
-      enabled: data.CHANNELS?.TELEGRAM?.ENABLED ?? false,
       bot_token: secretFieldDefault(data.CHANNELS?.TELEGRAM?.BOT_TOKEN),
       whitelist: data.CHANNELS?.TELEGRAM?.WHITELIST ?? '',
     },
     whatsapp: {
-      enabled: data.CHANNELS?.WHATSAPP?.ENABLED ?? false,
       mention_id: data.CHANNELS?.WHATSAPP?.MENTION_ID ?? '',
       whitelist: data.CHANNELS?.WHATSAPP?.WHITELIST ?? '',
     },
@@ -109,6 +107,39 @@ function buildProfilePatch(profile: AiProfileForm): Record<string, unknown> {
   return patch;
 }
 
+/** Channel-only slice of the settings payload (telegram/whatsapp secrets + whitelists). */
+export function buildChannelsPatch(form: SettingsFormState): Record<string, unknown> {
+  const telegram: Record<string, unknown> = { whitelist: form.telegram.whitelist };
+  if (form.telegram.bot_token) telegram.bot_token = form.telegram.bot_token;
+
+  return {
+    channels: {
+      telegram,
+      whatsapp: {
+        mention_id: form.whatsapp.mention_id,
+        whitelist: form.whatsapp.whitelist,
+      },
+    },
+  };
+}
+
+/** "General" slice: web search key, allowed domains, personal info — no provider/channel config. */
+export function buildGeneralPatch(form: SettingsFormState): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+
+  if (form.search_api_key) {
+    patch.ai = { search_api_key: form.search_api_key };
+  }
+  if (form.allowed_domains.length > 0) {
+    patch.allowed_domains = form.allowed_domains;
+  }
+  if (Object.keys(form.personal_information).length > 0) {
+    patch.personal_information = form.personal_information;
+  }
+
+  return patch;
+}
+
 /** Builds the partial snake_case payload for POST /settings from the current form state. */
 export function buildSettingsPatch(form: SettingsFormState): Record<string, unknown> {
   const workers = form.sameForBoth ? form.manager : form.workers;
@@ -120,11 +151,9 @@ export function buildSettingsPatch(form: SettingsFormState): Record<string, unkn
     },
     channels: {
       telegram: {
-        enabled: form.telegram.enabled,
         whitelist: form.telegram.whitelist,
       },
       whatsapp: {
-        enabled: form.whatsapp.enabled,
         mention_id: form.whatsapp.mention_id,
         whitelist: form.whatsapp.whitelist,
       },
@@ -162,6 +191,18 @@ export interface ConnectionTestResult {
   status?: number;
 }
 
+/** Human-readable one-liner for a provider connection test result. */
+export function formatConnectionTestResult(result: ConnectionTestResult): string {
+  if (result.ok) {
+    return result.skipped
+      ? 'mock provider — no check needed'
+      : `reachable${result.detail ? ` (v${result.detail})` : ''}`;
+  }
+  return result.authFailed
+    ? `auth failed (HTTP ${result.status})`
+    : (result.error ?? `HTTP ${result.status}`);
+}
+
 export interface TelegramTestResult {
   ok: boolean;
   username?: string;
@@ -172,7 +213,7 @@ export interface TelegramTestResult {
 export function useSettingsForm() {
   const [form, setForm] = useState<SettingsFormState>(DEFAULT_FORM);
   const [original, setOriginal] = useState<RuntimeSettings | null>(null);
-  const [providers, setProviders] = useState<string[]>(['ollama', 'nvidia']);
+  const [providers, setProviders] = useState<string[]>(['ollama', 'nvidia', 'openai', 'deepseek']);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -257,12 +298,12 @@ export function useSettingsForm() {
     }
   }, []);
 
-  const submit = useCallback(async (): Promise<boolean> => {
+  const submit = useCallback(async (patchOverride?: Record<string, unknown>): Promise<boolean> => {
     setSaving(true);
     setSaveErrors(null);
     setSaveSuccess(false);
     try {
-      const patch = buildSettingsPatch(form);
+      const patch = patchOverride ?? buildSettingsPatch(form);
       const res = await apiRequest<{ success: boolean; settings: RuntimeSettings }>('/settings', {
         method: 'POST',
         body: JSON.stringify(patch),

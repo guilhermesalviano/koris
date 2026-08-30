@@ -58,37 +58,28 @@ function toPascalCase(kebab: string): string {
   return kebab.split('-').map((part) => part[0]!.toUpperCase() + part.slice(1)).join('');
 }
 
-function toCamelCase(kebab: string): string {
-  const pascal = toPascalCase(kebab);
-  return pascal[0]!.toLowerCase() + pascal.slice(1);
-}
+function buildParametersBlock(parameters: ScaffoldParameterSpec[]): string {
+  if (parameters.length === 0) return '';
 
-function toUpperSnakeCase(kebab: string): string {
-  return kebab.replace(/-/g, '_').toUpperCase();
-}
-
-function buildParametersSchema(parameters: ScaffoldParameterSpec[]): string {
-  if (parameters.length === 0) {
-    return `{\n      type: 'object',\n      properties: {},\n      required: [],\n    }`;
-  }
-
-  const properties = parameters
-    .map((p) => `      ${p.name}: {\n        type: '${p.type}',\n        description: ${JSON.stringify(p.description)},\n      },`)
+  const entries = parameters
+    .map((p) => {
+      const requiredLine = p.required ? `\n        required: true,` : '';
+      return `      ${p.name}: {\n        type: '${p.type}',${requiredLine}\n        description: ${JSON.stringify(p.description)},\n      },`;
+    })
     .join('\n');
-  const required = parameters.filter((p) => p.required).map((p) => JSON.stringify(p.name));
 
-  return `{\n      type: 'object',\n      properties: {\n${properties}\n      },\n      required: [${required.join(', ')}],\n    }`;
+  return `\n    parameters: {\n${entries}\n    },`;
 }
 
 function buildIndexFile(input: ScaffoldToolInput, toolName: string, pluginClassName: string): string {
-  return `import type { ILogger, Plugin, ToolDefinition, ToolPluginContext, ToolResult } from '../contracts';
+  return `import type { ILogger, Plugin, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
-import { load${pluginClassName}Config } from './config';
+import { defineTool } from '../define-tool';
 
 export const TOOL_NAME = '${toolName}' as const;
 
 // TODO: implement the actual tool logic. args are whatever the LLM passed,
-// matching the "parameters" schema below.
+// matching the "parameters" spec below.
 export async function execute${pluginClassName}(
   logger: ILogger,
   args: Record<string, unknown>,
@@ -101,54 +92,20 @@ export async function execute${pluginClassName}(
   };
 }
 
-const SCHEMA = {
-  description: ${JSON.stringify(input.description)},
-  parameters: ${buildParametersSchema(input.parameters ?? [])},
-};
-
-// Rename to "context" (dropping the underscore) once the TODO above actually
-// reads from it — e.g. context.heartbeats, context.channels, context.config.
-export function create(_context: ToolPluginContext): Plugin | null {
-  const cfg = load${pluginClassName}Config();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: '${input.name}',
     setup(registry) {
-      const definition: ToolDefinition = {
+      const definition = defineTool({
         name: TOOL_NAME,
-        schema: SCHEMA,
+        description: ${JSON.stringify(input.description)},${buildParametersBlock(input.parameters ?? [])}
         handler: (logger, args) => execute${pluginClassName}(logger, args),
-        enabled: (opts) => opts.trusted,
-      };
+        enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('${input.name}'),
+      });
       registry.extend(COMMANDS, definition);
     },
   };
 }
-`;
-}
-
-function buildConfigFile(input: ScaffoldToolInput, pluginClassName: string, pluginCamelName: string): string {
-  const envKey = `TOOLS_${toUpperSnakeCase(input.name)}_ENABLED`;
-  return `import { definePluginConfig } from '../../config/define-config';
-
-export interface ${pluginClassName}PluginConfig {
-  enabled: boolean;
-}
-
-const ${pluginCamelName}Config = definePluginConfig<${pluginClassName}PluginConfig>({
-  family: 'tools',
-  pluginName: '${input.name}',
-  fallbackDir: __dirname,
-  schema: {
-    enabled: { yamlKey: 'enabled', envKey: '${envKey}', fallback: 'true', parse: (v) => v === 'true' },
-  },
-});
-
-export const load${pluginClassName}Config = ${pluginCamelName}Config.load;
-export const write${pluginClassName}ConfigPatch = ${pluginCamelName}Config.writePatch;
 `;
 }
 
@@ -190,7 +147,6 @@ export function scaffoldToolPlugin(input: ScaffoldToolInput, options: ScaffoldOp
 
   const toolName = input.toolName ?? input.name.replace(/-/g, '_');
   const pluginClassName = toPascalCase(input.name);
-  const pluginCamelName = toCamelCase(input.name);
 
   io.mkdir(target);
 
@@ -201,8 +157,6 @@ export function scaffoldToolPlugin(input: ScaffoldToolInput, options: ScaffoldOp
   };
 
   write('index.ts', buildIndexFile(input, toolName, pluginClassName));
-  write('config.ts', buildConfigFile(input, pluginClassName, pluginCamelName));
-  write('config.example.yml', '# Tools default to enabled=true (unlike channel plugins, which default to false).\nenabled: true\n');
   write('index.test.ts', buildTestFile(pluginClassName));
 
   return { pluginName: input.name, toolName, createdFiles };

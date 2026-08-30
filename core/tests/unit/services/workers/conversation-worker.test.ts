@@ -49,6 +49,16 @@ describe('ConversationWorker', () => {
     expect(messageSvc.save).toHaveBeenCalledWith({ role: 'assistant', content: 'hi' });
   });
 
+  it('flags the assistant message with answerErrorCode when the turn failed', async () => {
+    const logger = makeLogger();
+    const { worker, messageSvc } = makeWorker(logger);
+
+    await worker.run({ sessionId: 's1', ask: 'q', answer: 'Rate limit exceeded', answerErrorCode: 'rate_limited', channel: 'web' });
+
+    expect(messageSvc.save).toHaveBeenCalledWith({ role: 'user', content: 'q' });
+    expect(messageSvc.save).toHaveBeenCalledWith({ role: 'assistant', content: 'Rate limit exceeded', errorCode: 'rate_limited' });
+  });
+
   it('calls save exactly twice (user + assistant)', async () => {
     const logger = makeLogger();
     const { worker, messageSvc } = makeWorker(logger);

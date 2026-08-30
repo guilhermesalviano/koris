@@ -8,7 +8,7 @@ import type { TelegramPluginOptions } from './types';
 export function createTelegramAdapter(options: TelegramPluginOptions): ChannelDefinition {
   return {
     name: 'telegram',
-    enabled: () => options.enabled && options.token.length > 0,
+    enabled: () => options.isEnabled() && options.token.length > 0,
     capabilities: TELEGRAM_CAPABILITIES,
     start: (logger: ILogger, gateway: IMessageGateway) => {
       let stopFn: (() => void) | null = null;

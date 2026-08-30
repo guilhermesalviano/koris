@@ -1,8 +1,8 @@
-import type { ILogger, IHeartbeatGateway, Plugin, ToolDefinition, ToolPluginContext, ToolResult } from '../contracts';
+import type { ILogger, IHeartbeatGateway, Plugin, ToolPluginContext, ToolResult } from '../contracts';
 import { COMMANDS } from '../contracts';
+import { defineTool } from '../define-tool';
 import { getOptionalStringArg, getRequiredStringArg, isAllowedValue } from '../runtime';
 import { hasSpecificHour, isEveryMinute, isValidCronExpression } from '../cron';
-import { loadUpdateBeatConfig } from './config';
 
 export const TOOL_NAME = 'update_beat' as const;
 
@@ -116,48 +116,29 @@ export async function updateBeat(
   }
 }
 
-const SCHEMA = {
-  description: 'Update an existing beat. Call this when the user wants to change the description, type, or schedule of a beat. Use list_beats first if the ID is not known.',
-  parameters: {
-    type: 'object',
-    properties: {
-      id: {
-        type: 'string',
-        description: 'The UUID of the beat to update.',
-      },
-      beat: {
-        type: 'string',
-        description: 'New description for the beat (optional).',
-      },
-      type: {
-        type: 'string',
-        enum: ['reminder', 'scheduled_beat'],
-        description: 'New type for the beat (optional): "reminder" or "scheduled_beat".',
-      },
-      cron_expression: {
-        type: 'string',
-        description: 'New 5-field cron expression for the schedule (optional). Examples: "0 9 * * *" (daily at 9am), "0 9 * * 1" (every Monday at 9am).',
-      },
-    },
-    required: ['id'],
-  },
-};
-
-export function create(context: ToolPluginContext): Plugin | null {
-  const cfg = loadUpdateBeatConfig();
-  if (!cfg.enabled) {
-    return null;
-  }
-
+export function create(context: ToolPluginContext): Plugin {
   return {
     name: 'update-beat',
     setup(registry) {
-      const definition: ToolDefinition = {
+      const definition = defineTool({
         name: TOOL_NAME,
-        schema: SCHEMA,
+        description: 'Update an existing beat. Call this when the user wants to change the description, type, or schedule of a beat. Use list_beats first if the ID is not known.',
+        parameters: {
+          id: { type: 'string', required: true, description: 'The UUID of the beat to update.' },
+          beat: { type: 'string', description: 'New description for the beat (optional).' },
+          type: {
+            type: 'string',
+            enum: ['reminder', 'scheduled_beat'],
+            description: 'New type for the beat (optional): "reminder" or "scheduled_beat".',
+          },
+          cron_expression: {
+            type: 'string',
+            description: 'New 5-field cron expression for the schedule (optional). Examples: "0 9 * * *" (daily at 9am), "0 9 * * 1" (every Monday at 9am).',
+          },
+        },
         handler: (logger, args) => updateBeat(logger, args, context.heartbeats),
-        enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat',
-      };
+        enabled: (opts) => opts.trusted && opts.agentName !== 'heartbeat' && context.pluginEnablement.isEnabled('update-beat'),
+      });
       registry.extend(COMMANDS, definition);
     },
   };

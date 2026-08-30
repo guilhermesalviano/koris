@@ -71,6 +71,38 @@ export function useToast(): [string | null, (msg: string, isError?: boolean) => 
   return [message, (msg: string, err = false) => { setMessage(msg); setIsError(err); }, isError];
 }
 
+export function Toggle({
+  checked,
+  onChange,
+  disabled,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onChange}
+      className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full border transition-colors disabled:opacity-50 ${
+        checked ? 'border-accent-muted bg-accent' : 'border-strong bg-bg-3'
+      }`}
+    >
+      <span
+        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-4' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  );
+}
+
 export function Toast({ message, isError }: { message: string | null; isError: boolean }) {
   if (!message) return null;
   return (

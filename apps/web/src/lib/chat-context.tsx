@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
-import { checkHealth, streamChat, apiRequest } from './api';
+import { checkHealth, streamChat, cancelChat, apiRequest } from './api';
 import { clearResponseAlert, triggerResponseDone } from './response-alert';
-import type { ActiveRun, ActiveRunsResponse, ImageAttachment, SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
+import type { ActiveRun, ActiveRunsResponse, AllowedDomainsResponse, GateBlock, GateBlocksResponse, ImageAttachment, SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
 
 export interface ChatMessage {
   id: number;
@@ -11,13 +11,16 @@ export interface ChatMessage {
   missingImages?: number;
   status?: string;
   pending?: boolean;
+  error?: boolean;
   timestamp: string;
   backgroundRunKey?: string;
 }
 
+type HistoryMessage = { id: string; role: string; content: string; images?: ImageAttachment[]; missingImages?: number; errorCode?: string; createdAt: string };
+
 interface ChatHistoryResponse {
   sessionId: string | null;
-  messages: { id: string; role: string; content: string; images?: ImageAttachment[]; missingImages?: number; createdAt: string }[];
+  messages: HistoryMessage[];
 }
 
 interface ChatContextValue {
@@ -33,11 +36,16 @@ interface ChatContextValue {
   historyLoaded: boolean;
   toast: string | null;
   submit: () => Promise<void>;
+  resendLast: () => Promise<void>;
+  cancel: () => void;
   fillPrompt: (text: string) => void;
   activeSessionId: string | null;
   sessions: SessionSummary[];
   openSession: (id: string | null) => void;
   newChat: () => Promise<void>;
+  gateBlocks: GateBlock[];
+  allowDomain: (domain: string) => Promise<void>;
+  dismissGateBlock: (domain: string) => void;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -55,13 +63,14 @@ function timeStr(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function mapMessages(messages: { id: string; role: string; content: string; images?: ImageAttachment[]; missingImages?: number; createdAt: string }[]): ChatMessage[] {
+function mapMessages(messages: HistoryMessage[]): ChatMessage[] {
   return messages.map((m) => ({
     id: nextId(),
     role: m.role === 'user' ? 'user' : 'assistant',
     content: m.content,
     images: m.images,
     missingImages: m.missingImages,
+    error: !!m.errorCode,
     timestamp: timeStr(new Date(m.createdAt)),
   }));
 }
@@ -77,6 +86,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [backgroundRun, setBackgroundRun] = useState<ActiveRun | null>(null);
+  const [gateBlocks, setGateBlocks] = useState<GateBlock[]>([]);
+  const dismissedDomainsRef = useRef<Set<string>>(new Set());
   const loadToken = useRef(0);
   const pendingNewChatRef = useRef(false);
   const streamingRef = useRef(false);
@@ -85,6 +96,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const backgroundRunRef = useRef<ActiveRun | null>(null);
   const surfacedRunKeyRef = useRef<string | null>(null);
   const backgroundPendingRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
   const inFlightRef = useRef<{ sessionId: string; userMsg: ChatMessage; assistantId: number; content: string; status: string | null } | null>(null);
 
   useEffect(() => {
@@ -179,8 +191,49 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setActiveSessionId(null);
     setMessages([]);
     setHistoryLoaded(true);
+    setGateBlocks([]);
+    dismissedDomainsRef.current = new Set();
     await loadSessions();
   }, [loadSessions]);
+
+  // Domain-gate blocks: after a turn, a tool call may have been refused because
+  // its target host is not in koris.json `allowed_domains`. Surface those so the
+  // user can add the domain from the chat.
+  const refreshGateBlocks = useCallback(async () => {
+    const sid = activeSessionIdRef.current;
+    if (!sid) {
+      setGateBlocks([]);
+      return;
+    }
+    try {
+      const res = await apiRequest<GateBlocksResponse>(`/chat/gate-blocks?sessionId=${encodeURIComponent(sid)}`);
+      setGateBlocks(res.blocks.filter((b) => !dismissedDomainsRef.current.has(b.domain)));
+    } catch {
+      // Non-critical — leave the current list in place.
+    }
+  }, []);
+
+  const allowDomain = useCallback(async (domain: string) => {
+    try {
+      await apiRequest<AllowedDomainsResponse>('/allowed-domains', {
+        method: 'POST',
+        body: JSON.stringify({ domain }),
+      });
+      setGateBlocks((prev) => prev.filter((b) => b.domain !== domain));
+      setToast(`Added ${domain} to allowed_domains`);
+    } catch (err) {
+      setToast(`Error: ${err instanceof Error ? err.message : 'Failed to add domain'}`);
+    }
+  }, []);
+
+  const dismissGateBlock = useCallback((domain: string) => {
+    dismissedDomainsRef.current.add(domain);
+    setGateBlocks((prev) => prev.filter((b) => b.domain !== domain));
+  }, []);
+
+  useEffect(() => {
+    void refreshGateBlocks();
+  }, [activeSessionId, refreshGateBlocks]);
 
   // Populate the sidebar list on mount. The chat page drives session loading.
   useEffect(() => {
@@ -322,9 +375,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setInput(text);
   }, []);
 
-  const submit = useCallback(async () => {
-    const text = input.trim();
-    const images = attachments;
+  const sendMessage = useCallback(async (rawText: string, images: ImageAttachment[]) => {
+    const text = rawText.trim();
     if ((!text && images.length === 0) || streaming) return;
 
     setStreaming(true);
@@ -333,8 +385,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const userMsg: ChatMessage = { id: nextId(), role: 'user', content: text, images, timestamp: timeStr(new Date()) };
     const assistantId = nextId();
     setMessages((prev) => [...prev, userMsg, { id: assistantId, role: 'assistant', content: '', pending: true, timestamp: '' }]);
-    setInput('');
-    setAttachments([]);
 
     let accumulated = '';
 
@@ -349,6 +399,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
       streamTargetRef.current = targetId;
       inFlightRef.current = { sessionId: targetId, userMsg, assistantId, content: '', status: null };
+      const controller = new AbortController();
+      abortRef.current = controller;
 
       await streamChat(
         text,
@@ -363,6 +415,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           if (inFlightRef.current) inFlightRef.current.content = accumulated;
           setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: accumulated, pending: false, status: undefined } : m)));
         },
+        controller.signal,
       );
 
       setMessages((prev) => prev.map((m) => (m.id === assistantId
@@ -370,20 +423,55 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         : m)));
       triggerResponseDone();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Request failed';
-      setMessages((prev) => prev.map((m) => (m.id === assistantId
-        ? { ...m, content: msg, pending: false, status: undefined, timestamp: timeStr(new Date()) }
-        : m)));
-      setServerHealthy(false);
-      setToast(`Error: ${msg}`);
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setMessages((prev) => prev.map((m) => (m.id === assistantId
+          ? { ...m, content: accumulated ? `${accumulated}\n\n_(canceled)_` : '_(canceled)_', pending: false, status: undefined, error: false, timestamp: timeStr(new Date()) }
+          : m)));
+      } else {
+        const msg = err instanceof Error ? err.message : 'Request failed';
+        setMessages((prev) => prev.map((m) => (m.id === assistantId
+          ? { ...m, content: msg, pending: false, status: undefined, error: true, timestamp: timeStr(new Date()) }
+          : m)));
+        setServerHealthy(false);
+        setToast(`Error: ${msg}`);
+      }
     } finally {
       inFlightRef.current = null;
+      abortRef.current = null;
       streamingRef.current = false;
       streamTargetRef.current = null;
       setStreaming(false);
       loadSessions();
+      void refreshGateBlocks();
     }
-  }, [input, attachments, streaming, activeSessionId, loadSessions]);
+  }, [streaming, activeSessionId, loadSessions, refreshGateBlocks]);
+
+  const cancel = useCallback(() => {
+    abortRef.current?.abort();
+    const sid = streamTargetRef.current ?? activeSessionIdRef.current;
+    if (sid) void cancelChat(sid);
+  }, []);
+
+  const submit = useCallback(async () => {
+    const text = input;
+    const images = attachments;
+    if ((!text.trim() && images.length === 0) || streaming) return;
+    setInput('');
+    setAttachments([]);
+    await sendMessage(text, images);
+  }, [input, attachments, streaming, sendMessage]);
+
+  // Re-send the last question (text + images) after a provider error, so the
+  // user doesn't retype. Keeps the failed turn on screen; appends a fresh try.
+  const resendLast = useCallback(async () => {
+    if (streaming) return;
+    let lastUser: ChatMessage | undefined;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') { lastUser = messages[i]; break; }
+    }
+    if (!lastUser) return;
+    await sendMessage(lastUser.content, lastUser.images ?? []);
+  }, [messages, streaming, sendMessage]);
 
   const value: ChatContextValue = {
     messages,
@@ -398,11 +486,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     historyLoaded,
     toast,
     submit,
+    resendLast,
+    cancel,
     fillPrompt,
     activeSessionId,
     sessions,
     openSession,
     newChat,
+    gateBlocks,
+    allowDomain,
+    dismissGateBlock,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

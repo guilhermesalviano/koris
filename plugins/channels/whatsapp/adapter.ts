@@ -8,7 +8,7 @@ import type { WhatsAppPluginOptions } from './types';
 export function createWhatsAppAdapter(options: WhatsAppPluginOptions): ChannelDefinition {
   return {
     name: 'whatsapp',
-    enabled: () => options.enabled,
+    enabled: () => options.isEnabled(),
     capabilities: WHATSAPP_CAPABILITIES,
     start: (logger: ILogger, gateway: IMessageGateway) => {
       let stopFn: (() => void) | null = null;
