@@ -318,7 +318,10 @@ describe('createChatHandler', () => {
     await promise;
 
     expect(mockAgentHandle).toHaveBeenCalledTimes(1);
-    expect(mockAgentHandle.mock.calls[0][2]).not.toHaveProperty('signal');
+    // The run gets an abort signal, but a mere client disconnect must NOT abort it.
+    const passedOptions = mockAgentHandle.mock.calls[0][2] as { signal?: AbortSignal };
+    expect(passedOptions.signal).toBeInstanceOf(AbortSignal);
+    expect(passedOptions.signal?.aborted).toBe(false);
     expect(res.write).not.toHaveBeenCalledWith('data: [DONE]\n\n');
     expect(res.end).not.toHaveBeenCalled();
   });
@@ -363,5 +366,96 @@ describe('createChatHandler', () => {
     await handler(req, res);
 
     expect(activeRunsRegistry.list()).toHaveLength(0);
+  });
+
+  it('passes an abort signal into the gateway options', async () => {
+    mockAgentHandle.mockResolvedValue('done');
+
+    const { createChatHandler } = await loadWebModule();
+    const handler = createChatHandler({ handle: mockAgentHandle } as unknown as IMessageGateway) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    req.body = { message: 'hello', sessionId: 'sess-1' } as Request['body'];
+
+    await handler(req, makeResponse());
+
+    const options = mockAgentHandle.mock.calls[0][2] as { signal?: AbortSignal };
+    expect(options.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('emits a cancelled event (not an error) when the run is aborted', async () => {
+    const { createChatHandler } = await loadWebModule();
+    const { AIServiceError } = await import('../../../src/services/ai-completion-service');
+    mockAgentHandle.mockRejectedValue(new AIServiceError('aborted', 'request aborted'));
+
+    const handler = createChatHandler({ handle: mockAgentHandle } as unknown as IMessageGateway) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    req.body = { message: 'hello', sessionId: 'sess-1' } as Request['body'];
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"type":"cancelled"'));
+    expect(res.write).not.toHaveBeenCalledWith(expect.stringContaining('"type":"error"'));
+    expect(res.write).toHaveBeenCalledWith('data: [DONE]\n\n');
+  });
+});
+
+describe('createChatCancelHandler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAgentHandle.mockReset();
+  });
+
+  it('returns 400 when sessionId is missing', async () => {
+    const { createChatCancelHandler } = await loadWebModule();
+    const handler = createChatCancelHandler({ handle: mockAgentHandle } as unknown as IMessageGateway) as AsyncHandler;
+    const res = makeResponse();
+
+    await handler(makeRequest('127.0.0.1'), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('reports { cancelled: false } when no run is active for the session', async () => {
+    const { createChatCancelHandler } = await loadWebModule();
+    const handler = createChatCancelHandler({ handle: mockAgentHandle } as unknown as IMessageGateway) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    req.body = { sessionId: 'nope' } as Request['body'];
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.json).toHaveBeenCalledWith({ cancelled: false });
+  });
+
+  it('aborts the in-flight run for a session and reports { cancelled: true }', async () => {
+    let capturedSignal: AbortSignal | undefined;
+    let resolveAgent: (value: string) => void = () => {};
+    mockAgentHandle.mockImplementation((_input: unknown, _origin: unknown, options: { signal?: AbortSignal }) => {
+      capturedSignal = options.signal;
+      return new Promise<string>((resolve) => { resolveAgent = resolve; });
+    });
+
+    const { createChatHandler, createChatCancelHandler } = await loadWebModule();
+    const gateway = { handle: mockAgentHandle } as unknown as IMessageGateway;
+    const chat = createChatHandler(gateway) as AsyncHandler;
+    const cancel = createChatCancelHandler(gateway) as AsyncHandler;
+
+    const chatReq = makeRequest('127.0.0.1');
+    chatReq.body = { message: 'hello', sessionId: 'sess-9' } as Request['body'];
+    const chatPromise = chat(chatReq, makeResponse());
+
+    expect(capturedSignal?.aborted).toBe(false);
+
+    const cancelReq = makeRequest('127.0.0.1');
+    cancelReq.body = { sessionId: 'sess-9' } as Request['body'];
+    const cancelRes = makeResponse();
+    await cancel(cancelReq, cancelRes);
+
+    expect(cancelRes.json).toHaveBeenCalledWith({ cancelled: true });
+    expect(capturedSignal?.aborted).toBe(true);
+
+    resolveAgent('done');
+    await chatPromise;
   });
 });

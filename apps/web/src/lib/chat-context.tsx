@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
-import { checkHealth, streamChat, apiRequest } from './api';
+import { checkHealth, streamChat, cancelChat, apiRequest } from './api';
 import { clearResponseAlert, triggerResponseDone } from './response-alert';
 import type { ActiveRun, ActiveRunsResponse, AllowedDomainsResponse, GateBlock, GateBlocksResponse, ImageAttachment, SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
 
@@ -37,6 +37,7 @@ interface ChatContextValue {
   toast: string | null;
   submit: () => Promise<void>;
   resendLast: () => Promise<void>;
+  cancel: () => void;
   fillPrompt: (text: string) => void;
   activeSessionId: string | null;
   sessions: SessionSummary[];
@@ -95,6 +96,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const backgroundRunRef = useRef<ActiveRun | null>(null);
   const surfacedRunKeyRef = useRef<string | null>(null);
   const backgroundPendingRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
   const inFlightRef = useRef<{ sessionId: string; userMsg: ChatMessage; assistantId: number; content: string; status: string | null } | null>(null);
 
   useEffect(() => {
@@ -397,6 +399,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
       streamTargetRef.current = targetId;
       inFlightRef.current = { sessionId: targetId, userMsg, assistantId, content: '', status: null };
+      const controller = new AbortController();
+      abortRef.current = controller;
 
       await streamChat(
         text,
@@ -411,6 +415,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           if (inFlightRef.current) inFlightRef.current.content = accumulated;
           setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: accumulated, pending: false, status: undefined } : m)));
         },
+        controller.signal,
       );
 
       setMessages((prev) => prev.map((m) => (m.id === assistantId
@@ -418,14 +423,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         : m)));
       triggerResponseDone();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Request failed';
-      setMessages((prev) => prev.map((m) => (m.id === assistantId
-        ? { ...m, content: msg, pending: false, status: undefined, error: true, timestamp: timeStr(new Date()) }
-        : m)));
-      setServerHealthy(false);
-      setToast(`Error: ${msg}`);
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setMessages((prev) => prev.map((m) => (m.id === assistantId
+          ? { ...m, content: accumulated ? `${accumulated}\n\n_(canceled)_` : '_(canceled)_', pending: false, status: undefined, error: false, timestamp: timeStr(new Date()) }
+          : m)));
+      } else {
+        const msg = err instanceof Error ? err.message : 'Request failed';
+        setMessages((prev) => prev.map((m) => (m.id === assistantId
+          ? { ...m, content: msg, pending: false, status: undefined, error: true, timestamp: timeStr(new Date()) }
+          : m)));
+        setServerHealthy(false);
+        setToast(`Error: ${msg}`);
+      }
     } finally {
       inFlightRef.current = null;
+      abortRef.current = null;
       streamingRef.current = false;
       streamTargetRef.current = null;
       setStreaming(false);
@@ -433,6 +445,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       void refreshGateBlocks();
     }
   }, [streaming, activeSessionId, loadSessions, refreshGateBlocks]);
+
+  const cancel = useCallback(() => {
+    abortRef.current?.abort();
+    const sid = streamTargetRef.current ?? activeSessionIdRef.current;
+    if (sid) void cancelChat(sid);
+  }, []);
 
   const submit = useCallback(async () => {
     const text = input;
@@ -469,6 +487,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     toast,
     submit,
     resendLast,
+    cancel,
     fillPrompt,
     activeSessionId,
     sessions,

@@ -111,6 +111,7 @@ class ChatRouteHandler {
     res.on('close', onClose);
 
     const runId = randomUUID();
+    const abortController = new AbortController();
     if (sessionId) {
       activeRunsRegistry.start({
         id: runId,
@@ -119,6 +120,7 @@ class ChatRouteHandler {
         startedAt: new Date().toISOString(),
         channel: 'web',
       });
+      activeRunsRegistry.attachController(runId, abortController);
     }
 
     const writeSse = this.createSseWriter(res, () => clientClosed);
@@ -127,6 +129,8 @@ class ChatRouteHandler {
     try {
       const result = await this.gateway.handle({ text: message, images }, 'web', {
         sessionId,
+        runId,
+        signal: abortController.signal,
         onProgress: (summary: string) => {
           if (clientClosed) {
             return;
@@ -152,6 +156,15 @@ class ChatRouteHandler {
         return;
       }
 
+      const aborted = abortController.signal.aborted
+        || (error instanceof AIServiceError && error.code === 'aborted');
+      if (aborted) {
+        writeSse({ type: 'cancelled' });
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
+      }
+
       const payload = error instanceof AIServiceError
         ? error.toJSON()
         : { code: 'unknown' as const, message: error instanceof Error ? error.message : String(error) };
@@ -166,6 +179,16 @@ class ChatRouteHandler {
       req.off('aborted', onClose);
       res.off('close', onClose);
     }
+  };
+
+  readonly cancel = async (req: Request, res: Response): Promise<void> => {
+    const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId : '';
+    if (!sessionId) {
+      res.status(400).json({ error: 'sessionId is required' });
+      return;
+    }
+    const cancelled = activeRunsRegistry.abortBySession(sessionId);
+    res.json({ cancelled });
   };
 
   private createSseWriter(res: Response, isClosed: () => boolean): SseWriter {
@@ -327,6 +350,7 @@ class DashboardServer implements WebServerHandle {
     app.use(express.json({ limit: '25mb' }));
     app.use(express.static(publicDir));
     app.post('/api/chat', chatHandler.handle);
+    app.post('/api/chat/cancel', chatHandler.cancel);
     app.use('/api/admin', adminRouter);
     app.get('/health', healthHandler.handle);
 
@@ -367,6 +391,10 @@ function createChatHandler(gateway: IMessageGateway) {
   return new ChatRouteHandler(gateway).handle;
 }
 
+function createChatCancelHandler(gateway: IMessageGateway) {
+  return new ChatRouteHandler(gateway).cancel;
+}
+
 async function startWebServer(logger: ILogger, gateway: IMessageGateway, db: IDatabaseService): Promise<WebServerHandle> {
   return new DashboardServer(logger, gateway, db).start();
 }
@@ -378,5 +406,6 @@ export {
   serveIndexHandler,
   createHealthHandler,
   createChatHandler,
+  createChatCancelHandler,
   startWebServer,
 };

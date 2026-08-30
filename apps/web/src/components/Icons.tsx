@@ -160,6 +160,14 @@ export function SendIcon({ className }: IconProps) {
   );
 }
 
+export function StopIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24">
+      <rect x="6" y="6" width="12" height="12" rx="2.5" />
+    </svg>
+  );
+}
+
 export function ChevronLeftIcon({ className }: IconProps) {
   return (
     <svg className={className} style={svgStyle(2)} viewBox="0 0 24 24">

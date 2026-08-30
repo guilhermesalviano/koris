@@ -5,7 +5,7 @@ import { useChat } from '../../lib/chat-context';
 import { usePageTitle } from '../../lib/use-page-title';
 import ImageLightbox from '../../components/ImageLightbox';
 import ProviderPicker from '../../components/ProviderPicker';
-import { AttachIcon, BrokenImageIcon, CloseIcon, PlusIcon, RetryIcon, SendIcon } from '../../components/Icons';
+import { AttachIcon, BrokenImageIcon, CloseIcon, PlusIcon, RetryIcon, SendIcon, StopIcon } from '../../components/Icons';
 import type { ImageAttachment } from '../../lib/types';
 
 const MAX_CHARS = 4000;
@@ -17,7 +17,7 @@ function imageSrc(image: ImageAttachment): string {
 export default function ChatPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
-  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, resendLast, openSession, sessions, activeSessionId, newChat, gateBlocks, allowDomain, dismissGateBlock } = useChat();
+  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, resendLast, cancel, openSession, sessions, activeSessionId, newChat, gateBlocks, allowDomain, dismissGateBlock } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -58,6 +58,9 @@ export default function ChatPage() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (canSend) submit();
+    } else if (e.key === 'Escape' && streaming) {
+      e.preventDefault();
+      cancel();
     }
   }
 
@@ -164,14 +167,25 @@ export default function ChatPage() {
           onPaste={handlePaste}
           className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3"
         />
-        <button
-          disabled={!canSend}
-          title="Send message"
-          onClick={submit}
-          className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:enabled:opacity-90 active:enabled:scale-95 disabled:opacity-35 disabled:cursor-default"
-        >
-          <SendIcon className="relative z-10 h-[15px] w-[15px] fill-none stroke-white" />
-        </button>
+        {streaming ? (
+          <button
+            type="button"
+            title="Stop generating"
+            onClick={cancel}
+            className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:opacity-90 active:scale-95"
+          >
+            <StopIcon className="relative z-10 h-3.5 w-3.5 fill-white" />
+          </button>
+        ) : (
+          <button
+            disabled={!canSend}
+            title="Send message"
+            onClick={submit}
+            className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:enabled:opacity-90 active:enabled:scale-95 disabled:opacity-35 disabled:cursor-default"
+          >
+            <SendIcon className="relative z-10 h-[15px] w-[15px] fill-none stroke-white" />
+          </button>
+        )}
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-2 px-1 font-mono text-[11px] text-txt-3">
         <ProviderPicker />
