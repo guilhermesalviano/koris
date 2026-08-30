@@ -674,6 +674,36 @@ describe('AdminRouterFactory /settings', () => {
     expect(body.providers).not.toContain('mock');
   });
 
+  it('GET /connectors returns the metadata catalogue plus the active per-role config', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/connectors'), res);
+
+    expect(res.json).toHaveBeenCalledTimes(1);
+    const body = res.json.mock.calls[0][0];
+
+    expect(Array.isArray(body.connectors)).toBe(true);
+    expect(body.connectors.map((c: { name: string }) => c.name)).not.toContain('mock');
+
+    const openrouter = body.connectors.find((c: { name: string }) => c.name === 'openrouter');
+    expect(openrouter).toMatchObject({
+      label: 'OpenRouter',
+      defaultBaseUrl: 'https://openrouter.ai/api/v1',
+      apiKeyUrl: 'https://openrouter.ai/keys',
+      embeddings: false,
+      isOpenAICompatible: true,
+      configured: expect.any(Boolean),
+    });
+
+    const ollama = body.connectors.find((c: { name: string }) => c.name === 'ollama');
+    expect(ollama.embeddings).toBe(true);
+    expect(ollama.apiKeyUrl).toBeUndefined();
+
+    expect(body.active.manager.provider).toBe(config.AI.MANAGER.PROVIDER);
+    expect(body.active.workers.provider).toBe(config.AI.WORKERS.PROVIDER);
+    expect(typeof body.active.manager.hasToken).toBe('boolean');
+  });
+
   it('POST /settings rejects a non-object body', () => {
     const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();

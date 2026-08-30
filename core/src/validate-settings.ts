@@ -19,6 +19,7 @@ import {
   isSupportedProvider,
   checkAiProviderConnectivity,
 } from './config/validators';
+import { resolveProviderBaseUrl } from './services/providers';
 
 // ── ANSI helpers ──────────────────────────────────────────────────────────────
 const c = {
@@ -150,11 +151,12 @@ async function main() {
     config.AI.MANAGER.PROVIDER,
   );
 
+  const managerBaseUrl = resolveProviderBaseUrl(config.AI.MANAGER.PROVIDER, config.AI.MANAGER.BASE_URL);
   check(
-    isValidUrl(config.AI.MANAGER.BASE_URL),
+    isValidUrl(managerBaseUrl),
     'ai.manager.base_url is a valid URL',
-    `Got: "${config.AI.MANAGER.BASE_URL}"`,
-    config.AI.MANAGER.BASE_URL,
+    `Got: "${managerBaseUrl}" (set ai.manager.base_url, or use a provider with a built-in default)`,
+    managerBaseUrl,
   );
 
   check(
@@ -171,11 +173,12 @@ async function main() {
     config.AI.WORKERS.PROVIDER,
   );
 
+  const workersBaseUrl = resolveProviderBaseUrl(config.AI.WORKERS.PROVIDER, config.AI.WORKERS.BASE_URL);
   check(
-    isValidUrl(config.AI.WORKERS.BASE_URL),
+    isValidUrl(workersBaseUrl),
     'ai.workers.base_url is a valid URL',
-    `Got: "${config.AI.WORKERS.BASE_URL}"`,
-    config.AI.WORKERS.BASE_URL,
+    `Got: "${workersBaseUrl}" (set ai.workers.base_url, or use a provider with a built-in default)`,
+    workersBaseUrl,
   );
 
   check(

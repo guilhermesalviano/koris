@@ -10,7 +10,7 @@ import {
   checkAiProviderConnectivity,
 } from '../config/validators';
 import { loadCurrentOrExampleSettings, mergeSettingsPayload, writeSettingsFile } from '../config/settings-writer';
-import { getSupportedProviders, clearProviderCache } from '../services/providers';
+import { getSupportedProviders, getProviderCatalog, getProviderDefaultBaseUrl, clearProviderCache } from '../services/providers';
 import {
   startWhatsAppLive,
   startTelegramLive,
@@ -771,6 +771,27 @@ class AdminRouterFactory {
       res.json({ providers, channels: CHANNEL_TYPES });
     });
 
+    router.get('/connectors', (_req: Request, res: Response) => {
+      const activeProfile = (profile: typeof config.AI.MANAGER) => ({
+        provider: profile.PROVIDER,
+        model: profile.MODEL,
+        baseUrl: profile.BASE_URL,
+        hasToken: !!profile.API_TOKEN?.trim(),
+      });
+      const configured = new Set([config.AI.MANAGER.PROVIDER, config.AI.WORKERS.PROVIDER]);
+      const connectors = getProviderCatalog().map((entry) => ({
+        ...entry,
+        configured: configured.has(entry.name),
+      }));
+      res.json({
+        connectors,
+        active: {
+          manager: activeProfile(config.AI.MANAGER),
+          workers: activeProfile(config.AI.WORKERS),
+        },
+      });
+    });
+
     router.post('/settings', (req: Request, res: Response) => {
       const patch = req.body;
       if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
@@ -820,7 +841,8 @@ class AdminRouterFactory {
     router.post('/ai/test-connection', async (req: Request, res: Response) => {
       const { provider, base_url: baseUrl, api_token: apiToken } = (req.body ?? {}) as Record<string, unknown>;
 
-      if (typeof provider !== 'string' || typeof baseUrl !== 'string' || !baseUrl) {
+      const baseUrlStr = typeof baseUrl === 'string' ? baseUrl : '';
+      if (typeof provider !== 'string' || (!baseUrlStr && !getProviderDefaultBaseUrl(provider))) {
         res.status(400).json({ error: 'provider and base_url are required.' });
         return;
       }
@@ -828,7 +850,7 @@ class AdminRouterFactory {
       const result = await checkAiProviderConnectivity({
         label: 'test',
         provider,
-        baseUrl,
+        baseUrl: baseUrlStr,
         apiToken: typeof apiToken === 'string' ? apiToken : '',
       });
 

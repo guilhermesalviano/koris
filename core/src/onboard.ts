@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname as pathDirname, join, normalize } from 'path';
 import { startTui, type TuiCommandResult, type TuiContext, type TuiKeypress } from '../../apps/tui';
 import { resolveConfigPaths } from './config/helpers';
+import { getSupportedProviders, getProviderDefaultBaseUrl } from './services/providers';
 
 const ONBOARDING_COMMANDS = [
   { name: '/start', description: 'redraw the onboarding screen' },
@@ -13,8 +14,7 @@ const ONBOARDING_COMMANDS = [
 ];
 
 const SUPPORTED_CHANNELS = ['telegram', 'discord'] as const;
-const SUPPORTED_PROVIDERS = ['ollama', 'nvidia', 'anthropic', 'deepseek'] as const;
-const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
+const SUPPORTED_PROVIDERS: readonly string[] = getSupportedProviders().filter((provider) => provider !== 'mock');
 const BOOLEAN_OPTIONS = ['true', 'false'] as const;
 const EXAMPLE_SETTINGS_FILENAME = 'koris.example.json';
 export const SETTINGS_FILENAME = 'koris.json';
@@ -23,7 +23,7 @@ type OnboardingScreenMode = 'plain' | 'tui';
 type TimelineState = 'complete' | 'active' | 'pending';
 
 export type OnboardingChannel = typeof SUPPORTED_CHANNELS[number];
-export type OnboardingProvider = typeof SUPPORTED_PROVIDERS[number];
+export type OnboardingProvider = string;
 export type OnboardingStep =
   | 'channels'
   | 'telegramToken'
@@ -434,9 +434,7 @@ export class Onboard {
 
       case 'provider':
         this.answers.provider = parseProvider(normalized);
-        if (this.answers.provider === 'nvidia' && !this.answers.providerUrl) {
-          this.answers.providerUrl = NVIDIA_BASE_URL;
-        }
+        this.applyProviderDefaultUrl();
         this.notice = `Captured provider: ${this.answers.provider}.`;
         this.pickerStep = undefined;
         break;
@@ -615,6 +613,17 @@ export class Onboard {
       ...this.answers.personalInfo,
       enabled: true,
     };
+  }
+
+  private applyProviderDefaultUrl(): void {
+    if (this.answers.providerUrl) {
+      return;
+    }
+
+    const presetUrl = this.answers.provider ? getProviderDefaultBaseUrl(this.answers.provider) : undefined;
+    if (presetUrl) {
+      this.answers.providerUrl = presetUrl;
+    }
   }
 
   private clearPersonalDetails(): void {
@@ -817,9 +826,7 @@ export class Onboard {
 
       case 'provider':
         this.answers.provider = parseProvider(selectedOption);
-        if (this.answers.provider === 'nvidia' && !this.answers.providerUrl) {
-          this.answers.providerUrl = NVIDIA_BASE_URL;
-        }
+        this.applyProviderDefaultUrl();
         this.notice = `Captured provider: ${this.answers.provider}.`;
         this.pickerStep = undefined;
         return;
@@ -989,9 +996,9 @@ function parsePersonalDetailPair(input: string): { key: string; value: string } 
 }
 
 function parseProvider(input: string): OnboardingProvider {
-  const normalized = input.toLowerCase();
-  if (SUPPORTED_PROVIDERS.includes(normalized as OnboardingProvider)) {
-    return normalized as OnboardingProvider;
+  const normalized = input.trim().toLowerCase();
+  if (SUPPORTED_PROVIDERS.includes(normalized)) {
+    return normalized;
   }
 
   throw new Error(`Unsupported provider: ${input}. Use ${formatOptionsLabel(SUPPORTED_PROVIDERS)}.`);

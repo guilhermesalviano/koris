@@ -39,7 +39,7 @@ function ProfileFields({
           value={profile.base_url}
           onChange={(e) => api.update((prev) => ({ ...prev, [role]: { ...prev[role], base_url: e.target.value } }))}
           className={`${inputClass} font-mono`}
-          placeholder="http://localhost:11434"
+          placeholder="leave blank to use the provider default"
         />
       </div>
       <div>

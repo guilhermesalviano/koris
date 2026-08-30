@@ -1,5 +1,6 @@
 import { ILogger } from '../../../infrastructure/logger';
 import type { AIChatOptions, AIChatRequest, AIProvider, AIProviderOptions, AIResponse } from '../../../types/chat';
+import type { ProviderRegistration } from '../manifest';
 
 class MockAIProvider implements AIProvider {
   readonly name: string;
@@ -69,6 +70,13 @@ class MockAIProviderFactory {
     const name = typeof opts === 'string' ? opts : 'mock';
     return new MockAIProvider(logger, name);
   }
+}
+
+export function providerManifest(): ProviderRegistration[] {
+  return [{
+    name: 'mock',
+    create: (logger: ILogger) => MockAIProviderFactory.create(logger),
+  }];
 }
 
 export { MockAIProvider, MockAIProviderFactory };

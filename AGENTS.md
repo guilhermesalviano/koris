@@ -11,7 +11,7 @@ Guidance for AI coding agents working in this repository.
 - **Package manager:** `pnpm` (`pnpm@10.18.3`, single-package workspace). Never use `npm`/`yarn`.
 - **Runtime:** Node >= 24. **Build:** `tsc` → `dist/`. No bundler.
 - **Database:** `better-sqlite3` (synchronous, WAL). DB file lives in `core/memory/database.db`.
-- **LLM providers:** Ollama, NVIDIA, Mock — selected per role via `koris.json` (`ai.manager.provider` for the main agent, `ai.workers.provider` for workers/summarizer/heartbeat).
+- **LLM providers:** Ollama (native), an `openai-compatible` client with presets (`openai`, `deepseek`, `groq`, `openrouter`, `xai`, `mistral`, `together`, `gemini`, `nvidia`), and Mock — selected per role via `koris.json` (`ai.manager.provider` for the main agent, `ai.workers.provider` for workers/summarizer/heartbeat). See "AI providers" below.
 - **Testing:** Vitest (globals enabled, `@` alias → `core/src`). Mutation testing via Stryker.
 - **Channels:** `@whiskeysockets/baileys` (WhatsApp) and `@guilhermesalviano/telegram-bot`.
 
@@ -81,11 +81,11 @@ Guidance for AI coding agents working in this repository.
 
 ## AI providers
 
-- `core/src/services/providers/index.ts` — factory registry + singleton `getAIProvider(logger)`.
-- Implementations: `ollama/index.ts`, `nvidia/index.ts`, `mock/index.ts`. Implement `AIProvider` (`core/src/types/chat.ts`).
-- `core/src/services/ai-completion-service.ts` wraps a provider and maps errors to typed `AIErrorCode`s (`aborted`, `timeout`, `authentication`, `rate_limited`, `unavailable`, `malformed_response`, `unknown`).
+- `core/src/services/providers/index.ts` — manifest registry + singleton `getAIProvider(logger)`. Each provider folder exports `providerManifest(): ProviderRegistration[]` (`manifest.ts`); `index.ts` combines the manifests it imports into a `Map<name, registration>`. `getSupportedProviders()`, `getProviderDefaultBaseUrl()`, `isOpenAICompatibleProvider()`, `resolveProviderBaseUrl()`, `getProviderCatalog()` all read that map, so onboarding (`core/src/onboard.ts`), the web setup wizard (`GET /api/admin/capabilities`), the **Connectors page** (`GET /api/admin/connectors` — catalogue with `label`/`apiKeyUrl`/`docsUrl`/`embeddings`/`recommendedModel` + the active per-role config), and `checkAiProviderConnectivity` (`core/src/config/validators.ts`) pick up new providers automatically. Connector display metadata + OpenRouter's `HTTP-Referer`/`X-Title` headers live on the preset rows in `openai-compatible/presets.ts`.
+- Implementations: `ollama/index.ts` (native `/api/chat`), `mock/index.ts` (echo; forced under Vitest / unknown-provider fallback), `openai-compatible/index.ts` — one generic OpenAI Chat Completions client parameterised by `openai-compatible/presets.ts` (`openai`, `deepseek`, `groq`, `openrouter`, `xai`, `mistral`, `together`, `gemini`, `nvidia`; `nvidia` keeps the model-namespace 404 hint). All implement `AIProvider` (`core/src/types/chat.ts`).
+- Config: `ai.<role>.provider` picks the name; `ai.<role>.base_url` is optional — empty falls back to the provider's shipped `defaultBaseUrl` (`resolveProviderBaseUrl`). Provider error strings must keep a `(NNN)` status token or a keyword (`aborted`, `timed out`, `missing content`, …) — `AICompletionService.mapError` parses them for retry / `AIErrorCode` classification (`aborted`, `timeout`, `authentication`, `rate_limited`, `unavailable`, `malformed_response`, `unknown`).
 - `core/src/services/provider-health-service.ts` — health checks / timeouts for providers.
-- Add a new provider: create `core/src/services/providers/<name>/index.ts`, register it in the `PROVIDER_FACTORIES` map.
+- Add an **OpenAI-compatible** service: one row in `openai-compatible/presets.ts`. Add a **native** provider: create `core/src/services/providers/<name>/index.ts` exporting `providerManifest()`, then add its import + array entry in `index.ts` (`PROVIDER_MANIFESTS`). Embeddings: providers without an `/embeddings` endpoint (e.g. `groq`, `xai`) throw from `embed()`; callers in `prompt.ts` / the summarizer catch + warn, so semantic memory silently degrades — pick an embeddings-capable `ai.workers.provider`.
 
 ### Background sub-agent queueing
 
@@ -138,7 +138,7 @@ Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/l
 - Trace path: `apps/web/index.html` (`#root`) → `apps/web/src/main.tsx` (BrowserRouter) → `apps/web/src/App.tsx` (`/` redirects to `/admin`) → `apps/web/src/pages/admin/AdminLayout.tsx` (sidebar + nested routes) → per-page components in `apps/web/src/pages/admin/`. Shared UI lives in `apps/web/src/components/AdminUI.tsx`.
 - `apps/web/src/lib/api.ts` — `streamChat()` consumes the `/api/chat` SSE stream (`progress` status + `content_block_delta` text events); `apiRequest()` calls `/api/admin/*`; `checkHealth()` polls `/health`. `apps/web/src/lib/markdown.ts` + `types.ts` handle rendering and response types.
 - `apps/web/src/lib/chat-context.tsx` — `ChatProvider`/`useChat` hold conversation state, hydrate prior history from `/api/admin/chat/history`, stream replies, and poll server health every 5s. Chats are sessions; `POST /api/admin/sessions` creates a new one without ending the previous, `/api/chat` accepts an optional `sessionId` to route messages to a specific session (`gateway.handle(message, 'web', { sessionId })`, `core/src/dashboard/index.ts:104`).
-- Admin API: `core/src/dashboard/admin.ts` (`AdminRouterFactory`, mounted at `/api/admin`) — overview, sessions, memories, chat history, heartbeats (create/update/delete with cron validation), skills (list merged disk+learned, `PATCH /skills/:name` enable/disable, `POST /skills/sync`), settings. Settings are deep-masked for secrets (`BOT_TOKEN`, `API_TOKEN`, `SEARCH_API_KEY`).
+- Admin API: `core/src/dashboard/admin.ts` (`AdminRouterFactory`, mounted at `/api/admin`) — overview, sessions, memories, chat history, heartbeats (create/update/delete with cron validation), skills (list merged disk+learned, `PATCH /skills/:name` enable/disable, `POST /skills/sync`), settings, `GET /connectors` + `POST /ai/test-connection` (the Connectors page — `apps/web/src/pages/admin/ConnectorsPage.tsx` + `use-connectors.ts`; activating a connector is a partial `POST /settings` `{ai:{<role>:…}}`). Settings are deep-masked for secrets (`BOT_TOKEN`, `API_TOKEN`, `SEARCH_API_KEY`).
 - Build `pnpm build:client` → `dist-web/` (root/outDir in `vite.config.mts`); dev `pnpm dev:client` on port 5173 proxies `/api` and `/health` to `localhost:3000`; type-check via `pnpm lint:client` (`apps/web/tsconfig.json`).
 
 ## Website

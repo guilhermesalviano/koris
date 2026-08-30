@@ -5,6 +5,7 @@ import {
   AuditIcon,
   ChannelsIcon,
   CloseIcon,
+  ConnectorsIcon,
   HeartbeatsIcon,
   MemoriesIcon,
   MenuIcon,
@@ -20,6 +21,7 @@ import {
 } from '../../components/Icons';
 import PluginsModal from './PluginsModal';
 import ChatPage from './ChatPage';
+import ConnectorsPage from './ConnectorsPage';
 import OverviewPage from './OverviewPage';
 import SessionsPage from './SessionsPage';
 import MemoriesPage from './MemoriesPage';
@@ -43,6 +45,7 @@ const NAV_ICONS = {
   audit: AuditIcon,
   usage: OverviewIcon,
   queue: QueueIcon,
+  connectors: ConnectorsIcon,
   settings: SettingsIcon,
 };
 
@@ -60,6 +63,7 @@ const CONFIG_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[
   { to: '/admin/outbound', label: 'Outbound', icon: 'sessions' },
   { to: '/admin/audit', label: 'Audit', icon: 'audit' },
   { to: '/admin/usage', label: 'Usage', icon: 'usage' },
+  { to: '/admin/connectors', label: 'Connectors', icon: 'connectors' },
   { to: '/admin/settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -479,6 +483,7 @@ export default function AdminLayout() {
               <Route path="audit" element={<AuditPage />} />
               <Route path="usage" element={<UsagePage />} />
               <Route path="queue" element={<QueuePage />} />
+              <Route path="connectors" element={<ConnectorsPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Routes>
           </main>

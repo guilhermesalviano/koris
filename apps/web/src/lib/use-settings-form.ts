@@ -41,7 +41,7 @@ export interface SettingsFormState {
   personal_information: Record<string, string>;
 }
 
-const EMPTY_PROFILE: AiProfileForm = { provider: 'ollama', base_url: 'http://localhost:11434', api_token: '', model: '' };
+const EMPTY_PROFILE: AiProfileForm = { provider: 'ollama', base_url: '', api_token: '', model: '' };
 
 export const DEFAULT_FORM: SettingsFormState = {
   sameForBoth: true,
@@ -66,7 +66,7 @@ function secretFieldDefault(value: string | undefined): string {
 function mapProfile(profile: RuntimeAiProfile | undefined): AiProfileForm {
   return {
     provider: profile?.PROVIDER ?? EMPTY_PROFILE.provider,
-    base_url: profile?.BASE_URL ?? EMPTY_PROFILE.base_url,
+    base_url: profile?.BASE_URL ?? '',
     api_token: secretFieldDefault(profile?.API_TOKEN),
     model: profile?.MODEL ?? '',
   };
@@ -168,7 +168,7 @@ export interface TelegramTestResult {
 export function useSettingsForm() {
   const [form, setForm] = useState<SettingsFormState>(DEFAULT_FORM);
   const [original, setOriginal] = useState<RuntimeSettings | null>(null);
-  const [providers, setProviders] = useState<string[]>(['ollama', 'nvidia']);
+  const [providers, setProviders] = useState<string[]>(['ollama', 'nvidia', 'openai', 'deepseek']);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);

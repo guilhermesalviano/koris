@@ -148,6 +148,32 @@ export interface PluginsResponse {
   items: PluginItem[];
 }
 
+export interface ConnectorCatalogEntry {
+  name: string;
+  label: string;
+  defaultBaseUrl?: string;
+  isOpenAICompatible: boolean;
+  embeddings: boolean;
+  recommendedModel?: string;
+  apiKeyUrl?: string;
+  docsUrl?: string;
+  configured: boolean;
+}
+
+export interface ActiveConnector {
+  provider: string;
+  model: string;
+  baseUrl: string;
+  hasToken: boolean;
+}
+
+export type ConnectorRole = 'manager' | 'workers';
+
+export interface ConnectorsResponse {
+  connectors: ConnectorCatalogEntry[];
+  active: Record<ConnectorRole, ActiveConnector>;
+}
+
 export interface ActiveRun {
   id: string;
   sessionId: string;

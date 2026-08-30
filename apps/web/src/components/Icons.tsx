@@ -72,6 +72,14 @@ export function PluginsIcon({ className }: IconProps) {
   );
 }
 
+export function ConnectorsIcon({ className }: IconProps) {
+  return (
+    <svg className={className} style={svgStyle(1.7)} viewBox="0 0 24 24">
+      <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5" />
+    </svg>
+  );
+}
+
 export function AuditIcon({ className }: IconProps) {
   return (
     <svg className={className} style={svgStyle(1.7)} viewBox="0 0 24 24">
