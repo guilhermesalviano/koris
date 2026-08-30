@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
 import { usePageTitle } from '../../lib/use-page-title';
 import ImageLightbox from '../../components/ImageLightbox';
-import { AttachIcon, BrokenImageIcon, ChatIcon, CloseIcon, SendIcon } from '../../components/Icons';
+import ProviderPicker from '../../components/ProviderPicker';
+import { AttachIcon, BrokenImageIcon, ChatIcon, CloseIcon, PlusIcon, SendIcon } from '../../components/Icons';
 import type { ImageAttachment } from '../../lib/types';
 
 const MAX_CHARS = 4000;
@@ -22,7 +23,8 @@ function imageSrc(image: ImageAttachment): string {
 
 export default function ChatPage() {
   const { sessionId } = useParams();
-  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, fillPrompt, openSession, sessions, activeSessionId } = useChat();
+  const navigate = useNavigate();
+  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, fillPrompt, openSession, sessions, activeSessionId, newChat } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,6 +55,11 @@ export default function ChatPage() {
   }, [input]);
 
   const canSend = !streaming && (input.trim().length > 0 || attachments.length > 0);
+
+  async function handleNewChat() {
+    await newChat();
+    navigate('/admin/chat');
+  }
 
   function handlePromptClick(text: string) {
     fillPrompt(text);
@@ -107,13 +114,24 @@ export default function ChatPage() {
 
   return (
     <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col w-full">
+      <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-subtle px-4 py-2">
+        <span className="truncate font-mono text-[11px] text-txt-3">{activeTitle || 'New chat'}</span>
+        <button
+          onClick={handleNewChat}
+          title="Start a new chat"
+          className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-strong bg-bg-3 px-2.5 py-1.5 text-[13px] text-txt transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2"
+        >
+          <PlusIcon className="h-3.5 w-3.5 fill-none stroke-current" />
+          New chat
+        </button>
+      </div>
       <div ref={chatRef} className="flex flex-1 flex-col gap-5 overflow-y-auto scroll-smooth px-5 py-6">
         {showEmptyState && (
           <div className="m-auto max-w-sm px-6 py-10 text-center">
             <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-strong bg-bg-3">
               <ChatIcon className="h-6 w-6 fill-none stroke-txt-3" />
             </div>
-            <h2 className="mb-2 text-base font-medium">What can I help with?</h2>
+            <h2 className="mb-2 text-lg font-medium">What can I help with?</h2>
             <p className="text-[13px] leading-relaxed text-txt-2">Ask anything — code, concepts, writing, analysis. I&apos;ll think it through with you.</p>
             <div className="mt-5 flex flex-wrap justify-center gap-1.5">
               {PROMPTS.map((p) => (
@@ -252,9 +270,12 @@ export default function ChatPage() {
             <SendIcon className="relative z-10 h-[15px] w-[15px] fill-none stroke-white" />
           </button>
         </div>
-        <div className="mt-1.5 flex items-center justify-between px-1 font-mono text-[11px] text-txt-3">
-          <span>{footerHint}</span>
-          <span className={charCount > MAX_CHARS * 0.85 ? 'text-amber-500' : ''}>{charCount}</span>
+        <div className="mt-1.5 flex items-center justify-between gap-2 px-1 font-mono text-[11px] text-txt-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <ProviderPicker />
+            <span className="hidden shrink-0 sm:inline">{footerHint}</span>
+          </div>
+          <span className={`shrink-0 ${charCount > MAX_CHARS * 0.85 ? 'text-amber-500' : ''}`}>{charCount}</span>
         </div>
       </div>
 

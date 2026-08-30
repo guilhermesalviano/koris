@@ -24,6 +24,7 @@ import HeartbeatsPage from './HeartbeatsPage';
 import SkillsPage from './SkillsPage';
 import QueuePage from './QueuePage';
 import { ChatProvider, useChat } from '../../lib/chat-context';
+import { UiProvider } from '../../lib/ui-context';
 
 const NAV_ICONS = {
   overview: OverviewIcon,
@@ -432,6 +433,7 @@ export default function AdminLayout() {
 
   return (
     <ChatProvider>
+      <UiProvider value={{ openConfig: () => setConfigOpen(true) }}>
       <div className="relative z-10 flex h-screen w-full flex-col supports-[height:100dvh]:h-dvh">
         <Header
           navOpen={navOpen}
@@ -478,6 +480,7 @@ export default function AdminLayout() {
 
         <PluginsModal open={pluginsOpen} onClose={() => setPluginsOpen(false)} />
       </div>
+      </UiProvider>
     </ChatProvider>
   );
 }
