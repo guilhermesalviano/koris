@@ -254,17 +254,17 @@ describe('onboarding settings draft', () => {
         },
       },
       ai: {
-        manager: {
-          provider: 'ollama',
-          base_url: 'http://localhost:11434',
-          api_token: '',
-          model: 'gemma4:e4b',
-        },
-        workers: {
-          provider: 'ollama',
-          base_url: 'http://localhost:11434',
-          api_token: '',
-          model: 'qwen:3.5:2b',
+        providers: [
+          {
+            provider: 'ollama',
+            base_url: 'http://localhost:11434',
+            api_token: 'YOUR_CHAT_ID',
+            models: ['gemma4:e4b', 'qwen:3.5:2b'],
+          },
+        ],
+        roles: {
+          manager: { provider: 'ollama', model: 'gemma4:e4b' },
+          workers: { provider: 'ollama', model: 'qwen:3.5:2b' },
         },
       },
       personal_information: {
@@ -341,17 +341,17 @@ describe('onboarding settings draft', () => {
       heartbeat: true,
       channels: {},
       ai: {
-        manager: {
-          provider: 'ollama',
-          base_url: 'http://localhost:11434',
-          api_token: '',
-          model: 'gemma4:e4b',
-        },
-        workers: {
-          provider: 'ollama',
-          base_url: 'http://localhost:11434',
-          api_token: '',
-          model: 'qwen:3.5:2b',
+        providers: [
+          {
+            provider: 'ollama',
+            base_url: 'http://localhost:11434',
+            api_token: '',
+            models: ['gemma4:e4b', 'qwen:3.5:2b'],
+          },
+        ],
+        roles: {
+          manager: { provider: 'ollama', model: 'gemma4:e4b' },
+          workers: { provider: 'ollama', model: 'qwen:3.5:2b' },
         },
       },
       personal_information: {

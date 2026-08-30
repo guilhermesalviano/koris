@@ -11,6 +11,7 @@ import {
   loadCurrentOrExampleSettings,
   writeSettingsFile,
   mergeSettingsPayload,
+  applyAiRolePatch,
 } from './settings-writer';
 
 const REAL_EXAMPLE_SETTINGS_PATH = join(__dirname, '..', '..', '..', 'koris.example.json');
@@ -99,6 +100,35 @@ describe('config/settings-writer', () => {
     const loaded = loadCurrentOrExampleSettings({ cwd: dir, dirname: dir });
 
     expect(loaded).toEqual({ web_port: 7777 });
+  });
+
+  it('applyAiRolePatch keeps a previously-configured provider when activating another', () => {
+    const base = {
+      ai: {
+        providers: [
+          { provider: 'ollama', base_url: 'http://host:11434', api_token: '', models: ['gemma', 'qwen'] },
+        ],
+        roles: {
+          manager: { provider: 'ollama', model: 'gemma' },
+          workers: { provider: 'ollama', model: 'qwen' },
+        },
+      },
+    };
+
+    const once = applyAiRolePatch(base, 'manager', {
+      provider: 'openai',
+      base_url: 'https://api.openai.com/v1',
+      api_token: 'sk-1',
+      model: 'gpt-4o-mini',
+    });
+    const twice = applyAiRolePatch(once, 'manager', {
+      provider: 'ollama',
+      model: 'gemma',
+    });
+
+    const ai = twice.ai as { providers: { provider: string }[]; roles: Record<string, unknown> };
+    expect(ai.providers.map((p) => p.provider)).toEqual(['ollama', 'openai']);
+    expect(ai.roles.manager).toEqual({ provider: 'ollama', model: 'gemma' });
   });
 
   it('loadCurrentOrExampleSettings falls back to the example template when no koris.json exists', () => {

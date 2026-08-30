@@ -173,7 +173,7 @@ export default function ProvidersPage() {
                       onClick={() => (isOpen ? setExpanded(null) : openProvider(entry))}
                       className={`${secondaryBtn} flex-shrink-0 py-1.5`}
                     >
-                      {isOpen ? 'Close' : 'Configure'}
+                      {isOpen ? 'Close' : entry.configured ? 'Reconfigure' : 'Configure'}
                     </button>
                   </div>
 

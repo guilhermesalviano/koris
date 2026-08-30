@@ -220,6 +220,83 @@ async function main() {
     'Only used if the SerpAPI fallback is enabled in code (currently inactivated)',
   );
 
+  // ── Structural check: ai.providers[] + ai.roles ────────────────────────
+  const rawAi = ((): Record<string, unknown> => {
+    const parsed = loadConfigFile({ cwd: process.cwd(), dirname: __dirname });
+    const ai = parsed.ai;
+    return ai && typeof ai === 'object' && !Array.isArray(ai) ? (ai as Record<string, unknown>) : {};
+  })();
+
+  const asObj = (value: unknown): Record<string, unknown> =>
+    value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+  if (Array.isArray(rawAi.providers)) {
+    const providers = (rawAi.providers as unknown[]).map(asObj);
+    check(
+      providers.some((p) => typeof p.provider === 'string' && p.provider.trim()),
+      'ai.providers has at least one entry',
+      'Add at least one provider to ai.providers[] in koris.json',
+    );
+
+    const providerNames = new Set<string>();
+    providers.forEach((entry, i) => {
+      const name = typeof entry.provider === 'string' ? entry.provider : '';
+      providerNames.add(name);
+      check(
+        isSupportedProvider(name),
+        `ai.providers[${i}].provider is supported`,
+        `Got: "${name}". ${supportedProvidersLabel}.`,
+        name,
+      );
+      const baseUrl = resolveProviderBaseUrl(name, typeof entry.base_url === 'string' ? entry.base_url : '');
+      check(
+        isValidUrl(baseUrl),
+        `ai.providers[${i}].base_url is a valid URL`,
+        `Got: "${baseUrl}" for provider "${name}"`,
+        baseUrl,
+      );
+      advisory(
+        Array.isArray(entry.models) && entry.models.length > 0,
+        `ai.providers[${i}].models is non-empty`,
+        `provider "${name}" has no models listed`,
+      );
+      if (entry.num_ctx !== undefined) {
+        const numCtx = Number(entry.num_ctx);
+        check(
+          Number.isInteger(numCtx) && numCtx >= 512 && numCtx <= 131072,
+          `ai.providers[${i}].num_ctx is a valid context size`,
+          `Got: ${entry.num_ctx} for provider "${name}". Expected an integer between 512 and 131072.`,
+          `${numCtx} tokens`,
+        );
+      }
+    });
+
+    const roles = asObj(rawAi.roles);
+    for (const role of ['manager', 'workers'] as const) {
+      const ptr = asObj(roles[role]);
+      const ptrProvider = typeof ptr.provider === 'string' ? ptr.provider : '';
+      check(
+        providerNames.has(ptrProvider),
+        `ai.roles.${role}.provider is configured in ai.providers[]`,
+        `Got: "${ptrProvider}" — add it to ai.providers[] or point the role at an existing provider`,
+        ptrProvider,
+      );
+      const entry = providers.find((p) => p.provider === ptrProvider);
+      const models = entry && Array.isArray(entry.models) ? (entry.models as unknown[]) : [];
+      const ptrModel = typeof ptr.model === 'string' ? ptr.model : '';
+      if (models.length > 0) {
+        advisory(
+          models.includes(ptrModel),
+          `ai.roles.${role}.model is listed in the provider's models[]`,
+          `"${ptrModel}" is not in ${ptrProvider}'s models list`,
+        );
+      }
+    }
+  } else {
+    warn('ai.providers[] is missing', 'AI role config will fall back to built-in defaults');
+    warnings++;
+  }
+
   // Connectivity check (skipped for mock)
   const profiles = [
     { label: 'manager', provider: config.AI.MANAGER.PROVIDER, baseUrl: config.AI.MANAGER.BASE_URL, apiToken: config.AI.MANAGER.API_TOKEN },

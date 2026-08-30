@@ -48,7 +48,12 @@ describe('config/index reloadConfig', () => {
   it('picks up nested AI/CHANNELS values after a reload', () => {
     const dir = createTempDir();
     writeFileSync(join(dir, 'koris.json'), JSON.stringify({
-      ai: { manager: { base_url: 'http://example.invalid:1234', model: 'reload-model' } },
+      ai: {
+        providers: [
+          { provider: 'ollama', base_url: 'http://example.invalid:1234', api_token: '', models: ['reload-model'] },
+        ],
+        roles: { manager: { provider: 'ollama', model: 'reload-model' } },
+      },
       channels: { allow_untrusted: true },
     }));
 
@@ -57,5 +62,22 @@ describe('config/index reloadConfig', () => {
     expect(config.AI.MANAGER.BASE_URL).toBe('http://example.invalid:1234');
     expect(config.AI.MANAGER.MODEL).toBe('reload-model');
     expect(config.CHANNELS.ALLOW_UNTRUSTED).toBe(true);
+  });
+
+  it('auto-migrates a legacy ai.manager / ai.workers koris.json on reload', () => {
+    const dir = createTempDir();
+    writeFileSync(join(dir, 'koris.json'), JSON.stringify({
+      ai: {
+        manager: { provider: 'ollama', base_url: 'http://legacy.invalid:9999', model: 'legacy-manager' },
+        workers: { provider: 'ollama', base_url: 'http://legacy.invalid:9999', model: 'legacy-worker', num_ctx: 8192 },
+      },
+    }));
+
+    reloadConfig({ cwd: dir, dirname: dir });
+
+    expect(config.AI.MANAGER.BASE_URL).toBe('http://legacy.invalid:9999');
+    expect(config.AI.MANAGER.MODEL).toBe('legacy-manager');
+    expect(config.AI.WORKERS.MODEL).toBe('legacy-worker');
+    expect(config.AI.WORKERS.NUM_CTX).toBe(8192);
   });
 });

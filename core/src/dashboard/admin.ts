@@ -9,7 +9,8 @@ import {
   isSupportedProvider,
   checkAiProviderConnectivity,
 } from '../config/validators';
-import { loadCurrentOrExampleSettings, mergeSettingsPayload, writeSettingsFile } from '../config/settings-writer';
+import { applyAiRolePatch, loadCurrentOrExampleSettings, mergeSettingsPayload, writeSettingsFile } from '../config/settings-writer';
+import type { AiRolePatch } from '../config/settings-writer';
 import { addAllowedDomain } from '../services/security/allowed-domains';
 import { findGateBlocks } from '../services/security/gate-blocks';
 import { getSupportedProviders, getProviderCatalog, getProviderDefaultBaseUrl, clearProviderCache } from '../services/providers';
@@ -111,6 +112,20 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+/** Maps a snake_case per-role settings patch to an `AiRolePatch`. */
+function toAiRolePatch(profile: Record<string, unknown>): AiRolePatch {
+  const patch: AiRolePatch = { provider: String(profile.provider) };
+  if (typeof profile.base_url === 'string') patch.base_url = profile.base_url;
+  if (typeof profile.api_token === 'string') patch.api_token = profile.api_token;
+  if (typeof profile.model === 'string') patch.model = profile.model;
+  if (profile.num_ctx !== undefined && Number.isFinite(Number(profile.num_ctx))) {
+    patch.num_ctx = Number(profile.num_ctx);
+  }
+  if (typeof profile.embedding === 'boolean') patch.embedding = profile.embedding;
+  if (typeof profile.embed_model === 'string') patch.embed_model = profile.embed_model;
+  return patch;
 }
 
 function collectSettingsPayloadErrors(
@@ -783,10 +798,34 @@ class AdminRouterFactory {
         hasToken: !!profile.API_TOKEN?.trim(),
       });
       const configured = new Set([config.AI.MANAGER.PROVIDER, config.AI.WORKERS.PROVIDER]);
-      const providers = getProviderCatalog().map((entry) => ({
-        ...entry,
-        configured: configured.has(entry.name),
-      }));
+      // Surface every provider kept in ai.providers[] on disk with its saved
+      // models / base_url so the chat picker can switch straight to it instead
+      // of showing "Set up".
+      const storedByName = new Map<string, Record<string, unknown>>();
+      const storedProviders = asRecord(asRecord(loadCurrentOrExampleSettings())?.ai)?.providers;
+      if (Array.isArray(storedProviders)) {
+        for (const raw of storedProviders) {
+          const entry = asRecord(raw);
+          const name = entry?.provider;
+          if (entry && typeof name === 'string' && name.trim()) {
+            configured.add(name);
+            storedByName.set(name, entry);
+          }
+        }
+      }
+      const providers = getProviderCatalog().map((entry) => {
+        const stored = storedByName.get(entry.name);
+        const models = Array.isArray(stored?.models)
+          ? (stored.models as unknown[]).filter((m): m is string => typeof m === 'string')
+          : [];
+        return {
+          ...entry,
+          configured: configured.has(entry.name),
+          models,
+          storedBaseUrl: typeof stored?.base_url === 'string' ? stored.base_url : '',
+          hasToken: typeof stored?.api_token === 'string' ? !!stored.api_token.trim() : false,
+        };
+      });
       res.json({
         providers,
         active: {
@@ -817,7 +856,28 @@ class AdminRouterFactory {
         corePatch.channels = coreChannelsPatch;
       }
 
-      const current = loadCurrentOrExampleSettings();
+      // The web UI still sends provider changes as a per-role patch
+      // (`{ ai: { manager: { provider, base_url, model, api_token } } }`).
+      // Translate each role into an `ai.providers[]` upsert + `ai.roles`
+      // repoint so previously-configured providers are preserved on disk.
+      const aiPatch = asRecord(corePatch.ai);
+      const rolePatches: { role: 'manager' | 'workers'; patch: AiRolePatch }[] = [];
+      if (aiPatch) {
+        const restAi: Record<string, unknown> = { ...aiPatch };
+        for (const role of ['manager', 'workers'] as const) {
+          const profile = asRecord(aiPatch[role]);
+          if (!profile) continue;
+          delete restAi[role];
+          if (typeof profile.provider !== 'string' || !profile.provider.trim()) continue;
+          rolePatches.push({ role, patch: toAiRolePatch(profile) });
+        }
+        corePatch.ai = restAi;
+      }
+
+      let current = loadCurrentOrExampleSettings();
+      for (const { role, patch: rolePatch } of rolePatches) {
+        current = applyAiRolePatch(current, role, rolePatch);
+      }
       const merged = mergeSettingsPayload(current, corePatch);
       const writtenPath = writeSettingsFile(merged);
 

@@ -91,8 +91,6 @@ class DatabaseService implements IDatabaseService {
         );
       `);
 
-      this.migrateHeartbeatManaged();
-
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS heartbeat_runs (
           id TEXT PRIMARY KEY,
@@ -193,8 +191,6 @@ class DatabaseService implements IDatabaseService {
           FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
         );
       `);
-
-      this.migrateMessagesErrorCode();
 
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
@@ -311,55 +307,9 @@ class DatabaseService implements IDatabaseService {
         );
       `);
 
-      this.migrateAuditToolsEnabled();
     } catch (error) {
       logger.error('[database] Failed to initialize database schema', { error });
       throw error;
-    }
-  }
-
-  /**
-   * One-time migration: adds the `tools_enabled` flag to audit_logs rows so
-   * LLM audit entries can record whether tools were enabled in the request.
-   */
-  private migrateAuditToolsEnabled(): void {
-    try {
-      const columns = this.db.prepare('PRAGMA table_info(audit_logs)').all() as { name: string }[];
-      if (!columns.some((c) => c.name === 'tools_enabled')) {
-        this.db.exec('ALTER TABLE audit_logs ADD COLUMN tools_enabled INTEGER;');
-      }
-    } catch (error) {
-      logger.error('[database] Failed to add audit_logs tools_enabled column', { error });
-    }
-  }
-
-  /**
-   * One-time migration: adds the nullable `error_code` column to messages so a
-   * failed provider turn can be persisted and flagged (null = normal message).
-   */
-  private migrateMessagesErrorCode(): void {
-    try {
-      const columns = this.db.prepare('PRAGMA table_info(messages)').all() as { name: string }[];
-      if (!columns.some((c) => c.name === 'error_code')) {
-        this.db.exec('ALTER TABLE messages ADD COLUMN error_code TEXT;');
-      }
-    } catch (error) {
-      logger.error('[database] Failed to add messages error_code column', { error });
-    }
-  }
-
-  /**
-   * One-time migration: adds the `managed` flag to heartbeat rows so the
-   * default-beats sync can distinguish config-owned beats from user-created ones.
-   */
-  private migrateHeartbeatManaged(): void {
-    try {
-      const columns = this.db.prepare('PRAGMA table_info(heartbeat)').all() as { name: string }[];
-      if (!columns.some((c) => c.name === 'managed')) {
-        this.db.exec('ALTER TABLE heartbeat ADD COLUMN managed INTEGER NOT NULL DEFAULT 0;');
-      }
-    } catch (error) {
-      logger.error('[database] Failed to add heartbeat managed column', { error });
     }
   }
 

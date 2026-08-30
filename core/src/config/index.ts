@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { deepGet, getConfigValue, loadConfigFile } from './helpers';
+import { resolveAiRoles } from './ai-config';
 
 let fileConfig = loadConfigFile({
   onParseError: (message) => console.warn(message),
@@ -7,6 +8,15 @@ let fileConfig = loadConfigFile({
 
 function get(path: string, fallback: string): string {
   return getConfigValue(path, fallback, fileConfig);
+}
+
+/**
+ * Like `get`, but only consults the env-var override for `path` (via toEnvKey)
+ * and otherwise returns `value` unchanged. Used for the AI role fields, which
+ * are resolved from `ai.providers[]` / `ai.roles` rather than a fixed path.
+ */
+function envOr(path: string, value: string): string {
+  return getConfigValue(path, value, {});
 }
 
 function getPersonalInformation(): Record<string, string> {
@@ -112,24 +122,31 @@ function buildConfig(): AppConfig {
     SUMMARIZER_MODE: get('session.summarizer_mode', 'auto') === 'manual' ? 'manual' : 'auto',
   },
   HEARTBEAT: get('heartbeat', 'true') === 'true',
-  AI: {
+  AI: (() => {
+    // Resolve manager/workers from the `ai.providers[]` + `ai.roles` shape
+    // (legacy `ai.manager` / `ai.workers` is auto-migrated by resolveAiRoles),
+    // then layer the documented env-var overrides on top of each field.
+    const roles = resolveAiRoles(deepGet(fileConfig, 'ai') ?? {});
+    return {
     PARALLEL: get('ai.parallel', 'true') === 'true',
     SUBAGENTS_PARALLEL: get('ai.subagents_parallel', 'false') === 'true',
     BACKGROUND_GRACE_MS: Number(get('ai.background_grace_ms', '5000')),
     MANAGER: {
-      PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.manager.provider', 'ollama'),
-      BASE_URL: get('ai.manager.base_url', ''),
-      API_TOKEN: get('ai.manager.api_token', ''),
-      MODEL:   get('ai.manager.model', 'gemma4:e2b'),
+      PROVIDER: process.env.VITEST === 'true' ? 'mock' : envOr('ai.manager.provider', roles.MANAGER.PROVIDER),
+      BASE_URL: envOr('ai.manager.base_url', roles.MANAGER.BASE_URL),
+      API_TOKEN: envOr('ai.manager.api_token', roles.MANAGER.API_TOKEN),
+      MODEL:   envOr('ai.manager.model', roles.MANAGER.MODEL),
     },
     WORKERS: {
-      PROVIDER: process.env.VITEST === 'true' ? 'mock' : get('ai.workers.provider', 'ollama'),
-      BASE_URL: get('ai.workers.base_url', ''),
-      API_TOKEN: get('ai.workers.api_token', ''),
-      MODEL:   get('ai.workers.model', 'qwen:3.5:2b'),
-      EMBEDDING_ENABLED: get('ai.workers.embedding', 'false') === 'true',
-      EMBED_MODEL: get('ai.workers.embed_model', 'nomic-embed-text'),
-      NUM_CTX: Number(get('ai.workers.num_ctx', '16384')),
+      PROVIDER: process.env.VITEST === 'true' ? 'mock' : envOr('ai.workers.provider', roles.WORKERS.PROVIDER),
+      BASE_URL: envOr('ai.workers.base_url', roles.WORKERS.BASE_URL),
+      API_TOKEN: envOr('ai.workers.api_token', roles.WORKERS.API_TOKEN),
+      MODEL:   envOr('ai.workers.model', roles.WORKERS.MODEL),
+      // Embeddings are AI-wide (`ai.embedding` / `ai.embed_model`); num_ctx is
+      // resolved from the workers provider entry. Env overrides still apply.
+      EMBEDDING_ENABLED: envOr('ai.embedding', String(roles.WORKERS.EMBEDDING_ENABLED)) === 'true',
+      EMBED_MODEL: envOr('ai.embed_model', roles.WORKERS.EMBED_MODEL),
+      NUM_CTX: Number(envOr('ai.workers.num_ctx', String(roles.WORKERS.NUM_CTX))),
     },
     SEARCH_API_KEY: get('ai.search_api_key', ''),
     SEARXNG_URL: get('ai.searxng_url', ''),
@@ -139,7 +156,8 @@ function buildConfig(): AppConfig {
       HEALTH_MS: Number(get('ai.timeouts.health_ms', String(5_000))),
     },
     PROMPT_SANITIZER: get('ai.prompt_sanitizer', 'false') === 'true',
-  },
+    };
+  })(),
   CHANNELS: {
     ALLOW_UNTRUSTED: get('channels.allow_untrusted', 'false') === 'true',
   },

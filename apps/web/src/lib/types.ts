@@ -159,6 +159,12 @@ export interface ProviderCatalogEntry {
   apiKeyUrl?: string;
   docsUrl?: string;
   configured: boolean;
+  /** Models saved for this provider in koris.json's ai.providers[] (empty when unconfigured). */
+  models: string[];
+  /** base_url saved for this provider (empty string means "use the shipped default"). */
+  storedBaseUrl: string;
+  /** Whether a non-empty api_token is saved for this provider. */
+  hasToken: boolean;
 }
 
 export interface ActiveProvider {

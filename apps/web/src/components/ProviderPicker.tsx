@@ -41,15 +41,20 @@ export default function ProviderPicker() {
     openConfig();
   }
 
+  function modelFor(entry: ProviderCatalogEntry, isCurrent: boolean): string {
+    if (isCurrent) return active.model;
+    return entry.models?.[0] ?? entry.recommendedModel ?? '';
+  }
+
   async function switchTo(entry: ProviderCatalogEntry) {
     const isCurrent = entry.name === active.provider;
     setSwitching(entry.name);
     try {
       const res = await api.activate('manager', {
         provider: entry.name,
-        model: isCurrent ? active.model : entry.recommendedModel ?? '',
+        model: modelFor(entry, isCurrent),
         apiToken: '',
-        baseUrl: isCurrent ? active.baseUrl : '',
+        baseUrl: isCurrent ? active.baseUrl : entry.storedBaseUrl ?? '',
       });
       if (res.ok) {
         showToast(`Switched to ${entry.label}`);
@@ -92,8 +97,10 @@ export default function ProviderPicker() {
           {visible.map((entry) => {
             const isCurrent = entry.name === active.provider;
             const isNative = !entry.isOpenAICompatible;
-            const ready = isNative || isCurrent;
-            const model = isCurrent ? active.model : entry.recommendedModel ?? '';
+            // A provider is switchable straight from the picker when it's native,
+            // already active, or has saved config in koris.json (ai.providers[]).
+            const ready = isNative || isCurrent || entry.configured;
+            const model = modelFor(entry, isCurrent);
             return (
               <div
                 key={entry.name}
