@@ -10,6 +10,8 @@ import {
   checkAiProviderConnectivity,
 } from '../config/validators';
 import { loadCurrentOrExampleSettings, mergeSettingsPayload, writeSettingsFile } from '../config/settings-writer';
+import { addAllowedDomain } from '../services/security/allowed-domains';
+import { findGateBlocks } from '../services/security/gate-blocks';
 import { getSupportedProviders, getProviderCatalog, getProviderDefaultBaseUrl, clearProviderCache } from '../services/providers';
 import {
   startWhatsAppLive,
@@ -836,6 +838,29 @@ class AdminRouterFactory {
 
       logger.info(`Settings saved to ${writtenPath}`);
       res.json({ success: true, settings: maskDeep(buildSettingsResponse(pluginSettingsRepo)) });
+    });
+
+    router.get('/allowed-domains', (_req: Request, res: Response) => {
+      res.json({ allowedDomains: config.ALLOWED_DOMAINS });
+    });
+
+    router.post('/allowed-domains', (req: Request, res: Response) => {
+      const raw = typeof req.body?.domain === 'string' ? req.body.domain : '';
+      const result = addAllowedDomain(raw);
+      if (!result.ok) {
+        res.status(400).json({ error: result.error });
+        return;
+      }
+      if (result.added) {
+        logger.info(`allowed_domains: added "${result.hostname}"`);
+      }
+      res.json({ ok: true, added: result.added, allowedDomains: result.allowedDomains });
+    });
+
+    router.get('/chat/gate-blocks', (req: Request, res: Response) => {
+      const sessionId = typeof req.query.sessionId === 'string' ? req.query.sessionId : '';
+      const blocks = findGateBlocks(auditRepo, { sessionId, allowed: config.ALLOWED_DOMAINS });
+      res.json({ blocks });
     });
 
     router.post('/ai/test-connection', async (req: Request, res: Response) => {

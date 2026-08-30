@@ -59,6 +59,18 @@ describe('Command Handler', () => {
       expect(result.response).toBeTruthy();
     });
 
+    it('refuses /allow for untrusted senders', () => {
+      const result = handleCommand('/allow example.com', { source: 'tui', trusted: false });
+      expect(result.handled).toBe(true);
+      expect(result.response?.toLowerCase()).toContain('trusted');
+    });
+
+    it('shows /allow usage when trusted but no domain is given', () => {
+      const result = handleCommand('/allow', { source: 'tui', trusted: true });
+      expect(result.handled).toBe(true);
+      expect(result.response).toContain('Usage: /allow');
+    });
+
     it('should handle /exit command for TUI', () => {
       const result = handleCommand('/exit', { source: 'tui' });
       expect(result.handled).toBe(true);

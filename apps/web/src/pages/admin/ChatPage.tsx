@@ -24,7 +24,7 @@ function imageSrc(image: ImageAttachment): string {
 export default function ChatPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
-  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, fillPrompt, openSession, sessions, activeSessionId, newChat } = useChat();
+  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, fillPrompt, openSession, sessions, activeSessionId, newChat, gateBlocks, allowDomain, dismissGateBlock } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -204,6 +204,35 @@ export default function ChatPage() {
         ))}
       </div>
 
+      {gateBlocks.length > 0 && (
+        <div className="flex-shrink-0 space-y-1.5 border-t border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
+          {gateBlocks.map((b) => (
+            <div key={b.domain} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-txt">
+              <span aria-hidden className="text-amber-500">⚠</span>
+              <span className="min-w-0">
+                A tool call was blocked — <span className="font-mono text-amber-500">{b.domain}</span> is not in{' '}
+                <span className="font-mono">allowed_domains</span>. Add it to koris.json to allow it.
+              </span>
+              <span className="ml-auto flex flex-shrink-0 items-center gap-1.5">
+                <button
+                  onClick={() => allowDomain(b.domain)}
+                  className="rounded-lg border border-amber-500/50 bg-amber-500/15 px-2 py-1 font-mono text-[11px] text-amber-500 transition-colors duration-150 hover:bg-amber-500/25"
+                >
+                  Add {b.domain}
+                </button>
+                <button
+                  onClick={() => dismissGateBlock(b.domain)}
+                  title="Dismiss"
+                  className="rounded-lg border border-strong bg-bg-3 px-2 py-1 font-mono text-[11px] text-txt-3 transition-colors duration-150 hover:text-txt"
+                >
+                  Dismiss
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex-shrink-0 border-t border-subtle bg-bg/90 px-4 pb-4 pt-3 backdrop-blur-md">
         {attachments.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
@@ -271,9 +300,9 @@ export default function ChatPage() {
           </button>
         </div>
         <div className="mt-1.5 flex items-center justify-between gap-2 px-1 font-mono text-[11px] text-txt-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <ProviderPicker />
+          <div className="flex min-w-0 items-center justify-between gap-2">
             <span className="hidden shrink-0 sm:inline">{footerHint}</span>
+            <ProviderPicker />
           </div>
           <span className={`shrink-0 ${charCount > MAX_CHARS * 0.85 ? 'text-amber-500' : ''}`}>{charCount}</span>
         </div>

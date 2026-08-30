@@ -15,9 +15,11 @@ vi.mock('../../../../src/config', () => ({ config: mockConfig }));
 // ── imports (after mocks) ───────────────────────────────────────────────────
 
 import {
+  blockedHostnameFromGateError,
   extractHostname,
   gateErrorForUrl,
   getAllowedDomains,
+  isDomainGateError,
 } from '../../../../src/services/security/gate';
 
 describe('extractHostname', () => {
@@ -85,5 +87,32 @@ describe('getAllowedDomains', () => {
   it('returns the configured allowlist', () => {
     mockConfig.ALLOWED_DOMAINS = ['a.local', 'b.local'];
     expect(getAllowedDomains()).toEqual(['a.local', 'b.local']);
+  });
+});
+
+describe('isDomainGateError', () => {
+  it('is true for a domain gate error string', () => {
+    mockConfig.ALLOWED_DOMAINS = ['example.com'];
+    expect(isDomainGateError(gateErrorForUrl('https://evil.com'))).toBe(true);
+  });
+
+  it('is false for unrelated messages and nullish input', () => {
+    expect(isDomainGateError('Request timeout after 30 seconds')).toBe(false);
+    expect(isDomainGateError(null)).toBe(false);
+    expect(isDomainGateError(undefined)).toBe(false);
+  });
+});
+
+describe('blockedHostnameFromGateError', () => {
+  it('extracts the blocked hostname from a "not in allowed_domains" message', () => {
+    mockConfig.ALLOWED_DOMAINS = ['example.com'];
+    const error = gateErrorForUrl('https://api.evil.com/x') as string;
+    expect(blockedHostnameFromGateError(error)).toBe('api.evil.com');
+  });
+
+  it('returns null for the empty-allowlist message (names no host)', () => {
+    mockConfig.ALLOWED_DOMAINS = [];
+    const error = gateErrorForUrl('https://mac.local/api') as string;
+    expect(blockedHostnameFromGateError(error)).toBeNull();
   });
 });

@@ -1,5 +1,8 @@
 import { handleCommand, isCommand } from '../commands';
 import { previewMessage, toSafeMessage } from '../../utils/message';
+import { config } from '../../config';
+import { findGateBlocks, formatGateBlockNotice } from '../security/gate-blocks';
+import { AuditLogRepositoryFactory, type IAuditLogRepository } from '../../repositories/audit-log';
 import { ILogger } from '../../infrastructure/logger';
 import { IDatabaseService } from '../../infrastructure/db-sqlite';
 import { ISessionManager } from '../session-manager';
@@ -32,6 +35,7 @@ class MessageGateway implements IMessageGateway {
     private backgroundDispatcher: IBackgroundDispatcher,
     private mainAgent: IMainAgent,
     private channelService: IChannelService,
+    private auditRepo: IAuditLogRepository,
   ) {}
 
   async handle(input: InboundInput, originId: string, options?: ProcessOptions): Promise<ProcessedMessage> {
@@ -46,7 +50,7 @@ class MessageGateway implements IMessageGateway {
     this.channelService.record(channel, originId);
 
     if (isCommand(safeMessage)) {
-      const commandResult = handleCommand(safeMessage, { source: channel });
+      const commandResult = handleCommand(safeMessage, { source: channel, trusted: !!options?.toolsEnabled });
 
       if (commandResult.action === 'compact') {
         return this.handleCompact(
@@ -69,6 +73,7 @@ class MessageGateway implements IMessageGateway {
       return response;
     }
 
+    const runId = options?.runId ?? generateId();
     const response = await this.mainAgent.run({
       userMessage: safeMessage,
       channel,
@@ -76,13 +81,15 @@ class MessageGateway implements IMessageGateway {
       images,
       stickers,
       target: originId,
-      options: { ...options, runId: options?.runId ?? generateId() },
+      options: { ...options, runId },
     });
 
     this.logger.info(`Processed message from ${channel}: "${previewMessage(safeMessage)}" => "${previewMessage(response)}"`);
 
     const sessionId = messageService.getSessionId();
-    this.backgroundDispatcher.persistConversation({ sessionId, ask: safeMessage, askImages: images, answer: response, channel });
+    const finalResponse = this.appendGateBlockNotice(response, runId, channel);
+
+    this.backgroundDispatcher.persistConversation({ sessionId, ask: safeMessage, askImages: images, answer: finalResponse, channel });
     this.backgroundDispatcher.summarizeConversation({
       sessionId,
       ask: safeMessage,
@@ -91,7 +98,33 @@ class MessageGateway implements IMessageGateway {
       memoryService,
     });
 
-    return response;
+    return finalResponse;
+  }
+
+  // When a tool call this turn was refused by the domain gate, tell the user
+  // which domain and how to allow it. The web UI has its own banner for this
+  // (GET /api/admin/chat/gate-blocks), so it's skipped here; streaming
+  // responses (non-string) are skipped too.
+  private appendGateBlockNotice(response: string, runId: string, channel: string): string {
+    if (channel === 'web' || typeof response !== 'string') {
+      return response;
+    }
+
+    try {
+      const blocks = findGateBlocks(this.auditRepo, { runId, allowed: config.ALLOWED_DOMAINS });
+      if (blocks.length === 0) {
+        return response;
+      }
+
+      const notice = formatGateBlockNotice(blocks);
+      this.logger.info(`Domain-gate notice added for ${blocks.map((b) => b.domain).join(', ')}`);
+      return response ? `${response}\n\n${notice}` : notice;
+    } catch (err) {
+      this.logger.warn('Failed to build domain-gate notice', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return response;
+    }
   }
 
   private async handleCompact(
@@ -134,8 +167,9 @@ class MessageGatewayFactory {
     const backgroundDispatcher = BackgroundDispatcherFactory.create(logger, db, sessionManager);
     const mainAgent = MainAgentFactory.create(logger);
     const channelService = ChannelServiceFactory.create(db);
+    const auditRepo = AuditLogRepositoryFactory.create(db);
 
-    return new MessageGateway(logger, channel, sessionContextFactory, backgroundDispatcher, mainAgent, channelService);
+    return new MessageGateway(logger, channel, sessionContextFactory, backgroundDispatcher, mainAgent, channelService, auditRepo);
   }
 }
 

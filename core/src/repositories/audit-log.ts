@@ -58,6 +58,7 @@ export interface UsageQuery {
 export interface AuditLogFilters {
   type?: AuditType;
   sessionId?: string;
+  runId?: string;
   role?: 'manager' | 'worker';
   status?: AuditStatus;
   agentName?: string;
@@ -93,6 +94,11 @@ function buildWhere(filters?: AuditLogFilters): { clause: string; params: unknow
   if (filters.sessionId) {
     conditions.push('session_id = ?');
     params.push(filters.sessionId);
+  }
+
+  if (filters.runId) {
+    conditions.push('run_id = ?');
+    params.push(filters.runId);
   }
 
   if (filters.role) {

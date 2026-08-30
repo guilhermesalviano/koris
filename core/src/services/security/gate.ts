@@ -37,3 +37,18 @@ export function gateErrorForUrl(input: string): string | null {
 
   return null;
 }
+
+/** True when a tool error string was produced by the domain allowlist gate. */
+export function isDomainGateError(message: string | null | undefined): boolean {
+  return typeof message === 'string' && message.startsWith('Domain gate:');
+}
+
+/**
+ * Pulls the blocked hostname out of a `gateErrorForUrl` "not in allowed_domains"
+ * message, or null when the message is a different gate error (e.g. the empty
+ * allowlist case, which names no specific host).
+ */
+export function blockedHostnameFromGateError(message: string): string | null {
+  const match = /^Domain gate: "([^"]+)" is not in allowed_domains/.exec(message);
+  return match ? match[1].toLowerCase() : null;
+}

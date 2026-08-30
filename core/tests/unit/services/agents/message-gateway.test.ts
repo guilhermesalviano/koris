@@ -26,6 +26,7 @@ function makeDeps() {
     },
     mainAgent: { run: vi.fn().mockResolvedValue('assistant reply') },
     channelService: { record: vi.fn() },
+    auditLogRepo: { findAll: vi.fn().mockReturnValue([]) },
     sessionService,
     messageService,
     memoryService,
@@ -43,6 +44,7 @@ function makeGateway(channel = 'tui') {
     deps.backgroundDispatcher as never,
     deps.mainAgent as never,
     deps.channelService as never,
+    deps.auditLogRepo as never,
   );
 
   return { gateway, logger, deps };
@@ -127,6 +129,44 @@ describe('MessageGateway', () => {
       channel: 'tui',
       memoryService: deps.memoryService,
     });
+  });
+
+  it('appends a domain-gate notice to a channel reply when a tool call was blocked', async () => {
+    const { gateway, deps } = makeGateway('whatsapp');
+    deps.auditLogRepo.findAll.mockReturnValue([
+      {
+        id: 'x', type: 'tool', role: 'worker', tool_calls: 0, duration_ms: 1, status: 'error',
+        created_at: '2026-01-01T00:00:00Z', tool_name: 'curl_request',
+        error_message: 'Domain gate: "api.evil.com" is not in allowed_domains. Add it to koris.json to allow this request. Allowed domains: .',
+      },
+    ]);
+
+    const result = await gateway.handle('grab api.evil.com', 'origin-1', { toolsEnabled: true });
+
+    expect(result).toContain('assistant reply');
+    expect(result).toContain('/allow api.evil.com');
+    expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ answer: expect.stringContaining('/allow api.evil.com') }),
+    );
+    // memory summary keeps the raw reply, without the plumbing notice
+    expect(deps.backgroundDispatcher.summarizeConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ answer: 'assistant reply' }),
+    );
+  });
+
+  it('does not append a domain-gate notice for the web channel (it has its own banner)', async () => {
+    const { gateway, deps } = makeGateway('web');
+    deps.auditLogRepo.findAll.mockReturnValue([
+      {
+        id: 'x', type: 'tool', role: 'worker', tool_calls: 0, duration_ms: 1, status: 'error',
+        created_at: '2026-01-01T00:00:00Z', tool_name: 'curl_request',
+        error_message: 'Domain gate: "api.evil.com" is not in allowed_domains.',
+      },
+    ]);
+
+    const result = await gateway.handle('grab api.evil.com', 'origin-1', { toolsEnabled: true });
+
+    expect(result).toBe('assistant reply');
   });
 
   it('persists under the current session id when the session rotates', async () => {

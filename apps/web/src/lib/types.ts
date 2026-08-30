@@ -182,6 +182,22 @@ export interface ActiveRun {
   channel: string;
 }
 
+export interface GateBlock {
+  domain: string;
+  toolName: string | null;
+  at: string;
+}
+
+export interface GateBlocksResponse {
+  blocks: GateBlock[];
+}
+
+export interface AllowedDomainsResponse {
+  ok?: boolean;
+  added?: boolean;
+  allowedDomains: string[];
+}
+
 export interface ActiveRunsResponse {
   items: ActiveRun[];
 }

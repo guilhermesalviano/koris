@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { checkHealth, streamChat, apiRequest } from './api';
 import { clearResponseAlert, triggerResponseDone } from './response-alert';
-import type { ActiveRun, ActiveRunsResponse, ImageAttachment, SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
+import type { ActiveRun, ActiveRunsResponse, AllowedDomainsResponse, GateBlock, GateBlocksResponse, ImageAttachment, SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
 
 export interface ChatMessage {
   id: number;
@@ -38,6 +38,9 @@ interface ChatContextValue {
   sessions: SessionSummary[];
   openSession: (id: string | null) => void;
   newChat: () => Promise<void>;
+  gateBlocks: GateBlock[];
+  allowDomain: (domain: string) => Promise<void>;
+  dismissGateBlock: (domain: string) => void;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -77,6 +80,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [backgroundRun, setBackgroundRun] = useState<ActiveRun | null>(null);
+  const [gateBlocks, setGateBlocks] = useState<GateBlock[]>([]);
+  const dismissedDomainsRef = useRef<Set<string>>(new Set());
   const loadToken = useRef(0);
   const pendingNewChatRef = useRef(false);
   const streamingRef = useRef(false);
@@ -179,8 +184,49 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setActiveSessionId(null);
     setMessages([]);
     setHistoryLoaded(true);
+    setGateBlocks([]);
+    dismissedDomainsRef.current = new Set();
     await loadSessions();
   }, [loadSessions]);
+
+  // Domain-gate blocks: after a turn, a tool call may have been refused because
+  // its target host is not in koris.json `allowed_domains`. Surface those so the
+  // user can add the domain from the chat.
+  const refreshGateBlocks = useCallback(async () => {
+    const sid = activeSessionIdRef.current;
+    if (!sid) {
+      setGateBlocks([]);
+      return;
+    }
+    try {
+      const res = await apiRequest<GateBlocksResponse>(`/chat/gate-blocks?sessionId=${encodeURIComponent(sid)}`);
+      setGateBlocks(res.blocks.filter((b) => !dismissedDomainsRef.current.has(b.domain)));
+    } catch {
+      // Non-critical — leave the current list in place.
+    }
+  }, []);
+
+  const allowDomain = useCallback(async (domain: string) => {
+    try {
+      await apiRequest<AllowedDomainsResponse>('/allowed-domains', {
+        method: 'POST',
+        body: JSON.stringify({ domain }),
+      });
+      setGateBlocks((prev) => prev.filter((b) => b.domain !== domain));
+      setToast(`Added ${domain} to allowed_domains`);
+    } catch (err) {
+      setToast(`Error: ${err instanceof Error ? err.message : 'Failed to add domain'}`);
+    }
+  }, []);
+
+  const dismissGateBlock = useCallback((domain: string) => {
+    dismissedDomainsRef.current.add(domain);
+    setGateBlocks((prev) => prev.filter((b) => b.domain !== domain));
+  }, []);
+
+  useEffect(() => {
+    void refreshGateBlocks();
+  }, [activeSessionId, refreshGateBlocks]);
 
   // Populate the sidebar list on mount. The chat page drives session loading.
   useEffect(() => {
@@ -382,8 +428,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       streamTargetRef.current = null;
       setStreaming(false);
       loadSessions();
+      void refreshGateBlocks();
     }
-  }, [input, attachments, streaming, activeSessionId, loadSessions]);
+  }, [input, attachments, streaming, activeSessionId, loadSessions, refreshGateBlocks]);
 
   const value: ChatContextValue = {
     messages,
@@ -403,6 +450,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     sessions,
     openSession,
     newChat,
+    gateBlocks,
+    allowDomain,
+    dismissGateBlock,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
