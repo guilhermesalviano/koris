@@ -107,6 +107,39 @@ function buildProfilePatch(profile: AiProfileForm): Record<string, unknown> {
   return patch;
 }
 
+/** Channel-only slice of the settings payload (telegram/whatsapp secrets + whitelists). */
+export function buildChannelsPatch(form: SettingsFormState): Record<string, unknown> {
+  const telegram: Record<string, unknown> = { whitelist: form.telegram.whitelist };
+  if (form.telegram.bot_token) telegram.bot_token = form.telegram.bot_token;
+
+  return {
+    channels: {
+      telegram,
+      whatsapp: {
+        mention_id: form.whatsapp.mention_id,
+        whitelist: form.whatsapp.whitelist,
+      },
+    },
+  };
+}
+
+/** "General" slice: web search key, allowed domains, personal info — no provider/channel config. */
+export function buildGeneralPatch(form: SettingsFormState): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+
+  if (form.search_api_key) {
+    patch.ai = { search_api_key: form.search_api_key };
+  }
+  if (form.allowed_domains.length > 0) {
+    patch.allowed_domains = form.allowed_domains;
+  }
+  if (Object.keys(form.personal_information).length > 0) {
+    patch.personal_information = form.personal_information;
+  }
+
+  return patch;
+}
+
 /** Builds the partial snake_case payload for POST /settings from the current form state. */
 export function buildSettingsPatch(form: SettingsFormState): Record<string, unknown> {
   const workers = form.sameForBoth ? form.manager : form.workers;
@@ -156,6 +189,18 @@ export interface ConnectionTestResult {
   error?: string;
   authFailed?: boolean;
   status?: number;
+}
+
+/** Human-readable one-liner for a provider connection test result. */
+export function formatConnectionTestResult(result: ConnectionTestResult): string {
+  if (result.ok) {
+    return result.skipped
+      ? 'mock provider — no check needed'
+      : `reachable${result.detail ? ` (v${result.detail})` : ''}`;
+  }
+  return result.authFailed
+    ? `auth failed (HTTP ${result.status})`
+    : (result.error ?? `HTTP ${result.status}`);
 }
 
 export interface TelegramTestResult {
@@ -253,12 +298,12 @@ export function useSettingsForm() {
     }
   }, []);
 
-  const submit = useCallback(async (): Promise<boolean> => {
+  const submit = useCallback(async (patchOverride?: Record<string, unknown>): Promise<boolean> => {
     setSaving(true);
     setSaveErrors(null);
     setSaveSuccess(false);
     try {
-      const patch = buildSettingsPatch(form);
+      const patch = patchOverride ?? buildSettingsPatch(form);
       const res = await apiRequest<{ success: boolean; settings: RuntimeSettings }>('/settings', {
         method: 'POST',
         body: JSON.stringify(patch),

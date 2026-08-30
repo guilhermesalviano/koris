@@ -9,7 +9,7 @@ function EnabledIndicator({ enabled }: { enabled: boolean }) {
     <span className="font-mono text-[11px] text-txt-3">
       currently{' '}
       <span className={enabled ? 'text-green-400' : 'text-amber-400'}>{enabled ? 'enabled' : 'disabled'}</span>
-      {' — '}configure in the Plugins step
+      {' — '}toggle via Plugins
     </span>
   );
 }
@@ -103,7 +103,7 @@ export function ChannelsStep({ api }: { api: SettingsFormApi }) {
             )}
           </div>
           <p className="font-mono text-[11px] text-txt-3">
-            WhatsApp pairing uses a QR code. Enable WhatsApp from the Plugins step first, then check the
+            WhatsApp pairing uses a QR code. Enable WhatsApp via Plugins first, then check the
             server&apos;s terminal output for a QR code to scan with WhatsApp on your phone.
           </p>
         </div>

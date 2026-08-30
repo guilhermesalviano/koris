@@ -1,4 +1,4 @@
-import type { SettingsFormApi } from '../../../lib/use-settings-form';
+import { formatConnectionTestResult, type SettingsFormApi } from '../../../lib/use-settings-form';
 
 const inputClass = 'w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent';
 const labelClass = 'mb-1 block font-mono text-[10px] uppercase tracking-wide text-txt-3';
@@ -78,9 +78,7 @@ function ProfileFields({
         </button>
         {result && (
           <span className={`font-mono text-[11px] ${result.ok ? 'text-green-400' : 'text-red-400'}`}>
-            {result.ok
-              ? (result.skipped ? 'mock provider — no check needed' : `reachable${result.detail ? ` (v${result.detail})` : ''}`)
-              : (result.authFailed ? `auth failed (HTTP ${result.status})` : (result.error ?? `HTTP ${result.status}`))}
+            {formatConnectionTestResult(result)}
           </span>
         )}
       </div>

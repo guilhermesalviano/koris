@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { PageShell, Card, EmptyState, useToast, Toast } from '../../components/AdminUI';
 import { useConnectors } from '../../lib/use-connectors';
 import type { ConnectorCatalogEntry, ConnectorRole } from '../../lib/types';
-import type { ConnectionTestResult } from '../../lib/use-settings-form';
+import { formatConnectionTestResult, type ConnectionTestResult } from '../../lib/use-settings-form';
 
 const inputClass = 'w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent';
 const labelClass = 'mb-1 block font-mono text-[10px] uppercase tracking-wide text-txt-3';
@@ -19,17 +19,6 @@ interface FormState {
   apiToken: string;
   baseUrl: string;
   showAdvanced: boolean;
-}
-
-function testResultText(result: ConnectionTestResult): string {
-  if (result.ok) {
-    return result.skipped
-      ? 'mock provider — no check needed'
-      : `reachable${result.detail ? ` (v${result.detail})` : ''}`;
-  }
-  return result.authFailed
-    ? `auth failed (HTTP ${result.status})`
-    : (result.error ?? `HTTP ${result.status}`);
 }
 
 export default function ConnectorsPage() {
@@ -249,7 +238,7 @@ export default function ConnectorsPage() {
                         </button>
                         {testResult && (
                           <span className={`font-mono text-[11px] ${testResult.ok ? 'text-green-400' : 'text-red-400'}`}>
-                            {testResultText(testResult)}
+                            {formatConnectionTestResult(testResult)}
                           </span>
                         )}
                       </div>

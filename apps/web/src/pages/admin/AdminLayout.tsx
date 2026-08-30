@@ -2,10 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import type { SessionSummary } from '../../lib/types';
 import {
-  AuditIcon,
-  ChannelsIcon,
   CloseIcon,
-  ConnectorsIcon,
   HeartbeatsIcon,
   MemoriesIcon,
   MenuIcon,
@@ -14,39 +11,26 @@ import {
   PluginsIcon,
   PlusIcon,
   QueueIcon,
-  SessionsIcon,
   SettingsIcon,
   SkillsIcon,
   SunIcon,
 } from '../../components/Icons';
 import PluginsModal from './PluginsModal';
+import ConfigModal from './ConfigModal';
 import ChatPage from './ChatPage';
-import ConnectorsPage from './ConnectorsPage';
 import OverviewPage from './OverviewPage';
-import SessionsPage from './SessionsPage';
 import MemoriesPage from './MemoriesPage';
 import HeartbeatsPage from './HeartbeatsPage';
-import ChannelsPage from './ChannelsPage';
-import OutboundPage from './OutboundPage';
 import SkillsPage from './SkillsPage';
-import SettingsPage from './SettingsPage';
-import AuditPage from './AuditPage';
-import UsagePage from './UsagePage';
 import QueuePage from './QueuePage';
 import { ChatProvider, useChat } from '../../lib/chat-context';
 
 const NAV_ICONS = {
   overview: OverviewIcon,
-  sessions: SessionsIcon,
   memories: MemoriesIcon,
   heartbeats: HeartbeatsIcon,
-  channels: ChannelsIcon,
   skills: SkillsIcon,
-  audit: AuditIcon,
-  usage: OverviewIcon,
   queue: QueueIcon,
-  connectors: ConnectorsIcon,
-  settings: SettingsIcon,
 };
 
 const MAIN_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] = [
@@ -55,16 +39,6 @@ const MAIN_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] 
   { to: '/admin/heartbeats', label: 'Beats', icon: 'heartbeats' },
   { to: '/admin/skills', label: 'Skills', icon: 'skills' },
   { to: '/admin/queue', label: 'Queue', icon: 'queue' },
-];
-
-const CONFIG_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] = [
-  { to: '/admin/sessions', label: 'Sessions', icon: 'sessions' },
-  { to: '/admin/channels', label: 'Channels', icon: 'channels' },
-  { to: '/admin/outbound', label: 'Outbound', icon: 'sessions' },
-  { to: '/admin/audit', label: 'Audit', icon: 'audit' },
-  { to: '/admin/usage', label: 'Usage', icon: 'usage' },
-  { to: '/admin/connectors', label: 'Connectors', icon: 'connectors' },
-  { to: '/admin/settings', label: 'Settings', icon: 'settings' },
 ];
 
 function navItemClass({ isActive }: { isActive: boolean }, vertical: boolean, collapsed: boolean): string {
@@ -474,17 +448,11 @@ export default function AdminLayout() {
               <Route path="chat" element={<ChatPage />} />
               <Route path="chat/:sessionId" element={<ChatPage />} />
               <Route path="overview" element={<OverviewPage />} />
-              <Route path="sessions" element={<SessionsPage />} />
               <Route path="memories" element={<MemoriesPage />} />
               <Route path="heartbeats" element={<HeartbeatsPage />} />
-              <Route path="channels" element={<ChannelsPage />} />
-              <Route path="outbound" element={<OutboundPage />} />
               <Route path="skills" element={<SkillsPage />} />
-              <Route path="audit" element={<AuditPage />} />
-              <Route path="usage" element={<UsagePage />} />
               <Route path="queue" element={<QueuePage />} />
-              <Route path="connectors" element={<ConnectorsPage />} />
-              <Route path="settings" element={<SettingsPage />} />
+              <Route path="*" element={<Navigate to="/admin/chat" replace />} />
             </Routes>
           </main>
         </div>
@@ -506,12 +474,7 @@ export default function AdminLayout() {
           </div>
         </Drawer>
 
-        <Drawer open={configOpen} onClose={() => setConfigOpen(false)} label="Config">
-          <DrawerHeader title="Config" onClose={() => setConfigOpen(false)} />
-          <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
-            <NavItems items={CONFIG_ITEMS} vertical onNavigate={() => setConfigOpen(false)} />
-          </div>
-        </Drawer>
+        <ConfigModal open={configOpen} onClose={() => setConfigOpen(false)} />
 
         <PluginsModal open={pluginsOpen} onClose={() => setPluginsOpen(false)} />
       </div>

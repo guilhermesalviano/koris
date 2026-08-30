@@ -1,34 +1,24 @@
 import { PageShell, Card, EmptyState, useToast, Toast } from '../../components/AdminUI';
-import { useSettingsForm } from '../../lib/use-settings-form';
-import { ProviderStep } from '../setup/steps/ProviderStep';
-import { ChannelsStep } from '../setup/steps/ChannelsStep';
+import { useSettingsForm, buildGeneralPatch } from '../../lib/use-settings-form';
 import { SearchStep } from '../setup/steps/SearchStep';
 import { DomainsStep } from '../setup/steps/DomainsStep';
 import { PersonalInfoStep } from '../setup/steps/PersonalInfoStep';
 
-export default function SettingsPage() {
+export default function GeneralPage() {
   const api = useSettingsForm();
   const [toastMsg, showToast, isError] = useToast();
 
   async function handleSave() {
-    const ok = await api.submit();
+    const ok = await api.submit(buildGeneralPatch(api.form));
     showToast(ok ? 'Settings saved' : (api.saveErrors?.[0] ?? 'Failed to save settings'), !ok);
   }
 
   return (
-    <PageShell title="Settings" description="Runtime configuration" onRefresh={api.reload}>
+    <PageShell title="General" description="Web search, allowed domains, and personal context" onRefresh={api.reload}>
       {api.loadError && <EmptyState text={api.loadError} />}
       {api.loading && !api.loadError && <EmptyState text="Loading…" />}
       {!api.loading && !api.loadError && (
         <div className="space-y-4">
-          <Card>
-            <h2 className="mb-3 text-sm font-medium">AI provider</h2>
-            <ProviderStep api={api} />
-          </Card>
-          <Card>
-            <h2 className="mb-3 text-sm font-medium">Channels</h2>
-            <ChannelsStep api={api} />
-          </Card>
           <Card>
             <h2 className="mb-3 text-sm font-medium">Web search</h2>
             <SearchStep api={api} />

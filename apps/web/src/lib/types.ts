@@ -254,11 +254,3 @@ export interface UsageStats {
   totalTokens: number;
   durationMs: number;
 }
-
-export interface UsageReport {
-  days: number | null;
-  total: UsageStats;
-  byAgent: Record<string, UsageStats>;
-  byChannel: Record<string, UsageStats>;
-  byTool: Record<string, UsageStats>;
-}
