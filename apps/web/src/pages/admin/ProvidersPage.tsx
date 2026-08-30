@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PageShell, Card, EmptyState, useToast, Toast } from '../../components/AdminUI';
-import { useConnectors } from '../../lib/use-connectors';
-import type { ConnectorCatalogEntry, ConnectorRole } from '../../lib/types';
+import { useProviders } from '../../lib/use-providers';
+import type { ProviderCatalogEntry, ProviderRole } from '../../lib/types';
 import { formatConnectionTestResult, type ConnectionTestResult } from '../../lib/use-settings-form';
 
 const inputClass = 'w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent';
@@ -9,10 +9,12 @@ const labelClass = 'mb-1 block font-mono text-[10px] uppercase tracking-wide tex
 const secondaryBtn = 'rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm font-medium hover:border-accent disabled:opacity-60';
 const primaryBtn = 'rounded-lg bg-accent px-3 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-60';
 
-const ROLES: { key: ConnectorRole; label: string }[] = [
+const ROLES: { key: ProviderRole; label: string }[] = [
   { key: 'manager', label: 'Manager' },
   { key: 'workers', label: 'Workers' },
 ];
+
+const DEFAULT_PROVIDERS = ['ollama'];
 
 interface FormState {
   model: string;
@@ -21,19 +23,25 @@ interface FormState {
   showAdvanced: boolean;
 }
 
-export default function ConnectorsPage() {
-  const api = useConnectors();
+export default function ProvidersPage() {
+  const api = useProviders();
   const [toastMsg, showToast, isError] = useToast();
-  const [role, setRole] = useState<ConnectorRole>('manager');
+  const [role, setRole] = useState<ProviderRole>('manager');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({ model: '', apiToken: '', baseUrl: '', showAdvanced: false });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
   const [activating, setActivating] = useState(false);
+  const [added, setAdded] = useState<string[]>([]);
 
   const active = api.active[role];
 
-  function openConnector(entry: ConnectorCatalogEntry) {
+  const visible = api.catalog.filter(
+    (e) => DEFAULT_PROVIDERS.includes(e.name) || e.configured || added.includes(e.name),
+  );
+  const addable = api.catalog.filter((e) => !visible.some((v) => v.name === e.name));
+
+  function openProvider(entry: ProviderCatalogEntry) {
     const isActive = active.provider === entry.name;
     setExpanded(entry.name);
     setTestResult(null);
@@ -45,13 +53,13 @@ export default function ConnectorsPage() {
     });
   }
 
-  function switchRole(next: ConnectorRole) {
+  function switchRole(next: ProviderRole) {
     setRole(next);
     setExpanded(null);
     setTestResult(null);
   }
 
-  async function runTest(entry: ConnectorCatalogEntry) {
+  async function runTest(entry: ProviderCatalogEntry) {
     setTesting(true);
     setTestResult(null);
     try {
@@ -66,7 +74,7 @@ export default function ConnectorsPage() {
     }
   }
 
-  async function activate(entry: ConnectorCatalogEntry) {
+  async function activate(entry: ProviderCatalogEntry) {
     setActivating(true);
     try {
       const res = await api.activate(role, {
@@ -79,7 +87,7 @@ export default function ConnectorsPage() {
         showToast(`${entry.label} activated for ${role}`);
         setExpanded(null);
       } else {
-        showToast(res.errors?.[0] ?? 'Failed to activate connector', true);
+        showToast(res.errors?.[0] ?? 'Failed to activate provider', true);
       }
     } finally {
       setActivating(false);
@@ -87,7 +95,7 @@ export default function ConnectorsPage() {
   }
 
   return (
-    <PageShell title="Connectors" description="Choose an LLM provider" onRefresh={api.reload}>
+    <PageShell title="Providers" description="Choose an LLM provider" onRefresh={api.reload}>
       {api.error && <EmptyState text={api.error} />}
       {api.loading && !api.error && <EmptyState text="Loading…" />}
 
@@ -115,16 +123,16 @@ export default function ConnectorsPage() {
 
           {role === 'workers' && (
             <p className="font-mono text-[11px] text-txt-3">
-              Workers handles summarisation &amp; embeddings — prefer an embeddings-capable connector.
+              Workers handles summarisation &amp; embeddings — prefer an embeddings-capable provider.
             </p>
           )}
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {api.catalog.map((entry) => {
+          <div className="space-y-3">
+            {visible.map((entry) => {
               const isActive = active.provider === entry.name;
               const isOpen = expanded === entry.name;
               return (
-                <Card key={entry.name} className={isOpen ? 'sm:col-span-2' : ''}>
+                <Card key={entry.name}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -162,7 +170,7 @@ export default function ConnectorsPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => (isOpen ? setExpanded(null) : openConnector(entry))}
+                      onClick={() => (isOpen ? setExpanded(null) : openProvider(entry))}
                       className={`${secondaryBtn} flex-shrink-0 py-1.5`}
                     >
                       {isOpen ? 'Close' : 'Configure'}
@@ -177,6 +185,8 @@ export default function ConnectorsPage() {
                           value={form.model}
                           onChange={(e) => setForm((p) => ({ ...p, model: e.target.value }))}
                           className={`${inputClass} font-mono`}
+                          name="model"
+                          autoComplete="off"
                           placeholder={entry.recommendedModel ?? ''}
                         />
                       </div>
@@ -187,6 +197,8 @@ export default function ConnectorsPage() {
                           value={form.apiToken}
                           onChange={(e) => setForm((p) => ({ ...p, apiToken: e.target.value }))}
                           className={`${inputClass} font-mono`}
+                          name="api-token"
+                          autoComplete="off"
                           placeholder={
                             isActive && active.hasToken
                               ? 'Leave blank to keep current token'
@@ -205,6 +217,7 @@ export default function ConnectorsPage() {
                               value={form.baseUrl}
                               onChange={(e) => setForm((p) => ({ ...p, baseUrl: e.target.value }))}
                               className={`${inputClass} font-mono`}
+                              name="provider-url"
                               placeholder={entry.defaultBaseUrl ?? 'http://localhost:11434'}
                             />
                           </div>
@@ -248,6 +261,27 @@ export default function ConnectorsPage() {
               );
             })}
           </div>
+
+          {addable.length > 0 && (
+            <Card>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Add provider</span>
+                <span className="font-mono text-[11px] text-txt-3">not shown by default</span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {addable.map((entry) => (
+                  <button
+                    key={entry.name}
+                    type="button"
+                    onClick={() => setAdded((p) => [...p, entry.name])}
+                    className={`${secondaryBtn} py-1.5`}
+                  >
+                    {entry.label}
+                  </button>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
       )}
 

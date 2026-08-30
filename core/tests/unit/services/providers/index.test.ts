@@ -130,7 +130,7 @@ describe('provider registry', () => {
     });
   });
 
-  it('exposes a connector catalogue with presentational metadata, excluding mock', () => {
+  it('exposes a provider catalogue with presentational metadata, excluding mock', () => {
     const catalog = getProviderCatalog();
     expect(catalog.map((c) => c.name)).not.toContain('mock');
 

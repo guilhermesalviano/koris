@@ -200,7 +200,7 @@ export interface ProviderCatalogEntry {
 }
 
 /**
- * The user-facing connector catalogue: every selectable provider (minus the
+ * The user-facing provider catalogue: every selectable provider (minus the
  * internal `mock`) with its presentational metadata.
  */
 export function getProviderCatalog(): ProviderCatalogEntry[] {

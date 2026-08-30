@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { useConnectors } from '../lib/use-connectors';
+import { useProviders } from '../lib/use-providers';
 import { useUi } from '../lib/ui-context';
 import { useToast, Toast } from './AdminUI';
 import { ChevronDownIcon, SettingsIcon } from './Icons';
-import type { ConnectorCatalogEntry } from '../lib/types';
+import type { ProviderCatalogEntry } from '../lib/types';
+
+const DEFAULT_PROVIDERS = ['ollama'];
 
 export default function ProviderPicker() {
-  const api = useConnectors();
+  const api = useProviders();
   const { openConfig } = useUi();
   const [toastMsg, showToast, isError] = useToast();
   const [open, setOpen] = useState(false);
@@ -16,6 +18,7 @@ export default function ProviderPicker() {
   const active = api.active.manager;
   const activeEntry = api.catalog.find((e) => e.name === active.provider);
   const connected = !!active.provider && (active.hasToken || (activeEntry ? !activeEntry.isOpenAICompatible : false));
+  const visible = api.catalog.filter((e) => DEFAULT_PROVIDERS.includes(e.name) || e.configured);
 
   useEffect(() => {
     if (!open) return;
@@ -38,7 +41,7 @@ export default function ProviderPicker() {
     openConfig();
   }
 
-  async function switchTo(entry: ConnectorCatalogEntry) {
+  async function switchTo(entry: ProviderCatalogEntry) {
     const isCurrent = entry.name === active.provider;
     setSwitching(entry.name);
     try {
@@ -86,7 +89,7 @@ export default function ProviderPicker() {
 
       {open && !api.error && (
         <div className="absolute bottom-full left-0 z-50 mb-2 max-h-[60vh] w-[17rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-card border border-strong bg-bg-2 py-1 shadow-2xl">
-          {api.catalog.map((entry) => {
+          {visible.map((entry) => {
             const isCurrent = entry.name === active.provider;
             const isNative = !entry.isOpenAICompatible;
             const ready = isNative || isCurrent;
@@ -134,7 +137,7 @@ export default function ProviderPicker() {
             onClick={handleConfig}
             className="block w-full px-3 py-2 text-left text-[13px] text-txt-2 hover:bg-bg-3 hover:text-txt"
           >
-            Configure connectors…
+            Configure providers…
           </button>
         </div>
       )}

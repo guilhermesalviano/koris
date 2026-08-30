@@ -149,7 +149,7 @@ export interface PluginsResponse {
   items: PluginItem[];
 }
 
-export interface ConnectorCatalogEntry {
+export interface ProviderCatalogEntry {
   name: string;
   label: string;
   defaultBaseUrl?: string;
@@ -161,18 +161,18 @@ export interface ConnectorCatalogEntry {
   configured: boolean;
 }
 
-export interface ActiveConnector {
+export interface ActiveProvider {
   provider: string;
   model: string;
   baseUrl: string;
   hasToken: boolean;
 }
 
-export type ConnectorRole = 'manager' | 'workers';
+export type ProviderRole = 'manager' | 'workers';
 
-export interface ConnectorsResponse {
-  connectors: ConnectorCatalogEntry[];
-  active: Record<ConnectorRole, ActiveConnector>;
+export interface ProvidersResponse {
+  providers: ProviderCatalogEntry[];
+  active: Record<ProviderRole, ActiveProvider>;
 }
 
 export interface ActiveRun {

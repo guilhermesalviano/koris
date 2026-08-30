@@ -1,10 +1,10 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import Modal from '../../components/Modal';
-import { AuditIcon, ChannelsIcon, ConnectorsIcon, SessionsIcon, SettingsIcon } from '../../components/Icons';
+import { AuditIcon, ChannelsIcon, ProvidersIcon, SessionsIcon, SettingsIcon } from '../../components/Icons';
 import SessionsPage from './SessionsPage';
 import ChannelsPage from './ChannelsPage';
 import AuditPage from './AuditPage';
-import ConnectorsPage from './ConnectorsPage';
+import ProvidersPage from './ProvidersPage';
 import GeneralPage from './GeneralPage';
 
 type IconComponent = ComponentType<{ className?: string }>;
@@ -17,7 +17,7 @@ interface Section {
 }
 
 const SECTIONS: Section[] = [
-  { id: 'connectors', label: 'Connectors', Icon: ConnectorsIcon, Component: ConnectorsPage },
+  { id: 'providers', label: 'Providers', Icon: ProvidersIcon, Component: ProvidersPage },
   { id: 'channels', label: 'Channels', Icon: ChannelsIcon, Component: ChannelsPage },
   { id: 'sessions', label: 'Sessions', Icon: SessionsIcon, Component: SessionsPage },
   { id: 'audit', label: 'Audit', Icon: AuditIcon, Component: AuditPage },

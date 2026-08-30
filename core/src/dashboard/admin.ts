@@ -775,7 +775,7 @@ class AdminRouterFactory {
       res.json({ providers, channels: CHANNEL_TYPES });
     });
 
-    router.get('/connectors', (_req: Request, res: Response) => {
+    router.get('/providers', (_req: Request, res: Response) => {
       const activeProfile = (profile: typeof config.AI.MANAGER) => ({
         provider: profile.PROVIDER,
         model: profile.MODEL,
@@ -783,12 +783,12 @@ class AdminRouterFactory {
         hasToken: !!profile.API_TOKEN?.trim(),
       });
       const configured = new Set([config.AI.MANAGER.PROVIDER, config.AI.WORKERS.PROVIDER]);
-      const connectors = getProviderCatalog().map((entry) => ({
+      const providers = getProviderCatalog().map((entry) => ({
         ...entry,
         configured: configured.has(entry.name),
       }));
       res.json({
-        connectors,
+        providers,
         active: {
           manager: activeProfile(config.AI.MANAGER),
           workers: activeProfile(config.AI.WORKERS),

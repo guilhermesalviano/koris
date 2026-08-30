@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiRequest, ApiRequestError } from './api';
-import type { ConnectorCatalogEntry, ConnectorRole, ConnectorsResponse, ActiveConnector } from './types';
+import type { ProviderCatalogEntry, ProviderRole, ProvidersResponse, ActiveProvider } from './types';
 import type { ConnectionTestResult } from './use-settings-form';
 
-const EMPTY_ACTIVE: ActiveConnector = { provider: '', model: '', baseUrl: '', hasToken: false };
+const EMPTY_ACTIVE: ActiveProvider = { provider: '', model: '', baseUrl: '', hasToken: false };
 
 export interface ActivateInput {
   provider: string;
@@ -12,9 +12,9 @@ export interface ActivateInput {
   baseUrl: string;
 }
 
-export function useConnectors() {
-  const [catalog, setCatalog] = useState<ConnectorCatalogEntry[]>([]);
-  const [active, setActive] = useState<Record<ConnectorRole, ActiveConnector>>({
+export function useProviders() {
+  const [catalog, setCatalog] = useState<ProviderCatalogEntry[]>([]);
+  const [active, setActive] = useState<Record<ProviderRole, ActiveProvider>>({
     manager: EMPTY_ACTIVE,
     workers: EMPTY_ACTIVE,
   });
@@ -25,11 +25,11 @@ export function useConnectors() {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiRequest<ConnectorsResponse>('/connectors');
-      setCatalog(res.connectors);
+      const res = await apiRequest<ProvidersResponse>('/providers');
+      setCatalog(res.providers);
       setActive(res.active);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load connectors');
+      setError(err instanceof Error ? err.message : 'Failed to load providers');
     } finally {
       setLoading(false);
     }
@@ -50,7 +50,7 @@ export function useConnectors() {
     }
   }, []);
 
-  const activate = useCallback(async (role: ConnectorRole, input: ActivateInput): Promise<{ ok: boolean; errors?: string[] }> => {
+  const activate = useCallback(async (role: ProviderRole, input: ActivateInput): Promise<{ ok: boolean; errors?: string[] }> => {
     const profile: Record<string, unknown> = {
       provider: input.provider,
       base_url: input.baseUrl,
@@ -69,11 +69,11 @@ export function useConnectors() {
       if (err instanceof ApiRequestError && err.details?.length) {
         return { ok: false, errors: err.details };
       }
-      return { ok: false, errors: [err instanceof Error ? err.message : 'Failed to activate connector'] };
+      return { ok: false, errors: [err instanceof Error ? err.message : 'Failed to activate provider'] };
     }
   }, [load]);
 
   return { catalog, active, loading, error, reload: load, test, activate };
 }
 
-export type UseConnectorsApi = ReturnType<typeof useConnectors>;
+export type UseProvidersApi = ReturnType<typeof useProviders>;
