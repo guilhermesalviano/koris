@@ -5,17 +5,10 @@ import { useChat } from '../../lib/chat-context';
 import { usePageTitle } from '../../lib/use-page-title';
 import ImageLightbox from '../../components/ImageLightbox';
 import ProviderPicker from '../../components/ProviderPicker';
-import { AttachIcon, BrokenImageIcon, ChatIcon, CloseIcon, PlusIcon, SendIcon } from '../../components/Icons';
+import { AttachIcon, BrokenImageIcon, CloseIcon, PlusIcon, SendIcon } from '../../components/Icons';
 import type { ImageAttachment } from '../../lib/types';
 
 const MAX_CHARS = 4000;
-
-const PROMPTS = [
-  'Explain how streaming works in the Fetch API',
-  'Write a Python function to parse JSON safely',
-  'What is the difference between RAG and fine-tuning?',
-  'How do I center a div in CSS?',
-];
 
 function imageSrc(image: ImageAttachment): string {
   return `data:${image.mimeType ?? 'image/png'};base64,${image.data}`;
@@ -24,7 +17,7 @@ function imageSrc(image: ImageAttachment): string {
 export default function ChatPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
-  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, fillPrompt, openSession, sessions, activeSessionId, newChat, gateBlocks, allowDomain, dismissGateBlock } = useChat();
+  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, openSession, sessions, activeSessionId, newChat, gateBlocks, allowDomain, dismissGateBlock } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,11 +52,6 @@ export default function ChatPage() {
   async function handleNewChat() {
     await newChat();
     navigate('/admin/chat');
-  }
-
-  function handlePromptClick(text: string) {
-    fillPrompt(text);
-    textareaRef.current?.focus();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -112,6 +100,88 @@ export default function ChatPage() {
   const footerHint = '↵ send · ⇧↵ newline';
   const charCount = input.length;
 
+  // A fresh chat centers the composer — put the cursor in it straight away.
+  useEffect(() => {
+    if (showEmptyState) textareaRef.current?.focus();
+  }, [showEmptyState]);
+
+  const composerBody = (
+    <>
+      {attachments.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {attachments.map((img, i) => (
+            <div key={i} className="relative">
+              <button
+                type="button"
+                onClick={() => setPreview({ images: attachments, index: i })}
+                title="View image"
+                className="block h-16 w-16 overflow-hidden rounded-lg border border-strong transition-transform duration-150 hover:scale-[1.03] focus:outline-none focus:ring-2 focus:ring-accent"
+              >
+                <img src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-full w-full cursor-zoom-in object-cover" />
+              </button>
+              <button
+                onClick={() => removeAttachment(i)}
+                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-strong bg-bg text-txt-2 hover:text-red-400"
+                title="Remove image"
+              >
+                <CloseIcon className="h-3 w-3 fill-none stroke-current" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex items-start gap-2 rounded-card border border-strong bg-bg-3 px-4 py-2.5 pr-2.5 transition-colors duration-200 focus-within:border-accent">
+        <button
+          type="button"
+          disabled={streaming}
+          onClick={() => fileInputRef.current?.click()}
+          title="Attach image"
+          className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[10px] border-none bg-transparent text-txt-3 transition-all duration-150 hover:bg-bg-2 hover:text-accent-2 disabled:opacity-35 disabled:cursor-default"
+        >
+          <AttachIcon className="h-[16px] w-[16px] fill-none stroke-current" />
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            handleFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+        <textarea
+          ref={textareaRef}
+          rows={1}
+          placeholder="Ask something…"
+          autoComplete="off"
+          value={input}
+          maxLength={MAX_CHARS}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3"
+        />
+        <button
+          disabled={!canSend}
+          title="Send message"
+          onClick={submit}
+          className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:enabled:opacity-90 active:enabled:scale-95 disabled:opacity-35 disabled:cursor-default"
+        >
+          <SendIcon className="relative z-10 h-[15px] w-[15px] fill-none stroke-white" />
+        </button>
+      </div>
+      <div className="mt-1.5 flex items-center justify-between gap-2 px-1 font-mono text-[11px] text-txt-3">
+        <ProviderPicker />
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="hidden shrink-0 sm:inline">{footerHint}</span>
+          <span className={`shrink-0 ${charCount > MAX_CHARS * 0.85 ? 'text-amber-500' : ''}`}>{charCount}</span>
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col w-full">
       <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-subtle px-4 py-2">
@@ -125,28 +195,14 @@ export default function ChatPage() {
           New chat
         </button>
       </div>
+      {showEmptyState ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 px-4">
+          <h2 className="text-center text-xl font-medium">What can I help with?</h2>
+          <div className="w-full max-w-2xl">{composerBody}</div>
+        </div>
+      ) : (
+        <>
       <div ref={chatRef} className="flex flex-1 flex-col gap-5 overflow-y-auto scroll-smooth px-5 py-6">
-        {showEmptyState && (
-          <div className="m-auto max-w-sm px-6 py-10 text-center">
-            <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-strong bg-bg-3">
-              <ChatIcon className="h-6 w-6 fill-none stroke-txt-3" />
-            </div>
-            <h2 className="mb-2 text-lg font-medium">What can I help with?</h2>
-            <p className="text-[13px] leading-relaxed text-txt-2">Ask anything — code, concepts, writing, analysis. I&apos;ll think it through with you.</p>
-            <div className="mt-5 flex flex-wrap justify-center gap-1.5">
-              {PROMPTS.map((p) => (
-                <button
-                  key={p}
-                  onClick={() => handlePromptClick(p)}
-                  className="rounded-full border border-strong bg-bg-3 px-3.5 py-1.5 font-mono text-xs text-txt-2 transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2"
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {messages.map((m) => (
           <div key={m.id} className={`flex gap-2.5 animate-msg-in ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
             {m.role === 'assistant' && (
@@ -234,79 +290,10 @@ export default function ChatPage() {
       )}
 
       <div className="flex-shrink-0 border-t border-subtle bg-bg/90 px-4 pb-4 pt-3 backdrop-blur-md">
-        {attachments.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {attachments.map((img, i) => (
-              <div key={i} className="relative">
-                <button
-                  type="button"
-                  onClick={() => setPreview({ images: attachments, index: i })}
-                  title="View image"
-                  className="block h-16 w-16 overflow-hidden rounded-lg border border-strong transition-transform duration-150 hover:scale-[1.03] focus:outline-none focus:ring-2 focus:ring-accent"
-                >
-                  <img src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-full w-full cursor-zoom-in object-cover" />
-                </button>
-                <button
-                  onClick={() => removeAttachment(i)}
-                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-strong bg-bg text-txt-2 hover:text-red-400"
-                  title="Remove image"
-                >
-                  <CloseIcon className="h-3 w-3 fill-none stroke-current" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex items-start gap-2 rounded-card border border-strong bg-bg-3 px-4 py-2.5 pr-2.5 transition-colors duration-200 focus-within:border-accent">
-          <button
-            type="button"
-            disabled={streaming}
-            onClick={() => fileInputRef.current?.click()}
-            title="Attach image"
-            className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[10px] border-none bg-transparent text-txt-3 transition-all duration-150 hover:bg-bg-2 hover:text-accent-2 disabled:opacity-35 disabled:cursor-default"
-          >
-            <AttachIcon className="h-[16px] w-[16px] fill-none stroke-current" />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              handleFiles(e.target.files);
-              e.target.value = '';
-            }}
-          />
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            placeholder="Ask something…"
-            autoComplete="off"
-            value={input}
-            maxLength={MAX_CHARS}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3"
-          />
-          <button
-            disabled={!canSend}
-            title="Send message"
-            onClick={submit}
-            className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:enabled:opacity-90 active:enabled:scale-95 disabled:opacity-35 disabled:cursor-default"
-          >
-            <SendIcon className="relative z-10 h-[15px] w-[15px] fill-none stroke-white" />
-          </button>
-        </div>
-        <div className="mt-1.5 flex items-center justify-between gap-2 px-1 font-mono text-[11px] text-txt-3">
-          <div className="flex min-w-0 items-center justify-between gap-2">
-            <span className="hidden shrink-0 sm:inline">{footerHint}</span>
-            <ProviderPicker />
-          </div>
-          <span className={`shrink-0 ${charCount > MAX_CHARS * 0.85 ? 'text-amber-500' : ''}`}>{charCount}</span>
-        </div>
+        {composerBody}
       </div>
+        </>
+      )}
 
       {toast && (
         <div className="pointer-events-none fixed bottom-20 left-1/2 z-[100] -translate-x-1/2 whitespace-nowrap rounded-[10px] border border-red-500/30 bg-[#2a1212] px-4 py-2 text-[13px] font-mono text-red-300 animate-toast-in">
