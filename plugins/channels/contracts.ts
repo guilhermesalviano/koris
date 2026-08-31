@@ -39,8 +39,6 @@ export type ProcessOptions = {
   signal?: AbortSignal;
   toolsEnabled?: boolean;
   learnedSkillsEnabled?: boolean;
-  stickersEnabled?: boolean;
-  searchEnabled?: boolean;
   onProgress?: (summary: string) => void;
   sessionId?: string;
   runId?: string;

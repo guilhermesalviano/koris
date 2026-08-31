@@ -33,8 +33,6 @@ interface BuildPromptParams {
   images?: ImageAttachment[];
   toolsEnabled?: boolean;
   learnedSkillsEnabled?: boolean;
-  stickersEnabled?: boolean;
-  searchEnabled?: boolean;
   messageHistory?: Message[];
   includeBeatTools?: boolean;
   sessionId?: string;
@@ -84,7 +82,7 @@ class PromptRepository implements IPromptRepository {
     extraSystemBlocks,
     toolResults,
     learnedSkillsEnabled,
-    stickersEnabled,
+    toolsEnabled,
   }: BuildPromptParams): Promise<Message[]> {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
 
@@ -102,8 +100,7 @@ class PromptRepository implements IPromptRepository {
     const learnedSkills = this.buildLearnedSkills({ learnedSkillsEnabled });
     if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
 
-    const stickerToolsAllowed = this.isStickerContentAllowed(stickersEnabled);
-    const stickerRules = stickerToolsAllowed ? this.buildStickerRules(channel) : '';
+    const stickerRules = (toolsEnabled ?? true) ? this.buildStickerRules(channel) : '';
     if (stickerRules) systemBlocks.push(`# Learned Stickers\n${stickerRules}`);
 
     const memory = await this.buildMemoryContext(userMessage, sessionId);
@@ -247,31 +244,12 @@ class PromptRepository implements IPromptRepository {
     return contextString.trim().slice(0, 15000);
   }
 
-  private buildTools({ toolsEnabled, includeBeatTools, stickersEnabled, searchEnabled }: BuildPromptParams): AIToolDefinition[] | undefined {
-    const toolsEnabledFinal = toolsEnabled ?? true;
-    const stickerToolsAllowed = this.isStickerContentAllowed(stickersEnabled);
-    const searchToolsAllowed = this.isSearchContentAllowed(searchEnabled);
-
-    if (!toolsEnabledFinal) {
-      const restrictedTools = [
-        ...(stickerToolsAllowed ? this.toolsRepository.getStickerTools() : []),
-        ...(searchToolsAllowed ? this.toolsRepository.getSearchTools() : []),
-      ];
-      return restrictedTools.length > 0 ? restrictedTools : undefined;
+  private buildTools({ toolsEnabled, includeBeatTools }: BuildPromptParams): AIToolDefinition[] | undefined {
+    if (!(toolsEnabled ?? true)) {
+      return undefined;
     }
 
-    return this.toolsRepository.getAll({
-      includeBeatTools,
-      includeStickerTools: stickerToolsAllowed,
-    });
-  }
-
-  private isStickerContentAllowed(stickersEnabled?: boolean): boolean {
-    return stickersEnabled ?? true;
-  }
-
-  private isSearchContentAllowed(searchEnabled?: boolean): boolean {
-    return searchEnabled ?? true;
+    return this.toolsRepository.getAll({ includeBeatTools });
   }
 }
 

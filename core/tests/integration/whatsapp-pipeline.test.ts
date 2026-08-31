@@ -70,8 +70,7 @@ function waMessage(overrides: Partial<WAMessage> = {}): WAMessage {
 async function start(mainAgentReply: string) {
   configureWhatsAppRuntime({
     channelHandler: ChannelHandlerFactory,
-    allowUntrusted: true,
-    config: { enabled: true, authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot' },
+    config: { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot', allowUnlistedSenders: true },
   });
 
   const { gateway, mainAgent } = makeGatewayWithFakeAgent(mainAgentReply);

@@ -5,16 +5,7 @@
   "gateway_host": "http://localhost:3000",
   "allowed_domains": [],
   "learned_skills_limit": 10,
-  "stickers": {
-    "allow_untrusted": false
-  },
-  "search": {
-    "allow_untrusted": false
-  },
   "heartbeat": false,
-  "channels": {
-    "allow_untrusted": false
-  },
   "session": {
     "summarizer_mode": "manual"
   },

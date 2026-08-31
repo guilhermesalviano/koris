@@ -15,12 +15,13 @@ import { addAllowedDomain } from '../services/security/allowed-domains';
 import { findGateBlocks } from '../services/security/gate-blocks';
 import { getSupportedProviders, getProviderCatalog, getProviderDefaultBaseUrl, clearProviderCache } from '../services/providers';
 import {
-  startWhatsAppLive,
-  startTelegramLive,
+  startChannelLive,
   loadTelegramConfig,
   loadWhatsAppConfig,
   writeTelegramConfigPatch,
   writeWhatsAppConfigPatch,
+  reprimeChannelRuntime,
+  type LiveChannelName,
 } from './live-channel-runtime';
 import { ILogger } from '../infrastructure/logger';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
@@ -80,26 +81,26 @@ function maskSecret(value: string): string {
 }
 
 /**
- * Reassembles the legacy `CHANNELS.TELEGRAM`/`WHATSAPP` shape the frontend
- * already expects, sourcing ALLOW_UNTRUSTED from the central config and
- * telegram/whatsapp from each plugin's own config.yml — so the API contract
- * (and thus the web Settings UI) doesn't need to change.
+ * Reassembles the `CHANNELS.TELEGRAM`/`WHATSAPP` shape the frontend expects,
+ * sourcing every field (including the per-channel `ALLOW_UNLISTED_SENDERS`
+ * policy) from each plugin's own config.yml.
  */
 function buildChannelsSnapshot(pluginSettingsRepo: IPluginSettingsRepository) {
   const telegram = loadTelegramConfig();
   const whatsapp = loadWhatsAppConfig();
   return {
-    ALLOW_UNTRUSTED: config.CHANNELS.ALLOW_UNTRUSTED,
     TELEGRAM: {
       ENABLED: resolvePluginEnabled(pluginSettingsRepo, 'channels', 'telegram'),
       BOT_TOKEN: telegram.token,
       WHITELIST: telegram.whitelist,
+      ALLOW_UNLISTED_SENDERS: telegram.allowUnlistedSenders,
     },
     WHATSAPP: {
       ENABLED: resolvePluginEnabled(pluginSettingsRepo, 'channels', 'whatsapp'),
       AUTH_FOLDER: whatsapp.authFolder,
       WHITELIST: whatsapp.whitelist,
       MENTION_ID: whatsapp.mentionId,
+      ALLOW_UNLISTED_SENDERS: whatsapp.allowUnlistedSenders,
     },
   };
 }
@@ -791,8 +792,7 @@ class AdminRouterFactory {
 
       if (family === 'channels') {
         if (enabled) {
-          if (name === 'telegram') startTelegramLive(logger, gateway);
-          if (name === 'whatsapp') startWhatsAppLive(logger, gateway);
+          startChannelLive(name as LiveChannelName, logger, gateway);
         } else {
           ChannelsSingleton.getExistingInstance()?.stopChannel(name);
         }
@@ -932,12 +932,14 @@ class AdminRouterFactory {
       if (telegramPatchRecord) {
         const { enabled: _enabled, ...rest } = telegramPatchRecord;
         writeTelegramConfigPatch(rest);
+        reprimeChannelRuntime('telegram');
       }
 
       const whatsappPatchRecord = asRecord(whatsappPatch);
       if (whatsappPatchRecord) {
         const { enabled: _enabled, ...rest } = whatsappPatchRecord;
         writeWhatsAppConfigPatch(rest);
+        reprimeChannelRuntime('whatsapp');
       }
 
       reloadConfig();
@@ -993,7 +995,7 @@ class AdminRouterFactory {
       // WhatsApp pairing goes through Baileys' own terminal QR prompt
       // (plugins/whatsapp's startBaileysSocket already prints it via
       // qrcode-terminal) — this just triggers the live connection attempt.
-      startWhatsAppLive(logger, gateway);
+      startChannelLive('whatsapp', logger, gateway);
       res.json({ success: true });
     });
 

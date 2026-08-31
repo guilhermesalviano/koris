@@ -49,12 +49,12 @@ const {
     writeSettingsFile: vi.fn(() => '/tmp/koris.json'),
   },
   liveChannelRuntime: {
-    startWhatsAppLive: vi.fn(),
-    startTelegramLive: vi.fn(),
-    loadTelegramConfig: vi.fn(() => ({ token: '', whitelist: '' })),
-    loadWhatsAppConfig: vi.fn(() => ({ authFolder: '', whitelist: '', mentionId: '' })),
+    startChannelLive: vi.fn(),
+    loadTelegramConfig: vi.fn(() => ({ token: '', whitelist: '', allowUnlistedSenders: false })),
+    loadWhatsAppConfig: vi.fn(() => ({ authFolder: '', whitelist: '', mentionId: '', allowUnlistedSenders: false })),
     writeTelegramConfigPatch: vi.fn(),
     writeWhatsAppConfigPatch: vi.fn(),
+    reprimeChannelRuntime: vi.fn(),
   },
   pluginSettingsRepo: { getEnabled: vi.fn(), setEnabled: vi.fn(), getAll: vi.fn() },
   pluginCatalog: { getInstance: vi.fn(), getExistingInstance: vi.fn(() => []) },
@@ -620,7 +620,7 @@ describe('AdminRouterFactory /plugins', () => {
     callRoute(router, req, res);
 
     expect(pluginSettingsRepo.setEnabled).toHaveBeenCalledWith('tools', 'curl-request', false);
-    expect(liveChannelRuntime.startTelegramLive).not.toHaveBeenCalled();
+    expect(liveChannelRuntime.startChannelLive).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({ success: true, item: { family: 'tools', name: 'curl-request', enabled: false } });
   });
 
@@ -632,7 +632,8 @@ describe('AdminRouterFactory /plugins', () => {
     callRoute(router, req, res);
 
     expect(pluginSettingsRepo.setEnabled).toHaveBeenCalledWith('channels', 'telegram', true);
-    expect(liveChannelRuntime.startTelegramLive).toHaveBeenCalledTimes(1);
+    expect(liveChannelRuntime.startChannelLive).toHaveBeenCalledTimes(1);
+    expect(liveChannelRuntime.startChannelLive).toHaveBeenCalledWith('telegram', expect.anything(), expect.anything());
   });
 
   it('PATCH /plugins/:family/:name stops a running channel live when disabling it', () => {
@@ -953,7 +954,7 @@ describe('AdminRouterFactory /settings', () => {
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/whatsapp/connect'), res);
 
-    expect(liveChannelRuntime.startWhatsAppLive).toHaveBeenCalledTimes(1);
+    expect(liveChannelRuntime.startChannelLive).toHaveBeenCalledWith('whatsapp', expect.anything(), expect.anything());
     expect(res.json).toHaveBeenCalledWith({ success: true });
   });
 });

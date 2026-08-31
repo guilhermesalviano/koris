@@ -12,6 +12,8 @@ import 'dotenv/config';
 import { existsSync } from 'fs';
 import { config } from './config';
 import { resolveConfigPaths, loadConfigFile } from './config/helpers';
+import { loadTelegramConfig } from '../../plugins/channels/telegram';
+import { loadWhatsAppConfig } from '../../plugins/channels/whatsapp';
 import {
   VALID_LOG_LEVELS,
   isValidUrl,
@@ -113,9 +115,9 @@ async function main() {
   );
 
   advisory(
-    !config.STICKERS.ALLOW_UNTRUSTED,
-    'stickers.allow_untrusted is valid',
-    'but stickers.allow_untrusted is on — anyone outside the channel whitelist can learn/send stickers',
+    !loadTelegramConfig().allowUnlistedSenders && !loadWhatsAppConfig().allowUnlistedSenders,
+    'channel unlisted-sender access is valid',
+    'this means allow_unlisted_senders is on for a channel — senders not on that channel whitelist reach the agent (as untrusted)',
   );
 
   // ── 3. AI Provider ───────────────────────────────────────────────────────

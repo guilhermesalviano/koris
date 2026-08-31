@@ -45,7 +45,7 @@ describe('config/index reloadConfig', () => {
     expect(config.WEB_PORT).toBe(5555);
   });
 
-  it('picks up nested AI/CHANNELS values after a reload', () => {
+  it('picks up nested AI values after a reload', () => {
     const dir = createTempDir();
     writeFileSync(join(dir, 'koris.json'), JSON.stringify({
       ai: {
@@ -55,7 +55,6 @@ describe('config/index reloadConfig', () => {
         roles: { manager: { provider: 'ollama' } },
         embed: { enabled: true, provider: 'ollama', model: 'reload-embed' },
       },
-      channels: { allow_untrusted: true },
     }));
 
     reloadConfig({ cwd: dir, dirname: dir });
@@ -68,6 +67,5 @@ describe('config/index reloadConfig', () => {
     // Embedding settings no longer live on config.AI.WORKERS.
     expect((config.AI.WORKERS as Record<string, unknown>).EMBEDDING_ENABLED).toBeUndefined();
     expect((config.AI.WORKERS as Record<string, unknown>).EMBED_MODEL).toBeUndefined();
-    expect(config.CHANNELS.ALLOW_UNTRUSTED).toBe(true);
   });
 });

@@ -63,7 +63,7 @@ describe('config/settings-writer', () => {
 
     expect(template).toHaveProperty('web_port');
     expect(template).toHaveProperty('ai');
-    expect(template).toHaveProperty('channels');
+    expect(template).toHaveProperty('github');
     expect(template).toHaveProperty('personal_information');
   });
 

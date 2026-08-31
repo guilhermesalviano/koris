@@ -61,7 +61,7 @@ export function create(context: ToolPluginContext): Plugin {
           id: { type: 'string', required: true, description: 'The id of the learned sticker to forget, from the "Learned Stickers" list.' },
         },
         handler: (logger, args, execContext) => unlearnSticker(logger, args, execContext, context.stickerRules),
-        enabled: (opts) => opts.trusted && opts.stickersEnabled && context.pluginEnablement.isEnabled('unlearn-sticker'),
+        enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('unlearn-sticker'),
       });
       registry.extend(COMMANDS, definition);
     },

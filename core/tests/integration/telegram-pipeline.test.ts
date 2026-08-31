@@ -67,8 +67,7 @@ function baseMessage(overrides: Partial<TelegramMessage> = {}): TelegramMessage 
 function setupRuntime() {
   configureTelegramRuntime({
     channelHandler: ChannelHandlerFactory,
-    allowUntrusted: true,
-    config: { enabled: true, token: 'TEST_TOKEN', whitelist: '' },
+    config: { token: 'TEST_TOKEN', whitelist: '', allowUnlistedSenders: true },
   });
   _setTelegramWhitelistForTesting([]);
 }

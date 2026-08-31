@@ -96,8 +96,8 @@ describe('defineTool', () => {
       enabled,
     });
 
-    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(false);
-    expect(enabled).toHaveBeenCalledWith({ trusted: true, stickersEnabled: true });
+    expect(definition.enabled({ trusted: true })).toBe(false);
+    expect(enabled).toHaveBeenCalledWith({ trusted: true });
 
     await definition.handler({ info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() }, {});
     expect(handler).toHaveBeenCalled();

@@ -63,7 +63,7 @@ export function create(context: ToolPluginContext): Plugin {
           'Requires Docker to be installed and running on the host; takes up to about 2 minutes. ' +
           'REQUIRES CONFIRMATION: this stops and recreates a running container. Before calling this tool, tell the human that search_engine failed and ask if they want you to restart SearXNG to fix it. Only call this tool after the human has explicitly confirmed in a follow-up message.',
         handler: (logger) => executeRestartSearchEngine(logger),
-        enabled: (opts) => opts.trusted && (opts.searchEnabled ?? true) && context.pluginEnablement.isEnabled('search-engine-restart'),
+        enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('search-engine-restart'),
       });
       registry.extend(COMMANDS, definition);
     },
