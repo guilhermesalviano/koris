@@ -38,7 +38,6 @@ export function create(context: PluginContext, configOverride?: WhatsAppPluginCo
 
   configureWhatsAppRuntime({
     channelHandler: context.channelHandler,
-    allowUntrusted: context.allowUntrusted,
     config: cfg,
   });
 

@@ -214,8 +214,6 @@ export interface IPluginEnablementGateway {
 }
 
 export interface PluginContext {
-  /** Cross-channel security policy: allow senders outside a channel's own whitelist. */
-  allowUntrusted: boolean;
   logger: ILogger;
   gateway: IMessageGateway;
   channelHandler: IChannelHandlerFactory;

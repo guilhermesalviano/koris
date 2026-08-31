@@ -65,7 +65,6 @@ export function create(context: PluginContext, configOverride?: TelegramPluginCo
 
   configureTelegramRuntime({
     channelHandler: context.channelHandler,
-    allowUntrusted: context.allowUntrusted,
     config: cfg,
   });
 

@@ -44,12 +44,6 @@ export interface AppConfig {
   GATEWAY_HOST: string;
   ALLOWED_DOMAINS: string[];
   LEARNED_SKILLS_LIMIT: number;
-  STICKERS: {
-    ALLOW_UNTRUSTED: boolean;
-  };
-  SEARCH: {
-    ALLOW_UNTRUSTED: boolean;
-  };
   SESSION: {
     /** Sessions auto-rotate once idle past this long, regardless of mode. */
     TTL_MS: number;
@@ -95,9 +89,6 @@ export interface AppConfig {
     };
     PROMPT_SANITIZER: boolean;
   };
-  CHANNELS: {
-    ALLOW_UNTRUSTED: boolean;
-  };
   GITHUB: {
     TOKEN: string;
     OWNER: string;
@@ -118,16 +109,6 @@ function buildConfig(): AppConfig {
     .map((domain) => domain.trim().toLowerCase())
     .filter(Boolean),
   LEARNED_SKILLS_LIMIT: Number(get('learned_skills_limit', '10')),
-  STICKERS: {
-    // Temporary: lets senders outside the channel whitelist learn/send stickers
-    // while the rest of the toolset stays locked to trusted senders.
-    ALLOW_UNTRUSTED: get('stickers.allow_untrusted', 'true') === 'true',
-  },
-  SEARCH: {
-    // Lets untrusted senders use search-engine and search-engine-restart,
-    // following the same pattern as stickers.allow_untrusted.
-    ALLOW_UNTRUSTED: get('search.allow_untrusted', 'true') === 'true',
-  },
   SESSION: {
     TTL_MS: Number(get('session.ttl_ms', String(3 * 60 * 60 * 1000))),
     SUMMARIZER_MODE: get('session.summarizer_mode', 'auto') === 'manual' ? 'manual' : 'auto',
@@ -175,9 +156,6 @@ function buildConfig(): AppConfig {
     PROMPT_SANITIZER: get('ai.prompt_sanitizer', 'false') === 'true',
     };
   })(),
-  CHANNELS: {
-    ALLOW_UNTRUSTED: get('channels.allow_untrusted', 'false') === 'true',
-  },
   GITHUB: {
     TOKEN: get('github.token', ''),
     OWNER: get('github.owner', ''),
@@ -192,7 +170,7 @@ export const config: AppConfig = buildConfig();
  * Re-reads koris.json (and env vars) and applies the new values onto the
  * existing `config` object in place, so already-imported references stay
  * valid. Note this is a shallow merge: nested objects (config.AI,
- * config.CHANNELS, ...) are replaced wholesale with new references — code
+ * config.SESSION, ...) are replaced wholesale with new references — code
  * must not cache a nested object across a reload.
  */
 export function reloadConfig(options?: { cwd?: string; dirname?: string }): void {
