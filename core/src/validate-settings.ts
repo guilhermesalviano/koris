@@ -256,8 +256,7 @@ async function main() {
         baseUrl,
       );
       advisory(
-        (typeof entry.model === 'string' && entry.model.trim().length > 0)
-          || (Array.isArray(entry.models) && entry.models.length > 0),
+        typeof entry.model === 'string' && entry.model.trim().length > 0,
         `ai.providers[${i}].model is set`,
         `provider "${name}" has no model set`,
       );
@@ -283,10 +282,7 @@ async function main() {
         ptrProvider,
       );
       const entry = providers.find((p) => p.provider === ptrProvider);
-      const legacyModels = entry && Array.isArray(entry.models) ? (entry.models as unknown[]) : [];
-      const roleModel = entry && typeof entry.model === 'string' && entry.model.trim()
-        ? entry.model
-        : (typeof legacyModels[0] === 'string' ? legacyModels[0] : '');
+      const roleModel = entry && typeof entry.model === 'string' ? entry.model : '';
       check(
         roleModel.trim().length > 0,
         `ai.roles.${role} resolves to a provider with a model`,

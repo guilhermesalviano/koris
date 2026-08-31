@@ -841,11 +841,7 @@ class AdminRouterFactory {
       }
       const providers = getProviderCatalog().map((entry) => {
         const stored = storedByName.get(entry.name);
-        const model = typeof stored?.model === 'string'
-          ? stored.model
-          : Array.isArray(stored?.models) && typeof stored.models[0] === 'string'
-            ? stored.models[0]
-            : '';
+        const model = typeof stored?.model === 'string' ? stored.model : '';
         return {
           ...entry,
           configured: configured.has(entry.name),

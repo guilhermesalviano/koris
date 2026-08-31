@@ -4,70 +4,12 @@ import {
   applyAiEmbedPatch,
   applyAiProviderPatch,
   applyAiRolePatch,
-  hasLegacyAiShape,
-  normalizeLegacyAi,
   resolveAiRoles,
   resolveEmbed,
   upsertAiProvider,
 } from './ai-config';
 
 describe('config/ai-config', () => {
-  describe('hasLegacyAiShape', () => {
-    it('is true for an ai block with manager/workers and no providers/roles', () => {
-      expect(hasLegacyAiShape({ manager: { provider: 'ollama' } })).toBe(true);
-      expect(hasLegacyAiShape({ workers: { provider: 'ollama' } })).toBe(true);
-    });
-
-    it('is false once providers or roles are present', () => {
-      expect(hasLegacyAiShape({ manager: { provider: 'ollama' }, providers: [] })).toBe(false);
-      expect(hasLegacyAiShape({ roles: {} })).toBe(false);
-      expect(hasLegacyAiShape({ providers: [] })).toBe(false);
-    });
-
-    it('is false for non-objects', () => {
-      expect(hasLegacyAiShape(undefined)).toBe(false);
-      expect(hasLegacyAiShape('ollama')).toBe(false);
-    });
-  });
-
-  describe('normalizeLegacyAi', () => {
-    it('collapses manager + workers on the same provider/base_url into one entry (first model wins) and builds ai.embed', () => {
-      const out = normalizeLegacyAi({
-        parallel: false,
-        manager: { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' },
-        workers: { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'qwen', num_ctx: 8192, embedding: true, embed_model: 'nomic' },
-      });
-
-      expect(out.parallel).toBe(false);
-      expect(out.providers).toEqual([
-        { provider: 'ollama', base_url: 'http://host:11434', api_token: '', num_ctx: 8192, model: 'gemma' },
-      ]);
-      expect(out.roles).toEqual({
-        manager: { provider: 'ollama' },
-        workers: { provider: 'ollama' },
-      });
-      // num_ctx moves onto the provider entry; embeddings move onto ai.embed.
-      expect(out.embed).toEqual({ enabled: true, provider: 'ollama', model: 'nomic' });
-      expect(out).not.toHaveProperty('manager');
-      expect(out).not.toHaveProperty('workers');
-      expect(out).not.toHaveProperty('embedding');
-      expect(out).not.toHaveProperty('embed_model');
-    });
-
-    it('keeps distinct providers as separate entries', () => {
-      const out = normalizeLegacyAi({
-        manager: { provider: 'openai', base_url: '', api_token: 'sk-1', model: 'gpt-4o-mini' },
-        workers: { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'qwen' },
-      });
-
-      expect(out.providers).toEqual([
-        { provider: 'openai', base_url: '', api_token: 'sk-1', model: 'gpt-4o-mini' },
-        { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'qwen' },
-      ]);
-      expect(out.embed).toEqual({ enabled: false, provider: 'ollama', model: 'nomic-embed-text' });
-    });
-  });
-
   describe('resolveAiRoles', () => {
     it('joins a role pointer to its provider entry credentials and model', () => {
       const roles = resolveAiRoles({
@@ -101,27 +43,15 @@ describe('config/ai-config', () => {
 
     it('falls back to defaults for a role pointing at an unknown provider', () => {
       const roles = resolveAiRoles({
-        providers: [{ provider: 'ollama', base_url: 'http://host:11434', api_token: '', models: ['gemma'] }],
-        roles: { manager: { provider: 'lmstudio', model: 'local-model' } },
+        providers: [{ provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' }],
+        roles: { manager: { provider: 'lmstudio' } },
       });
 
       expect(roles.MANAGER.PROVIDER).toBe('lmstudio');
       expect(roles.MANAGER.BASE_URL).toBe('');
       expect(roles.MANAGER.API_TOKEN).toBe('');
-      expect(roles.MANAGER.MODEL).toBe('local-model');
-    });
-
-    it('auto-migrates a legacy ai block (manager + workers collapse to one entry/model)', () => {
-      const roles = resolveAiRoles({
-        manager: { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' },
-        workers: { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'qwen', num_ctx: 4096 },
-      });
-
-      expect(roles.MANAGER.MODEL).toBe('gemma');
-      // 1:1 provider↔model: both roles share the single ollama entry model.
-      expect(roles.WORKERS.MODEL).toBe('gemma');
-      expect(roles.WORKERS.NUM_CTX).toBe(4096);
-      expect(roles.MANAGER.BASE_URL).toBe('http://host:11434');
+      // no matching entry → the built-in default model
+      expect(roles.MANAGER.MODEL).toBe('gemma4:e2b');
     });
 
     it('uses built-in defaults for an empty ai block', () => {
@@ -159,15 +89,13 @@ describe('config/ai-config', () => {
       ]);
     });
 
-    it('folds a legacy models[] array into a single model and drops it', () => {
-      const ai: Record<string, unknown> = {
-        providers: [{ provider: 'ollama', base_url: 'http://host:11434', api_token: '', models: ['gemma', 'qwen'] }],
-      };
+    it('creates an entry with an empty model string when the patch omits it', () => {
+      const ai: Record<string, unknown> = {};
 
-      upsertAiProvider(ai, { provider: 'ollama', base_url: 'http://host:11434', api_token: '' });
+      upsertAiProvider(ai, { provider: 'nvidia', api_token: 'nv-key' });
 
       expect(ai.providers).toEqual([
-        { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' },
+        { provider: 'nvidia', base_url: '', api_token: 'nv-key', model: '' },
       ]);
     });
   });
@@ -204,25 +132,6 @@ describe('config/ai-config', () => {
       });
       // input not mutated
       expect(base.ai.providers).toHaveLength(1);
-    });
-
-    it('migrates a legacy base and drops the per-role blocks', () => {
-      const base = {
-        ai: {
-          manager: { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' },
-          workers: { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'qwen' },
-        },
-      };
-
-      const out = applyAiRolePatch(base, 'workers', { provider: 'ollama', model: 'qwen-v2' });
-      const ai = out.ai as Record<string, unknown>;
-
-      expect(ai).not.toHaveProperty('manager');
-      expect(ai).not.toHaveProperty('workers');
-      expect(ai.providers).toEqual([
-        { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'qwen-v2' },
-      ]);
-      expect((ai.roles as Record<string, unknown>).workers).toEqual({ provider: 'ollama' });
     });
 
     it('stores num_ctx on the provider entry, not on the role pointer', () => {
@@ -269,31 +178,6 @@ describe('config/ai-config', () => {
       });
     });
 
-    it('reads back-compat AI-wide ai.embedding / ai.embed_model keys', () => {
-      const embed = resolveEmbed({
-        embedding: true,
-        embed_model: 'nomic',
-        providers: [{ provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' }],
-        roles: { workers: { provider: 'ollama' } },
-      });
-
-      expect(embed.ENABLED).toBe(true);
-      expect(embed.PROVIDER).toBe('ollama');
-      expect(embed.MODEL).toBe('nomic');
-      expect(embed.BASE_URL).toBe('http://host:11434');
-    });
-
-    it('reads legacy per-workers embedding fields', () => {
-      const embed = resolveEmbed({
-        manager: { provider: 'ollama', base_url: 'http://host:11434', model: 'gemma' },
-        workers: { provider: 'ollama', base_url: 'http://host:11434', model: 'qwen', embedding: true, embed_model: 'nomic' },
-      });
-
-      expect(embed.ENABLED).toBe(true);
-      expect(embed.PROVIDER).toBe('ollama');
-      expect(embed.MODEL).toBe('nomic');
-    });
-
     it('defaults to disabled ollama / nomic-embed-text', () => {
       const embed = resolveEmbed({});
       expect(embed).toEqual({
@@ -327,23 +211,19 @@ describe('config/ai-config', () => {
       expect(ai.roles).toEqual({ manager: { provider: 'ollama' }, workers: { provider: 'openai' } });
     });
 
-    it('migrates a legacy base and drops ai.embedding / ai.embed_model', () => {
+    it('keeps the existing enabled flag when the patch omits it', () => {
       const base = {
         ai: {
-          embedding: true,
-          embed_model: 'old-embed',
-          manager: { provider: 'ollama', base_url: 'http://host:11434', model: 'gemma' },
-          workers: { provider: 'ollama', base_url: 'http://host:11434', model: 'qwen' },
+          providers: [{ provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' }],
+          roles: { manager: { provider: 'ollama' }, workers: { provider: 'ollama' } },
+          embed: { enabled: true, provider: 'ollama', model: 'nomic-embed-text' },
         },
       };
 
-      const out = applyAiEmbedPatch(base, { provider: 'ollama', model: 'nomic-embed-text' });
+      const out = applyAiEmbedPatch(base, { provider: 'ollama', model: 'mxbai-embed-large' });
       const ai = out.ai as Record<string, unknown>;
 
-      expect(ai).not.toHaveProperty('embedding');
-      expect(ai).not.toHaveProperty('embed_model');
-      expect(ai).not.toHaveProperty('manager');
-      expect(ai.embed).toEqual({ enabled: true, provider: 'ollama', model: 'nomic-embed-text' });
+      expect(ai.embed).toEqual({ enabled: true, provider: 'ollama', model: 'mxbai-embed-large' });
     });
   });
 
@@ -351,10 +231,10 @@ describe('config/ai-config', () => {
     it('upserts the provider without touching either role pointer', () => {
       const base = {
         ai: {
-          providers: [{ provider: 'ollama', base_url: 'http://host:11434', api_token: '', models: ['gemma'] }],
+          providers: [{ provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' }],
           roles: {
-            manager: { provider: 'ollama', model: 'gemma' },
-            workers: { provider: 'ollama', model: 'gemma' },
+            manager: { provider: 'ollama' },
+            workers: { provider: 'ollama' },
           },
         },
       };
@@ -368,8 +248,8 @@ describe('config/ai-config', () => {
 
       expect((ai.providers as { provider: string }[]).map((p) => p.provider)).toEqual(['ollama', 'nvidia']);
       expect(ai.roles).toEqual({
-        manager: { provider: 'ollama', model: 'gemma' },
-        workers: { provider: 'ollama', model: 'gemma' },
+        manager: { provider: 'ollama' },
+        workers: { provider: 'ollama' },
       });
     });
   });

@@ -128,9 +128,9 @@ function buildConfig(): AppConfig {
   },
   HEARTBEAT: get('heartbeat', 'true') === 'true',
   AI: (() => {
-    // Resolve manager/workers from the `ai.providers[]` + `ai.roles` shape
-    // (legacy `ai.manager` / `ai.workers` is auto-migrated by resolveAiRoles),
-    // then layer the documented env-var overrides on top of each field.
+    // Resolve manager/workers/embed from the `ai.providers[]` + `ai.roles` +
+    // `ai.embed` shape, then layer the documented env-var overrides on top of
+    // each field.
     const roles = resolveAiRoles(deepGet(fileConfig, 'ai') ?? {});
     return {
     PARALLEL: get('ai.parallel', 'true') === 'true',

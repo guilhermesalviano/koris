@@ -70,25 +70,4 @@ describe('config/index reloadConfig', () => {
     expect((config.AI.WORKERS as Record<string, unknown>).EMBED_MODEL).toBeUndefined();
     expect(config.CHANNELS.ALLOW_UNTRUSTED).toBe(true);
   });
-
-  it('auto-migrates a legacy ai.manager / ai.workers koris.json on reload', () => {
-    const dir = createTempDir();
-    writeFileSync(join(dir, 'koris.json'), JSON.stringify({
-      ai: {
-        manager: { provider: 'ollama', base_url: 'http://legacy.invalid:9999', model: 'legacy-manager' },
-        workers: { provider: 'ollama', base_url: 'http://legacy.invalid:9999', model: 'legacy-worker', num_ctx: 8192, embedding: true, embed_model: 'legacy-embed' },
-      },
-    }));
-
-    reloadConfig({ cwd: dir, dirname: dir });
-
-    expect(config.AI.MANAGER.BASE_URL).toBe('http://legacy.invalid:9999');
-    expect(config.AI.MANAGER.MODEL).toBe('legacy-manager');
-    // 1:1 provider↔model: workers shares the single collapsed ollama entry model.
-    expect(config.AI.WORKERS.MODEL).toBe('legacy-manager');
-    expect(config.AI.WORKERS.NUM_CTX).toBe(8192);
-    // Legacy per-workers embedding fields migrate onto config.AI.EMBED.
-    expect(config.AI.EMBED.ENABLED).toBe(true);
-    expect(config.AI.EMBED.MODEL).toBe('legacy-embed');
-  });
 });

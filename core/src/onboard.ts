@@ -1298,8 +1298,7 @@ export function buildOnboardingSettings(
   }
 
   // Store the answered provider once in `ai.providers[]` and point both roles
-  // at it (legacy `ai.manager` / `ai.workers` in the base template is migrated
-  // by applyAiRolePatch).
+  // at it.
   const rolePatch: AiRolePatch = { provider: answers.provider };
   if (answers.providerUrl) rolePatch.base_url = answers.providerUrl;
   if (answers.providerApiToken) rolePatch.api_token = answers.providerApiToken;
