@@ -3,7 +3,7 @@ import * as path from 'path';
 
 export class InjectManager {
   private static cachedContent: string | null = null;
-  private static readonly injectDir = path.join(process.cwd(), 'load');
+  private static readonly injectDir = path.join(process.cwd(), 'core', 'load');
 
   static getInjectedContent(): string {
     if (this.cachedContent !== null) return this.cachedContent;
