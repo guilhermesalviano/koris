@@ -10,8 +10,7 @@ import { AICompletionService } from "../ai-completion-service";
 async function handlePlan(message: string, logger: ILogger, options?: ProcessOptions): Promise<CommandResult> {
   const data = replacePlaceholders(PLAN_DATA, { v1: message });
 
-  const provider = getAIProvider(logger);
-  const completionService = new AICompletionService(provider, logger, { role: 'manager', agentName: 'plan' });
+  const completionService = new AICompletionService(() => getAIProvider(logger), logger, { role: 'manager', agentName: 'plan' });
   const chatRequest: AIChatRequest = {
     messages: [{ role: 'system', content: PLAN_INSTRUCTIONS }, { role: 'user', content: data }],
     ...options?.toolsEnabled ? { tools: [] } : {} 

@@ -22,7 +22,7 @@ function providerWith(complete: AIProvider['complete']): AIProvider {
 
 function makeService(complete: AIProvider['complete'], options?: { role?: 'manager' | 'worker'; agentName?: string; retryAttempts?: number; retryBackoffMs?: number }) {
   const auditService = { record: vi.fn() };
-  const service = new AICompletionService(providerWith(complete), logger, {
+  const service = new AICompletionService(() => providerWith(complete), logger, {
     role: options?.role,
     agentName: options?.agentName,
     auditService,

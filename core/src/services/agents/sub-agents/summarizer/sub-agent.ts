@@ -188,7 +188,7 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
 
 class SummarizerFactory {
   static create(logger: ILogger): Summarizer {
-    const completionService = new AICompletionService(getAIProvider(logger, 'worker', { background: true }), logger, { role: 'worker', agentName: 'summarizer' });
+    const completionService = new AICompletionService(() => getAIProvider(logger, 'worker', { background: true }), logger, { role: 'worker', agentName: 'summarizer' });
     return new Summarizer(logger, completionService, AuditServiceFactory.create(logger));
   }
 }
