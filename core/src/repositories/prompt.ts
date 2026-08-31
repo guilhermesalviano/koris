@@ -267,7 +267,7 @@ class PromptRepository implements IPromptRepository {
   }
 
   private isStickerContentAllowed(stickersEnabled?: boolean): boolean {
-    return config.STICKERS.ENABLED && (stickersEnabled ?? true);
+    return stickersEnabled ?? true;
   }
 
   private isSearchContentAllowed(searchEnabled?: boolean): boolean {

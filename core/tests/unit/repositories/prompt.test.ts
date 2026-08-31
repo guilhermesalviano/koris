@@ -348,12 +348,6 @@ describe('PromptRepository learned skills gating', () => {
 });
 
 describe('PromptRepository sticker tools gating', () => {
-  const originalStickersEnabled = config.STICKERS.ENABLED;
-
-  afterEach(() => {
-    (config.STICKERS as { ENABLED: boolean }).ENABLED = originalStickersEnabled;
-  });
-
   it('includes sticker tools alongside the full toolset for trusted senders', async () => {
     const getAll = vi.fn().mockReturnValue([{ type: 'function', function: { name: 'curl_request', parameters: {} } }]);
     const toolsRepository = { getAll, getStickerTools: vi.fn().mockReturnValue([]), getSearchTools: vi.fn().mockReturnValue([]) };
@@ -362,17 +356,6 @@ describe('PromptRepository sticker tools gating', () => {
     await repository.build({ userMessage: 'Hello', channel: 'whatsapp', toolsEnabled: true });
 
     expect(getAll).toHaveBeenCalledWith({ includeBeatTools: undefined, includeStickerTools: true });
-  });
-
-  it('excludes sticker tools from the full toolset when the master flag is off', async () => {
-    (config.STICKERS as { ENABLED: boolean }).ENABLED = false;
-    const getAll = vi.fn().mockReturnValue([]);
-    const toolsRepository = { getAll, getStickerTools: vi.fn().mockReturnValue([]), getSearchTools: vi.fn().mockReturnValue([]) };
-    const repository = makeRepository({ toolsRepository });
-
-    await repository.build({ userMessage: 'Hello', channel: 'whatsapp', toolsEnabled: true });
-
-    expect(getAll).toHaveBeenCalledWith({ includeBeatTools: undefined, includeStickerTools: false });
   });
 
   it('returns only sticker tools for an untrusted sender when stickersEnabled is on', async () => {
@@ -405,22 +388,6 @@ describe('PromptRepository sticker tools gating', () => {
 
     expect(toolsRepository.getStickerTools).not.toHaveBeenCalled();
     expect(toolsRepository.getAll).not.toHaveBeenCalled();
-    expect(tools).toBeUndefined();
-  });
-
-  it('returns no tools for an untrusted sender when the master sticker flag is off, even if stickersEnabled is on', async () => {
-    (config.STICKERS as { ENABLED: boolean }).ENABLED = false;
-    const toolsRepository = { getAll: vi.fn(), getStickerTools: vi.fn(), getSearchTools: vi.fn().mockReturnValue([]) };
-    const repository = makeRepository({ toolsRepository });
-
-    const { tools } = await repository.build({
-      userMessage: 'Hello',
-      channel: 'whatsapp',
-      toolsEnabled: false,
-      stickersEnabled: true,
-    });
-
-    expect(toolsRepository.getStickerTools).not.toHaveBeenCalled();
     expect(tools).toBeUndefined();
   });
 });

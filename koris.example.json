@@ -6,7 +6,6 @@
   "allowed_domains": [],
   "learned_skills_limit": 10,
   "stickers": {
-    "enabled": true,
     "allow_untrusted": false
   },
   "search": {

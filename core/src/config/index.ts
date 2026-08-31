@@ -45,7 +45,6 @@ export interface AppConfig {
   ALLOWED_DOMAINS: string[];
   LEARNED_SKILLS_LIMIT: number;
   STICKERS: {
-    ENABLED: boolean;
     ALLOW_UNTRUSTED: boolean;
   };
   SEARCH: {
@@ -120,7 +119,6 @@ function buildConfig(): AppConfig {
     .filter(Boolean),
   LEARNED_SKILLS_LIMIT: Number(get('learned_skills_limit', '10')),
   STICKERS: {
-    ENABLED: get('stickers.enabled', 'true') === 'true',
     // Temporary: lets senders outside the channel whitelist learn/send stickers
     // while the rest of the toolset stays locked to trusted senders.
     ALLOW_UNTRUSTED: get('stickers.allow_untrusted', 'true') === 'true',
