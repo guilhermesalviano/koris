@@ -33,7 +33,8 @@ export function create(context: ToolPluginContext): Plugin {
       const definition = defineTool({
         name: TOOL_NAME,
         description:
-          'Perform a web search using Google Search API. Supports country, language, recency, pagination and search type context.',
+          'Perform a web search using Google Search API. Supports country, language, recency, pagination and search type context. ' +
+          'If this tool fails with a connection error ("Couldn\'t connect to server") or an HTTP 403 error, the local SearXNG service is likely down or misconfigured — tell the human it failed and ask if they want you to run the restart_search_engine tool to fix it (that tool requires its own separate confirmation before running).',
         parameters: {
           query: { type: 'string', required: true, description: 'The search query string.' },
           num: { type: 'number', description: 'Number of results to return (default: 5, max: 100).' },

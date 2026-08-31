@@ -8,6 +8,13 @@ interface SpawnCommandOptions {
   cwd?: string;
   shell?: boolean;
   maxOutputSize?: number;
+  /** Kill the child and resolve (not reject) with `code: null` if it hasn't
+   * closed within this many ms — callers branch on `code` uniformly instead
+   * of needing a separate timeout-rejection shape. Note: the kill signal only
+   * reaches this direct child, not any grandchildren it spawned (e.g. a
+   * shell script's own `docker` calls), which may keep running to completion
+   * independent of this timeout. */
+  timeoutMs?: number;
 }
 
 interface SpawnCommandResult {
@@ -117,6 +124,11 @@ function spawnCommand(options: SpawnCommandOptions): Promise<SpawnCommandResult>
       let stdout = '';
       let stderr = '';
       let isSettled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      const clearTimer = () => {
+        if (timer) clearTimeout(timer);
+      };
 
       const finish = (result: SpawnCommandResult) => {
         if (isSettled) {
@@ -124,6 +136,7 @@ function spawnCommand(options: SpawnCommandOptions): Promise<SpawnCommandResult>
         }
 
         isSettled = true;
+        clearTimer();
         resolve(result);
       };
 
@@ -133,8 +146,16 @@ function spawnCommand(options: SpawnCommandOptions): Promise<SpawnCommandResult>
         }
 
         isSettled = true;
+        clearTimer();
         reject(error);
       };
+
+      if (options.timeoutMs) {
+        timer = setTimeout(() => {
+          child.kill();
+          finish({ stdout, stderr: `${stderr}\n[timed out after ${options.timeoutMs}ms]`, code: null });
+        }, options.timeoutMs);
+      }
 
       child.stdout.on('data', (data) => {
         stdout += data.toString('utf-8');

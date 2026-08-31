@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 
@@ -324,5 +324,58 @@ describe('spawnCommand', () => {
     });
 
     await expect(promise).resolves.toMatchObject({ code: 0 });
+  });
+
+  describe('timeoutMs', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('kills the child and resolves with code null once the timeout elapses', async () => {
+      const proc = makeProc();
+      mockSpawn.mockReturnValue(proc);
+
+      const promise = spawnCommand({ command: 'sleep', args: ['999'], timeoutMs: 1000 });
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      const result = await promise;
+
+      expect(proc.kill).toHaveBeenCalled();
+      expect(result.code).toBeNull();
+      expect(result.stderr).toContain('timed out after 1000ms');
+    });
+
+    it('does not settle twice when close fires after the timeout already resolved', async () => {
+      const proc = makeProc();
+      mockSpawn.mockReturnValue(proc);
+
+      const promise = spawnCommand({ command: 'sleep', args: ['999'], timeoutMs: 1000 });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      proc.emit('close', 0);
+
+      const result = await promise;
+
+      expect(result.code).toBeNull();
+    });
+
+    it('does not fire the timeout when the process closes in time', async () => {
+      const proc = makeProc();
+      mockSpawn.mockReturnValue(proc);
+
+      const promise = spawnCommand({ command: 'echo', args: ['hi'], timeoutMs: 1000 });
+
+      proc.emit('close', 0);
+      const result = await promise;
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(result.code).toBe(0);
+      expect(proc.kill).not.toHaveBeenCalled();
+    });
   });
 });
