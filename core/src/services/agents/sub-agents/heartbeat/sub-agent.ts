@@ -138,7 +138,7 @@ class HeartbeatFactory {
   static create(logger: ILogger, channelsManager: IChannelsManager): Heartbeat {
     const db = DatabaseServiceFactory.create();
     const aiProvider = getAIProvider(logger, 'worker', { background: true });
-    const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
+    const promptRepository = PromptRepositoryFactory.create(db, logger, getAIProvider(logger, 'embed'));
     const heartbeatRepository = HeartbeatRepositoryFactory.create(db);
     const agnosticExecutionTool = AgnosticExecutionToolFactory.create();
     const toolsQueue = new ToolsQueue(logger, agnosticExecutionTool);

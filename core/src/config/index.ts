@@ -75,9 +75,14 @@ export interface AppConfig {
       BASE_URL: string;
       API_TOKEN: string;
       MODEL: string;
-      EMBEDDING_ENABLED: boolean;
-      EMBED_MODEL: string;
       NUM_CTX: number;
+    };
+    EMBED: {
+      ENABLED: boolean;
+      PROVIDER: string;
+      BASE_URL: string;
+      API_TOKEN: string;
+      MODEL: string;
     };
     SEARCH_API_KEY: string;
     SEARXNG_URL: string;
@@ -142,11 +147,17 @@ function buildConfig(): AppConfig {
       BASE_URL: envOr('ai.workers.base_url', roles.WORKERS.BASE_URL),
       API_TOKEN: envOr('ai.workers.api_token', roles.WORKERS.API_TOKEN),
       MODEL:   envOr('ai.workers.model', roles.WORKERS.MODEL),
-      // Embeddings are AI-wide (`ai.embedding` / `ai.embed_model`); num_ctx is
-      // resolved from the workers provider entry. Env overrides still apply.
-      EMBEDDING_ENABLED: envOr('ai.embedding', String(roles.WORKERS.EMBEDDING_ENABLED)) === 'true',
-      EMBED_MODEL: envOr('ai.embed_model', roles.WORKERS.EMBED_MODEL),
+      // num_ctx is resolved from the workers provider entry. Env overrides apply.
       NUM_CTX: Number(envOr('ai.workers.num_ctx', String(roles.WORKERS.NUM_CTX))),
+    },
+    EMBED: {
+      // Embeddings have their own pointer (`ai.embed`), resolved to
+      // base_url/api_token from the matching ai.providers[] entry.
+      ENABLED: envOr('ai.embed.enabled', String(roles.EMBED.ENABLED)) === 'true',
+      PROVIDER: process.env.VITEST === 'true' ? 'mock' : envOr('ai.embed.provider', roles.EMBED.PROVIDER),
+      BASE_URL: envOr('ai.embed.base_url', roles.EMBED.BASE_URL),
+      API_TOKEN: envOr('ai.embed.api_token', roles.EMBED.API_TOKEN),
+      MODEL: envOr('ai.embed.model', roles.EMBED.MODEL),
     },
     SEARCH_API_KEY: get('ai.search_api_key', ''),
     SEARXNG_URL: get('ai.searxng_url', ''),

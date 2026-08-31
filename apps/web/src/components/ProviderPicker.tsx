@@ -43,7 +43,7 @@ export default function ProviderPicker() {
 
   function modelFor(entry: ProviderCatalogEntry, isCurrent: boolean): string {
     if (isCurrent) return active.model;
-    return entry.models?.[0] ?? entry.recommendedModel ?? '';
+    return entry.model || entry.recommendedModel || '';
   }
 
   async function switchTo(entry: ProviderCatalogEntry) {

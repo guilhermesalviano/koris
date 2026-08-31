@@ -130,6 +130,19 @@ describe('provider registry', () => {
     });
   });
 
+  it('builds the embed-role provider from config.AI.EMBED', () => {
+    const original = Object.getOwnPropertyDescriptor(config.AI.EMBED, 'PROVIDER');
+    Object.defineProperty(config.AI.EMBED, 'PROVIDER', { value: 'deepseek', configurable: true, writable: true });
+    try {
+      const provider = createAIProvider(logger, 'embed');
+      expect(provider.name).toBe('deepseek');
+    } finally {
+      if (original) Object.defineProperty(config.AI.EMBED, 'PROVIDER', original);
+      clearProviderCache();
+      clearProviderRegistry();
+    }
+  });
+
   it('exposes a provider catalogue with presentational metadata, excluding mock', () => {
     const catalog = getProviderCatalog();
     expect(catalog.map((c) => c.name)).not.toContain('mock');

@@ -159,8 +159,8 @@ export interface ProviderCatalogEntry {
   apiKeyUrl?: string;
   docsUrl?: string;
   configured: boolean;
-  /** Models saved for this provider in koris.json's ai.providers[] (empty when unconfigured). */
-  models: string[];
+  /** The single model saved for this provider in koris.json's ai.providers[] (empty when unconfigured). */
+  model: string;
   /** base_url saved for this provider (empty string means "use the shipped default"). */
   storedBaseUrl: string;
   /** Whether a non-empty api_token is saved for this provider. */
@@ -178,7 +178,9 @@ export type ProviderRole = 'manager' | 'workers';
 
 export interface ProvidersResponse {
   providers: ProviderCatalogEntry[];
-  active: Record<ProviderRole, ActiveProvider>;
+  active: Record<ProviderRole, ActiveProvider> & {
+    embed: ActiveProvider & { enabled: boolean };
+  };
 }
 
 export interface ActiveRun {

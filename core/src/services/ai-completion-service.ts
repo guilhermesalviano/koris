@@ -1,8 +1,7 @@
 import { config } from '../config';
 import type { ILogger } from '../infrastructure/logger';
 import type { AIChatOptions, AIChatRequest, AIProvider, AIResponse } from '../types/chat';
-import type { AIProviderRole } from './providers';
-import { AuditLogLlm } from '../entities/audit-log';
+import { AuditLogLlm, type AuditRole } from '../entities/audit-log';
 import { IAuditService, AuditServiceFactory } from './audit/audit-service';
 import { generateId } from '../utils/generate-id';
 import { HTTP_ERROR_MESSAGES } from '../constants';
@@ -51,7 +50,7 @@ export interface IAICompletionService {
 }
 
 export interface AICompletionServiceOptions {
-  role?: AIProviderRole;
+  role?: AuditRole;
   agentName?: string;
   auditService?: IAuditService;
   retry?: {
@@ -61,7 +60,7 @@ export interface AICompletionServiceOptions {
 }
 
 export class AICompletionService implements IAICompletionService {
-  private readonly role: AIProviderRole;
+  private readonly role: AuditRole;
   private readonly agentName?: string;
   private readonly auditService: IAuditService;
   private readonly retryAttempts: number;

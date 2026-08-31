@@ -12,6 +12,7 @@ import {
   writeSettingsFile,
   mergeSettingsPayload,
   applyAiRolePatch,
+  applyAiEmbedPatch,
 } from './settings-writer';
 
 const REAL_EXAMPLE_SETTINGS_PATH = join(__dirname, '..', '..', '..', 'koris.example.json');
@@ -106,11 +107,11 @@ describe('config/settings-writer', () => {
     const base = {
       ai: {
         providers: [
-          { provider: 'ollama', base_url: 'http://host:11434', api_token: '', models: ['gemma', 'qwen'] },
+          { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' },
         ],
         roles: {
-          manager: { provider: 'ollama', model: 'gemma' },
-          workers: { provider: 'ollama', model: 'qwen' },
+          manager: { provider: 'ollama' },
+          workers: { provider: 'ollama' },
         },
       },
     };
@@ -128,7 +129,25 @@ describe('config/settings-writer', () => {
 
     const ai = twice.ai as { providers: { provider: string }[]; roles: Record<string, unknown> };
     expect(ai.providers.map((p) => p.provider)).toEqual(['ollama', 'openai']);
-    expect(ai.roles.manager).toEqual({ provider: 'ollama', model: 'gemma' });
+    expect(ai.roles.manager).toEqual({ provider: 'ollama' });
+  });
+
+  it('applyAiEmbedPatch points ai.embed at a provider without touching the roles', () => {
+    const base = {
+      ai: {
+        providers: [
+          { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' },
+          { provider: 'openai', base_url: '', api_token: 'sk-1', model: 'gpt-4o-mini' },
+        ],
+        roles: { manager: { provider: 'ollama' }, workers: { provider: 'openai' } },
+      },
+    };
+
+    const out = applyAiEmbedPatch(base, { enabled: true, provider: 'ollama', model: 'nomic-embed-text' });
+    const ai = out.ai as { embed: Record<string, unknown>; roles: Record<string, unknown> };
+
+    expect(ai.embed).toEqual({ enabled: true, provider: 'ollama', model: 'nomic-embed-text' });
+    expect(ai.roles).toEqual({ manager: { provider: 'ollama' }, workers: { provider: 'openai' } });
   });
 
   it('loadCurrentOrExampleSettings falls back to the example template when no koris.json exists', () => {

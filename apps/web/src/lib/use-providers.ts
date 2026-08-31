@@ -4,6 +4,11 @@ import type { ProviderCatalogEntry, ProviderRole, ProvidersResponse, ActiveProvi
 import type { ConnectionTestResult } from './use-settings-form';
 
 const EMPTY_ACTIVE: ActiveProvider = { provider: '', model: '', baseUrl: '', hasToken: false };
+const EMPTY_EMBED: ActiveProvider & { enabled: boolean } = { ...EMPTY_ACTIVE, enabled: false };
+
+type ActiveState = Record<ProviderRole, ActiveProvider> & {
+  embed: ActiveProvider & { enabled: boolean };
+};
 
 export interface ActivateInput {
   provider: string;
@@ -12,11 +17,19 @@ export interface ActivateInput {
   baseUrl: string;
 }
 
+export interface EmbedInput {
+  enabled: boolean;
+  provider: string;
+  model: string;
+  apiToken: string;
+}
+
 export function useProviders() {
   const [catalog, setCatalog] = useState<ProviderCatalogEntry[]>([]);
-  const [active, setActive] = useState<Record<ProviderRole, ActiveProvider>>({
+  const [active, setActive] = useState<ActiveState>({
     manager: EMPTY_ACTIVE,
     workers: EMPTY_ACTIVE,
+    embed: EMPTY_EMBED,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,30 +63,62 @@ export function useProviders() {
     }
   }, []);
 
-  const activate = useCallback(async (role: ProviderRole, input: ActivateInput): Promise<{ ok: boolean; errors?: string[] }> => {
+  const buildProfile = (input: ActivateInput): Record<string, unknown> => {
     const profile: Record<string, unknown> = {
       provider: input.provider,
       base_url: input.baseUrl,
       model: input.model,
     };
     if (input.apiToken) profile.api_token = input.apiToken;
+    return profile;
+  };
 
-    try {
-      await apiRequest('/settings', {
-        method: 'POST',
-        body: JSON.stringify({ ai: { [role]: profile } }),
-      });
-      await load();
-      return { ok: true };
-    } catch (err) {
-      if (err instanceof ApiRequestError && err.details?.length) {
-        return { ok: false, errors: err.details };
+  const postSettings = useCallback(
+    async (body: Record<string, unknown>, failMsg: string): Promise<{ ok: boolean; errors?: string[] }> => {
+      try {
+        await apiRequest('/settings', { method: 'POST', body: JSON.stringify(body) });
+        await load();
+        return { ok: true };
+      } catch (err) {
+        if (err instanceof ApiRequestError && err.details?.length) {
+          return { ok: false, errors: err.details };
+        }
+        return { ok: false, errors: [err instanceof Error ? err.message : failMsg] };
       }
-      return { ok: false, errors: [err instanceof Error ? err.message : 'Failed to activate provider'] };
-    }
-  }, [load]);
+    },
+    [load],
+  );
 
-  return { catalog, active, loading, error, reload: load, test, activate };
+  // Save a provider's config into ai.providers[] without changing which
+  // provider is active for any role.
+  const saveProvider = useCallback(
+    (input: ActivateInput) => postSettings({ ai: { provider: buildProfile(input) } }, 'Failed to save provider'),
+    [postSettings],
+  );
+
+  // Save + make this provider the active one for `role`.
+  const activate = useCallback(
+    (role: ProviderRole, input: ActivateInput) =>
+      postSettings({ ai: { [role]: buildProfile(input) } }, 'Failed to activate provider'),
+    [postSettings],
+  );
+
+  // Point the embeddings config at a provider/model (base_url/api_token reused
+  // from the matching ai.providers[] entry) and toggle it on/off.
+  const setEmbed = useCallback(
+    (input: EmbedInput) => {
+      const embed: Record<string, unknown> = {
+        enabled: input.enabled,
+        provider: input.provider,
+        model: input.model,
+      };
+      if (input.apiToken) embed.api_token = input.apiToken;
+      return postSettings({ ai: { embed } }, 'Failed to update embeddings');
+    },
+    [postSettings],
+  );
+
+  return { catalog, active, loading, error, reload: load, test, saveProvider, activate, setEmbed };
 }
 
 export type UseProvidersApi = ReturnType<typeof useProviders>;

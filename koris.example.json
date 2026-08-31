@@ -20,21 +20,20 @@
     "parallel": false,
     "background_grace_ms": 5000,
     "subagents_parallel": false,
-    "embedding": false,
-    "embed_model": "nomic-embed-text",
     "providers": [
       {
         "provider": "ollama",
         "base_url": "http://localhost:11434",
         "api_token": "PROVIDER_API_TOKEN",
         "num_ctx": 16384,
-        "models": ["gemma4:e4b-it-q4_K_M", "qwen:3.5:2b", "nomic-embed-text"]
+        "model": "gemma4:e4b-it-q4_K_M"
       }
     ],
     "roles": {
-      "manager": { "provider": "ollama", "model": "gemma4:e4b-it-q4_K_M" },
-      "workers": { "provider": "ollama", "model": "qwen:3.5:2b" }
+      "manager": { "provider": "ollama" },
+      "workers": { "provider": "ollama" }
     },
+    "embed": { "enabled": false, "provider": "ollama", "model": "nomic-embed-text" },
     "searxng_url": "http://localhost:8080",
     "search_api_key": "SERPAPI_KEY",
     "prompt_sanitizer": false,

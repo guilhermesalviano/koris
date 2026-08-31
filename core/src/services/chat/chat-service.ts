@@ -1,4 +1,5 @@
-import { getAIProvider, AIProviderRole } from "../providers";
+import { getAIProvider } from "../providers";
+import type { AuditRole } from "../../entities/audit-log";
 import { ILogger } from "../../infrastructure/logger";
 import { IPromptRepository, PromptRepositoryFactory } from "../../repositories/prompt";
 import { ProcessedMessage, ProcessOptions } from "../../types/agents";
@@ -66,10 +67,10 @@ class ChatService implements IChatService {
 }
 
 class ChatServiceFactory {
-  static create(logger: ILogger, role: AIProviderRole = 'manager', agentName?: string): IChatService {
+  static create(logger: ILogger, role: AuditRole = 'manager', agentName?: string): IChatService {
     const db = DatabaseServiceFactory.create();
     const aiProvider = getAIProvider(logger, role);
-    const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
+    const promptRepository = PromptRepositoryFactory.create(db, logger, getAIProvider(logger, 'embed'));
     const completionService = new AICompletionService(aiProvider, logger, { role, agentName });
     return new ChatService(completionService, promptRepository);
   }

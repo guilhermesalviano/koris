@@ -81,9 +81,9 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
       const parsedMemory = parseSummarizerResponse(response.text);
       
       let embedding: number[] | undefined;
-      if (config.AI.WORKERS.EMBEDDING_ENABLED) {
+      if (config.AI.EMBED.ENABLED) {
         try {
-          const provider = getAIProvider(this.logger, 'worker', { background: true });
+          const provider = getAIProvider(this.logger, 'embed', { background: true });
           embedding = await provider.embed(parsedMemory.content);
         } catch (error) {
           this.logger.error(`Failed to generate embedding for summarized memory`, { error });
@@ -127,9 +127,9 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
       const parsedMemory = parseSummarizerResponse(response.text);
 
       let embedding: number[] | undefined;
-      if (config.AI.WORKERS.EMBEDDING_ENABLED) {
+      if (config.AI.EMBED.ENABLED) {
         try {
-          const provider = getAIProvider(this.logger, 'worker', { background: true });
+          const provider = getAIProvider(this.logger, 'embed', { background: true });
           embedding = await provider.embed(parsedMemory.content);
         } catch (error) {
           this.logger.error(`Failed to generate embedding for compacted memory`, { error });

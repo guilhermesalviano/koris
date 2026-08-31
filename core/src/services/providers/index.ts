@@ -41,7 +41,7 @@ function providerRegistry(): Map<string, ProviderRegistration> {
   return registryCache;
 }
 
-export type AIProviderRole = 'manager' | 'worker';
+export type AIProviderRole = 'manager' | 'worker' | 'embed';
 
 export const AI_PRIORITY_BACKGROUND = 0;
 export const AI_PRIORITY_INTERACTIVE = 1;
@@ -117,7 +117,11 @@ export function getAIProvider(
  * Create a new provider instance based on configuration and role
  */
 export function createAIProvider(logger: ILogger, role: AIProviderRole = 'manager'): AIProvider {
-  const profile = role === 'worker' ? config.AI.WORKERS : config.AI.MANAGER;
+  const profile = role === 'worker'
+    ? config.AI.WORKERS
+    : role === 'embed'
+      ? config.AI.EMBED
+      : config.AI.MANAGER;
   const providerType = profile.PROVIDER as string;
   const registry = providerRegistry();
 
@@ -131,8 +135,8 @@ export function createAIProvider(logger: ILogger, role: AIProviderRole = 'manage
     baseUrl: resolveProviderBaseUrl(providerType, profile.BASE_URL),
     model: profile.MODEL,
     apiToken: profile.API_TOKEN,
-    embeddingEnabled: config.AI.WORKERS.EMBEDDING_ENABLED,
-    embeddingModel: config.AI.WORKERS.EMBED_MODEL,
+    embeddingEnabled: config.AI.EMBED.ENABLED,
+    embeddingModel: config.AI.EMBED.MODEL,
     numCtx: config.AI.WORKERS.NUM_CTX,
   };
 

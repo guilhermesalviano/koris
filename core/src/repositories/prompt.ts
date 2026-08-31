@@ -58,7 +58,7 @@ class PromptRepository implements IPromptRepository {
     private learnedSkillsRepository: ILearnedSkillsRepository,
     private stickerRulesRepository: IStickerRulesRepository,
     private memoryRepository: IMemoryRepository,
-    private aiProvider: AIProvider,
+    private embedProvider: AIProvider,
     private logger: ILogger,
   ) {}
 
@@ -201,9 +201,9 @@ class PromptRepository implements IPromptRepository {
   }
 
   private async buildMemoryContext(userMessage: string, sessionId?: string): Promise<string> {
-    if (config.AI.WORKERS.EMBEDDING_ENABLED) {
+    if (config.AI.EMBED.ENABLED) {
       try {
-        const queryEmbedding = await this.aiProvider.embed(userMessage);
+        const queryEmbedding = await this.embedProvider.embed(userMessage);
         const memories = this.memoryRepository.search(queryEmbedding, MEMORY_CONTEXT_LIMIT, sessionId);
 
         if (memories.length === 0) {
@@ -266,13 +266,13 @@ class PromptRepository implements IPromptRepository {
 }
 
 class PromptRepositoryFactory {
-  static create(db: IDatabaseService, logger: ILogger, aiProvider: AIProvider): PromptRepository {
+  static create(db: IDatabaseService, logger: ILogger, embedProvider: AIProvider): PromptRepository {
     const contextRepository = ContextRepositoryFactory.create();
     const toolsRepository = ToolsRepositoryFactory.create();
     const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
     const stickerRulesRepository = StickerRulesRepositoryFactory.create(db);
     const memoryRepository = MemoryRepositoryFactory.create(db);
-    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, stickerRulesRepository, memoryRepository, aiProvider, logger);
+    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, stickerRulesRepository, memoryRepository, embedProvider, logger);
   }
 }
 

@@ -50,9 +50,10 @@ describe('config/index reloadConfig', () => {
     writeFileSync(join(dir, 'koris.json'), JSON.stringify({
       ai: {
         providers: [
-          { provider: 'ollama', base_url: 'http://example.invalid:1234', api_token: '', models: ['reload-model'] },
+          { provider: 'ollama', base_url: 'http://example.invalid:1234', api_token: '', model: 'reload-model' },
         ],
-        roles: { manager: { provider: 'ollama', model: 'reload-model' } },
+        roles: { manager: { provider: 'ollama' } },
+        embed: { enabled: true, provider: 'ollama', model: 'reload-embed' },
       },
       channels: { allow_untrusted: true },
     }));
@@ -61,6 +62,12 @@ describe('config/index reloadConfig', () => {
 
     expect(config.AI.MANAGER.BASE_URL).toBe('http://example.invalid:1234');
     expect(config.AI.MANAGER.MODEL).toBe('reload-model');
+    expect(config.AI.EMBED.ENABLED).toBe(true);
+    expect(config.AI.EMBED.MODEL).toBe('reload-embed');
+    expect(config.AI.EMBED.BASE_URL).toBe('http://example.invalid:1234');
+    // Embedding settings no longer live on config.AI.WORKERS.
+    expect((config.AI.WORKERS as Record<string, unknown>).EMBEDDING_ENABLED).toBeUndefined();
+    expect((config.AI.WORKERS as Record<string, unknown>).EMBED_MODEL).toBeUndefined();
     expect(config.CHANNELS.ALLOW_UNTRUSTED).toBe(true);
   });
 
@@ -69,7 +76,7 @@ describe('config/index reloadConfig', () => {
     writeFileSync(join(dir, 'koris.json'), JSON.stringify({
       ai: {
         manager: { provider: 'ollama', base_url: 'http://legacy.invalid:9999', model: 'legacy-manager' },
-        workers: { provider: 'ollama', base_url: 'http://legacy.invalid:9999', model: 'legacy-worker', num_ctx: 8192 },
+        workers: { provider: 'ollama', base_url: 'http://legacy.invalid:9999', model: 'legacy-worker', num_ctx: 8192, embedding: true, embed_model: 'legacy-embed' },
       },
     }));
 
@@ -77,7 +84,11 @@ describe('config/index reloadConfig', () => {
 
     expect(config.AI.MANAGER.BASE_URL).toBe('http://legacy.invalid:9999');
     expect(config.AI.MANAGER.MODEL).toBe('legacy-manager');
-    expect(config.AI.WORKERS.MODEL).toBe('legacy-worker');
+    // 1:1 provider↔model: workers shares the single collapsed ollama entry model.
+    expect(config.AI.WORKERS.MODEL).toBe('legacy-manager');
     expect(config.AI.WORKERS.NUM_CTX).toBe(8192);
+    // Legacy per-workers embedding fields migrate onto config.AI.EMBED.
+    expect(config.AI.EMBED.ENABLED).toBe(true);
+    expect(config.AI.EMBED.MODEL).toBe('legacy-embed');
   });
 });

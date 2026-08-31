@@ -256,9 +256,10 @@ async function main() {
         baseUrl,
       );
       advisory(
-        Array.isArray(entry.models) && entry.models.length > 0,
-        `ai.providers[${i}].models is non-empty`,
-        `provider "${name}" has no models listed`,
+        (typeof entry.model === 'string' && entry.model.trim().length > 0)
+          || (Array.isArray(entry.models) && entry.models.length > 0),
+        `ai.providers[${i}].model is set`,
+        `provider "${name}" has no model set`,
       );
       if (entry.num_ctx !== undefined) {
         const numCtx = Number(entry.num_ctx);
@@ -282,13 +283,38 @@ async function main() {
         ptrProvider,
       );
       const entry = providers.find((p) => p.provider === ptrProvider);
-      const models = entry && Array.isArray(entry.models) ? (entry.models as unknown[]) : [];
-      const ptrModel = typeof ptr.model === 'string' ? ptr.model : '';
-      if (models.length > 0) {
+      const legacyModels = entry && Array.isArray(entry.models) ? (entry.models as unknown[]) : [];
+      const roleModel = entry && typeof entry.model === 'string' && entry.model.trim()
+        ? entry.model
+        : (typeof legacyModels[0] === 'string' ? legacyModels[0] : '');
+      check(
+        roleModel.trim().length > 0,
+        `ai.roles.${role} resolves to a provider with a model`,
+        `provider "${ptrProvider}" for role ${role} has no model set in ai.providers[]`,
+        roleModel,
+      );
+    }
+
+    const embed = asObj(rawAi.embed);
+    if (rawAi.embed !== undefined) {
+      const embedProvider = typeof embed.provider === 'string' ? embed.provider : '';
+      check(
+        isSupportedProvider(embedProvider),
+        'ai.embed.provider is supported',
+        `Got: "${embedProvider}". ${supportedProvidersLabel}.`,
+        embedProvider,
+      );
+      advisory(
+        providerNames.has(embedProvider),
+        'ai.embed.provider is configured in ai.providers[]',
+        `"${embedProvider}" is not in ai.providers[]`,
+      );
+      const embedEnabled = embed.enabled === true || String(embed.enabled) === 'true';
+      if (embedEnabled) {
         advisory(
-          models.includes(ptrModel),
-          `ai.roles.${role}.model is listed in the provider's models[]`,
-          `"${ptrModel}" is not in ${ptrProvider}'s models list`,
+          typeof embed.model === 'string' && embed.model.trim().length > 0,
+          'ai.embed.model is set',
+          'ai.embed.enabled is true but ai.embed.model is empty',
         );
       }
     }

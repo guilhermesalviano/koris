@@ -9,8 +9,8 @@ import {
   isSupportedProvider,
   checkAiProviderConnectivity,
 } from '../config/validators';
-import { applyAiRolePatch, loadCurrentOrExampleSettings, mergeSettingsPayload, writeSettingsFile } from '../config/settings-writer';
-import type { AiRolePatch } from '../config/settings-writer';
+import { applyAiProviderPatch, applyAiRolePatch, applyAiEmbedPatch, loadCurrentOrExampleSettings, mergeSettingsPayload, writeSettingsFile } from '../config/settings-writer';
+import type { AiRolePatch, AiEmbedPatch } from '../config/settings-writer';
 import { addAllowedDomain } from '../services/security/allowed-domains';
 import { findGateBlocks } from '../services/security/gate-blocks';
 import { getSupportedProviders, getProviderCatalog, getProviderDefaultBaseUrl, clearProviderCache } from '../services/providers';
@@ -123,8 +123,16 @@ function toAiRolePatch(profile: Record<string, unknown>): AiRolePatch {
   if (profile.num_ctx !== undefined && Number.isFinite(Number(profile.num_ctx))) {
     patch.num_ctx = Number(profile.num_ctx);
   }
-  if (typeof profile.embedding === 'boolean') patch.embedding = profile.embedding;
-  if (typeof profile.embed_model === 'string') patch.embed_model = profile.embed_model;
+  return patch;
+}
+
+/** Maps a snake_case `ai.embed` settings patch to an `AiEmbedPatch`. */
+function toAiEmbedPatch(profile: Record<string, unknown>): AiEmbedPatch {
+  const patch: AiEmbedPatch = { provider: String(profile.provider) };
+  if (typeof profile.enabled === 'boolean') patch.enabled = profile.enabled;
+  if (typeof profile.model === 'string') patch.model = profile.model;
+  if (typeof profile.base_url === 'string') patch.base_url = profile.base_url;
+  if (typeof profile.api_token === 'string') patch.api_token = profile.api_token;
   return patch;
 }
 
@@ -151,20 +159,38 @@ function collectSettingsPayloadErrors(
 
   const ai = asRecord(payload.ai);
   if (ai) {
-    for (const role of ['manager', 'workers'] as const) {
-      const profile = asRecord(ai[role]);
+    // `ai.<role>` = save + activate for that role; `ai.provider` = save only.
+    for (const key of ['manager', 'workers', 'provider'] as const) {
+      const profile = asRecord(ai[key]);
       if (!profile) continue;
+      const label = `ai.${key}`;
 
       if (typeof profile.provider === 'string' && profile.provider === 'mock') {
-        errors.push(`ai.${role}.provider "mock" is reserved for internal testing and cannot be set here.`);
+        errors.push(`${label}.provider "mock" is reserved for internal testing and cannot be set here.`);
       } else if (typeof profile.provider === 'string' && !isSupportedProvider(profile.provider)) {
-        errors.push(`ai.${role}.provider "${profile.provider}" is not supported.`);
+        errors.push(`${label}.provider "${profile.provider}" is not supported.`);
       }
       if (typeof profile.base_url === 'string' && profile.base_url && !isValidUrl(profile.base_url)) {
-        errors.push(`ai.${role}.base_url must be a valid URL.`);
+        errors.push(`${label}.base_url must be a valid URL.`);
       }
       if (typeof profile.model === 'string' && !profile.model.trim()) {
-        errors.push(`ai.${role}.model must not be empty.`);
+        errors.push(`${label}.model must not be empty.`);
+      }
+    }
+
+    const embed = asRecord(ai.embed);
+    if (embed) {
+      const label = 'ai.embed';
+      if (typeof embed.provider === 'string' && embed.provider === 'mock') {
+        errors.push(`${label}.provider "mock" is reserved for internal testing and cannot be set here.`);
+      } else if (typeof embed.provider === 'string' && !isSupportedProvider(embed.provider)) {
+        errors.push(`${label}.provider "${embed.provider}" is not supported.`);
+      }
+      if (typeof embed.base_url === 'string' && embed.base_url && !isValidUrl(embed.base_url)) {
+        errors.push(`${label}.base_url must be a valid URL.`);
+      }
+      if (embed.enabled !== false && typeof embed.model === 'string' && !embed.model.trim()) {
+        errors.push(`${label}.model must not be empty when embeddings are enabled.`);
       }
     }
   }
@@ -797,7 +823,7 @@ class AdminRouterFactory {
         baseUrl: profile.BASE_URL,
         hasToken: !!profile.API_TOKEN?.trim(),
       });
-      const configured = new Set([config.AI.MANAGER.PROVIDER, config.AI.WORKERS.PROVIDER]);
+      const configured = new Set([config.AI.MANAGER.PROVIDER, config.AI.WORKERS.PROVIDER, config.AI.EMBED.PROVIDER]);
       // Surface every provider kept in ai.providers[] on disk with its saved
       // models / base_url so the chat picker can switch straight to it instead
       // of showing "Set up".
@@ -815,13 +841,15 @@ class AdminRouterFactory {
       }
       const providers = getProviderCatalog().map((entry) => {
         const stored = storedByName.get(entry.name);
-        const models = Array.isArray(stored?.models)
-          ? (stored.models as unknown[]).filter((m): m is string => typeof m === 'string')
-          : [];
+        const model = typeof stored?.model === 'string'
+          ? stored.model
+          : Array.isArray(stored?.models) && typeof stored.models[0] === 'string'
+            ? stored.models[0]
+            : '';
         return {
           ...entry,
           configured: configured.has(entry.name),
-          models,
+          model,
           storedBaseUrl: typeof stored?.base_url === 'string' ? stored.base_url : '',
           hasToken: typeof stored?.api_token === 'string' ? !!stored.api_token.trim() : false,
         };
@@ -831,6 +859,7 @@ class AdminRouterFactory {
         active: {
           manager: activeProfile(config.AI.MANAGER),
           workers: activeProfile(config.AI.WORKERS),
+          embed: { ...activeProfile(config.AI.EMBED), enabled: config.AI.EMBED.ENABLED },
         },
       });
     });
@@ -860,8 +889,12 @@ class AdminRouterFactory {
       // (`{ ai: { manager: { provider, base_url, model, api_token } } }`).
       // Translate each role into an `ai.providers[]` upsert + `ai.roles`
       // repoint so previously-configured providers are preserved on disk.
+      // `ai.<role>` patch = save the provider AND make it active for that role.
+      // `ai.provider` patch = save the provider's config only (no role change).
       const aiPatch = asRecord(corePatch.ai);
       const rolePatches: { role: 'manager' | 'workers'; patch: AiRolePatch }[] = [];
+      let providerOnlyPatch: AiRolePatch | undefined;
+      let embedPatch: AiEmbedPatch | undefined;
       if (aiPatch) {
         const restAi: Record<string, unknown> = { ...aiPatch };
         for (const role of ['manager', 'workers'] as const) {
@@ -871,12 +904,28 @@ class AdminRouterFactory {
           if (typeof profile.provider !== 'string' || !profile.provider.trim()) continue;
           rolePatches.push({ role, patch: toAiRolePatch(profile) });
         }
+        const providerProfile = asRecord(aiPatch.provider);
+        if (providerProfile && typeof providerProfile.provider === 'string' && providerProfile.provider.trim()) {
+          delete restAi.provider;
+          providerOnlyPatch = toAiRolePatch(providerProfile);
+        }
+        const embedProfile = asRecord(aiPatch.embed);
+        if (embedProfile && typeof embedProfile.provider === 'string' && embedProfile.provider.trim()) {
+          delete restAi.embed;
+          embedPatch = toAiEmbedPatch(embedProfile);
+        }
         corePatch.ai = restAi;
       }
 
       let current = loadCurrentOrExampleSettings();
+      if (providerOnlyPatch) {
+        current = applyAiProviderPatch(current, providerOnlyPatch);
+      }
       for (const { role, patch: rolePatch } of rolePatches) {
         current = applyAiRolePatch(current, role, rolePatch);
+      }
+      if (embedPatch) {
+        current = applyAiEmbedPatch(current, embedPatch);
       }
       const merged = mergeSettingsPayload(current, corePatch);
       const writtenPath = writeSettingsFile(merged);

@@ -706,16 +706,19 @@ describe('AdminRouterFactory /settings', () => {
     expect(body.active.manager.provider).toBe(config.AI.MANAGER.PROVIDER);
     expect(body.active.workers.provider).toBe(config.AI.WORKERS.PROVIDER);
     expect(typeof body.active.manager.hasToken).toBe('boolean');
+    expect(body.active.embed.provider).toBe(config.AI.EMBED.PROVIDER);
+    expect(body.active.embed.model).toBe(config.AI.EMBED.MODEL);
+    expect(typeof body.active.embed.enabled).toBe('boolean');
   });
 
-  it('GET /providers marks a provider saved in ai.providers[] as configured and surfaces its models/token', () => {
+  it('GET /providers marks a provider saved in ai.providers[] as configured and surfaces its model/token', () => {
     settingsWriter.loadCurrentOrExampleSettings.mockReturnValueOnce({
       ai: {
         providers: [
-          { provider: 'ollama', base_url: 'http://host:11434', api_token: '', models: ['gemma'] },
-          { provider: 'nvidia', base_url: '', api_token: 'nv-key', models: ['meta/llama-3.3-70b-instruct'] },
+          { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' },
+          { provider: 'nvidia', base_url: '', api_token: 'nv-key', model: 'meta/llama-3.3-70b-instruct' },
         ],
-        roles: { manager: { provider: 'ollama', model: 'gemma' }, workers: { provider: 'ollama', model: 'gemma' } },
+        roles: { manager: { provider: 'ollama' }, workers: { provider: 'ollama' } },
       },
     });
 
@@ -727,7 +730,7 @@ describe('AdminRouterFactory /settings', () => {
     const nvidia = body.providers.find((c: { name: string }) => c.name === 'nvidia');
     expect(nvidia).toMatchObject({
       configured: true,
-      models: ['meta/llama-3.3-70b-instruct'],
+      model: 'meta/llama-3.3-70b-instruct',
       hasToken: true,
       storedBaseUrl: '',
     });
@@ -814,11 +817,11 @@ describe('AdminRouterFactory /settings', () => {
     settingsWriter.loadCurrentOrExampleSettings.mockReturnValueOnce({
       ai: {
         providers: [
-          { provider: 'ollama', base_url: 'http://host:11434', api_token: '', models: ['gemma', 'qwen'] },
+          { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' },
         ],
         roles: {
-          manager: { provider: 'ollama', model: 'gemma' },
-          workers: { provider: 'ollama', model: 'qwen' },
+          manager: { provider: 'ollama' },
+          workers: { provider: 'ollama' },
         },
       },
     });
@@ -833,12 +836,96 @@ describe('AdminRouterFactory /settings', () => {
 
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     const [transformedCurrent] = settingsWriter.mergeSettingsPayload.mock.calls.at(-1) as [
-      { ai: { providers: { provider: string }[]; roles: Record<string, unknown> } },
+      { ai: { providers: { provider: string; model?: string }[]; roles: Record<string, unknown> } },
       unknown,
     ];
     expect(transformedCurrent.ai.providers.map((p) => p.provider)).toEqual(['ollama', 'openai']);
-    expect(transformedCurrent.ai.roles.manager).toEqual({ provider: 'openai', model: 'gpt-4o-mini' });
-    expect(transformedCurrent.ai.roles.workers).toEqual({ provider: 'ollama', model: 'qwen' });
+    expect(transformedCurrent.ai.providers.find((p) => p.provider === 'openai')?.model).toBe('gpt-4o-mini');
+    expect(transformedCurrent.ai.roles.manager).toEqual({ provider: 'openai' });
+    expect(transformedCurrent.ai.roles.workers).toEqual({ provider: 'ollama' });
+  });
+
+  it('POST /settings with an ai.embed patch updates ai.embed without repointing any role', () => {
+    settingsWriter.loadCurrentOrExampleSettings.mockReturnValueOnce({
+      ai: {
+        providers: [
+          { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' },
+          { provider: 'openai', base_url: '', api_token: 'sk-1', model: 'gpt-4o-mini' },
+        ],
+        roles: { manager: { provider: 'openai' }, workers: { provider: 'openai' } },
+      },
+    });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { ai: { embed: { enabled: true, provider: 'ollama', model: 'nomic-embed-text' } } };
+    callRoute(router, req, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    const [transformedCurrent] = settingsWriter.mergeSettingsPayload.mock.calls.at(-1) as [
+      { ai: { embed: Record<string, unknown>; roles: Record<string, unknown> } },
+      unknown,
+    ];
+    expect(transformedCurrent.ai.embed).toEqual({ enabled: true, provider: 'ollama', model: 'nomic-embed-text' });
+    expect(transformedCurrent.ai.roles).toEqual({ manager: { provider: 'openai' }, workers: { provider: 'openai' } });
+  });
+
+  it('POST /settings rejects an unsupported provider in an ai.embed patch', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { ai: { embed: { enabled: true, provider: 'anthropic', model: 'x' } } };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = res.json.mock.calls[0][0];
+    expect(body.details).toEqual(expect.arrayContaining([expect.stringContaining('ai.embed.provider')]));
+    expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings with an ai.provider patch saves the provider without repointing any role', () => {
+    settingsWriter.loadCurrentOrExampleSettings.mockReturnValueOnce({
+      ai: {
+        providers: [
+          { provider: 'ollama', base_url: 'http://host:11434', api_token: '', models: ['gemma'] },
+        ],
+        roles: {
+          manager: { provider: 'ollama', model: 'gemma' },
+          workers: { provider: 'ollama', model: 'gemma' },
+        },
+      },
+    });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = {
+      ai: { provider: { provider: 'nvidia', base_url: '', model: 'meta/llama-3.3-70b-instruct', api_token: 'nv-key' } },
+    };
+    callRoute(router, req, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    const [transformedCurrent] = settingsWriter.mergeSettingsPayload.mock.calls.at(-1) as [
+      { ai: { providers: { provider: string }[]; roles: Record<string, unknown> } },
+      unknown,
+    ];
+    expect(transformedCurrent.ai.providers.map((p) => p.provider)).toEqual(['ollama', 'nvidia']);
+    expect(transformedCurrent.ai.roles.manager).toEqual({ provider: 'ollama', model: 'gemma' });
+    expect(transformedCurrent.ai.roles.workers).toEqual({ provider: 'ollama', model: 'gemma' });
+  });
+
+  it('POST /settings rejects an unsupported provider in an ai.provider save patch', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { ai: { provider: { provider: 'anthropic', model: 'claude' } } };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = res.json.mock.calls[0][0];
+    expect(body.details).toEqual(expect.arrayContaining([expect.stringContaining('ai.provider.provider')]));
+    expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
   });
 
   it('POST /ai/test-connection requires a provider and base_url', () => {

@@ -41,19 +41,19 @@ function makeRepository(overrides: Partial<{
 }
 
 describe('PromptRepository buildMemoryContext', () => {
-  const originalEmbeddingEnabled = config.AI.WORKERS.EMBEDDING_ENABLED;
+  const originalEmbeddingEnabled = config.AI.EMBED.ENABLED;
 
   beforeEach(() => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = true;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = true;
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = originalEmbeddingEnabled;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = originalEmbeddingEnabled;
   });
 
   it('injects memory context from the most recent memories when embeddings are disabled', async () => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = false;
 
     const memoryRepository = {
       getAll: vi.fn().mockReturnValue([
@@ -84,7 +84,7 @@ describe('PromptRepository buildMemoryContext', () => {
   });
 
   it('limits the fallback to the most recent memories', async () => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = false;
 
     const recent = Array.from({ length: 25 }, (_, i) =>
       makeMemory({ id: `m${i}`, content: `memory ${i}` })
@@ -106,7 +106,7 @@ describe('PromptRepository buildMemoryContext', () => {
   });
 
   it('injects memory context from semantic search when embeddings are enabled', async () => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = true;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = true;
 
     const memoryRepository = {
       getAll: vi.fn(),
@@ -131,7 +131,7 @@ describe('PromptRepository buildMemoryContext', () => {
   });
 
   it('omits the memory block when there are no memories', async () => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = false;
 
     const repository = makeRepository();
 
