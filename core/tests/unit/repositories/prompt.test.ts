@@ -28,7 +28,7 @@ function makeRepository(overrides: Partial<{
 }> = {}) {
   return new PromptRepository(
     { get: vi.fn().mockReturnValue('') } as any,
-    overrides.toolsRepository ?? { getAll: vi.fn().mockReturnValue([]), getStickerTools: vi.fn().mockReturnValue([]) },
+    overrides.toolsRepository ?? { getAll: vi.fn().mockReturnValue([]), getStickerTools: vi.fn().mockReturnValue([]), getSearchTools: vi.fn().mockReturnValue([]) },
     overrides.learnedSkillsRepository ?? { getRecent: vi.fn().mockReturnValue([]) },
     overrides.stickerRulesRepository ?? { getRecent: vi.fn().mockReturnValue([]) },
     overrides.memoryRepository ?? {
@@ -356,7 +356,7 @@ describe('PromptRepository sticker tools gating', () => {
 
   it('includes sticker tools alongside the full toolset for trusted senders', async () => {
     const getAll = vi.fn().mockReturnValue([{ type: 'function', function: { name: 'curl_request', parameters: {} } }]);
-    const toolsRepository = { getAll, getStickerTools: vi.fn().mockReturnValue([]) };
+    const toolsRepository = { getAll, getStickerTools: vi.fn().mockReturnValue([]), getSearchTools: vi.fn().mockReturnValue([]) };
     const repository = makeRepository({ toolsRepository });
 
     await repository.build({ userMessage: 'Hello', channel: 'whatsapp', toolsEnabled: true });
@@ -367,7 +367,7 @@ describe('PromptRepository sticker tools gating', () => {
   it('excludes sticker tools from the full toolset when the master flag is off', async () => {
     (config.STICKERS as { ENABLED: boolean }).ENABLED = false;
     const getAll = vi.fn().mockReturnValue([]);
-    const toolsRepository = { getAll, getStickerTools: vi.fn().mockReturnValue([]) };
+    const toolsRepository = { getAll, getStickerTools: vi.fn().mockReturnValue([]), getSearchTools: vi.fn().mockReturnValue([]) };
     const repository = makeRepository({ toolsRepository });
 
     await repository.build({ userMessage: 'Hello', channel: 'whatsapp', toolsEnabled: true });
@@ -377,7 +377,7 @@ describe('PromptRepository sticker tools gating', () => {
 
   it('returns only sticker tools for an untrusted sender when stickersEnabled is on', async () => {
     const getStickerTools = vi.fn().mockReturnValue([{ type: 'function', function: { name: 'send_sticker', parameters: {} } }]);
-    const toolsRepository = { getAll: vi.fn(), getStickerTools };
+    const toolsRepository = { getAll: vi.fn(), getStickerTools, getSearchTools: vi.fn().mockReturnValue([]) };
     const repository = makeRepository({ toolsRepository });
 
     const { tools } = await repository.build({
@@ -393,7 +393,7 @@ describe('PromptRepository sticker tools gating', () => {
   });
 
   it('returns no tools for an untrusted sender when stickersEnabled is off', async () => {
-    const toolsRepository = { getAll: vi.fn(), getStickerTools: vi.fn() };
+    const toolsRepository = { getAll: vi.fn(), getStickerTools: vi.fn(), getSearchTools: vi.fn().mockReturnValue([]) };
     const repository = makeRepository({ toolsRepository });
 
     const { tools } = await repository.build({
@@ -410,7 +410,7 @@ describe('PromptRepository sticker tools gating', () => {
 
   it('returns no tools for an untrusted sender when the master sticker flag is off, even if stickersEnabled is on', async () => {
     (config.STICKERS as { ENABLED: boolean }).ENABLED = false;
-    const toolsRepository = { getAll: vi.fn(), getStickerTools: vi.fn() };
+    const toolsRepository = { getAll: vi.fn(), getStickerTools: vi.fn(), getSearchTools: vi.fn().mockReturnValue([]) };
     const repository = makeRepository({ toolsRepository });
 
     const { tools } = await repository.build({
@@ -421,6 +421,61 @@ describe('PromptRepository sticker tools gating', () => {
     });
 
     expect(toolsRepository.getStickerTools).not.toHaveBeenCalled();
+    expect(tools).toBeUndefined();
+  });
+});
+
+describe('PromptRepository search tools gating', () => {
+  it('returns only search tools for an untrusted sender when searchEnabled is on', async () => {
+    const getSearchTools = vi.fn().mockReturnValue([{ type: 'function', function: { name: 'search_engine', parameters: {} } }]);
+    const toolsRepository = { getAll: vi.fn(), getStickerTools: vi.fn().mockReturnValue([]), getSearchTools };
+    const repository = makeRepository({ toolsRepository });
+
+    const { tools } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+      toolsEnabled: false,
+      searchEnabled: true,
+    });
+
+    expect(getSearchTools).toHaveBeenCalled();
+    expect(toolsRepository.getAll).not.toHaveBeenCalled();
+    expect(tools).toEqual([{ type: 'function', function: { name: 'search_engine', parameters: {} } }]);
+  });
+
+  it('returns sticker and search tools together for an untrusted sender when both are enabled', async () => {
+    const getStickerTools = vi.fn().mockReturnValue([{ type: 'function', function: { name: 'send_sticker', parameters: {} } }]);
+    const getSearchTools = vi.fn().mockReturnValue([{ type: 'function', function: { name: 'search_engine', parameters: {} } }]);
+    const toolsRepository = { getAll: vi.fn(), getStickerTools, getSearchTools };
+    const repository = makeRepository({ toolsRepository });
+
+    const { tools } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+      toolsEnabled: false,
+      stickersEnabled: true,
+      searchEnabled: true,
+    });
+
+    expect(tools).toEqual([
+      { type: 'function', function: { name: 'send_sticker', parameters: {} } },
+      { type: 'function', function: { name: 'search_engine', parameters: {} } },
+    ]);
+  });
+
+  it('returns no tools for an untrusted sender when searchEnabled is off', async () => {
+    const toolsRepository = { getAll: vi.fn(), getStickerTools: vi.fn().mockReturnValue([]), getSearchTools: vi.fn() };
+    const repository = makeRepository({ toolsRepository });
+
+    const { tools } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+      toolsEnabled: false,
+      searchEnabled: false,
+    });
+
+    expect(toolsRepository.getSearchTools).not.toHaveBeenCalled();
+    expect(toolsRepository.getAll).not.toHaveBeenCalled();
     expect(tools).toBeUndefined();
   });
 });

@@ -34,6 +34,7 @@ interface BuildPromptParams {
   toolsEnabled?: boolean;
   learnedSkillsEnabled?: boolean;
   stickersEnabled?: boolean;
+  searchEnabled?: boolean;
   messageHistory?: Message[];
   includeBeatTools?: boolean;
   sessionId?: string;
@@ -246,12 +247,17 @@ class PromptRepository implements IPromptRepository {
     return contextString.trim().slice(0, 15000);
   }
 
-  private buildTools({ toolsEnabled, includeBeatTools, stickersEnabled }: BuildPromptParams): AIToolDefinition[] | undefined {
+  private buildTools({ toolsEnabled, includeBeatTools, stickersEnabled, searchEnabled }: BuildPromptParams): AIToolDefinition[] | undefined {
     const toolsEnabledFinal = toolsEnabled ?? true;
     const stickerToolsAllowed = this.isStickerContentAllowed(stickersEnabled);
+    const searchToolsAllowed = this.isSearchContentAllowed(searchEnabled);
 
     if (!toolsEnabledFinal) {
-      return stickerToolsAllowed ? this.toolsRepository.getStickerTools() : undefined;
+      const restrictedTools = [
+        ...(stickerToolsAllowed ? this.toolsRepository.getStickerTools() : []),
+        ...(searchToolsAllowed ? this.toolsRepository.getSearchTools() : []),
+      ];
+      return restrictedTools.length > 0 ? restrictedTools : undefined;
     }
 
     return this.toolsRepository.getAll({
@@ -262,6 +268,10 @@ class PromptRepository implements IPromptRepository {
 
   private isStickerContentAllowed(stickersEnabled?: boolean): boolean {
     return config.STICKERS.ENABLED && (stickersEnabled ?? true);
+  }
+
+  private isSearchContentAllowed(searchEnabled?: boolean): boolean {
+    return searchEnabled ?? true;
   }
 }
 

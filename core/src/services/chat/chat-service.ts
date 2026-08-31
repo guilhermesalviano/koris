@@ -37,6 +37,7 @@ class ChatService implements IChatService {
       toolsEnabled: options?.toolsEnabled,
       learnedSkillsEnabled: options?.learnedSkillsEnabled,
       stickersEnabled: options?.stickersEnabled,
+      searchEnabled: options?.searchEnabled,
       messageHistory: messagesHistory,
       sessionId,
       extraSystemBlocks,

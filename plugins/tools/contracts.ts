@@ -63,6 +63,8 @@ export interface ToolFilterOptions {
   agentName?: string;
   /** Pre-resolved by the caller: `config.STICKERS.ENABLED && (paramOverride ?? true)`. */
   stickersEnabled: boolean;
+  /** Pre-resolved by the caller: `message.isTrustedSender || config.SEARCH.ALLOW_UNTRUSTED`. */
+  searchEnabled?: boolean;
 }
 
 export interface ToolSchema {

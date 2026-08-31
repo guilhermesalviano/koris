@@ -65,11 +65,16 @@ describe('create', () => {
 
   it('is enabled when trusted and the plugin is enabled', () => {
     const definition = register(() => true);
-    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(true);
+    expect(definition.enabled({ trusted: true, stickersEnabled: true, searchEnabled: true })).toBe(true);
   });
 
   it('is disabled when the plugin is administratively disabled, even when trusted', () => {
     const definition = register(() => false);
-    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(false);
+    expect(definition.enabled({ trusted: true, stickersEnabled: true, searchEnabled: true })).toBe(false);
+  });
+
+  it('is disabled when search is not enabled, even when trusted', () => {
+    const definition = register(() => true);
+    expect(definition.enabled({ trusted: true, stickersEnabled: true, searchEnabled: false })).toBe(false);
   });
 });

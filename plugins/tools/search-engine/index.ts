@@ -53,7 +53,7 @@ export function create(context: ToolPluginContext): Plugin {
           },
         },
         handler: (logger, args) => executeSearch(logger, args, context.config.searxngUrl, context.config.searchApiKey),
-        enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('search-engine'),
+        enabled: (opts) => opts.trusted && (opts.searchEnabled ?? true) && context.pluginEnablement.isEnabled('search-engine'),
       });
       registry.extend(COMMANDS, definition);
     },

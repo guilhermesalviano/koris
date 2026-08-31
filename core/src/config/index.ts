@@ -48,6 +48,9 @@ export interface AppConfig {
     ENABLED: boolean;
     ALLOW_UNTRUSTED: boolean;
   };
+  SEARCH: {
+    ALLOW_UNTRUSTED: boolean;
+  };
   SESSION: {
     /** Sessions auto-rotate once idle past this long, regardless of mode. */
     TTL_MS: number;
@@ -121,6 +124,11 @@ function buildConfig(): AppConfig {
     // Temporary: lets senders outside the channel whitelist learn/send stickers
     // while the rest of the toolset stays locked to trusted senders.
     ALLOW_UNTRUSTED: get('stickers.allow_untrusted', 'true') === 'true',
+  },
+  SEARCH: {
+    // Lets untrusted senders use search-engine and search-engine-restart,
+    // following the same pattern as stickers.allow_untrusted.
+    ALLOW_UNTRUSTED: get('search.allow_untrusted', 'true') === 'true',
   },
   SESSION: {
     TTL_MS: Number(get('session.ttl_ms', String(3 * 60 * 60 * 1000))),

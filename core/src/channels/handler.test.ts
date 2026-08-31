@@ -62,8 +62,9 @@ describe('channels/handler', () => {
   });
 
   it('prefixes the prompt with the sender name', async () => {
-    const original = config.STICKERS.ALLOW_UNTRUSTED;
+    const originalStorage = { stickers: config.STICKERS.ALLOW_UNTRUSTED, search: config.SEARCH.ALLOW_UNTRUSTED };
     (config.STICKERS as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = true;
+    (config.SEARCH as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = true;
     try {
       const { handler, gateway, reply } = makeHandler();
       gateway.handle.mockResolvedValue('pong');
@@ -73,10 +74,11 @@ describe('channels/handler', () => {
       expect(gateway.handle).toHaveBeenCalledWith(
         { text: '[Context] Chat: direct (untrusted sender). Sender: guilherme. Message: hi', images: undefined, stickers: undefined },
         'jid',
-        { channel: 'test-channel', toolsEnabled: false, learnedSkillsEnabled: false, stickersEnabled: true },
+        { channel: 'test-channel', toolsEnabled: false, learnedSkillsEnabled: false, stickersEnabled: true, searchEnabled: true },
       );
     } finally {
-      (config.STICKERS as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = original;
+      (config.STICKERS as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = originalStorage.stickers;
+      (config.SEARCH as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = originalStorage.search;
     }
   });
 
@@ -203,7 +205,7 @@ describe('channels/handler', () => {
     expect(gateway.handle).toHaveBeenCalledWith(
       expect.anything(),
       'jid',
-      { channel: 'test-channel', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true },
+      { channel: 'test-channel', toolsEnabled: true, learnedSkillsEnabled: true, stickersEnabled: true, searchEnabled: true },
     );
   });
 
@@ -242,6 +244,44 @@ describe('channels/handler', () => {
       );
     } finally {
       (config.STICKERS as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = original;
+    }
+  });
+
+  it('enables search tools for untrusted senders when search.allow_untrusted is on', async () => {
+    const original = config.SEARCH.ALLOW_UNTRUSTED;
+    (config.SEARCH as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = true;
+    try {
+      const { handler, gateway } = makeHandler();
+      gateway.handle.mockResolvedValue('pong');
+
+      await handler.handle('jid', message({ isTrustedSender: false }));
+
+      expect(gateway.handle).toHaveBeenCalledWith(
+        expect.anything(),
+        'jid',
+        expect.objectContaining({ toolsEnabled: false, searchEnabled: true }),
+      );
+    } finally {
+      (config.SEARCH as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = original;
+    }
+  });
+
+  it('disables search tools for untrusted senders when search.allow_untrusted is off', async () => {
+    const original = config.SEARCH.ALLOW_UNTRUSTED;
+    (config.SEARCH as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = false;
+    try {
+      const { handler, gateway } = makeHandler();
+      gateway.handle.mockResolvedValue('pong');
+
+      await handler.handle('jid', message({ isTrustedSender: false }));
+
+      expect(gateway.handle).toHaveBeenCalledWith(
+        expect.anything(),
+        'jid',
+        expect.objectContaining({ toolsEnabled: false, searchEnabled: false }),
+      );
+    } finally {
+      (config.SEARCH as { ALLOW_UNTRUSTED: boolean }).ALLOW_UNTRUSTED = original;
     }
   });
 

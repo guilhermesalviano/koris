@@ -49,6 +49,7 @@ class ChannelHandler implements IChannelHandler {
           toolsEnabled: message.isTrustedSender,
           learnedSkillsEnabled: message.isTrustedSender,
           stickersEnabled: this.computeStickersEnabled(message),
+          searchEnabled: this.computeSearchEnabled(message),
         },
       );
       const resolved = await resolveResponse(response);
@@ -69,6 +70,10 @@ class ChannelHandler implements IChannelHandler {
   // PromptRepository.buildTools' privileged-bypass branch).
   private computeStickersEnabled(message: InboundChannelMessage): boolean {
     return message.isTrustedSender || config.STICKERS.ALLOW_UNTRUSTED;
+  }
+
+  private computeSearchEnabled(message: InboundChannelMessage): boolean {
+    return message.isTrustedSender || config.SEARCH.ALLOW_UNTRUSTED;
   }
 
   private stripMention(text: string): string {

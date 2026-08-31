@@ -9,6 +9,9 @@
     "enabled": true,
     "allow_untrusted": false
   },
+  "search": {
+    "allow_untrusted": false
+  },
   "heartbeat": false,
   "channels": {
     "allow_untrusted": false

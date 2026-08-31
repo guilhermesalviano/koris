@@ -12,12 +12,17 @@ interface GetAllOptions {
 interface IToolsRepository {
   getAll(options?: GetAllOptions): AIToolDefinition[];
   getStickerTools(): AIToolDefinition[];
+  getSearchTools(): AIToolDefinition[];
 }
 
 /** Isolates the sticker subset for `getStickerTools()`, which needs to answer
  * "sticker tools only" independently of the general trust gate — every other
  * tool's own `enabled()` already encodes whether it belongs in a given call. */
 const STICKER_TOOL_NAMES = new Set(['learn_sticker', 'send_sticker', 'unlearn_sticker']);
+
+/** Isolates the search subset for `getSearchTools()`, mirroring the sticker
+ * bypass so untrusted senders can search when `search.allow_untrusted` is on. */
+const SEARCH_TOOL_NAMES = new Set(['search_engine', 'restart_search_engine']);
 
 function toAIToolDefinition(def: ToolDefinition): AIToolDefinition {
   return {
@@ -54,9 +59,16 @@ class ToolsRepository implements IToolsRepository {
   }
 
   getStickerTools(): AIToolDefinition[] {
-    const filterOptions: ToolFilterOptions = { trusted: true, stickersEnabled: true };
+    const filterOptions: ToolFilterOptions = { trusted: true, stickersEnabled: true, searchEnabled: true };
     return ToolPluginsSingleton.getExistingInstance()
       .filter((def) => STICKER_TOOL_NAMES.has(def.name) && def.enabled(filterOptions))
+      .map(toAIToolDefinition);
+  }
+
+  getSearchTools(): AIToolDefinition[] {
+    const filterOptions: ToolFilterOptions = { trusted: true, stickersEnabled: true, searchEnabled: true };
+    return ToolPluginsSingleton.getExistingInstance()
+      .filter((def) => SEARCH_TOOL_NAMES.has(def.name) && def.enabled(filterOptions))
       .map(toAIToolDefinition);
   }
 }
