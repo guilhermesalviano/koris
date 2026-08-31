@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { apiRequest, ApiRequestError } from './api';
 import type { ProviderCatalogEntry, ProviderRole, ProvidersResponse, ActiveProvider } from './types';
 import type { ConnectionTestResult } from './use-settings-form';
@@ -24,7 +24,21 @@ export interface EmbedInput {
   apiToken: string;
 }
 
-export function useProviders() {
+interface ProvidersContextValue {
+  catalog: ProviderCatalogEntry[];
+  active: ActiveState;
+  loading: boolean;
+  error: string | null;
+  reload: () => Promise<void>;
+  test: (input: { provider: string; baseUrl: string; apiToken: string }) => Promise<ConnectionTestResult>;
+  saveProvider: (input: ActivateInput) => Promise<{ ok: boolean; errors?: string[] }>;
+  activate: (role: ProviderRole, input: ActivateInput) => Promise<{ ok: boolean; errors?: string[] }>;
+  setEmbed: (input: EmbedInput) => Promise<{ ok: boolean; errors?: string[] }>;
+}
+
+const ProvidersContext = createContext<ProvidersContextValue | null>(null);
+
+export function ProvidersProvider({ children }: { children: ReactNode }) {
   const [catalog, setCatalog] = useState<ProviderCatalogEntry[]>([]);
   const [active, setActive] = useState<ActiveState>({
     manager: EMPTY_ACTIVE,
@@ -118,7 +132,15 @@ export function useProviders() {
     [postSettings],
   );
 
-  return { catalog, active, loading, error, reload: load, test, saveProvider, activate, setEmbed };
+  const value: ProvidersContextValue = { catalog, active, loading, error, reload: load, test, saveProvider, activate, setEmbed };
+
+  return <ProvidersContext.Provider value={value}>{children}</ProvidersContext.Provider>;
 }
 
-export type UseProvidersApi = ReturnType<typeof useProviders>;
+export function useProviders(): ProvidersContextValue {
+  const ctx = useContext(ProvidersContext);
+  if (!ctx) {
+    throw new Error('useProviders must be used within a ProvidersProvider');
+  }
+  return ctx;
+}
