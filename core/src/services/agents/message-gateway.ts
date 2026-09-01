@@ -60,6 +60,7 @@ class MessageGateway implements IMessageGateway {
           images,
           channel,
           commandResult.response || '',
+          options,
         );
       }
 
@@ -152,6 +153,7 @@ class MessageGateway implements IMessageGateway {
     images: ImageAttachment[] | undefined,
     channel: string,
     confirmation: string,
+    options?: ProcessOptions,
   ): Promise<ProcessedMessage> {
     const history = messageService.getHistory();
     if (history.length === 0) {
@@ -166,15 +168,18 @@ class MessageGateway implements IMessageGateway {
       memoryService,
     });
 
-    sessionService.forceRotate(result ? { compactSummary: result.content } : undefined);
-
+    // Record the `/compact` command against the session it compacted, not the
+    // fresh one — the new session must start empty.
     this.backgroundDispatcher.persistConversation({
-      sessionId: sessionService.getSession().id,
+      sessionId,
       ask: safeMessage,
       askImages: images,
       answer: confirmation,
       channel,
     });
+
+    sessionService.forceRotate(result ? { compactSummary: result.content } : undefined);
+    options?.onSessionRotated?.(sessionService.getSession().id);
 
     return confirmation;
   }

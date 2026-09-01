@@ -1,5 +1,6 @@
 
 import { IDatabaseService } from '../infrastructure/db-sqlite';
+import { ILogger } from '../infrastructure/logger';
 import { Memory } from '../entities/memory';
 import { MemoryType } from '../types/memory';
 import { similarity } from 'ml-distance';
@@ -16,7 +17,7 @@ interface IMemoryRepository {
 }
 
 class MemoryRepository implements IMemoryRepository {
-  constructor(private db: IDatabaseService) { }
+  constructor(private db: IDatabaseService, private logger?: ILogger) { }
 
   save(memory: Memory): void {
     this.db.run(
@@ -81,14 +82,27 @@ class MemoryRepository implements IMemoryRepository {
 
   search(queryEmbedding: number[], limit: number, excludeSessionId?: string): Memory[] {
     const memories = this.getAll(excludeSessionId);
-    const scoredMemories = memories
-      .filter((m) => m.embedding)
-      .map((m) => ({
-        memory: m,
-        score: similarity.cosine(queryEmbedding, m.embedding as any as number[])
-      }))
+    const embedded = memories.filter((m): m is Memory & { embedding: number[] } => Array.isArray(m.embedding));
+
+    let dimensionMismatches = 0;
+    const scoredMemories = embedded
+      .filter((m) => {
+        if (m.embedding.length === queryEmbedding.length) return true;
+        dimensionMismatches += 1;
+        return false;
+      })
+      .map((m) => ({ memory: m, score: similarity.cosine(queryEmbedding, m.embedding) }))
+      .filter((sm) => Number.isFinite(sm.score))
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
+
+    if (dimensionMismatches > 0) {
+      this.logger?.warn('Skipped memories with a mismatched embedding dimension during search', {
+        skipped: dimensionMismatches,
+        queryDimension: queryEmbedding.length,
+        hint: 'ai.embed.model likely changed — old memories were embedded with a different model and are no longer comparable',
+      });
+    }
 
     return scoredMemories.map((sm) => sm.memory);
   }
@@ -120,8 +134,8 @@ class MemoryRepository implements IMemoryRepository {
 }
 
 class MemoryRepositoryFactory {
-  public static create(db: IDatabaseService): MemoryRepository {
-    return new MemoryRepository(db);
+  public static create(db: IDatabaseService, logger?: ILogger): MemoryRepository {
+    return new MemoryRepository(db, logger);
   }
 }
 

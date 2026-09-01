@@ -141,6 +141,13 @@ class ChatRouteHandler {
             delta: { status: summary },
           });
         },
+        onSessionRotated: (newSessionId: string) => {
+          if (clientClosed) {
+            return;
+          }
+
+          writeSse({ type: 'session', sessionId: newSessionId });
+        },
       });
 
       await this.writeResponse(result, writeSse, () => clientClosed || res.writableEnded || res.destroyed);

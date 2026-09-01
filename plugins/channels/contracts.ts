@@ -40,6 +40,8 @@ export type ProcessOptions = {
   toolsEnabled?: boolean;
   learnedSkillsEnabled?: boolean;
   onProgress?: (summary: string) => void;
+  /** Fired when a turn rotates the session (e.g. `/compact`) so the caller can follow the new id. */
+  onSessionRotated?: (newSessionId: string) => void;
   sessionId?: string;
   runId?: string;
   channel?: string;

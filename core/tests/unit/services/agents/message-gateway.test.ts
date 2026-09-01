@@ -288,7 +288,7 @@ describe('MessageGateway', () => {
   });
 
   describe('/compact', () => {
-    it('compacts the session, rotates it, and persists the exchange under the new session', async () => {
+    it('compacts the session, rotates it, and persists the exchange under the compacted session (never the fresh one)', async () => {
       const { gateway, deps } = makeGateway();
       deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'hi' }] as never);
       deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
@@ -307,7 +307,10 @@ describe('MessageGateway', () => {
       });
       expect(deps.sessionService.forceRotate).toHaveBeenCalledWith({ compactSummary: 'we covered X' });
       expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
-        expect.objectContaining({ sessionId: 'session-2', ask: '/compact' }),
+        expect.objectContaining({ sessionId: 'session-1', ask: '/compact' }),
+      );
+      expect(deps.backgroundDispatcher.persistConversation).not.toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'session-2' }),
       );
       expect(result).toContain('Compacting');
     });
@@ -332,6 +335,20 @@ describe('MessageGateway', () => {
       await gateway.handle('/compact', 'origin-1');
 
       expect(deps.sessionService.forceRotate).toHaveBeenCalledWith(undefined);
+    });
+
+    it('notifies the caller of the rotated session id so a pinned client can follow it', async () => {
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'hi' }] as never);
+      deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
+      deps.sessionService.getSession
+        .mockReturnValueOnce({ id: 'session-1' })
+        .mockReturnValue({ id: 'session-2' });
+      const onSessionRotated = vi.fn();
+
+      await gateway.handle('/compact', 'origin-1', { onSessionRotated });
+
+      expect(onSessionRotated).toHaveBeenCalledWith('session-2');
     });
   });
 });

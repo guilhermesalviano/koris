@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import type { SessionSummary } from '../../lib/types';
 import {
+  AuditIcon,
   CloseIcon,
   HeartbeatsIcon,
   MemoriesIcon,
@@ -23,6 +24,7 @@ import MemoriesPage from './MemoriesPage';
 import HeartbeatsPage from './HeartbeatsPage';
 import SkillsPage from './SkillsPage';
 import QueuePage from './QueuePage';
+import AuditPage from './AuditPage';
 import { ChatProvider, useChat } from '../../lib/chat-context';
 import { UiProvider } from '../../lib/ui-context';
 import { ProvidersProvider } from '../../lib/use-providers';
@@ -33,6 +35,7 @@ const NAV_ICONS = {
   heartbeats: HeartbeatsIcon,
   skills: SkillsIcon,
   queue: QueueIcon,
+  audit: AuditIcon,
 };
 
 const MAIN_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] = [
@@ -41,6 +44,7 @@ const MAIN_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] 
   { to: '/admin/heartbeats', label: 'Beats', icon: 'heartbeats' },
   { to: '/admin/skills', label: 'Skills', icon: 'skills' },
   { to: '/admin/queue', label: 'Queue', icon: 'queue' },
+  { to: '/admin/audit', label: 'Audit', icon: 'audit' },
 ];
 
 function navItemClass({ isActive }: { isActive: boolean }, vertical: boolean, collapsed: boolean): string {
@@ -456,6 +460,7 @@ export default function AdminLayout() {
               <Route path="heartbeats" element={<HeartbeatsPage />} />
               <Route path="skills" element={<SkillsPage />} />
               <Route path="queue" element={<QueuePage />} />
+              <Route path="audit" element={<AuditPage />} />
               <Route path="*" element={<Navigate to="/admin/chat" replace />} />
             </Routes>
           </main>

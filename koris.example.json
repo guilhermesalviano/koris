@@ -26,7 +26,7 @@
       "manager": { "provider": "ollama" },
       "workers": { "provider": "ollama" }
     },
-    "embed": { "enabled": false, "provider": "ollama", "model": "nomic-embed-text" },
+    "embed": { "enabled": true, "provider": "ollama", "model": "nomic-embed-text" },
     "searxng_url": "http://localhost:8080",
     "search_api_key": "SERPAPI_KEY",
     "prompt_sanitizer": false,

@@ -104,7 +104,7 @@ class PromptRepository implements IPromptRepository {
     if (stickerRules) systemBlocks.push(`# Learned Stickers\n${stickerRules}`);
 
     const memory = await this.buildMemoryContext(userMessage, sessionId);
-    if (memory) systemBlocks.push(`# Cross-session Memory Context\n${memory}`);
+    if (memory) systemBlocks.push(`# Long-term Memory Context\n${memory}`);
 
     const context = this.contextRepository.get({ channel });
     if (context) systemBlocks.push(`# Session Context\n${context}`);
@@ -203,15 +203,11 @@ class PromptRepository implements IPromptRepository {
       try {
         const queryEmbedding = await this.embedProvider.embed(userMessage);
         const memories = this.memoryRepository.search(queryEmbedding, MEMORY_CONTEXT_LIMIT, sessionId);
-
-        if (memories.length === 0) {
-          return '';
+        if (memories.length > 0) {
+          return this.formatMemories(memories);
         }
-
-        return this.formatMemories(memories);
       } catch (e) {
-        this.logger.warn('Failed to embed user message for memory retrieval', { error: e instanceof Error ? e.message : String(e) });
-        return '';
+        this.logger.warn('Failed to embed user message for memory retrieval; falling back to recent memories', { error: e instanceof Error ? e.message : String(e) });
       }
     }
 
@@ -259,7 +255,7 @@ class PromptRepositoryFactory {
     const toolsRepository = ToolsRepositoryFactory.create();
     const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
     const stickerRulesRepository = StickerRulesRepositoryFactory.create(db);
-    const memoryRepository = MemoryRepositoryFactory.create(db);
+    const memoryRepository = MemoryRepositoryFactory.create(db, logger);
     return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, stickerRulesRepository, memoryRepository, embedProvider, logger);
   }
 }

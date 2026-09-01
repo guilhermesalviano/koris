@@ -76,7 +76,7 @@ describe('PromptRepository buildMemoryContext', () => {
     expect(memoryRepository.search).not.toHaveBeenCalled();
 
     const systemContent = messages[0].content as string;
-    expect(systemContent).toContain('# Cross-session Memory Context');
+    expect(systemContent).toContain('# Long-term Memory Context');
     expect(systemContent).toContain('### channel: whatsapp');
     expect(systemContent).toContain('- User likes coffee.');
     expect(systemContent).toContain('### channel: telegram');
@@ -126,7 +126,7 @@ describe('PromptRepository buildMemoryContext', () => {
     expect(memoryRepository.getAll).not.toHaveBeenCalled();
 
     const systemContent = messages[0].content as string;
-    expect(systemContent).toContain('# Cross-session Memory Context');
+    expect(systemContent).toContain('# Long-term Memory Context');
     expect(systemContent).toContain('- Relevant memory.');
   });
 
@@ -141,7 +141,35 @@ describe('PromptRepository buildMemoryContext', () => {
     });
 
     const systemContent = messages[0].content as string;
-    expect(systemContent).not.toContain('# Cross-session Memory Context');
+    expect(systemContent).not.toContain('# Long-term Memory Context');
+  });
+
+  it('falls back to recent memories when the query embed call fails', async () => {
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = true;
+
+    const memoryRepository = {
+      getAll: vi.fn().mockReturnValue([
+        makeMemory({ id: 'm1', source: 'tui', content: 'Prefers dark mode.' }),
+      ]),
+      search: vi.fn(),
+    };
+    const aiProvider = { embed: vi.fn().mockRejectedValue(new Error('embeddings unavailable')) };
+    const logger = makeLogger();
+    const repository = makeRepository({ memoryRepository, aiProvider, logger });
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'tui',
+      sessionId: 'session-current',
+    });
+
+    expect(aiProvider.embed).toHaveBeenCalledWith('Hello');
+    expect(memoryRepository.getAll).toHaveBeenCalledWith('session-current');
+    expect(logger.warn).toHaveBeenCalled();
+
+    const systemContent = messages[0].content as string;
+    expect(systemContent).toContain('# Long-term Memory Context');
+    expect(systemContent).toContain('- Prefers dark mode.');
   });
 });
 

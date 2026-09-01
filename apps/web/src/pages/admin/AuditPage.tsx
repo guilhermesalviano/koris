@@ -1,12 +1,58 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PageShell, Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
 import { apiRequest } from '../../lib/api';
+import { useProviders } from '../../lib/use-providers';
 import type { AuditItem, AuditResponse } from '../../lib/types';
 
 const PAGE_SIZE = 50;
 
+/** The system-prompt heading `PromptRepository` writes retrieved memories under. */
+const MEMORY_CONTEXT_MARKER = '# Long-term Memory Context';
+
 function typeLabel(type: string): string {
   return type === 'llm' ? 'LLM' : 'tool';
+}
+
+function EmbedContextPanel() {
+  const { active } = useProviders();
+  const embed = active.embed;
+
+  const rows: [string, string][] = [
+    ['status', embed.enabled ? 'enabled' : 'disabled'],
+    ['provider', embed.provider || '—'],
+    ['model', embed.model || '—'],
+    ['base url', embed.baseUrl || 'provider default'],
+  ];
+
+  return (
+    <Card className="mb-4">
+      <div className="mb-2 font-mono text-[11px] uppercase tracking-wide text-txt-3">Embeddings (RAG)</div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 font-mono text-[11px] text-txt-2 sm:grid-cols-4">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <span className="text-txt-3">{label} </span>
+            {value}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 rounded-lg border border-subtle bg-bg-3 px-3 py-2.5 text-[11px] leading-relaxed text-txt-2">
+        <span className="font-medium text-txt">Tip — validate what embed context was used:</span>{' '}
+        embedding retrieval isn't logged as its own audit entry. To see which memories a turn
+        actually pulled in, open that turn's <span className="font-mono">LLM</span> entry below and
+        look in the prompt for the <span className="font-mono">{MEMORY_CONTEXT_MARKER}</span> block —
+        those bullets are exactly what semantic search injected.
+        {embed.enabled ? (
+          <> If the block is absent or empty, retrieval returned nothing: check the provider/model
+            above is reachable and scan the server logs for <span className="font-mono">embed failed</span>{' '}
+            or <span className="font-mono">mismatched embedding dimension</span>.</>
+        ) : (
+          <> Embeddings are disabled, so that block (when present) is the 20 most recent memories by
+            recency, not a semantic match.</>
+        )}
+      </div>
+    </Card>
+  );
 }
 
 export default function AuditPage() {
@@ -97,7 +143,9 @@ export default function AuditPage() {
     'rounded-lg border border-strong bg-bg-3 px-3 py-1.5 font-mono text-[11px] text-txt-2 outline-none focus:border-accent';
 
   return (
-    <PageShell title="Audit log" description="Tool-call audit trail" onRefresh={() => { load(); if (selectedId) loadDetail(selectedId); }}>
+    <PageShell title="Audit log" description="LLM & tool-call audit trail, with embedding/RAG context" onRefresh={() => { load(); if (selectedId) loadDetail(selectedId); }}>
+      <EmbedContextPanel />
+
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <select value={type} onChange={(e) => applyFilters(e.target.value, status)} className={selectClass}>
           <option value="">all types</option>
@@ -233,6 +281,12 @@ export default function AuditPage() {
                 <div><span className="text-txt-3">duration </span>{detail.durationMs}ms</div>
                 <div><span className="text-txt-3">model </span>{detail.model ?? detail.provider ?? '—'}</div>
                 {detail.finishReason && <div><span className="text-txt-3">finish </span>{detail.finishReason}</div>}
+                {detail.type === 'llm' && (
+                  <div>
+                    <span className="text-txt-3">memory ctx </span>
+                    {detail.prompt?.includes(MEMORY_CONTEXT_MARKER) ? 'injected' : 'none'}
+                  </div>
+                )}
                 {detail.toolCalls !== undefined && <div><span className="text-txt-3">toolCalls </span>{detail.toolCalls}</div>}
                 {detail.toolsEnabled !== undefined && <div><span className="text-txt-3">tools </span>{detail.toolsEnabled ? 'enabled' : 'off'}</div>}
                 {detail.errorCode && <div className="text-red-400"><span className="text-txt-3">error </span>{detail.errorCode}</div>}

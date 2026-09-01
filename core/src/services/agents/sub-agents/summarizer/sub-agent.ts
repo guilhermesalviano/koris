@@ -86,7 +86,10 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
           const provider = getAIProvider(this.logger, 'embed', { background: true });
           embedding = await provider.embed(parsedMemory.content);
         } catch (error) {
-          this.logger.error(`Failed to generate embedding for summarized memory`, { error });
+          this.logger.error(
+            `embed failed for ${config.AI.EMBED.PROVIDER}/${config.AI.EMBED.MODEL}; memory saved WITHOUT an embedding and will not surface in semantic memory — check the embed provider/model is reachable`,
+            { error },
+          );
         }
       }
 
@@ -132,7 +135,10 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
           const provider = getAIProvider(this.logger, 'embed', { background: true });
           embedding = await provider.embed(parsedMemory.content);
         } catch (error) {
-          this.logger.error(`Failed to generate embedding for compacted memory`, { error });
+          this.logger.error(
+            `embed failed for ${config.AI.EMBED.PROVIDER}/${config.AI.EMBED.MODEL} while compacting; memory saved WITHOUT an embedding and will not surface in semantic memory — check the embed provider/model is reachable`,
+            { error },
+          );
         }
       }
 
