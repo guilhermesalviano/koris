@@ -222,6 +222,8 @@ export function useSettingsForm() {
   const [form, setForm] = useState<SettingsFormState>(DEFAULT_FORM);
   const [original, setOriginal] = useState<RuntimeSettings | null>(null);
   const [providers, setProviders] = useState<string[]>(['ollama', 'nvidia', 'openai', 'deepseek']);
+  // Channel names come from GET /capabilities (see `load`); no hardcoded list.
+  const [channels, setChannels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -246,6 +248,7 @@ export function useSettingsForm() {
       setOriginal(settings);
       setForm(mapRuntimeToForm(settings));
       if (capabilities?.providers?.length) setProviders(capabilities.providers);
+      if (capabilities?.channels?.length) setChannels(capabilities.channels);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load settings');
     } finally {
@@ -337,6 +340,7 @@ export function useSettingsForm() {
     update,
     original,
     providers,
+    channels,
     loading,
     loadError,
     reload: load,

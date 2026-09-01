@@ -99,7 +99,7 @@ export interface HeartbeatsResponse {
 
 export interface ChannelItem {
   id: string;
-  channel: 'telegram' | 'whatsapp';
+  channel: string;
   target: string;
   isPrincipal: boolean;
   createdAt: string;
@@ -112,7 +112,7 @@ export interface ChannelsResponse {
 
 export interface OutboundMessageItem {
   id: string;
-  channel: 'telegram' | 'whatsapp';
+  channel: string;
   target: string;
   content: string;
   status: 'sent' | 'failed';

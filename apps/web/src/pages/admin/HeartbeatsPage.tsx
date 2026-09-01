@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PageShell, Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
 import { apiRequest } from '../../lib/api';
+import { useChannelOptions } from '../../lib/use-channel-options';
 import type { HeartbeatsResponse } from '../../lib/types';
 
 export default function HeartbeatsPage() {
@@ -9,8 +10,9 @@ export default function HeartbeatsPage() {
   const [beat, setBeat] = useState('');
   const [cronExpression, setCronExpression] = useState('');
   const [type, setType] = useState<'reminder' | 'scheduled_beat'>('reminder');
-  const [channel, setChannel] = useState<'telegram' | 'whatsapp' | ''>('');
+  const [channel, setChannel] = useState('');
   const [target, setTarget] = useState('');
+  const channelOptions = useChannelOptions();
   const [toastMsg, showToast, isError] = useToast();
   const load = useCallback(async () => {
     setError(null);
@@ -88,21 +90,22 @@ export default function HeartbeatsPage() {
             <option value="reminder">reminder</option>
             <option value="scheduled_beat">scheduled_beat</option>
           </select>
-          <div className="flex gap-2 md:col-span-2">
+          <div className="flex flex-col gap-2 sm:flex-row md:col-span-2">
             <select
               value={channel}
-              onChange={(e) => setChannel(e.target.value as 'telegram' | 'whatsapp' | '')}
-              className="w-1/3 rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent"
+              onChange={(e) => setChannel(e.target.value)}
+              className="w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent sm:w-40"
             >
               <option value="">channel</option>
-              <option value="telegram">telegram</option>
-              <option value="whatsapp">whatsapp</option>
+              {channelOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder="chat id / jid (optional)"
-              className="flex-1 rounded-lg border border-strong bg-bg-3 px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+              className="w-full flex-1 rounded-lg border border-strong bg-bg-3 px-3 py-2 font-mono text-sm outline-none focus:border-accent"
             />
           </div>
           <button type="submit" className="rounded-lg bg-accent px-3 py-2 text-sm font-medium hover:opacity-90 md:col-span-4">

@@ -15,7 +15,7 @@ export default function ChannelsPage() {
   const [error, setError] = useState<string | null>(null);
   const [outbound, setOutbound] = useState<OutboundResponse | null>(null);
   const [outboundError, setOutboundError] = useState<string | null>(null);
-  const [channel, setChannel] = useState<'telegram' | 'whatsapp' | ''>('');
+  const [channel, setChannel] = useState('');
   const [target, setTarget] = useState('');
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
@@ -185,22 +185,23 @@ export default function ChannelsPage() {
       <SectionTitle>Outbound messages</SectionTitle>
       <Card>
         <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">Start a message</div>
-        <form onSubmit={sendMessage} className="grid grid-cols-1 gap-2 md:grid-cols-3">
-          <div className="flex gap-2">
+        <form onSubmit={sendMessage} className="space-y-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <select
               value={channel}
-              onChange={(e) => setChannel(e.target.value as 'telegram' | 'whatsapp' | '')}
-              className="w-1/3 rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent"
+              onChange={(e) => setChannel(e.target.value)}
+              className="w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent sm:w-44"
             >
               <option value="">channel</option>
-              <option value="telegram">telegram</option>
-              <option value="whatsapp">whatsapp</option>
+              {settings.channels.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder="chat id / jid"
-              className="flex-1 rounded-lg border border-strong bg-bg-3 px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+              className="w-full flex-1 rounded-lg border border-strong bg-bg-3 px-3 py-2 font-mono text-sm outline-none focus:border-accent"
             />
           </div>
           <textarea
@@ -209,12 +210,12 @@ export default function ChannelsPage() {
             onChange={(e) => setContent(e.target.value)}
             placeholder="Message content"
             rows={2}
-            className="rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent"
+            className="w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent"
           />
           <button
             type="submit"
             disabled={sending}
-            className="rounded-lg bg-accent px-3 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-60"
+            className="w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-60 sm:w-auto"
           >
             {sending ? 'Sending…' : 'Send'}
           </button>
