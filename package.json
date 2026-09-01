@@ -69,23 +69,23 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "@stryker-mutator/core": "^9.6.1",
-    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/better-sqlite3": "^7.6.13",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.6",
-    "@types/node": "^25.6.2",
+    "@types/node": "^26.4.0",
     "@types/qrcode-terminal": "^0.12.2",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.0.5",
-    "@vitest/coverage-v8": "4.1.5",
-    "@vitest/ui": "^4.1.5",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "4.1.11",
+    "@vitest/ui": "^4.1.11",
     "tailwindcss": "^4.3.3",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.3",
-    "vite": "^8.2.1",
-    "vitest": "^4.1.5"
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   }
 }
