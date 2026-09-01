@@ -62,18 +62,25 @@ class MessageGateway implements IMessageGateway {
 
     this.channelService.record(channel, originId);
 
+    const sessionCtx: SessionContext = { sessionService, messageService, memoryService };
+
     if (isCommand(safeMessage)) {
-      const commandResult = handleCommand(safeMessage, { source: channel, trusted: !!options?.toolsEnabled });
+      const commandResult = handleCommand(safeMessage, {
+        source: channel,
+        trusted: !!options?.toolsEnabled,
+        originId,
+      });
 
       if (commandResult.action === 'compact') {
-        return this.handleCompact(
-          { sessionService, messageService, memoryService },
-          safeMessage,
-          images,
-          channel,
-          commandResult.response || '',
-          options,
-        );
+        return this.handleCompact(sessionCtx, safeMessage, images, channel, commandResult.response || '', options);
+      }
+
+      if (commandResult.action === 'clear') {
+        return this.handleClear(sessionCtx, safeMessage, images, channel, commandResult.response || '', options);
+      }
+
+      if (commandResult.action === 'memory') {
+        return this.handleMemory(sessionCtx, safeMessage, images, channel);
       }
 
       const response = commandResult.response || '';
@@ -89,7 +96,6 @@ class MessageGateway implements IMessageGateway {
 
     const runId = options?.runId ?? generateId();
     const turnOptions = { ...options, runId };
-    const sessionCtx: SessionContext = { sessionService, messageService, memoryService };
 
     // Manual-mode safety valve (proactive): if the session is near the manager's
     // context window, summarize it into memory and start fresh before this turn.
@@ -217,6 +223,62 @@ class MessageGateway implements IMessageGateway {
     });
 
     return confirmation;
+  }
+
+  // `/clear`: drop the current thread entirely — rotate into a fresh, empty
+  // session with no summary carried forward. The command exchange is recorded
+  // against the old session so the new one starts clean.
+  private handleClear(
+    ctx: SessionContext,
+    safeMessage: string,
+    images: ImageAttachment[] | undefined,
+    channel: string,
+    confirmation: string,
+    options?: ProcessOptions,
+  ): ProcessedMessage {
+    if (ctx.messageService.getHistory().length === 0) {
+      return 'This session is already empty.';
+    }
+
+    const clearedSessionId = ctx.sessionService.getSession().id;
+    this.backgroundDispatcher.persistConversation({
+      sessionId: clearedSessionId,
+      ask: safeMessage,
+      askImages: images,
+      answer: confirmation,
+      channel,
+    });
+
+    ctx.sessionService.forceRotate();
+    const freshSessionId = ctx.sessionService.getSession().id;
+    options?.onSessionRotated?.(freshSessionId);
+    this.logger.info(`Cleared session ${clearedSessionId} → ${freshSessionId} (${channel})`);
+
+    return confirmation;
+  }
+
+  // `/memory`: surface the summary a prior `/compact` (or the auto-compaction
+  // valve) seeded into this session, so compaction is not a black box.
+  private handleMemory(
+    ctx: SessionContext,
+    safeMessage: string,
+    images: ImageAttachment[] | undefined,
+    channel: string,
+  ): ProcessedMessage {
+    const summary = metadataString(ctx.messageService.getSessionMetadata(), 'compactSummary');
+    const response = summary
+      ? `Summary carried into this session:\n\n${summary}`
+      : "Nothing summarized into this session yet — it hasn't been compacted.";
+
+    this.backgroundDispatcher.persistConversation({
+      sessionId: ctx.sessionService.getSession().id,
+      ask: safeMessage,
+      askImages: images,
+      answer: response,
+      channel,
+    });
+
+    return response;
   }
 
   // Summarize the current session into a memory and rotate into a fresh one

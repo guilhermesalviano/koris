@@ -3,10 +3,17 @@ import { getAvailableCommands, handleCommand, isCommand } from '../../../../src/
 
 describe('Command Handler', () => {
   describe('isCommand', () => {
-    it('should recognize commands starting with /', () => {
+    it('recognizes known commands and their aliases', () => {
       expect(isCommand('/start')).toBe(true);
       expect(isCommand('/help')).toBe(true);
       expect(isCommand('/status')).toBe(true);
+      expect(isCommand('/reset')).toBe(true); // alias of /clear
+      expect(isCommand('/USAGE 7')).toBe(true); // case- and arg-insensitive
+    });
+
+    it('does not recognize an unknown slash message — it flows to the agent', () => {
+      expect(isCommand('/shrug')).toBe(false);
+      expect(isCommand('/path/to/file.ts')).toBe(false);
     });
 
     it('should not recognize non-commands', () => {
@@ -46,10 +53,38 @@ describe('Command Handler', () => {
       expect(result.action).toBe('clear');
     });
 
-    it('should handle /reset command', () => {
+    it('treats /reset as an alias of /clear', () => {
       const result = handleCommand('/reset', { source: 'tui' });
       expect(result.handled).toBe(true);
-      expect(result.action).toBe('reset');
+      expect(result.action).toBe('clear');
+    });
+
+    it('handles /whoami with the sender access level', () => {
+      const trusted = handleCommand('/whoami', { source: 'tui', trusted: true, originId: 'user-9' });
+      expect(trusted.handled).toBe(true);
+      expect(trusted.response).toContain('trusted');
+      expect(trusted.response).toContain('user-9');
+
+      const standard = handleCommand('/whoami', { source: 'telegram', trusted: false });
+      expect(standard.response?.toLowerCase()).toContain('standard');
+    });
+
+    it('handles /memory by delegating to the gateway via a memory action', () => {
+      const result = handleCommand('/memory', { source: 'tui' });
+      expect(result.handled).toBe(true);
+      expect(result.action).toBe('memory');
+    });
+
+    it('gives per-command detail for /help <command>', () => {
+      const result = handleCommand('/help compact', { source: 'tui' });
+      expect(result.handled).toBe(true);
+      expect(result.response).toContain('/compact');
+      expect(result.response).toContain('summary');
+    });
+
+    it('reports an unknown argument to /help', () => {
+      const result = handleCommand('/help nope', { source: 'tui' });
+      expect(result.response).toContain('Unknown command: nope');
     });
 
     it('should handle /compact command', () => {
@@ -71,17 +106,15 @@ describe('Command Handler', () => {
       expect(result.response).toContain('Usage: /allow');
     });
 
-    it('should handle /exit command for TUI', () => {
-      const result = handleCommand('/exit', { source: 'tui' });
-      expect(result.handled).toBe(true);
-      expect(result.action).toBe('exit');
-    });
+    it('answers /exit with guidance rather than a fake exit action', () => {
+      const tui = handleCommand('/exit', { source: 'tui' });
+      expect(tui.handled).toBe(true);
+      expect(tui.action).toBe('none');
+      expect(tui.response).toContain('Ctrl+C');
 
-    it('should not allow /exit for Telegram', () => {
-      const result = handleCommand('/exit', { source: 'telegram' });
-      expect(result.handled).toBe(true);
-      expect(result.response).toBeTruthy();
-      expect(result.action).toBe('none');
+      const telegram = handleCommand('/exit', { source: 'telegram' });
+      expect(telegram.action).toBe('none');
+      expect(telegram.response).toBeTruthy();
     });
 
     it('should handle unknown commands', () => {
@@ -136,17 +169,26 @@ describe('Command Handler', () => {
       expect(commands.length).toBeGreaterThan(0);
     });
 
-    it('should return common commands for both interfaces', () => {
+    it('shares the core commands across interfaces', () => {
       const tuiCommands = getAvailableCommands('tui');
       const telegramCommands = getAvailableCommands('telegram');
-      
-      expect(tuiCommands).toContain('/start');
-      expect(tuiCommands).toContain('/help');
-      expect(tuiCommands).toContain('/compact');
 
-      expect(telegramCommands).toContain('/start');
-      expect(telegramCommands).toContain('/help');
-      expect(telegramCommands).toContain('/compact');
+      for (const cmd of ['/help', '/compact', '/clear', '/usage']) {
+        expect(tuiCommands).toContain(cmd);
+        expect(telegramCommands).toContain(cmd);
+      }
+    });
+
+    it('scopes channel-specific commands to their channel', () => {
+      expect(getAvailableCommands('telegram')).toContain('/start');
+      expect(getAvailableCommands('tui')).not.toContain('/start');
+
+      expect(getAvailableCommands('tui')).toContain('/exit');
+      expect(getAvailableCommands('telegram')).not.toContain('/exit');
+    });
+
+    it('includes aliases so completion resolves them', () => {
+      expect(getAvailableCommands('tui')).toContain('/reset');
     });
   });
 
@@ -164,10 +206,10 @@ describe('Command Handler', () => {
       const clearResult = handleCommand('/clear', { source: 'tui' });
       const resetResult = handleCommand('/reset', { source: 'tui' });
       const helpResult = handleCommand('/help', { source: 'tui' });
-      
-      expect(exitResult.action).toBe('exit');
+
+      expect(exitResult.action).toBe('none');
       expect(clearResult.action).toBe('clear');
-      expect(resetResult.action).toBe('reset');
+      expect(resetResult.action).toBe('clear');
       expect(helpResult.action).toBe('none');
     });
   });

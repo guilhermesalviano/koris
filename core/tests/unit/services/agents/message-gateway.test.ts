@@ -358,6 +358,63 @@ describe('MessageGateway', () => {
     });
   });
 
+  describe('/clear', () => {
+    it('rotates into a fresh empty session, notifies the caller, and persists under the old session', async () => {
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'hi' }] as never);
+      deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
+      deps.sessionService.getSession
+        .mockReturnValueOnce({ id: 'session-1' })
+        .mockReturnValue({ id: 'session-2' });
+      const onSessionRotated = vi.fn();
+
+      const result = await gateway.handle('/clear', 'origin-1', { onSessionRotated });
+
+      expect(deps.mainAgent.run).not.toHaveBeenCalled();
+      expect(deps.backgroundDispatcher.compactConversation).not.toHaveBeenCalled();
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith();
+      expect(onSessionRotated).toHaveBeenCalledWith('session-2');
+      expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'session-1', ask: '/clear' }),
+      );
+      expect(result).toContain('fresh session');
+    });
+
+    it('is a no-op on an already-empty session', async () => {
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([]);
+
+      const result = await gateway.handle('/clear', 'origin-1');
+
+      expect(deps.sessionService.forceRotate).not.toHaveBeenCalled();
+      expect(result).toBe('This session is already empty.');
+    });
+  });
+
+  describe('/memory', () => {
+    it('replies with the summary carried into the session', async () => {
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getSessionMetadata.mockReturnValue({ compactSummary: 'we discussed the parser' });
+
+      const result = await gateway.handle('/memory', 'origin-1');
+
+      expect(deps.mainAgent.run).not.toHaveBeenCalled();
+      expect(result).toContain('we discussed the parser');
+      expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
+        expect.objectContaining({ ask: '/memory' }),
+      );
+    });
+
+    it('says so when nothing has been compacted into the session', async () => {
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getSessionMetadata.mockReturnValue({});
+
+      const result = await gateway.handle('/memory', 'origin-1');
+
+      expect(result).toContain("hasn't been compacted");
+    });
+  });
+
   describe('manual-mode auto-compact safety valve', () => {
     let originalNumCtx: number;
     let originalThreshold: number;
