@@ -3,3 +3,4 @@ export * from './main-agent';
 export * from './sub-agents';
 export * from './prompt';
 export * from './http-errors';
+export * from './commands';
