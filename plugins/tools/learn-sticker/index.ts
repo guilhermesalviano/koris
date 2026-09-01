@@ -71,7 +71,7 @@ export function create(context: ToolPluginContext): Plugin {
           },
         },
         handler: (logger, args, execContext) => learnSticker(logger, args, execContext, context.stickerRules),
-        enabled: (opts) => opts.trusted && opts.stickersEnabled && context.pluginEnablement.isEnabled('learn-sticker'),
+        enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('learn-sticker'),
       });
       registry.extend(COMMANDS, definition);
     },

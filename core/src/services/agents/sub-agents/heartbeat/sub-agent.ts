@@ -137,13 +137,12 @@ class Heartbeat implements ISubAgent<Date> {
 class HeartbeatFactory {
   static create(logger: ILogger, channelsManager: IChannelsManager): Heartbeat {
     const db = DatabaseServiceFactory.create();
-    const aiProvider = getAIProvider(logger, 'worker', { background: true });
-    const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
+    const promptRepository = PromptRepositoryFactory.create(db, logger, getAIProvider(logger, 'embed'));
     const heartbeatRepository = HeartbeatRepositoryFactory.create(db);
     const agnosticExecutionTool = AgnosticExecutionToolFactory.create();
     const toolsQueue = new ToolsQueue(logger, agnosticExecutionTool);
 
-    const completionService = new AICompletionService(aiProvider, logger, { role: 'worker', agentName: 'heartbeat' });
+    const completionService = new AICompletionService(() => getAIProvider(logger, 'worker', { background: true }), logger, { role: 'worker', agentName: 'heartbeat' });
     const pipeline = ToolCallPipelineFactory.create(logger);
     const channelService = ChannelServiceFactory.create(db);
     const imageRepository = ImageRepositoryFactory.create(db);

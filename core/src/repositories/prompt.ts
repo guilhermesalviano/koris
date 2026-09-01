@@ -33,7 +33,6 @@ interface BuildPromptParams {
   images?: ImageAttachment[];
   toolsEnabled?: boolean;
   learnedSkillsEnabled?: boolean;
-  stickersEnabled?: boolean;
   messageHistory?: Message[];
   includeBeatTools?: boolean;
   sessionId?: string;
@@ -58,7 +57,7 @@ class PromptRepository implements IPromptRepository {
     private learnedSkillsRepository: ILearnedSkillsRepository,
     private stickerRulesRepository: IStickerRulesRepository,
     private memoryRepository: IMemoryRepository,
-    private aiProvider: AIProvider,
+    private embedProvider: AIProvider,
     private logger: ILogger,
   ) {}
 
@@ -83,7 +82,7 @@ class PromptRepository implements IPromptRepository {
     extraSystemBlocks,
     toolResults,
     learnedSkillsEnabled,
-    stickersEnabled,
+    toolsEnabled,
   }: BuildPromptParams): Promise<Message[]> {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
 
@@ -101,12 +100,11 @@ class PromptRepository implements IPromptRepository {
     const learnedSkills = this.buildLearnedSkills({ learnedSkillsEnabled });
     if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
 
-    const stickerToolsAllowed = this.isStickerContentAllowed(stickersEnabled);
-    const stickerRules = stickerToolsAllowed ? this.buildStickerRules(channel) : '';
+    const stickerRules = (toolsEnabled ?? true) ? this.buildStickerRules(channel) : '';
     if (stickerRules) systemBlocks.push(`# Learned Stickers\n${stickerRules}`);
 
     const memory = await this.buildMemoryContext(userMessage, sessionId);
-    if (memory) systemBlocks.push(`# Cross-session Memory Context\n${memory}`);
+    if (memory) systemBlocks.push(`# Long-term Memory Context\n${memory}`);
 
     const context = this.contextRepository.get({ channel });
     if (context) systemBlocks.push(`# Session Context\n${context}`);
@@ -201,19 +199,15 @@ class PromptRepository implements IPromptRepository {
   }
 
   private async buildMemoryContext(userMessage: string, sessionId?: string): Promise<string> {
-    if (config.AI.WORKERS.EMBEDDING_ENABLED) {
+    if (config.AI.EMBED.ENABLED) {
       try {
-        const queryEmbedding = await this.aiProvider.embed(userMessage);
+        const queryEmbedding = await this.embedProvider.embed(userMessage);
         const memories = this.memoryRepository.search(queryEmbedding, MEMORY_CONTEXT_LIMIT, sessionId);
-
-        if (memories.length === 0) {
-          return '';
+        if (memories.length > 0) {
+          return this.formatMemories(memories);
         }
-
-        return this.formatMemories(memories);
       } catch (e) {
-        this.logger.warn('Failed to embed user message for memory retrieval', { error: e instanceof Error ? e.message : String(e) });
-        return '';
+        this.logger.warn('Failed to embed user message for memory retrieval; falling back to recent memories', { error: e instanceof Error ? e.message : String(e) });
       }
     }
 
@@ -246,33 +240,23 @@ class PromptRepository implements IPromptRepository {
     return contextString.trim().slice(0, 15000);
   }
 
-  private buildTools({ toolsEnabled, includeBeatTools, stickersEnabled }: BuildPromptParams): AIToolDefinition[] | undefined {
-    const toolsEnabledFinal = toolsEnabled ?? true;
-    const stickerToolsAllowed = this.isStickerContentAllowed(stickersEnabled);
-
-    if (!toolsEnabledFinal) {
-      return stickerToolsAllowed ? this.toolsRepository.getStickerTools() : undefined;
+  private buildTools({ toolsEnabled, includeBeatTools }: BuildPromptParams): AIToolDefinition[] | undefined {
+    if (!(toolsEnabled ?? true)) {
+      return undefined;
     }
 
-    return this.toolsRepository.getAll({
-      includeBeatTools,
-      includeStickerTools: stickerToolsAllowed,
-    });
-  }
-
-  private isStickerContentAllowed(stickersEnabled?: boolean): boolean {
-    return config.STICKERS.ENABLED && (stickersEnabled ?? true);
+    return this.toolsRepository.getAll({ includeBeatTools });
   }
 }
 
 class PromptRepositoryFactory {
-  static create(db: IDatabaseService, logger: ILogger, aiProvider: AIProvider): PromptRepository {
+  static create(db: IDatabaseService, logger: ILogger, embedProvider: AIProvider): PromptRepository {
     const contextRepository = ContextRepositoryFactory.create();
     const toolsRepository = ToolsRepositoryFactory.create();
     const learnedSkillsRepository = LearnedSkillsRepositoryFactory.create(db);
     const stickerRulesRepository = StickerRulesRepositoryFactory.create(db);
-    const memoryRepository = MemoryRepositoryFactory.create(db);
-    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, stickerRulesRepository, memoryRepository, aiProvider, logger);
+    const memoryRepository = MemoryRepositoryFactory.create(db, logger);
+    return new PromptRepository(contextRepository, toolsRepository, learnedSkillsRepository, stickerRulesRepository, memoryRepository, embedProvider, logger);
   }
 }
 

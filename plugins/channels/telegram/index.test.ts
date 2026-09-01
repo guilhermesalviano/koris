@@ -68,8 +68,7 @@ function setupRuntime(replyText = 'Assistant reply', opts: { allowUntrusted?: bo
   const { factory, calls } = makeChannelHandlerFactory(replyText);
   configureTelegramRuntime({
     channelHandler: factory,
-    allowUntrusted: opts.allowUntrusted ?? true,
-    config: { token: 'TEST_TOKEN', whitelist: '' },
+    config: { token: 'TEST_TOKEN', whitelist: '', allowUnlistedSenders: opts.allowUntrusted ?? true },
   });
   if (opts.whitelist) {
     _setTelegramWhitelistForTesting(opts.whitelist);
@@ -207,13 +206,12 @@ describe('telegram plugin', () => {
 
     const plugin = create(
       {
-        allowUntrusted: true,
         logger: makeLogger(),
         gateway,
         channelHandler: makeChannelHandlerFactory('n/a').factory,
         pluginEnablement: { isEnabled: () => true },
       },
-      { token: 'TEST_TOKEN', whitelist: '' },
+      { token: 'TEST_TOKEN', whitelist: '', allowUnlistedSenders: true },
     );
     plugin.setup(fakeRegistry);
 
@@ -230,8 +228,8 @@ describe('telegram plugin', () => {
     const factory = makeChannelHandlerFactory('n/a').factory;
 
     const plugin = create(
-      { allowUntrusted: true, logger, gateway, channelHandler: factory, pluginEnablement: { isEnabled: () => true } },
-      { token: '', whitelist: '' },
+      { logger, gateway, channelHandler: factory, pluginEnablement: { isEnabled: () => true } },
+      { token: '', whitelist: '', allowUnlistedSenders: true },
     );
 
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('[telegram]'));
@@ -244,8 +242,8 @@ describe('telegram plugin', () => {
 
   it('is disabled when administratively disabled, even with a valid token', () => {
     const plugin = create(
-      { allowUntrusted: true, logger: makeLogger(), gateway, channelHandler: makeChannelHandlerFactory('n/a').factory, pluginEnablement: { isEnabled: () => false } },
-      { token: 'TEST_TOKEN', whitelist: '' },
+      { logger: makeLogger(), gateway, channelHandler: makeChannelHandlerFactory('n/a').factory, pluginEnablement: { isEnabled: () => false } },
+      { token: 'TEST_TOKEN', whitelist: '', allowUnlistedSenders: true },
     );
 
     let registered: ChannelDefinition | undefined;

@@ -1,5 +1,5 @@
 import type { TelegramMessage } from '@guilhermesalviano/telegram-bot';
-import type { ILogger, IMessageGateway, Plugin, PluginContext } from '../contracts';
+import type { ILogger, IMessageGateway, LiveChannelDescriptor, Plugin, PluginContext } from '../contracts';
 import { createTelegramPlugin } from './adapter';
 import { TelegramChannel } from './channel';
 import { loadTelegramConfig, writeTelegramConfigPatch, type TelegramPluginConfig } from './config';
@@ -50,6 +50,18 @@ export {
   _setTelegramWhitelistForTesting,
 };
 
+export const liveChannel: LiveChannelDescriptor = {
+  name: 'telegram',
+  configureRuntime: ({ channelHandler }) =>
+    configureTelegramRuntime({ channelHandler }) as unknown as Record<string, unknown>,
+  start: ({ channelHandler, gateway, logger }) => {
+    const cfg = configureTelegramRuntime({ channelHandler });
+    return TelegramChannelFactory.start({ token: cfg.token, gateway, logger });
+  },
+  loadConfig: () => loadTelegramConfig() as unknown as Record<string, unknown>,
+  writeConfigPatch: (patch) => writeTelegramConfigPatch(patch),
+};
+
 export function create(context: PluginContext, configOverride?: TelegramPluginConfig): Plugin {
   const cfg = configOverride ?? loadTelegramConfig();
 
@@ -65,7 +77,6 @@ export function create(context: PluginContext, configOverride?: TelegramPluginCo
 
   configureTelegramRuntime({
     channelHandler: context.channelHandler,
-    allowUntrusted: context.allowUntrusted,
     config: cfg,
   });
 

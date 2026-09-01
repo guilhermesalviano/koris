@@ -45,8 +45,18 @@ elif [ "$SOURCE_SETTINGS" != "" ] && [ ! -f "${SETTINGS_FILE}" ]; then
   echo "Generated secret_key in ${SETTINGS_FILE}"
 fi
 
-# Check if SearXNG is already running
-if docker compose -f "${COMPOSE_FILE}" ps --services --filter "status=running" | grep -q "^searxng$"; then
+# `--restart` forces a full recreate (down + up) even if a container is
+# already running — needed when it's up but misconfigured (e.g. its bind
+# mount pointed at a stale path and it fell back to SearXNG's bare defaults,
+# which silently disables the JSON API and causes HTTP 403s). Without this
+# flag, an already-running container is left untouched, since a plain restart
+# isn't needed in the common case.
+if [ "${1:-}" = "--restart" ]; then
+  echo "Restarting SearXNG container..."
+  # set -e means a failing `down` aborts here rather than falling through to
+  # `up -d` — a failed stop is reported as a failure, not silently retried.
+  docker compose -f "${COMPOSE_FILE}" down
+elif docker compose -f "${COMPOSE_FILE}" ps --services --filter "status=running" | grep -q "^searxng$"; then
   echo "SearXNG is already running."
   echo "API URL: http://localhost:8080"
   exit 0

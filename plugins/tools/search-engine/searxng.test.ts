@@ -150,14 +150,46 @@ describe('search_engine tool (SearXNG provider)', () => {
     expect(result.result).toBe('No search results found.');
   });
 
-  it('returns error when the HTTP response is not ok', async () => {
+  it('returns a specific, actionable error for HTTP 403', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}, false, 403));
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await search({ query: 'test query' });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('403');
+    expect(result.error).toContain('HTTP 403');
+    expect(result.error).toContain('restart_search_engine');
+  });
+
+  it('returns a specific, actionable error when the server is unreachable', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(Object.assign(new Error('fetch failed'), { cause: { code: 'ECONNREFUSED' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await search({ query: 'test query' });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Couldn't connect to the SearXNG server");
+    expect(result.error).toContain('restart_search_engine');
+  });
+
+  it('returns the raw error for a fetch failure unrelated to connectivity', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('invalid URL'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await search({ query: 'test query' });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('invalid URL');
+  });
+
+  it('returns a generic error for other non-ok statuses', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}, false, 500));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await search({ query: 'test query' });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('500');
   });
 
   it('returns error when query is missing', async () => {

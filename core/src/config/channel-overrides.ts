@@ -7,8 +7,9 @@ export interface ChannelOverride {
 /**
  * Optional `channels.overrides` array in koris.json:
  *   { "channels": { "overrides": [{ "id": "telegram", "enabled": false }] } }
- * (nested under the existing `channels` object, which already holds
- * `allow_untrusted` — a top-level `channels` array would collide with it.)
+ * (kept nested under a `channels` object rather than a top-level `channels`
+ * array so the key can grow other channel-scoped settings later without a
+ * breaking shape change.)
  *
  * This is a thin, additive override on top of each channel's DB-backed
  * enablement (`core/src/services/plugins/plugin-enablement.ts`) — not a

@@ -226,18 +226,19 @@ describe('onboarding settings draft', () => {
           },
         },
         ai: {
-          manager: {
-            provider: 'ollama',
-            base_url: 'http://localhost:11434',
-            api_token: '',
-            model: 'gemma4:e4b',
+          providers: [
+            {
+              provider: 'ollama',
+              base_url: 'http://localhost:11434',
+              api_token: '',
+              model: 'gemma4:e4b',
+            },
+          ],
+          roles: {
+            manager: { provider: 'ollama' },
+            workers: { provider: 'ollama' },
           },
-          workers: {
-            provider: 'ollama',
-            base_url: 'http://localhost:11434',
-            api_token: '',
-            model: 'qwen:3.5:2b',
-          },
+          embed: { enabled: false, provider: 'ollama', model: 'nomic-embed-text' },
         },
         personal_information: {
           name: 'John Doe',
@@ -254,18 +255,19 @@ describe('onboarding settings draft', () => {
         },
       },
       ai: {
-        manager: {
-          provider: 'ollama',
-          base_url: 'http://localhost:11434',
-          api_token: '',
-          model: 'gemma4:e4b',
+        providers: [
+          {
+            provider: 'ollama',
+            base_url: 'http://localhost:11434',
+            api_token: 'YOUR_CHAT_ID',
+            model: 'gemma4:e4b',
+          },
+        ],
+        roles: {
+          manager: { provider: 'ollama' },
+          workers: { provider: 'ollama' },
         },
-        workers: {
-          provider: 'ollama',
-          base_url: 'http://localhost:11434',
-          api_token: '',
-          model: 'qwen:3.5:2b',
-        },
+        embed: { enabled: false, provider: 'ollama', model: 'nomic-embed-text' },
       },
       personal_information: {
         name: 'Joe Doe',
@@ -304,18 +306,19 @@ describe('onboarding settings draft', () => {
         },
       },
       ai: {
-        manager: {
-          provider: 'ollama',
-          base_url: 'http://localhost:11434',
-          api_token: '',
-          model: 'gemma4:e4b',
+        providers: [
+          {
+            provider: 'ollama',
+            base_url: 'http://localhost:11434',
+            api_token: '',
+            model: 'gemma4:e4b',
+          },
+        ],
+        roles: {
+          manager: { provider: 'ollama' },
+          workers: { provider: 'ollama' },
         },
-        workers: {
-          provider: 'ollama',
-          base_url: 'http://localhost:11434',
-          api_token: '',
-          model: 'qwen:3.5:2b',
-        },
+        embed: { enabled: false, provider: 'ollama', model: 'nomic-embed-text' },
       },
       personal_information: {
         name: 'John Doe',
@@ -341,18 +344,19 @@ describe('onboarding settings draft', () => {
       heartbeat: true,
       channels: {},
       ai: {
-        manager: {
-          provider: 'ollama',
-          base_url: 'http://localhost:11434',
-          api_token: '',
-          model: 'gemma4:e4b',
+        providers: [
+          {
+            provider: 'ollama',
+            base_url: 'http://localhost:11434',
+            api_token: '',
+            model: 'gemma4:e4b',
+          },
+        ],
+        roles: {
+          manager: { provider: 'ollama' },
+          workers: { provider: 'ollama' },
         },
-        workers: {
-          provider: 'ollama',
-          base_url: 'http://localhost:11434',
-          api_token: '',
-          model: 'qwen:3.5:2b',
-        },
+        embed: { enabled: false, provider: 'ollama', model: 'nomic-embed-text' },
       },
       personal_information: {
       },

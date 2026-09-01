@@ -99,7 +99,7 @@ export interface HeartbeatsResponse {
 
 export interface ChannelItem {
   id: string;
-  channel: 'telegram' | 'whatsapp';
+  channel: string;
   target: string;
   isPrincipal: boolean;
   createdAt: string;
@@ -112,7 +112,7 @@ export interface ChannelsResponse {
 
 export interface OutboundMessageItem {
   id: string;
-  channel: 'telegram' | 'whatsapp';
+  channel: string;
   target: string;
   content: string;
   status: 'sent' | 'failed';
@@ -149,7 +149,7 @@ export interface PluginsResponse {
   items: PluginItem[];
 }
 
-export interface ConnectorCatalogEntry {
+export interface ProviderCatalogEntry {
   name: string;
   label: string;
   defaultBaseUrl?: string;
@@ -159,20 +159,28 @@ export interface ConnectorCatalogEntry {
   apiKeyUrl?: string;
   docsUrl?: string;
   configured: boolean;
+  /** The single model saved for this provider in koris.json's ai.providers[] (empty when unconfigured). */
+  model: string;
+  /** base_url saved for this provider (empty string means "use the shipped default"). */
+  storedBaseUrl: string;
+  /** Whether a non-empty api_token is saved for this provider. */
+  hasToken: boolean;
 }
 
-export interface ActiveConnector {
+export interface ActiveProvider {
   provider: string;
   model: string;
   baseUrl: string;
   hasToken: boolean;
 }
 
-export type ConnectorRole = 'manager' | 'workers';
+export type ProviderRole = 'manager' | 'workers';
 
-export interface ConnectorsResponse {
-  connectors: ConnectorCatalogEntry[];
-  active: Record<ConnectorRole, ActiveConnector>;
+export interface ProvidersResponse {
+  providers: ProviderCatalogEntry[];
+  active: Record<ProviderRole, ActiveProvider> & {
+    embed: ActiveProvider & { enabled: boolean };
+  };
 }
 
 export interface ActiveRun {

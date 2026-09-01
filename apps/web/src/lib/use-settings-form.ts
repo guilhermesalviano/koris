@@ -16,8 +16,8 @@ export interface RuntimeSettings {
     SEARCH_API_KEY?: string;
   };
   CHANNELS?: {
-    TELEGRAM?: { ENABLED?: boolean; BOT_TOKEN?: string; WHITELIST?: string };
-    WHATSAPP?: { ENABLED?: boolean; WHITELIST?: string; MENTION_ID?: string };
+    TELEGRAM?: { ENABLED?: boolean; BOT_TOKEN?: string; WHITELIST?: string; ALLOW_UNLISTED_SENDERS?: boolean };
+    WHATSAPP?: { ENABLED?: boolean; WHITELIST?: string; MENTION_ID?: string; ALLOW_UNLISTED_SENDERS?: boolean };
   };
   ALLOWED_DOMAINS?: string[];
   PERSONAL_INFORMATION?: Record<string, string>;
@@ -35,8 +35,8 @@ export interface SettingsFormState {
   manager: AiProfileForm;
   workers: AiProfileForm;
   search_api_key: string;
-  telegram: { bot_token: string; whitelist: string };
-  whatsapp: { mention_id: string; whitelist: string };
+  telegram: { bot_token: string; whitelist: string; allow_unlisted_senders: boolean };
+  whatsapp: { mention_id: string; whitelist: string; allow_unlisted_senders: boolean };
   allowed_domains: string[];
   personal_information: Record<string, string>;
 }
@@ -48,8 +48,8 @@ export const DEFAULT_FORM: SettingsFormState = {
   manager: { ...EMPTY_PROFILE },
   workers: { ...EMPTY_PROFILE },
   search_api_key: '',
-  telegram: { bot_token: '', whitelist: '' },
-  whatsapp: { mention_id: '', whitelist: '' },
+  telegram: { bot_token: '', whitelist: '', allow_unlisted_senders: false },
+  whatsapp: { mention_id: '', whitelist: '', allow_unlisted_senders: false },
   allowed_domains: [],
   personal_information: {},
 };
@@ -87,10 +87,12 @@ export function mapRuntimeToForm(data: RuntimeSettings): SettingsFormState {
     telegram: {
       bot_token: secretFieldDefault(data.CHANNELS?.TELEGRAM?.BOT_TOKEN),
       whitelist: data.CHANNELS?.TELEGRAM?.WHITELIST ?? '',
+      allow_unlisted_senders: data.CHANNELS?.TELEGRAM?.ALLOW_UNLISTED_SENDERS ?? false,
     },
     whatsapp: {
       mention_id: data.CHANNELS?.WHATSAPP?.MENTION_ID ?? '',
       whitelist: data.CHANNELS?.WHATSAPP?.WHITELIST ?? '',
+      allow_unlisted_senders: data.CHANNELS?.WHATSAPP?.ALLOW_UNLISTED_SENDERS ?? false,
     },
     allowed_domains: data.ALLOWED_DOMAINS ?? [],
     personal_information: data.PERSONAL_INFORMATION ?? {},
@@ -107,9 +109,12 @@ function buildProfilePatch(profile: AiProfileForm): Record<string, unknown> {
   return patch;
 }
 
-/** Channel-only slice of the settings payload (telegram/whatsapp secrets + whitelists). */
+/** Channel-only slice of the settings payload (telegram/whatsapp secrets + whitelists + trust policy). */
 export function buildChannelsPatch(form: SettingsFormState): Record<string, unknown> {
-  const telegram: Record<string, unknown> = { whitelist: form.telegram.whitelist };
+  const telegram: Record<string, unknown> = {
+    whitelist: form.telegram.whitelist,
+    allow_unlisted_senders: form.telegram.allow_unlisted_senders,
+  };
   if (form.telegram.bot_token) telegram.bot_token = form.telegram.bot_token;
 
   return {
@@ -118,6 +123,7 @@ export function buildChannelsPatch(form: SettingsFormState): Record<string, unkn
       whatsapp: {
         mention_id: form.whatsapp.mention_id,
         whitelist: form.whatsapp.whitelist,
+        allow_unlisted_senders: form.whatsapp.allow_unlisted_senders,
       },
     },
   };
@@ -152,10 +158,12 @@ export function buildSettingsPatch(form: SettingsFormState): Record<string, unkn
     channels: {
       telegram: {
         whitelist: form.telegram.whitelist,
+        allow_unlisted_senders: form.telegram.allow_unlisted_senders,
       },
       whatsapp: {
         mention_id: form.whatsapp.mention_id,
         whitelist: form.whatsapp.whitelist,
+        allow_unlisted_senders: form.whatsapp.allow_unlisted_senders,
       },
     },
   };
@@ -214,6 +222,8 @@ export function useSettingsForm() {
   const [form, setForm] = useState<SettingsFormState>(DEFAULT_FORM);
   const [original, setOriginal] = useState<RuntimeSettings | null>(null);
   const [providers, setProviders] = useState<string[]>(['ollama', 'nvidia', 'openai', 'deepseek']);
+  // Channel names come from GET /capabilities (see `load`); no hardcoded list.
+  const [channels, setChannels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -238,6 +248,7 @@ export function useSettingsForm() {
       setOriginal(settings);
       setForm(mapRuntimeToForm(settings));
       if (capabilities?.providers?.length) setProviders(capabilities.providers);
+      if (capabilities?.channels?.length) setChannels(capabilities.channels);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load settings');
     } finally {
@@ -329,6 +340,7 @@ export function useSettingsForm() {
     update,
     original,
     providers,
+    channels,
     loading,
     loadError,
     reload: load,

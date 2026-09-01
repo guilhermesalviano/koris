@@ -5,14 +5,7 @@
   "gateway_host": "http://localhost:3000",
   "allowed_domains": [],
   "learned_skills_limit": 10,
-  "stickers": {
-    "enabled": true,
-    "allow_untrusted": false
-  },
   "heartbeat": false,
-  "channels": {
-    "allow_untrusted": false
-  },
   "session": {
     "summarizer_mode": "manual"
   },
@@ -20,20 +13,20 @@
     "parallel": false,
     "background_grace_ms": 5000,
     "subagents_parallel": false,
-    "manager": {
-      "provider": "ollama",
-      "base_url": "http://localhost:11434",
-      "api_token": "PROVIDER_API_TOKEN",
-      "model": "gemma4:e4b-it-q4_K_M"
+    "providers": [
+      {
+        "provider": "ollama",
+        "base_url": "http://localhost:11434",
+        "api_token": "PROVIDER_API_TOKEN",
+        "num_ctx": 16384,
+        "model": "gemma4:e4b-it-q4_K_M"
+      }
+    ],
+    "roles": {
+      "manager": { "provider": "ollama" },
+      "workers": { "provider": "ollama" }
     },
-    "workers": {
-      "provider": "ollama",
-      "base_url": "http://localhost:11434",
-      "api_token": "PROVIDER_API_TOKEN",
-      "model": "qwen:3.5:2b",
-      "embedding": true,
-      "embed_model": "nomic-embed-text"
-    },
+    "embed": { "enabled": true, "provider": "ollama", "model": "nomic-embed-text" },
     "searxng_url": "http://localhost:8080",
     "search_api_key": "SERPAPI_KEY",
     "prompt_sanitizer": false,

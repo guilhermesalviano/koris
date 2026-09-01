@@ -5,7 +5,7 @@ export interface ProviderRegistration {
   name: string;
   defaultBaseUrl?: string;
   isOpenAICompatible?: boolean;
-  /** Human-facing name for the connectors UI (falls back to `name`). */
+  /** Human-facing name for the providers UI (falls back to `name`). */
   label?: string;
   /** Link to the provider's model catalogue / docs. */
   docsUrl?: string;
@@ -13,7 +13,7 @@ export interface ProviderRegistration {
   apiKeyUrl?: string;
   /** Whether the provider exposes a usable `/embeddings` endpoint. */
   embeddings?: boolean;
-  /** Placeholder model shown in the connectors UI — not enforced. */
+  /** Placeholder model shown in the providers UI — not enforced. */
   recommendedModel?: string;
   create(logger: ILogger, opts?: AIProviderOptions): AIProvider;
 }

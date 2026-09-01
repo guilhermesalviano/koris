@@ -49,6 +49,17 @@ function composeLanguage(hl: string | null, gl: string | null): string | null {
   return gl ? `${hl}-${gl.toUpperCase()}` : hl;
 }
 
+const CONNECTION_FAILURE_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT']);
+
+// Narrowed to actual network-connection failures (server down/unreachable) so
+// a malformed URL, DNS/TLS error, etc. isn't wrongly steered toward "restart
+// SearXNG" — only fetch() throwing with one of these underlying causes means
+// the container itself is unreachable.
+function isConnectionFailure(err: unknown): boolean {
+  const code = (err as { cause?: { code?: string } } | undefined)?.cause?.code;
+  return typeof code === 'string' && CONNECTION_FAILURE_CODES.has(code);
+}
+
 export async function executeSearchViaSearxng(logger: ILogger, args: Record<string, unknown>, searxngUrl: string): Promise<ToolResult> {
   const query = getRequiredStringArg(args, 'query');
   if (!query) {
@@ -86,16 +97,30 @@ export async function executeSearchViaSearxng(logger: ILogger, args: Record<stri
 
   logger.info('Executing search', { query, num, start, gl, hl, timePeriod, searchType });
 
+  const params = new URLSearchParams({ q: query, format: 'json', pageno: String(pageno) });
+  if (category) params.set('categories', category);
+  if (language) params.set('language', language);
+  if (timeRange) params.set('time_range', timeRange);
+  const requestUrl = `${baseUrl.replace(/\/$/, '')}/search?${params.toString()}`;
+
+  let response: Response;
   try {
-    const params = new URLSearchParams({ q: query, format: 'json', pageno: String(pageno) });
-    if (category) params.set('categories', category);
-    if (language) params.set('language', language);
-    if (timeRange) params.set('time_range', timeRange);
+    response = await fetch(requestUrl, { headers: { Accept: 'application/json' } });
+  } catch (err) {
+    const errorMsg = isConnectionFailure(err)
+      ? `Couldn't connect to the SearXNG server at ${baseUrl}. It may be down or misconfigured — ask the user if they'd like you to run the restart_search_engine tool to fix it.`
+      : err instanceof Error ? err.message : String(err);
+    logger.error('SearXNG search failed', { query, error: errorMsg });
+    return { toolName: TOOL_NAME, success: false, error: errorMsg };
+  }
 
-    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/search?${params.toString()}`, {
-      headers: { Accept: 'application/json' },
-    });
+  if (response.status === 403) {
+    const errorMsg = "SearXNG rejected the request with HTTP 403 (Forbidden) — its JSON API format is likely disabled or bot-detection is blocking it. Ask the user if they'd like you to run the restart_search_engine tool to fix it.";
+    logger.error('SearXNG search failed', { query, error: errorMsg });
+    return { toolName: TOOL_NAME, success: false, error: errorMsg };
+  }
 
+  try {
     if (!response.ok) {
       throw new Error(`SearXNG request failed with status ${response.status}`);
     }

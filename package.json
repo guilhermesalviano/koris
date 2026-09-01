@@ -20,7 +20,7 @@
     "onboard": "node dist/core/src/onboard.js",
     "app": "node dist/core/src/app.js",
     "clean": "rm -rf dist dist-web",
-    "clear:memory": "rm core/memory/database.*",
+    "clear:memory": "rm memory/database.*",
     "build": "pnpm run clean && tsc --project tsconfig.json && vite build",
     "build:client": "vite build",
     "dev:client": "vite",

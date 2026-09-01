@@ -2,10 +2,12 @@ export interface SseEvent {
   type: string;
   delta?: { status?: string; text?: string };
   error?: { code?: string; statusCode?: number; message: string };
+  sessionId?: string;
 }
 
 export type OnStatus = (status: string) => void;
 export type OnText = (text: string) => void;
+export type OnSession = (sessionId: string) => void;
 
 /**
  * Consumes the `/api/chat` SSE stream, invoking callbacks for progress
@@ -19,6 +21,7 @@ export async function streamChat(
   onStatus: OnStatus,
   onText: OnText,
   signal?: AbortSignal,
+  onSession?: OnSession,
 ): Promise<void> {
   const payload: Record<string, unknown> = { message };
   if (sessionId) payload.sessionId = sessionId;
@@ -54,6 +57,11 @@ export async function streamChat(
 
       if (parsed.type === 'progress' && parsed.delta?.status) {
         onStatus(parsed.delta.status);
+        return;
+      }
+
+      if (parsed.type === 'session' && parsed.sessionId) {
+        onSession?.(parsed.sessionId);
         return;
       }
 

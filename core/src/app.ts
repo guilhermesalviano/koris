@@ -45,7 +45,6 @@ const MODES = ['tui', 'web'] as const;
 function createPluginContext(logger: ILogger, gateway: IMessageGateway, db: IDatabaseService): PluginContext {
   const pluginSettingsRepo = PluginSettingsRepositoryFactory.create(db);
   return {
-    allowUntrusted: config.CHANNELS.ALLOW_UNTRUSTED,
     logger,
     gateway,
     channelHandler: ChannelHandlerFactory,

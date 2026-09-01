@@ -1,4 +1,4 @@
-import type { IMessageGateway, ImageAttachment, Plugin, PluginContext } from '../contracts';
+import type { IMessageGateway, ImageAttachment, LiveChannelDescriptor, Plugin, PluginContext } from '../contracts';
 import { createWhatsAppPlugin } from './adapter';
 import { WhatsAppChannel } from './channel';
 import { loadWhatsAppConfig, writeWhatsAppConfigPatch, type WhatsAppPluginConfig } from './config';
@@ -33,12 +33,23 @@ export {
   _resetWhatsAppDedupeForTesting,
 };
 
+export const liveChannel: LiveChannelDescriptor = {
+  name: 'whatsapp',
+  configureRuntime: ({ channelHandler }) =>
+    configureWhatsAppRuntime({ channelHandler }) as unknown as Record<string, unknown>,
+  start: ({ channelHandler, gateway, logger }) => {
+    const cfg = configureWhatsAppRuntime({ channelHandler });
+    return WhatsAppChannelFactory.start({ authFolder: cfg.authFolder, mentionId: cfg.mentionId, gateway, logger });
+  },
+  loadConfig: () => loadWhatsAppConfig() as unknown as Record<string, unknown>,
+  writeConfigPatch: (patch) => writeWhatsAppConfigPatch(patch),
+};
+
 export function create(context: PluginContext, configOverride?: WhatsAppPluginConfig): Plugin {
   const cfg = configOverride ?? loadWhatsAppConfig();
 
   configureWhatsAppRuntime({
     channelHandler: context.channelHandler,
-    allowUntrusted: context.allowUntrusted,
     config: cfg,
   });
 

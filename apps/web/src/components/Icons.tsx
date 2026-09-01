@@ -72,10 +72,10 @@ export function PluginsIcon({ className }: IconProps) {
   );
 }
 
-export function ConnectorsIcon({ className }: IconProps) {
+export function ProvidersIcon({ className }: IconProps) {
   return (
     <svg className={className} style={svgStyle(1.7)} viewBox="0 0 24 24">
-      <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5" />
+      <path d="M12 21a9 9 0 1 0-9-9 9 9 0 0 0 9 9zM12 3v18M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
     </svg>
   );
 }

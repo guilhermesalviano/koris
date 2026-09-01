@@ -32,15 +32,15 @@ function makeProps(overrides: Partial<{
 }
 
 describe('Summarizer', () => {
-  const originalEmbeddingEnabled = config.AI.WORKERS.EMBEDDING_ENABLED;
+  const originalEmbeddingEnabled = config.AI.EMBED.ENABLED;
 
   beforeEach(() => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = true;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = true;
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = originalEmbeddingEnabled;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = originalEmbeddingEnabled;
   });
 
   it('stores parsed memory type and content from AI JSON', async () => {
@@ -74,6 +74,7 @@ describe('Summarizer', () => {
       content: 'TS adds static typing.',
       embedding: [0.1, 0.2],
     });
+    expect(providerRegistry.getAIProvider).toHaveBeenCalledWith(expect.anything(), 'embed', expect.objectContaining({ background: true }));
     expect(logger.info).toHaveBeenCalledWith('Summarizer worker completed for session session-1');
   });
 
@@ -101,7 +102,7 @@ describe('Summarizer', () => {
   it('skips embedding generation when embeddings are disabled', async () => {
     const embed = vi.fn().mockResolvedValue([0.1, 0.2]);
     vi.spyOn(providerRegistry, 'getAIProvider').mockReturnValue({ embed } as any);
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = false;
 
     const logger = makeLogger();
     const completionService = {
@@ -253,8 +254,8 @@ it('logs an error when completion fails', async () => {
 
   it('exposes queue state via snapshot', async () => {
     (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
-    const originalEmbeddingEnabled = config.AI.WORKERS.EMBEDDING_ENABLED;
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
+    const originalEmbeddingEnabled = config.AI.EMBED.ENABLED;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = false;
 
     const release: Array<() => void> = [];
     const gated = () => new Promise<unknown>((resolve) => release.push(() => resolve({ kind: 'message', text: '{"type":"fact","content":"x"}' })));
@@ -275,7 +276,7 @@ it('logs an error when completion fails', async () => {
 
     expect(queue.snapshot()).toEqual({ queued: 0, active: 0, concurrency: 1, queuedLabels: [], activeLabels: [] });
 
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = originalEmbeddingEnabled;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = originalEmbeddingEnabled;
   });
 
   describe('compact', () => {
@@ -301,7 +302,7 @@ it('logs an error when completion fails', async () => {
       vi.spyOn(providerRegistry, 'getAIProvider').mockReturnValue({
         embed: vi.fn().mockResolvedValue([0.3]),
       } as any);
-      (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = true;
+      (config.AI.EMBED as { ENABLED: boolean }).ENABLED = true;
 
       const logger = makeLogger();
       const completionService = {

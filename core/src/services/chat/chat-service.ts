@@ -1,4 +1,5 @@
-import { getAIProvider, AIProviderRole } from "../providers";
+import { getAIProvider } from "../providers";
+import type { AuditRole } from "../../entities/audit-log";
 import { ILogger } from "../../infrastructure/logger";
 import { IPromptRepository, PromptRepositoryFactory } from "../../repositories/prompt";
 import { ProcessedMessage, ProcessOptions } from "../../types/agents";
@@ -35,7 +36,6 @@ class ChatService implements IChatService {
       channel,
       toolsEnabled: options?.toolsEnabled,
       learnedSkillsEnabled: options?.learnedSkillsEnabled,
-      stickersEnabled: options?.stickersEnabled,
       messageHistory: messagesHistory,
       sessionId,
       extraSystemBlocks,
@@ -66,11 +66,12 @@ class ChatService implements IChatService {
 }
 
 class ChatServiceFactory {
-  static create(logger: ILogger, role: AIProviderRole = 'manager', agentName?: string): IChatService {
+  static create(logger: ILogger, role: AuditRole = 'manager', agentName?: string): IChatService {
     const db = DatabaseServiceFactory.create();
-    const aiProvider = getAIProvider(logger, role);
-    const promptRepository = PromptRepositoryFactory.create(db, logger, aiProvider);
-    const completionService = new AICompletionService(aiProvider, logger, { role, agentName });
+    const promptRepository = PromptRepositoryFactory.create(db, logger, getAIProvider(logger, 'embed'));
+    // Resolved lazily so a provider activated for `role` in the config UI
+    // takes effect on the next message, not just after a process restart.
+    const completionService = new AICompletionService(() => getAIProvider(logger, role), logger, { role, agentName });
     return new ChatService(completionService, promptRepository);
   }
 }

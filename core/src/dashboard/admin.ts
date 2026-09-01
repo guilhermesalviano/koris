@@ -9,17 +9,17 @@ import {
   isSupportedProvider,
   checkAiProviderConnectivity,
 } from '../config/validators';
-import { loadCurrentOrExampleSettings, mergeSettingsPayload, writeSettingsFile } from '../config/settings-writer';
+import { applyAiProviderPatch, applyAiRolePatch, applyAiEmbedPatch, loadCurrentOrExampleSettings, mergeSettingsPayload, writeSettingsFile } from '../config/settings-writer';
+import type { AiRolePatch, AiEmbedPatch } from '../config/settings-writer';
 import { addAllowedDomain } from '../services/security/allowed-domains';
 import { findGateBlocks } from '../services/security/gate-blocks';
 import { getSupportedProviders, getProviderCatalog, getProviderDefaultBaseUrl, clearProviderCache } from '../services/providers';
 import {
-  startWhatsAppLive,
-  startTelegramLive,
-  loadTelegramConfig,
-  loadWhatsAppConfig,
-  writeTelegramConfigPatch,
-  writeWhatsAppConfigPatch,
+  startChannelLive,
+  loadChannelConfig,
+  writeChannelConfigPatch,
+  reprimeChannelRuntime,
+  liveChannelNames,
 } from './live-channel-runtime';
 import { ILogger } from '../infrastructure/logger';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
@@ -79,26 +79,35 @@ function maskSecret(value: string): string {
 }
 
 /**
- * Reassembles the legacy `CHANNELS.TELEGRAM`/`WHATSAPP` shape the frontend
- * already expects, sourcing ALLOW_UNTRUSTED from the central config and
- * telegram/whatsapp from each plugin's own config.yml — so the API contract
- * (and thus the web Settings UI) doesn't need to change.
+ * Reassembles the `CHANNELS.TELEGRAM`/`WHATSAPP` shape the frontend expects,
+ * sourcing every field (including the per-channel `ALLOW_UNLISTED_SENDERS`
+ * policy) from each plugin's own config.yml.
  */
 function buildChannelsSnapshot(pluginSettingsRepo: IPluginSettingsRepository) {
-  const telegram = loadTelegramConfig();
-  const whatsapp = loadWhatsAppConfig();
+  const telegram = (loadChannelConfig('telegram') ?? {}) as {
+    token?: string;
+    whitelist?: string;
+    allowUnlistedSenders?: boolean;
+  };
+  const whatsapp = (loadChannelConfig('whatsapp') ?? {}) as {
+    authFolder?: string;
+    whitelist?: string;
+    mentionId?: string;
+    allowUnlistedSenders?: boolean;
+  };
   return {
-    ALLOW_UNTRUSTED: config.CHANNELS.ALLOW_UNTRUSTED,
     TELEGRAM: {
       ENABLED: resolvePluginEnabled(pluginSettingsRepo, 'channels', 'telegram'),
-      BOT_TOKEN: telegram.token,
-      WHITELIST: telegram.whitelist,
+      BOT_TOKEN: telegram.token ?? '',
+      WHITELIST: telegram.whitelist ?? '',
+      ALLOW_UNLISTED_SENDERS: telegram.allowUnlistedSenders ?? false,
     },
     WHATSAPP: {
       ENABLED: resolvePluginEnabled(pluginSettingsRepo, 'channels', 'whatsapp'),
-      AUTH_FOLDER: whatsapp.authFolder,
-      WHITELIST: whatsapp.whitelist,
-      MENTION_ID: whatsapp.mentionId,
+      AUTH_FOLDER: whatsapp.authFolder ?? '',
+      WHITELIST: whatsapp.whitelist ?? '',
+      MENTION_ID: whatsapp.mentionId ?? '',
+      ALLOW_UNLISTED_SENDERS: whatsapp.allowUnlistedSenders ?? false,
     },
   };
 }
@@ -111,6 +120,28 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+/** Maps a snake_case per-role settings patch to an `AiRolePatch`. */
+function toAiRolePatch(profile: Record<string, unknown>): AiRolePatch {
+  const patch: AiRolePatch = { provider: String(profile.provider) };
+  if (typeof profile.base_url === 'string') patch.base_url = profile.base_url;
+  if (typeof profile.api_token === 'string') patch.api_token = profile.api_token;
+  if (typeof profile.model === 'string') patch.model = profile.model;
+  if (profile.num_ctx !== undefined && Number.isFinite(Number(profile.num_ctx))) {
+    patch.num_ctx = Number(profile.num_ctx);
+  }
+  return patch;
+}
+
+/** Maps a snake_case `ai.embed` settings patch to an `AiEmbedPatch`. */
+function toAiEmbedPatch(profile: Record<string, unknown>): AiEmbedPatch {
+  const patch: AiEmbedPatch = { provider: String(profile.provider) };
+  if (typeof profile.enabled === 'boolean') patch.enabled = profile.enabled;
+  if (typeof profile.model === 'string') patch.model = profile.model;
+  if (typeof profile.base_url === 'string') patch.base_url = profile.base_url;
+  if (typeof profile.api_token === 'string') patch.api_token = profile.api_token;
+  return patch;
 }
 
 function collectSettingsPayloadErrors(
@@ -136,20 +167,38 @@ function collectSettingsPayloadErrors(
 
   const ai = asRecord(payload.ai);
   if (ai) {
-    for (const role of ['manager', 'workers'] as const) {
-      const profile = asRecord(ai[role]);
+    // `ai.<role>` = save + activate for that role; `ai.provider` = save only.
+    for (const key of ['manager', 'workers', 'provider'] as const) {
+      const profile = asRecord(ai[key]);
       if (!profile) continue;
+      const label = `ai.${key}`;
 
       if (typeof profile.provider === 'string' && profile.provider === 'mock') {
-        errors.push(`ai.${role}.provider "mock" is reserved for internal testing and cannot be set here.`);
+        errors.push(`${label}.provider "mock" is reserved for internal testing and cannot be set here.`);
       } else if (typeof profile.provider === 'string' && !isSupportedProvider(profile.provider)) {
-        errors.push(`ai.${role}.provider "${profile.provider}" is not supported.`);
+        errors.push(`${label}.provider "${profile.provider}" is not supported.`);
       }
       if (typeof profile.base_url === 'string' && profile.base_url && !isValidUrl(profile.base_url)) {
-        errors.push(`ai.${role}.base_url must be a valid URL.`);
+        errors.push(`${label}.base_url must be a valid URL.`);
       }
       if (typeof profile.model === 'string' && !profile.model.trim()) {
-        errors.push(`ai.${role}.model must not be empty.`);
+        errors.push(`${label}.model must not be empty.`);
+      }
+    }
+
+    const embed = asRecord(ai.embed);
+    if (embed) {
+      const label = 'ai.embed';
+      if (typeof embed.provider === 'string' && embed.provider === 'mock') {
+        errors.push(`${label}.provider "mock" is reserved for internal testing and cannot be set here.`);
+      } else if (typeof embed.provider === 'string' && !isSupportedProvider(embed.provider)) {
+        errors.push(`${label}.provider "${embed.provider}" is not supported.`);
+      }
+      if (typeof embed.base_url === 'string' && embed.base_url && !isValidUrl(embed.base_url)) {
+        errors.push(`${label}.base_url must be a valid URL.`);
+      }
+      if (embed.enabled !== false && typeof embed.model === 'string' && !embed.model.trim()) {
+        errors.push(`${label}.model must not be empty when embeddings are enabled.`);
       }
     }
   }
@@ -750,8 +799,7 @@ class AdminRouterFactory {
 
       if (family === 'channels') {
         if (enabled) {
-          if (name === 'telegram') startTelegramLive(logger, gateway);
-          if (name === 'whatsapp') startWhatsAppLive(logger, gateway);
+          startChannelLive(name, logger, gateway);
         } else {
           ChannelsSingleton.getExistingInstance()?.stopChannel(name);
         }
@@ -775,23 +823,46 @@ class AdminRouterFactory {
       res.json({ providers, channels: CHANNEL_TYPES });
     });
 
-    router.get('/connectors', (_req: Request, res: Response) => {
+    router.get('/providers', (_req: Request, res: Response) => {
       const activeProfile = (profile: typeof config.AI.MANAGER) => ({
         provider: profile.PROVIDER,
         model: profile.MODEL,
         baseUrl: profile.BASE_URL,
         hasToken: !!profile.API_TOKEN?.trim(),
       });
-      const configured = new Set([config.AI.MANAGER.PROVIDER, config.AI.WORKERS.PROVIDER]);
-      const connectors = getProviderCatalog().map((entry) => ({
-        ...entry,
-        configured: configured.has(entry.name),
-      }));
+      const configured = new Set([config.AI.MANAGER.PROVIDER, config.AI.WORKERS.PROVIDER, config.AI.EMBED.PROVIDER]);
+      // Surface every provider kept in ai.providers[] on disk with its saved
+      // models / base_url so the chat picker can switch straight to it instead
+      // of showing "Set up".
+      const storedByName = new Map<string, Record<string, unknown>>();
+      const storedProviders = asRecord(asRecord(loadCurrentOrExampleSettings())?.ai)?.providers;
+      if (Array.isArray(storedProviders)) {
+        for (const raw of storedProviders) {
+          const entry = asRecord(raw);
+          const name = entry?.provider;
+          if (entry && typeof name === 'string' && name.trim()) {
+            configured.add(name);
+            storedByName.set(name, entry);
+          }
+        }
+      }
+      const providers = getProviderCatalog().map((entry) => {
+        const stored = storedByName.get(entry.name);
+        const model = typeof stored?.model === 'string' ? stored.model : '';
+        return {
+          ...entry,
+          configured: configured.has(entry.name),
+          model,
+          storedBaseUrl: typeof stored?.base_url === 'string' ? stored.base_url : '',
+          hasToken: typeof stored?.api_token === 'string' ? !!stored.api_token.trim() : false,
+        };
+      });
       res.json({
-        connectors,
+        providers,
         active: {
           manager: activeProfile(config.AI.MANAGER),
           workers: activeProfile(config.AI.WORKERS),
+          embed: { ...activeProfile(config.AI.EMBED), enabled: config.AI.EMBED.ENABLED },
         },
       });
     });
@@ -811,28 +882,76 @@ class AdminRouterFactory {
 
       const rawPatch = patch as Record<string, unknown>;
       const channelsPatch = asRecord(rawPatch.channels);
-      const { telegram: telegramPatch, whatsapp: whatsappPatch, ...coreChannelsPatch } = channelsPatch ?? {};
+      // Split `channels.*` into live-channel `config.yml` patches (any key that
+      // matches a discovered live channel) and the rest, which stays in the
+      // core settings file. No channel is named here.
+      const liveNames = new Set(liveChannelNames());
+      const channelConfigPatches: { name: string; patch: Record<string, unknown> }[] = [];
+      const coreChannelsPatch: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(channelsPatch ?? {})) {
+        const record = asRecord(value);
+        if (liveNames.has(key) && record) {
+          channelConfigPatches.push({ name: key, patch: record });
+        } else {
+          coreChannelsPatch[key] = value;
+        }
+      }
       const corePatch: Record<string, unknown> = { ...rawPatch };
       if (channelsPatch) {
         corePatch.channels = coreChannelsPatch;
       }
 
-      const current = loadCurrentOrExampleSettings();
+      // The web UI still sends provider changes as a per-role patch
+      // (`{ ai: { manager: { provider, base_url, model, api_token } } }`).
+      // Translate each role into an `ai.providers[]` upsert + `ai.roles`
+      // repoint so previously-configured providers are preserved on disk.
+      // `ai.<role>` patch = save the provider AND make it active for that role.
+      // `ai.provider` patch = save the provider's config only (no role change).
+      const aiPatch = asRecord(corePatch.ai);
+      const rolePatches: { role: 'manager' | 'workers'; patch: AiRolePatch }[] = [];
+      let providerOnlyPatch: AiRolePatch | undefined;
+      let embedPatch: AiEmbedPatch | undefined;
+      if (aiPatch) {
+        const restAi: Record<string, unknown> = { ...aiPatch };
+        for (const role of ['manager', 'workers'] as const) {
+          const profile = asRecord(aiPatch[role]);
+          if (!profile) continue;
+          delete restAi[role];
+          if (typeof profile.provider !== 'string' || !profile.provider.trim()) continue;
+          rolePatches.push({ role, patch: toAiRolePatch(profile) });
+        }
+        const providerProfile = asRecord(aiPatch.provider);
+        if (providerProfile && typeof providerProfile.provider === 'string' && providerProfile.provider.trim()) {
+          delete restAi.provider;
+          providerOnlyPatch = toAiRolePatch(providerProfile);
+        }
+        const embedProfile = asRecord(aiPatch.embed);
+        if (embedProfile && typeof embedProfile.provider === 'string' && embedProfile.provider.trim()) {
+          delete restAi.embed;
+          embedPatch = toAiEmbedPatch(embedProfile);
+        }
+        corePatch.ai = restAi;
+      }
+
+      let current = loadCurrentOrExampleSettings();
+      if (providerOnlyPatch) {
+        current = applyAiProviderPatch(current, providerOnlyPatch);
+      }
+      for (const { role, patch: rolePatch } of rolePatches) {
+        current = applyAiRolePatch(current, role, rolePatch);
+      }
+      if (embedPatch) {
+        current = applyAiEmbedPatch(current, embedPatch);
+      }
       const merged = mergeSettingsPayload(current, corePatch);
       const writtenPath = writeSettingsFile(merged);
 
       // `enabled` is DB-backed now (see PATCH /plugins/:family/:name) — strip it
       // defensively so a stale cached frontend can't write it back into config.yml.
-      const telegramPatchRecord = asRecord(telegramPatch);
-      if (telegramPatchRecord) {
-        const { enabled: _enabled, ...rest } = telegramPatchRecord;
-        writeTelegramConfigPatch(rest);
-      }
-
-      const whatsappPatchRecord = asRecord(whatsappPatch);
-      if (whatsappPatchRecord) {
-        const { enabled: _enabled, ...rest } = whatsappPatchRecord;
-        writeWhatsAppConfigPatch(rest);
+      for (const { name, patch: channelPatch } of channelConfigPatches) {
+        const { enabled: _enabled, ...rest } = channelPatch;
+        writeChannelConfigPatch(name, rest);
+        reprimeChannelRuntime(name);
       }
 
       reloadConfig();
@@ -888,7 +1007,7 @@ class AdminRouterFactory {
       // WhatsApp pairing goes through Baileys' own terminal QR prompt
       // (plugins/whatsapp's startBaileysSocket already prints it via
       // qrcode-terminal) — this just triggers the live connection attempt.
-      startWhatsAppLive(logger, gateway);
+      startChannelLive('whatsapp', logger, gateway);
       res.json({ success: true });
     });
 

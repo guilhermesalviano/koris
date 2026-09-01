@@ -1,8 +1,7 @@
 import { config } from '../config';
 import type { ILogger } from '../infrastructure/logger';
 import type { AIChatOptions, AIChatRequest, AIProvider, AIResponse } from '../types/chat';
-import type { AIProviderRole } from './providers';
-import { AuditLogLlm } from '../entities/audit-log';
+import { AuditLogLlm, type AuditRole } from '../entities/audit-log';
 import { IAuditService, AuditServiceFactory } from './audit/audit-service';
 import { generateId } from '../utils/generate-id';
 import { HTTP_ERROR_MESSAGES } from '../constants';
@@ -50,8 +49,12 @@ export interface IAICompletionService {
   complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse>;
 }
 
+/** Resolves the provider to use for a `complete()` call, invoked fresh each time
+ * so a provider swapped in via the config UI takes effect without a restart. */
+export type AIProviderResolver = () => AIProvider;
+
 export interface AICompletionServiceOptions {
-  role?: AIProviderRole;
+  role?: AuditRole;
   agentName?: string;
   auditService?: IAuditService;
   retry?: {
@@ -61,14 +64,14 @@ export interface AICompletionServiceOptions {
 }
 
 export class AICompletionService implements IAICompletionService {
-  private readonly role: AIProviderRole;
+  private readonly role: AuditRole;
   private readonly agentName?: string;
   private readonly auditService: IAuditService;
   private readonly retryAttempts: number;
   private readonly retryBackoffMs: number;
 
   constructor(
-    private readonly provider: AIProvider,
+    private readonly resolveProvider: AIProviderResolver,
     private readonly logger: ILogger,
     options?: AICompletionServiceOptions,
   ) {
@@ -80,6 +83,11 @@ export class AICompletionService implements IAICompletionService {
   }
 
   async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
+    // Resolved once per call (not once per constructor) so a provider activated
+    // in the config UI is picked up on the very next message, not just after a
+    // restart. `getAIProvider()` itself caches by role/priority, so this stays
+    // cheap until that cache is invalidated by a settings change.
+    const provider = this.resolveProvider();
     const startedAt = Date.now();
     let attempt = 0;
 
@@ -94,8 +102,8 @@ export class AICompletionService implements IAICompletionService {
       };
 
       try {
-        const response = await this.provider.complete(request, providerOptions);
-        this.recordAudit(request, options, Date.now() - startedAt, response, undefined, usage);
+        const response = await provider.complete(request, providerOptions);
+        this.recordAudit(request, options, Date.now() - startedAt, provider.name, response, undefined, usage);
         return response;
       } catch (error) {
         const mapped = this.mapError(error, options?.signal);
@@ -106,7 +114,7 @@ export class AICompletionService implements IAICompletionService {
         if (canRetry) {
           const backoff = this.retryBackoffMs * (2 ** (attempt - 1));
           this.logger.warn('AI provider transient error, retrying', {
-            provider: this.provider.name,
+            provider: provider.name,
             attempt,
             retriesLeft: this.retryAttempts - attempt,
             error: mapped.message,
@@ -115,9 +123,9 @@ export class AICompletionService implements IAICompletionService {
           continue;
         }
 
-        this.recordAudit(request, options, Date.now() - startedAt, undefined, mapped, usage);
+        this.recordAudit(request, options, Date.now() - startedAt, provider.name, undefined, mapped, usage);
         this.logger.error('AI completion failed', {
-          provider: this.provider.name,
+          provider: provider.name,
           code: mapped.code,
           statusCode: mapped.statusCode,
           error: mapped.message,
@@ -135,6 +143,7 @@ export class AICompletionService implements IAICompletionService {
     request: AIChatRequest,
     options: AIChatOptions | undefined,
     durationMs: number,
+    providerName: string,
     response?: AIResponse,
     error?: AIServiceError,
     usage?: { inputTokens?: number; outputTokens?: number },
@@ -159,7 +168,7 @@ export class AICompletionService implements IAICompletionService {
       runId: options?.audit?.runId,
       sessionId: options?.audit?.sessionId,
       channel: options?.audit?.channel,
-      provider: this.provider.name,
+      provider: providerName,
       model: request.model ?? this.resolveDefaultModel(),
       prompt,
       promptLength: prompt.length,

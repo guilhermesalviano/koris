@@ -8,12 +8,12 @@ import { telegramState } from './state';
  * (re)start Telegram live (e.g. after the setup wizard enables it) without
  * restarting the process. Re-reads `config.yml` from disk when no `config`
  * is passed explicitly, mirroring `reloadConfig()`'s "re-read on demand"
- * pattern. Returns the resolved config so callers don't need to know its
+ * pattern — which also picks up an `allow_unlisted_senders` change saved via
+ * the web UI. Returns the resolved config so callers don't need to know its
  * shape ahead of time.
  */
 export function configureTelegramRuntime(cfg: {
   channelHandler: IChannelHandlerFactory;
-  allowUntrusted: boolean;
   config?: TelegramPluginConfig;
 }): TelegramPluginConfig {
   const resolved = cfg.config ?? loadTelegramConfig();
@@ -22,6 +22,6 @@ export function configureTelegramRuntime(cfg: {
   telegramState.telegramWhitelist = new Set(
     resolved.whitelist.split(',').map((id) => id.trim()).filter(Boolean).map(Number),
   );
-  telegramState.allowUntrusted = cfg.allowUntrusted;
+  telegramState.allowUntrusted = resolved.allowUnlistedSenders;
   return resolved;
 }

@@ -1,2 +1,4 @@
 bot_token: "YOUR_BOT_TOKEN"
 whitelist: "NUMBER1"
+# When true, senders not on the whitelist still reach the agent, as untrusted (no tools/skills).
+allow_unlisted_senders: false

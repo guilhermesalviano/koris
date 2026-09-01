@@ -133,11 +133,11 @@ describe('create', () => {
 
   it('is disabled when the plugin is administratively disabled, even when trusted', () => {
     const definition = register(() => false);
-    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(false);
+    expect(definition.enabled({ trusted: true })).toBe(false);
   });
 
   it('is enabled when trusted, not the heartbeat agent, and the plugin is enabled', () => {
     const definition = register(() => true);
-    expect(definition.enabled({ trusted: true, stickersEnabled: true })).toBe(true);
+    expect(definition.enabled({ trusted: true })).toBe(true);
   });
 });

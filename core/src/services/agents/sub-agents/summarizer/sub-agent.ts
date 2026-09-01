@@ -81,12 +81,15 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
       const parsedMemory = parseSummarizerResponse(response.text);
       
       let embedding: number[] | undefined;
-      if (config.AI.WORKERS.EMBEDDING_ENABLED) {
+      if (config.AI.EMBED.ENABLED) {
         try {
-          const provider = getAIProvider(this.logger, 'worker', { background: true });
+          const provider = getAIProvider(this.logger, 'embed', { background: true });
           embedding = await provider.embed(parsedMemory.content);
         } catch (error) {
-          this.logger.error(`Failed to generate embedding for summarized memory`, { error });
+          this.logger.error(
+            `embed failed for ${config.AI.EMBED.PROVIDER}/${config.AI.EMBED.MODEL}; memory saved WITHOUT an embedding and will not surface in semantic memory — check the embed provider/model is reachable`,
+            { error },
+          );
         }
       }
 
@@ -127,12 +130,15 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
       const parsedMemory = parseSummarizerResponse(response.text);
 
       let embedding: number[] | undefined;
-      if (config.AI.WORKERS.EMBEDDING_ENABLED) {
+      if (config.AI.EMBED.ENABLED) {
         try {
-          const provider = getAIProvider(this.logger, 'worker', { background: true });
+          const provider = getAIProvider(this.logger, 'embed', { background: true });
           embedding = await provider.embed(parsedMemory.content);
         } catch (error) {
-          this.logger.error(`Failed to generate embedding for compacted memory`, { error });
+          this.logger.error(
+            `embed failed for ${config.AI.EMBED.PROVIDER}/${config.AI.EMBED.MODEL} while compacting; memory saved WITHOUT an embedding and will not surface in semantic memory — check the embed provider/model is reachable`,
+            { error },
+          );
         }
       }
 
@@ -188,7 +194,7 @@ class Summarizer implements ISubAgent<SummarizerWorkerProps> {
 
 class SummarizerFactory {
   static create(logger: ILogger): Summarizer {
-    const completionService = new AICompletionService(getAIProvider(logger, 'worker', { background: true }), logger, { role: 'worker', agentName: 'summarizer' });
+    const completionService = new AICompletionService(() => getAIProvider(logger, 'worker', { background: true }), logger, { role: 'worker', agentName: 'summarizer' });
     return new Summarizer(logger, completionService, AuditServiceFactory.create(logger));
   }
 }

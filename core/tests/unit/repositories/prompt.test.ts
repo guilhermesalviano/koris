@@ -28,7 +28,7 @@ function makeRepository(overrides: Partial<{
 }> = {}) {
   return new PromptRepository(
     { get: vi.fn().mockReturnValue('') } as any,
-    overrides.toolsRepository ?? { getAll: vi.fn().mockReturnValue([]), getStickerTools: vi.fn().mockReturnValue([]) },
+    overrides.toolsRepository ?? { getAll: vi.fn().mockReturnValue([]) },
     overrides.learnedSkillsRepository ?? { getRecent: vi.fn().mockReturnValue([]) },
     overrides.stickerRulesRepository ?? { getRecent: vi.fn().mockReturnValue([]) },
     overrides.memoryRepository ?? {
@@ -41,19 +41,19 @@ function makeRepository(overrides: Partial<{
 }
 
 describe('PromptRepository buildMemoryContext', () => {
-  const originalEmbeddingEnabled = config.AI.WORKERS.EMBEDDING_ENABLED;
+  const originalEmbeddingEnabled = config.AI.EMBED.ENABLED;
 
   beforeEach(() => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = true;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = true;
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = originalEmbeddingEnabled;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = originalEmbeddingEnabled;
   });
 
   it('injects memory context from the most recent memories when embeddings are disabled', async () => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = false;
 
     const memoryRepository = {
       getAll: vi.fn().mockReturnValue([
@@ -76,7 +76,7 @@ describe('PromptRepository buildMemoryContext', () => {
     expect(memoryRepository.search).not.toHaveBeenCalled();
 
     const systemContent = messages[0].content as string;
-    expect(systemContent).toContain('# Cross-session Memory Context');
+    expect(systemContent).toContain('# Long-term Memory Context');
     expect(systemContent).toContain('### channel: whatsapp');
     expect(systemContent).toContain('- User likes coffee.');
     expect(systemContent).toContain('### channel: telegram');
@@ -84,7 +84,7 @@ describe('PromptRepository buildMemoryContext', () => {
   });
 
   it('limits the fallback to the most recent memories', async () => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = false;
 
     const recent = Array.from({ length: 25 }, (_, i) =>
       makeMemory({ id: `m${i}`, content: `memory ${i}` })
@@ -106,7 +106,7 @@ describe('PromptRepository buildMemoryContext', () => {
   });
 
   it('injects memory context from semantic search when embeddings are enabled', async () => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = true;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = true;
 
     const memoryRepository = {
       getAll: vi.fn(),
@@ -126,12 +126,12 @@ describe('PromptRepository buildMemoryContext', () => {
     expect(memoryRepository.getAll).not.toHaveBeenCalled();
 
     const systemContent = messages[0].content as string;
-    expect(systemContent).toContain('# Cross-session Memory Context');
+    expect(systemContent).toContain('# Long-term Memory Context');
     expect(systemContent).toContain('- Relevant memory.');
   });
 
   it('omits the memory block when there are no memories', async () => {
-    (config.AI.WORKERS as { EMBEDDING_ENABLED: boolean }).EMBEDDING_ENABLED = false;
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = false;
 
     const repository = makeRepository();
 
@@ -141,7 +141,35 @@ describe('PromptRepository buildMemoryContext', () => {
     });
 
     const systemContent = messages[0].content as string;
-    expect(systemContent).not.toContain('# Cross-session Memory Context');
+    expect(systemContent).not.toContain('# Long-term Memory Context');
+  });
+
+  it('falls back to recent memories when the query embed call fails', async () => {
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = true;
+
+    const memoryRepository = {
+      getAll: vi.fn().mockReturnValue([
+        makeMemory({ id: 'm1', source: 'tui', content: 'Prefers dark mode.' }),
+      ]),
+      search: vi.fn(),
+    };
+    const aiProvider = { embed: vi.fn().mockRejectedValue(new Error('embeddings unavailable')) };
+    const logger = makeLogger();
+    const repository = makeRepository({ memoryRepository, aiProvider, logger });
+
+    const { messages } = await repository.build({
+      userMessage: 'Hello',
+      channel: 'tui',
+      sessionId: 'session-current',
+    });
+
+    expect(aiProvider.embed).toHaveBeenCalledWith('Hello');
+    expect(memoryRepository.getAll).toHaveBeenCalledWith('session-current');
+    expect(logger.warn).toHaveBeenCalled();
+
+    const systemContent = messages[0].content as string;
+    expect(systemContent).toContain('# Long-term Memory Context');
+    expect(systemContent).toContain('- Prefers dark mode.');
   });
 });
 
@@ -347,80 +375,28 @@ describe('PromptRepository learned skills gating', () => {
   });
 });
 
-describe('PromptRepository sticker tools gating', () => {
-  const originalStickersEnabled = config.STICKERS.ENABLED;
-
-  afterEach(() => {
-    (config.STICKERS as { ENABLED: boolean }).ENABLED = originalStickersEnabled;
-  });
-
-  it('includes sticker tools alongside the full toolset for trusted senders', async () => {
+describe('PromptRepository tool gating', () => {
+  it('requests the full toolset for trusted senders', async () => {
     const getAll = vi.fn().mockReturnValue([{ type: 'function', function: { name: 'curl_request', parameters: {} } }]);
-    const toolsRepository = { getAll, getStickerTools: vi.fn().mockReturnValue([]) };
+    const toolsRepository = { getAll };
     const repository = makeRepository({ toolsRepository });
 
     await repository.build({ userMessage: 'Hello', channel: 'whatsapp', toolsEnabled: true });
 
-    expect(getAll).toHaveBeenCalledWith({ includeBeatTools: undefined, includeStickerTools: true });
+    expect(getAll).toHaveBeenCalledWith({ includeBeatTools: undefined });
   });
 
-  it('excludes sticker tools from the full toolset when the master flag is off', async () => {
-    (config.STICKERS as { ENABLED: boolean }).ENABLED = false;
-    const getAll = vi.fn().mockReturnValue([]);
-    const toolsRepository = { getAll, getStickerTools: vi.fn().mockReturnValue([]) };
-    const repository = makeRepository({ toolsRepository });
-
-    await repository.build({ userMessage: 'Hello', channel: 'whatsapp', toolsEnabled: true });
-
-    expect(getAll).toHaveBeenCalledWith({ includeBeatTools: undefined, includeStickerTools: false });
-  });
-
-  it('returns only sticker tools for an untrusted sender when stickersEnabled is on', async () => {
-    const getStickerTools = vi.fn().mockReturnValue([{ type: 'function', function: { name: 'send_sticker', parameters: {} } }]);
-    const toolsRepository = { getAll: vi.fn(), getStickerTools };
+  it('returns no tools for an untrusted sender', async () => {
+    const toolsRepository = { getAll: vi.fn() };
     const repository = makeRepository({ toolsRepository });
 
     const { tools } = await repository.build({
       userMessage: 'Hello',
       channel: 'whatsapp',
       toolsEnabled: false,
-      stickersEnabled: true,
     });
 
-    expect(getStickerTools).toHaveBeenCalled();
     expect(toolsRepository.getAll).not.toHaveBeenCalled();
-    expect(tools).toEqual([{ type: 'function', function: { name: 'send_sticker', parameters: {} } }]);
-  });
-
-  it('returns no tools for an untrusted sender when stickersEnabled is off', async () => {
-    const toolsRepository = { getAll: vi.fn(), getStickerTools: vi.fn() };
-    const repository = makeRepository({ toolsRepository });
-
-    const { tools } = await repository.build({
-      userMessage: 'Hello',
-      channel: 'whatsapp',
-      toolsEnabled: false,
-      stickersEnabled: false,
-    });
-
-    expect(toolsRepository.getStickerTools).not.toHaveBeenCalled();
-    expect(toolsRepository.getAll).not.toHaveBeenCalled();
-    expect(tools).toBeUndefined();
-  });
-
-  it('returns no tools for an untrusted sender when the master sticker flag is off, even if stickersEnabled is on', async () => {
-    (config.STICKERS as { ENABLED: boolean }).ENABLED = false;
-    const toolsRepository = { getAll: vi.fn(), getStickerTools: vi.fn() };
-    const repository = makeRepository({ toolsRepository });
-
-    const { tools } = await repository.build({
-      userMessage: 'Hello',
-      channel: 'whatsapp',
-      toolsEnabled: false,
-      stickersEnabled: true,
-    });
-
-    expect(toolsRepository.getStickerTools).not.toHaveBeenCalled();
     expect(tools).toBeUndefined();
   });
 });

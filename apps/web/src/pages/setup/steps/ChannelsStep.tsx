@@ -1,4 +1,5 @@
 import type { SettingsFormApi } from '../../../lib/use-settings-form';
+import { Toggle } from '../../../components/AdminUI';
 
 const inputClass = 'w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent';
 const labelClass = 'mb-1 block font-mono text-[10px] uppercase tracking-wide text-txt-3';
@@ -60,6 +61,22 @@ export function ChannelsStep({ api }: { api: SettingsFormApi }) {
               </span>
             )}
           </div>
+          <div className="sm:col-span-2 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm">Allow unlisted senders</div>
+              <div className="font-mono text-[11px] text-txt-3">
+                Reply to senders not on the whitelist, as untrusted (no tools or learned skills).
+              </div>
+            </div>
+            <Toggle
+              checked={telegram.allow_unlisted_senders}
+              onChange={() => api.update((prev) => ({
+                ...prev,
+                telegram: { ...prev.telegram, allow_unlisted_senders: !prev.telegram.allow_unlisted_senders },
+              }))}
+              label="Allow unlisted senders on Telegram"
+            />
+          </div>
         </div>
       </div>
 
@@ -101,6 +118,22 @@ export function ChannelsStep({ api }: { api: SettingsFormApi }) {
             {api.whatsappConnectResult && (
               <span className="font-mono text-[11px] text-txt-3">{api.whatsappConnectResult}</span>
             )}
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm">Allow unlisted senders</div>
+              <div className="font-mono text-[11px] text-txt-3">
+                Reply to senders not on the whitelist, as untrusted (no tools or learned skills).
+              </div>
+            </div>
+            <Toggle
+              checked={whatsapp.allow_unlisted_senders}
+              onChange={() => api.update((prev) => ({
+                ...prev,
+                whatsapp: { ...prev.whatsapp, allow_unlisted_senders: !prev.whatsapp.allow_unlisted_senders },
+              }))}
+              label="Allow unlisted senders on WhatsApp"
+            />
           </div>
           <p className="font-mono text-[11px] text-txt-3">
             WhatsApp pairing uses a QR code. Enable WhatsApp via Plugins first, then check the

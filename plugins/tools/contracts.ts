@@ -61,8 +61,6 @@ export interface ToolFilterOptions {
   trusted: boolean;
   /** Replaces `includeBeatTools` — e.g. the heartbeat sub-agent sets this to `'heartbeat'` to exclude beat tools and avoid recursive scheduling. */
   agentName?: string;
-  /** Pre-resolved by the caller: `config.STICKERS.ENABLED && (paramOverride ?? true)`. */
-  stickersEnabled: boolean;
 }
 
 export interface ToolSchema {

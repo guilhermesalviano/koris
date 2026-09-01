@@ -1,86 +1,85 @@
-import { config } from '../config';
 import { ChannelHandlerFactory } from '../channels';
 import type { ILogger } from '../infrastructure/logger';
 import type { IMessageGateway } from '../services/agents/message-gateway';
-import {
-  configureWhatsAppRuntime,
-  WhatsAppChannelFactory,
-  loadWhatsAppConfig,
-  writeWhatsAppConfigPatch,
-} from '../../../plugins/channels/whatsapp';
-import {
-  configureTelegramRuntime,
-  TelegramChannelFactory,
-  loadTelegramConfig,
-  writeTelegramConfigPatch,
-} from '../../../plugins/channels/telegram';
-
-type LiveChannelName = 'telegram' | 'whatsapp';
-
-const stopFns = new Map<LiveChannelName, () => void>();
-const starting = new Set<LiveChannelName>();
+import { listLiveChannels } from '../../../plugins/channels';
+import type { LiveChannelDescriptor } from '../../../plugins/channels/contracts';
 
 /**
- * Starts (or, if already connecting/connected, no-ops on) the WhatsApp
- * channel outside the normal one-time boot registration in
- * `ChannelsManager`, so the setup wizard can bring it up live after saving
- * its config — without a process restart.
+ * Live channel control for the setup wizard / admin panel: start a channel,
+ * reprime its runtime state after a config save, and read/write its
+ * `config.yml` — all without a process restart.
+ *
+ * Channel-agnostic: the set of channels is discovered at load time by scanning
+ * `plugins/channels/*` for a `liveChannel` descriptor (see `listLiveChannels`).
+ * Nothing here names a specific channel, so adding one needs no change to this
+ * file. A name that isn't a discovered live channel is a safe no-op everywhere.
  */
-export function startWhatsAppLive(logger: ILogger, gateway: IMessageGateway): void {
-  if (stopFns.has('whatsapp') || starting.has('whatsapp')) return;
-  starting.add('whatsapp');
+let descriptorCache: Map<string, LiveChannelDescriptor> | null = null;
 
-  const cfg = configureWhatsAppRuntime({
-    channelHandler: ChannelHandlerFactory,
-    allowUntrusted: config.CHANNELS.ALLOW_UNTRUSTED,
-  });
+/** Discovered lazily so merely importing this module (common across the
+ *  dashboard) doesn't walk `plugins/channels/` until a live-channel action
+ *  actually needs it. */
+function descriptors(): Map<string, LiveChannelDescriptor> {
+  if (!descriptorCache) {
+    descriptorCache = new Map(listLiveChannels().map((descriptor) => [descriptor.name, descriptor]));
+  }
+  return descriptorCache;
+}
 
-  WhatsAppChannelFactory.start({
-    authFolder: cfg.authFolder,
-    mentionId: cfg.mentionId,
-    gateway,
-    logger,
-  })
-    .then(({ stop }) => {
-      stopFns.set('whatsapp', stop);
-    })
-    .catch((err: Error) => {
-      logger.warn(`Failed to start WhatsApp live: ${err.message}`);
-    })
-    .finally(() => {
-      starting.delete('whatsapp');
-    });
+const stopFns = new Map<string, () => void>();
+const starting = new Set<string>();
+
+/** Names of every channel that can be brought up live. */
+export function liveChannelNames(): string[] {
+  return [...descriptors().keys()];
 }
 
 /**
- * Starts (or no-ops on) the Telegram channel live, mirroring
- * `startWhatsAppLive`. Needed because `plugins/telegram`'s `create()`
- * doesn't even register a channel definition when Telegram starts disabled
- * — which is the default on a fresh install with no config.yml.
+ * Starts a channel live (or no-ops if it's already connecting/connected, or not
+ * a discovered live channel), so the setup wizard / admin panel can bring it up
+ * after saving its config without a process restart.
  */
-export function startTelegramLive(logger: ILogger, gateway: IMessageGateway): void {
-  if (stopFns.has('telegram') || starting.has('telegram')) return;
-  starting.add('telegram');
+export function startChannelLive(name: string, logger: ILogger, gateway: IMessageGateway): void {
+  const descriptor = descriptors().get(name);
+  if (!descriptor || stopFns.has(name) || starting.has(name)) return;
+  starting.add(name);
 
-  const cfg = configureTelegramRuntime({
-    channelHandler: ChannelHandlerFactory,
-    allowUntrusted: config.CHANNELS.ALLOW_UNTRUSTED,
-  });
-
-  TelegramChannelFactory.start({ token: cfg.token, gateway, logger })
+  descriptor
+    .start({ channelHandler: ChannelHandlerFactory, gateway, logger })
     .then(({ stop }) => {
-      stopFns.set('telegram', stop);
+      stopFns.set(name, stop);
     })
     .catch((err: Error) => {
-      logger.warn(`Failed to start Telegram live: ${err.message}`);
+      logger.warn(`Failed to start ${name} live: ${err.message}`);
     })
     .finally(() => {
-      starting.delete('telegram');
+      starting.delete(name);
     });
 }
 
-export function isChannelLiveStarted(name: LiveChannelName): boolean {
+export function isChannelLiveStarted(name: string): boolean {
   return stopFns.has(name);
 }
 
-export { loadTelegramConfig, loadWhatsAppConfig, writeTelegramConfigPatch, writeWhatsAppConfigPatch };
+/**
+ * Re-reads a channel's `config.yml` into its module-level runtime state
+ * (whitelist, `allow_unlisted_senders`, …) without touching its socket, so a
+ * channel settings save from the web UI takes effect without a restart. A
+ * no-op for an unknown channel; harmless when the channel isn't running — it
+ * only refreshes state the message handler reads.
+ */
+export function reprimeChannelRuntime(name: string): void {
+  descriptors().get(name)?.configureRuntime({ channelHandler: ChannelHandlerFactory });
+}
+
+/** A channel plugin's `config.yml` as a plain record, or `undefined` if the
+ *  name isn't a discovered live channel. */
+export function loadChannelConfig(name: string): Record<string, unknown> | undefined {
+  return descriptors().get(name)?.loadConfig();
+}
+
+/** Apply a partial `config.yml` patch to a channel plugin. No-op for an
+ *  unknown channel. */
+export function writeChannelConfigPatch(name: string, patch: Record<string, unknown>): void {
+  descriptors().get(name)?.writeConfigPatch(patch);
+}

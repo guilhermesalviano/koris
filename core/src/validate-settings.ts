@@ -12,6 +12,7 @@ import 'dotenv/config';
 import { existsSync } from 'fs';
 import { config } from './config';
 import { resolveConfigPaths, loadConfigFile } from './config/helpers';
+import { listLiveChannels } from '../../plugins/channels';
 import {
   VALID_LOG_LEVELS,
   isValidUrl,
@@ -112,10 +113,14 @@ async function main() {
     config.LOG_LEVEL,
   );
 
+  const channelsAllowingUnlisted = listLiveChannels()
+    .filter((channel) => channel.loadConfig().allowUnlistedSenders === true)
+    .map((channel) => channel.name);
+
   advisory(
-    !config.STICKERS.ALLOW_UNTRUSTED,
-    'stickers.allow_untrusted is valid',
-    'but stickers.allow_untrusted is on — anyone outside the channel whitelist can learn/send stickers',
+    channelsAllowingUnlisted.length === 0,
+    'channel unlisted-sender access is valid',
+    `but allow_unlisted_senders is on for: ${channelsAllowingUnlisted.join(', ') || 'a channel'} — senders not on that channel whitelist reach the agent (as untrusted)`,
   );
 
   // ── 3. AI Provider ───────────────────────────────────────────────────────
@@ -219,6 +224,105 @@ async function main() {
     'ai.search_api_key is set',
     'Only used if the SerpAPI fallback is enabled in code (currently inactivated)',
   );
+
+  // ── Structural check: ai.providers[] + ai.roles ────────────────────────
+  const rawAi = ((): Record<string, unknown> => {
+    const parsed = loadConfigFile({ cwd: process.cwd(), dirname: __dirname });
+    const ai = parsed.ai;
+    return ai && typeof ai === 'object' && !Array.isArray(ai) ? (ai as Record<string, unknown>) : {};
+  })();
+
+  const asObj = (value: unknown): Record<string, unknown> =>
+    value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+  if (Array.isArray(rawAi.providers)) {
+    const providers = (rawAi.providers as unknown[]).map(asObj);
+    check(
+      providers.some((p) => typeof p.provider === 'string' && p.provider.trim()),
+      'ai.providers has at least one entry',
+      'Add at least one provider to ai.providers[] in koris.json',
+    );
+
+    const providerNames = new Set<string>();
+    providers.forEach((entry, i) => {
+      const name = typeof entry.provider === 'string' ? entry.provider : '';
+      providerNames.add(name);
+      check(
+        isSupportedProvider(name),
+        `ai.providers[${i}].provider is supported`,
+        `Got: "${name}". ${supportedProvidersLabel}.`,
+        name,
+      );
+      const baseUrl = resolveProviderBaseUrl(name, typeof entry.base_url === 'string' ? entry.base_url : '');
+      check(
+        isValidUrl(baseUrl),
+        `ai.providers[${i}].base_url is a valid URL`,
+        `Got: "${baseUrl}" for provider "${name}"`,
+        baseUrl,
+      );
+      advisory(
+        typeof entry.model === 'string' && entry.model.trim().length > 0,
+        `ai.providers[${i}].model is set`,
+        `provider "${name}" has no model set`,
+      );
+      if (entry.num_ctx !== undefined) {
+        const numCtx = Number(entry.num_ctx);
+        check(
+          Number.isInteger(numCtx) && numCtx >= 512 && numCtx <= 131072,
+          `ai.providers[${i}].num_ctx is a valid context size`,
+          `Got: ${entry.num_ctx} for provider "${name}". Expected an integer between 512 and 131072.`,
+          `${numCtx} tokens`,
+        );
+      }
+    });
+
+    const roles = asObj(rawAi.roles);
+    for (const role of ['manager', 'workers'] as const) {
+      const ptr = asObj(roles[role]);
+      const ptrProvider = typeof ptr.provider === 'string' ? ptr.provider : '';
+      check(
+        providerNames.has(ptrProvider),
+        `ai.roles.${role}.provider is configured in ai.providers[]`,
+        `Got: "${ptrProvider}" — add it to ai.providers[] or point the role at an existing provider`,
+        ptrProvider,
+      );
+      const entry = providers.find((p) => p.provider === ptrProvider);
+      const roleModel = entry && typeof entry.model === 'string' ? entry.model : '';
+      check(
+        roleModel.trim().length > 0,
+        `ai.roles.${role} resolves to a provider with a model`,
+        `provider "${ptrProvider}" for role ${role} has no model set in ai.providers[]`,
+        roleModel,
+      );
+    }
+
+    const embed = asObj(rawAi.embed);
+    if (rawAi.embed !== undefined) {
+      const embedProvider = typeof embed.provider === 'string' ? embed.provider : '';
+      check(
+        isSupportedProvider(embedProvider),
+        'ai.embed.provider is supported',
+        `Got: "${embedProvider}". ${supportedProvidersLabel}.`,
+        embedProvider,
+      );
+      advisory(
+        providerNames.has(embedProvider),
+        'ai.embed.provider is configured in ai.providers[]',
+        `"${embedProvider}" is not in ai.providers[]`,
+      );
+      const embedEnabled = embed.enabled === true || String(embed.enabled) === 'true';
+      if (embedEnabled) {
+        advisory(
+          typeof embed.model === 'string' && embed.model.trim().length > 0,
+          'ai.embed.model is set',
+          'ai.embed.enabled is true but ai.embed.model is empty',
+        );
+      }
+    }
+  } else {
+    warn('ai.providers[] is missing', 'AI role config will fall back to built-in defaults');
+    warnings++;
+  }
 
   // Connectivity check (skipped for mock)
   const profiles = [

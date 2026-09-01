@@ -45,17 +45,27 @@ describe('config/index reloadConfig', () => {
     expect(config.WEB_PORT).toBe(5555);
   });
 
-  it('picks up nested AI/CHANNELS values after a reload', () => {
+  it('picks up nested AI values after a reload', () => {
     const dir = createTempDir();
     writeFileSync(join(dir, 'koris.json'), JSON.stringify({
-      ai: { manager: { base_url: 'http://example.invalid:1234', model: 'reload-model' } },
-      channels: { allow_untrusted: true },
+      ai: {
+        providers: [
+          { provider: 'ollama', base_url: 'http://example.invalid:1234', api_token: '', model: 'reload-model' },
+        ],
+        roles: { manager: { provider: 'ollama' } },
+        embed: { enabled: true, provider: 'ollama', model: 'reload-embed' },
+      },
     }));
 
     reloadConfig({ cwd: dir, dirname: dir });
 
     expect(config.AI.MANAGER.BASE_URL).toBe('http://example.invalid:1234');
     expect(config.AI.MANAGER.MODEL).toBe('reload-model');
-    expect(config.CHANNELS.ALLOW_UNTRUSTED).toBe(true);
+    expect(config.AI.EMBED.ENABLED).toBe(true);
+    expect(config.AI.EMBED.MODEL).toBe('reload-embed');
+    expect(config.AI.EMBED.BASE_URL).toBe('http://example.invalid:1234');
+    // Embedding settings no longer live on config.AI.WORKERS.
+    expect((config.AI.WORKERS as Record<string, unknown>).EMBEDDING_ENABLED).toBeUndefined();
+    expect((config.AI.WORKERS as Record<string, unknown>).EMBED_MODEL).toBeUndefined();
   });
 });

@@ -78,8 +78,8 @@ class OpenAICompatibleAIProvider implements AIProvider {
     this.name = preset.name;
     this.baseUrl = (opts?.baseUrl?.trim() || preset.baseUrl).replace(/\/+$/, '');
     this.defaultModel = opts?.model ?? config.AI.MANAGER.MODEL;
-    this.embeddingModel = opts?.embeddingModel ?? config.AI.WORKERS.EMBED_MODEL;
-    this.embeddingEnabled = opts?.embeddingEnabled ?? config.AI.WORKERS.EMBEDDING_ENABLED;
+    this.embeddingModel = opts?.embeddingModel ?? config.AI.EMBED.MODEL;
+    this.embeddingEnabled = opts?.embeddingEnabled ?? config.AI.EMBED.ENABLED;
     this.apiToken = opts?.apiToken ?? config.AI.MANAGER.API_TOKEN;
   }
 

@@ -2,6 +2,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname as pathDirname, join, normalize } from 'path';
 import { resolveConfigPaths } from './helpers';
 
+export { applyAiProviderPatch, applyAiRolePatch, applyAiEmbedPatch, upsertAiProvider } from './ai-config';
+export type { AiProviderPatch, AiRolePatch, AiEmbedPatch } from './ai-config';
+
 const SETTINGS_FILENAME = 'koris.json';
 const EXAMPLE_SETTINGS_FILENAME = 'koris.example.json';
 

@@ -74,11 +74,11 @@ async function start(replyText: string, opts: { allowUntrusted?: boolean; whitel
   const { factory, calls } = makeChannelHandlerFactory(replyText);
   configureWhatsAppRuntime({
     channelHandler: factory,
-    allowUntrusted: opts.allowUntrusted ?? true,
     config: {
       authFolder: '.test-wa-auth',
       whitelist: opts.whitelist ?? '',
       mentionId: opts.mentionId ?? 'korisbot',
+      allowUnlistedSenders: opts.allowUntrusted ?? true,
     },
   });
 
@@ -235,7 +235,7 @@ describe('whatsapp plugin', () => {
 
   it('detaches all listeners before ending the socket on stop(), so end() cannot trigger a reconnect', async () => {
     const { factory } = makeChannelHandlerFactory('n/a');
-    configureWhatsAppRuntime({ channelHandler: factory, allowUntrusted: true, config: { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot' } });
+    configureWhatsAppRuntime({ channelHandler: factory, config: { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot', allowUnlistedSenders: true } });
     const gateway = { handle: vi.fn() };
     const { stop } = await WhatsAppChannelFactory.start({ authFolder: '.test-wa-auth', mentionId: 'korisbot', gateway, logger: makeLogger() });
 
@@ -257,13 +257,12 @@ describe('whatsapp plugin', () => {
 
     const plugin = create(
       {
-        allowUntrusted: true,
         logger: makeLogger(),
         gateway: { handle: vi.fn() },
         channelHandler: makeChannelHandlerFactory('n/a').factory,
         pluginEnablement: { isEnabled: () => true },
       },
-      { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot' },
+      { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot', allowUnlistedSenders: true },
     );
     plugin.setup(fakeRegistry);
 
@@ -281,13 +280,12 @@ describe('whatsapp plugin', () => {
 
     const plugin = create(
       {
-        allowUntrusted: true,
         logger: makeLogger(),
         gateway: { handle: vi.fn() },
         channelHandler: makeChannelHandlerFactory('n/a').factory,
         pluginEnablement: { isEnabled: () => false },
       },
-      { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot' },
+      { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot', allowUnlistedSenders: true },
     );
     plugin.setup(fakeRegistry);
 

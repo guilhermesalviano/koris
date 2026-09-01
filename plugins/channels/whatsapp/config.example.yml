@@ -1,3 +1,5 @@
 auth_folder: ./.whatsapp_auth
 whitelist: "NUMBER1,NUMBER2"
 mention_id: "THE_BOT_MENTION_ID"
+# When true, senders not on the whitelist still reach the agent, as untrusted (no tools/skills).
+allow_unlisted_senders: false

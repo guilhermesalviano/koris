@@ -416,6 +416,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: accumulated, pending: false, status: undefined } : m)));
         },
         controller.signal,
+        (rotatedSessionId) => {
+          // `/compact` ended the current session and opened a fresh one. Follow
+          // it so the next turn is routed to the new session (and its resumed
+          // summary / retrieved memory reach the model).
+          streamTargetRef.current = rotatedSessionId;
+          if (inFlightRef.current) inFlightRef.current.sessionId = rotatedSessionId;
+          setActiveSessionId(rotatedSessionId);
+          void loadSessions();
+        },
       );
 
       setMessages((prev) => prev.map((m) => (m.id === assistantId

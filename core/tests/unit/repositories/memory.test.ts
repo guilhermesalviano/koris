@@ -192,6 +192,35 @@ describe('MemoryRepository', () => {
     expect(result).toEqual([]);
   });
 
+  it('search skips embeddings whose dimension differs from the query and warns', () => {
+    const logger = { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
+    const db = makeDb([
+      { id: 'match', session_id: 's', source: 'tui', type: 'fact', content: 'a', embedding: '[1,0,0]', created_at: '2026-01-01' },
+      { id: 'stale', session_id: 's', source: 'tui', type: 'fact', content: 'b', embedding: '[0.9,0.1]', created_at: '2026-01-02' },
+    ]);
+    const repository = new MemoryRepository(db as never, logger as never);
+
+    const result = repository.search([1, 0, 0], 5);
+
+    expect(result.map((memory) => memory.id)).toEqual(['match']);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('mismatched embedding dimension'),
+      expect.objectContaining({ skipped: 1, queryDimension: 3 }),
+    );
+  });
+
+  it('search never returns a memory with a non-finite similarity score', () => {
+    const db = makeDb([
+      { id: 'zero', session_id: 's', source: 'tui', type: 'fact', content: 'a', embedding: '[0,0]', created_at: '2026-01-01' },
+      { id: 'real', session_id: 's', source: 'tui', type: 'fact', content: 'b', embedding: '[1,0]', created_at: '2026-01-02' },
+    ]);
+    const repository = new MemoryRepository(db as never);
+
+    const result = repository.search([1, 0], 5);
+
+    expect(result.map((memory) => memory.id)).toEqual(['real']);
+  });
+
   it('deleteById deletes a single memory', () => {
     const db = makeDb();
     const repository = new MemoryRepository(db as never);

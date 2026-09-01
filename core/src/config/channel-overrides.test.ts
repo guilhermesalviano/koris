@@ -35,11 +35,11 @@ describe('config/channel-overrides', () => {
     expect(loadChannelOverrides({ cwd: dir, dirname: dir })).toEqual({});
   });
 
-  it('reads enabled overrides keyed by channel id, nested under the existing channels object', () => {
+  it('reads enabled overrides keyed by channel id, ignoring sibling keys under channels', () => {
     const dir = createTempDir();
     writeFileSync(join(dir, 'koris.json'), JSON.stringify({
       channels: {
-        allow_untrusted: false,
+        somethingElse: true,
         overrides: [
           { id: 'telegram', enabled: false },
           { id: 'whatsapp', enabled: true },

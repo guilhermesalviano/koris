@@ -71,7 +71,7 @@ export function create(context: ToolPluginContext): Plugin {
           id: { type: 'string', required: true, description: 'The id of the learned sticker to send, from the "Learned Stickers" list.' },
         },
         handler: (logger, args, execContext) => sendSticker(logger, args, execContext, context.stickerRules, context.channels),
-        enabled: (opts) => opts.trusted && opts.stickersEnabled && context.pluginEnablement.isEnabled('send-sticker'),
+        enabled: (opts) => opts.trusted && context.pluginEnablement.isEnabled('send-sticker'),
       });
       registry.extend(COMMANDS, definition);
     },

@@ -39,8 +39,9 @@ export type ProcessOptions = {
   signal?: AbortSignal;
   toolsEnabled?: boolean;
   learnedSkillsEnabled?: boolean;
-  stickersEnabled?: boolean;
   onProgress?: (summary: string) => void;
+  /** Fired when a turn rotates the session (e.g. `/compact`) so the caller can follow the new id. */
+  onSessionRotated?: (newSessionId: string) => void;
   sessionId?: string;
   runId?: string;
   channel?: string;
@@ -183,6 +184,31 @@ export interface IChannelHandlerFactory {
   create(options: ChannelHandlerOptions): IChannelHandler;
 }
 
+/**
+ * A channel plugin's "start it now, outside boot-time `ChannelsManager`
+ * registration" surface, exported as `liveChannel` from the plugin's entry
+ * module. The dashboard discovers these by scanning `plugins/channels/*` (see
+ * `listLiveChannels`) instead of importing each channel by name, so adding a
+ * channel needs no dashboard change.
+ *
+ * `configureRuntime` re-reads the plugin's `config.yml` into its module-level
+ * runtime state (whitelist, `allow_unlisted_senders`, …) without touching any
+ * socket. `start` primes that state then opens the connection, resolving to the
+ * plugin's `stop` fn. `loadConfig`/`writeConfigPatch` expose the plugin's
+ * `config.yml` as an opaque record for the admin settings API.
+ */
+export interface LiveChannelDescriptor {
+  name: string;
+  configureRuntime(opts: { channelHandler: IChannelHandlerFactory }): Record<string, unknown>;
+  start(opts: {
+    channelHandler: IChannelHandlerFactory;
+    gateway: IMessageGateway;
+    logger: ILogger;
+  }): Promise<{ stop: () => void }>;
+  loadConfig(): Record<string, unknown>;
+  writeConfigPatch(patch: Record<string, unknown>): void;
+}
+
 export const ADAPTERS = new ExtensionPoint<ChannelDefinition>('channels.adapters');
 
 export function splitMessage(text: string, maxLength: number): string[] {
@@ -213,8 +239,6 @@ export interface IPluginEnablementGateway {
 }
 
 export interface PluginContext {
-  /** Cross-channel security policy: allow senders outside a channel's own whitelist. */
-  allowUntrusted: boolean;
   logger: ILogger;
   gateway: IMessageGateway;
   channelHandler: IChannelHandlerFactory;

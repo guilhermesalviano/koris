@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname as pathDirname, join, normalize } from 'path';
 import { startTui, type TuiCommandResult, type TuiContext, type TuiKeypress } from '../../apps/tui';
 import { resolveConfigPaths } from './config/helpers';
+import { applyAiRolePatch, type AiRolePatch } from './config/settings-writer';
 import { getSupportedProviders, getProviderDefaultBaseUrl } from './services/providers';
 
 const ONBOARDING_COMMANDS = [
@@ -1296,29 +1297,20 @@ export function buildOnboardingSettings(
     delete channels.discord;
   }
 
-  const ai = getOrCreateRecord(payload, 'ai');
-  const manager = getOrCreateRecord(ai, 'manager');
-  const workers = getOrCreateRecord(ai, 'workers');
-  manager.provider = answers.provider;
-  if (answers.providerModel) {
-    manager.model = answers.providerModel;
-  }
-  if (answers.providerUrl) {
-    manager.base_url = answers.providerUrl;
-  }
-  workers.provider = answers.provider;
-  if (answers.providerModel) {
-    workers.model = answers.providerModel;
-  }
-  if (answers.providerUrl) {
-    workers.base_url = answers.providerUrl;
-  }
+  // Store the answered provider once in `ai.providers[]` and point both roles
+  // at it.
+  const rolePatch: AiRolePatch = { provider: answers.provider };
+  if (answers.providerUrl) rolePatch.base_url = answers.providerUrl;
+  if (answers.providerApiToken) rolePatch.api_token = answers.providerApiToken;
+  if (answers.providerModel) rolePatch.model = answers.providerModel;
+  let result = applyAiRolePatch(payload, 'manager', rolePatch);
+  result = applyAiRolePatch(result, 'workers', rolePatch);
 
-  payload.personal_information = answers.personalInfo?.enabled
+  result.personal_information = answers.personalInfo?.enabled
     ? { ...answers.personalInfo.details }
     : {};
 
-  return payload;
+  return result;
 }
 
 export function buildOnboardingTelegramConfig(answers: OnboardingAnswers): Record<string, unknown> {

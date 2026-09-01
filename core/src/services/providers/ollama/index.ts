@@ -35,8 +35,8 @@ class OllamaAIProvider implements AIProvider {
     const resolvedBaseUrl = (opts?.baseUrl?.trim() || config.AI.MANAGER.BASE_URL || 'http://localhost:11434').replace(/\/+$/, '');
     this.baseUrl = validateBaseUrl(resolvedBaseUrl);
     this.defaultModel = opts?.model ?? config.AI.MANAGER.MODEL;
-    this.embeddingModel = opts?.embeddingModel ?? config.AI.WORKERS.EMBED_MODEL;
-    this.embeddingEnabled = opts?.embeddingEnabled ?? config.AI.WORKERS.EMBEDDING_ENABLED;
+    this.embeddingModel = opts?.embeddingModel ?? config.AI.EMBED.MODEL;
+    this.embeddingEnabled = opts?.embeddingEnabled ?? config.AI.EMBED.ENABLED;
     this.numCtx = opts?.numCtx ?? config.AI.WORKERS.NUM_CTX;
   }
 
