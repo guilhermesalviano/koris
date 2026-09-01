@@ -6,6 +6,7 @@ export interface RuntimeAiProfile {
   BASE_URL?: string;
   API_TOKEN?: string;
   MODEL?: string;
+  NUM_CTX?: number;
 }
 
 export interface RuntimeSettings {
@@ -28,6 +29,7 @@ export interface AiProfileForm {
   base_url: string;
   api_token: string;
   model: string;
+  num_ctx: string;
 }
 
 export interface SettingsFormState {
@@ -41,7 +43,7 @@ export interface SettingsFormState {
   personal_information: Record<string, string>;
 }
 
-const EMPTY_PROFILE: AiProfileForm = { provider: 'ollama', base_url: '', api_token: '', model: '' };
+const EMPTY_PROFILE: AiProfileForm = { provider: 'ollama', base_url: '', api_token: '', model: '', num_ctx: '' };
 
 export const DEFAULT_FORM: SettingsFormState = {
   sameForBoth: true,
@@ -69,6 +71,7 @@ function mapProfile(profile: RuntimeAiProfile | undefined): AiProfileForm {
     base_url: profile?.BASE_URL ?? '',
     api_token: secretFieldDefault(profile?.API_TOKEN),
     model: profile?.MODEL ?? '',
+    num_ctx: profile?.NUM_CTX != null ? String(profile.NUM_CTX) : '',
   };
 }
 
@@ -77,7 +80,8 @@ export function mapRuntimeToForm(data: RuntimeSettings): SettingsFormState {
   const workers = mapProfile(data.AI?.WORKERS);
   const sameForBoth = manager.provider === workers.provider
     && manager.base_url === workers.base_url
-    && manager.model === workers.model;
+    && manager.model === workers.model
+    && manager.num_ctx === workers.num_ctx;
 
   return {
     sameForBoth,
@@ -106,6 +110,10 @@ function buildProfilePatch(profile: AiProfileForm): Record<string, unknown> {
     model: profile.model,
   };
   if (profile.api_token) patch.api_token = profile.api_token;
+  if (profile.num_ctx.trim()) {
+    const n = Math.floor(Number(profile.num_ctx));
+    if (Number.isFinite(n) && n > 0) patch.num_ctx = n;
+  }
   return patch;
 }
 

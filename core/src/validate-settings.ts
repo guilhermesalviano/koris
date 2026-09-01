@@ -172,6 +172,13 @@ async function main() {
   );
 
   check(
+    Number.isInteger(config.AI.MANAGER.NUM_CTX) && config.AI.MANAGER.NUM_CTX >= 512 && config.AI.MANAGER.NUM_CTX <= 131072,
+    'ai.manager.num_ctx is a valid context size',
+    `Got: ${config.AI.MANAGER.NUM_CTX}. Expected an integer between 512 and 131072.`,
+    `${config.AI.MANAGER.NUM_CTX} tokens`,
+  );
+
+  check(
     isSupportedProvider(config.AI.WORKERS.PROVIDER),
     'ai.workers.provider is supported',
     `Got: "${config.AI.WORKERS.PROVIDER}". ${supportedProvidersLabel}.`,

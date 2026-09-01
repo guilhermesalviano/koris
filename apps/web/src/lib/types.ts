@@ -165,6 +165,8 @@ export interface ProviderCatalogEntry {
   storedBaseUrl: string;
   /** Whether a non-empty api_token is saved for this provider. */
   hasToken: boolean;
+  /** num_ctx saved for this provider (undefined ⇒ falls back to the default preset). */
+  storedNumCtx?: number;
 }
 
 export interface ActiveProvider {
@@ -172,12 +174,15 @@ export interface ActiveProvider {
   model: string;
   baseUrl: string;
   hasToken: boolean;
+  /** Effective context size for this role (configured or the default preset). */
+  numCtx?: number;
 }
 
 export type ProviderRole = 'manager' | 'workers';
 
 export interface ProvidersResponse {
   providers: ProviderCatalogEntry[];
+  defaultNumCtx: number;
   active: Record<ProviderRole, ActiveProvider> & {
     embed: ActiveProvider & { enabled: boolean };
   };

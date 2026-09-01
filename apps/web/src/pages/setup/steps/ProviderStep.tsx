@@ -67,6 +67,24 @@ function ProfileFields({
           }
         />
       </div>
+      <div>
+        <label className={labelClass}>Context size</label>
+        <input
+          disabled={disabled}
+          value={profile.num_ctx}
+          inputMode="numeric"
+          onChange={(e) =>
+            api.update((prev) => ({
+              ...prev,
+              [role]: { ...prev[role], num_ctx: e.target.value.replace(/[^\d]/g, '') },
+            }))
+          }
+          className={`${inputClass} font-mono`}
+          placeholder={String(
+            (role === 'manager' ? api.original?.AI?.MANAGER?.NUM_CTX : api.original?.AI?.WORKERS?.NUM_CTX) ?? 16384,
+          )}
+        />
+      </div>
       <div className="sm:col-span-2 flex items-center gap-3">
         <button
           type="button"

@@ -130,6 +130,43 @@ describe('provider registry', () => {
     });
   });
 
+  it('passes each role its own NUM_CTX to the provider (surfaced as max_tokens)', async () => {
+    const okResponse = () =>
+      new Response(
+        JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }] }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    const fetchMock = vi.fn().mockImplementation(async () => okResponse());
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const managerProvider = Object.getOwnPropertyDescriptor(config.AI.MANAGER, 'PROVIDER');
+    const managerNumCtx = Object.getOwnPropertyDescriptor(config.AI.MANAGER, 'NUM_CTX');
+    const workerProvider = Object.getOwnPropertyDescriptor(config.AI.WORKERS, 'PROVIDER');
+    const workerNumCtx = Object.getOwnPropertyDescriptor(config.AI.WORKERS, 'NUM_CTX');
+    Object.defineProperty(config.AI.MANAGER, 'PROVIDER', { value: 'deepseek', configurable: true, writable: true });
+    Object.defineProperty(config.AI.MANAGER, 'NUM_CTX', { value: 40000, configurable: true, writable: true });
+    Object.defineProperty(config.AI.WORKERS, 'PROVIDER', { value: 'deepseek', configurable: true, writable: true });
+    Object.defineProperty(config.AI.WORKERS, 'NUM_CTX', { value: 4096, configurable: true, writable: true });
+
+    try {
+      await createAIProvider(logger, 'manager').chat({ messages: [{ role: 'user', content: 'hi' }] });
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body).max_tokens).toBe(40000);
+
+      fetchMock.mockClear();
+      await createAIProvider(logger, 'worker').chat({ messages: [{ role: 'user', content: 'hi' }] });
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body).max_tokens).toBe(4096);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (managerProvider) Object.defineProperty(config.AI.MANAGER, 'PROVIDER', managerProvider);
+      if (managerNumCtx) Object.defineProperty(config.AI.MANAGER, 'NUM_CTX', managerNumCtx);
+      if (workerProvider) Object.defineProperty(config.AI.WORKERS, 'PROVIDER', workerProvider);
+      if (workerNumCtx) Object.defineProperty(config.AI.WORKERS, 'NUM_CTX', workerNumCtx);
+      clearProviderCache();
+      clearProviderRegistry();
+    }
+  });
+
   it('builds the embed-role provider from config.AI.EMBED', () => {
     const original = Object.getOwnPropertyDescriptor(config.AI.EMBED, 'PROVIDER');
     Object.defineProperty(config.AI.EMBED, 'PROVIDER', { value: 'deepseek', configurable: true, writable: true });

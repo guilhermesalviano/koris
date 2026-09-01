@@ -65,6 +65,7 @@ export interface AppConfig {
       BASE_URL: string;
       API_TOKEN: string;
       MODEL: string;
+      NUM_CTX: number;
     };
     WORKERS: {
       PROVIDER: string;
@@ -128,6 +129,8 @@ function buildConfig(): AppConfig {
       BASE_URL: envOr('ai.manager.base_url', roles.MANAGER.BASE_URL),
       API_TOKEN: envOr('ai.manager.api_token', roles.MANAGER.API_TOKEN),
       MODEL:   envOr('ai.manager.model', roles.MANAGER.MODEL),
+      // num_ctx is resolved from the manager provider entry. Env overrides apply.
+      NUM_CTX: Number(envOr('ai.manager.num_ctx', String(roles.MANAGER.NUM_CTX))),
     },
     WORKERS: {
       PROVIDER: process.env.VITEST === 'true' ? 'mock' : envOr('ai.workers.provider', roles.WORKERS.PROVIDER),

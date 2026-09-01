@@ -713,6 +713,11 @@ describe('AdminRouterFactory /settings', () => {
     expect(body.active.embed.provider).toBe(config.AI.EMBED.PROVIDER);
     expect(body.active.embed.model).toBe(config.AI.EMBED.MODEL);
     expect(typeof body.active.embed.enabled).toBe('boolean');
+
+    expect(typeof body.defaultNumCtx).toBe('number');
+    expect(body.active.manager.numCtx).toBe(config.AI.MANAGER.NUM_CTX);
+    expect(body.active.workers.numCtx).toBe(config.AI.WORKERS.NUM_CTX);
+    expect(body.active.embed.numCtx).toBeUndefined();
   });
 
   it('GET /providers marks a provider saved in ai.providers[] as configured and surfaces its model/token', () => {
@@ -738,6 +743,28 @@ describe('AdminRouterFactory /settings', () => {
       hasToken: true,
       storedBaseUrl: '',
     });
+    expect(nvidia.storedNumCtx).toBeUndefined();
+    const ollama = body.providers.find((c: { name: string }) => c.name === 'ollama');
+    expect(ollama.storedNumCtx).toBeUndefined();
+  });
+
+  it('GET /providers surfaces a stored num_ctx as storedNumCtx', () => {
+    settingsWriter.loadCurrentOrExampleSettings.mockReturnValueOnce({
+      ai: {
+        providers: [
+          { provider: 'openrouter', base_url: '', api_token: 'sk-or', model: 'qwen/qwen3', num_ctx: 32768 },
+        ],
+        roles: { manager: { provider: 'openrouter' }, workers: { provider: 'openrouter' } },
+      },
+    });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/providers'), res);
+
+    const body = res.json.mock.calls[0][0];
+    const openrouter = body.providers.find((c: { name: string }) => c.name === 'openrouter');
+    expect(openrouter.storedNumCtx).toBe(32768);
   });
 
   it('POST /settings rejects a non-object body', () => {
@@ -930,6 +957,41 @@ describe('AdminRouterFactory /settings', () => {
     const body = res.json.mock.calls[0][0];
     expect(body.details).toEqual(expect.arrayContaining([expect.stringContaining('ai.provider.provider')]));
     expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings rejects an out-of-range num_ctx on a provider patch', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { ai: { manager: { provider: 'openrouter', model: 'qwen/qwen3', num_ctx: 10 } } };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = res.json.mock.calls[0][0];
+    expect(body.details).toEqual(expect.arrayContaining([expect.stringContaining('ai.manager.num_ctx')]));
+    expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings upserts a valid num_ctx onto the provider entry', () => {
+    settingsWriter.loadCurrentOrExampleSettings.mockReturnValueOnce({
+      ai: {
+        providers: [{ provider: 'openrouter', base_url: '', api_token: 'sk-or', model: 'qwen/qwen3' }],
+        roles: { manager: { provider: 'openrouter' }, workers: { provider: 'openrouter' } },
+      },
+    });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { ai: { manager: { provider: 'openrouter', model: 'qwen/qwen3', num_ctx: 32768 } } };
+    callRoute(router, req, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    const [transformedCurrent] = settingsWriter.mergeSettingsPayload.mock.calls.at(-1) as [
+      { ai: { providers: { provider: string; num_ctx?: number }[] } },
+      unknown,
+    ];
+    expect(transformedCurrent.ai.providers.find((p) => p.provider === 'openrouter')?.num_ctx).toBe(32768);
   });
 
   it('POST /ai/test-connection requires a provider and base_url', () => {

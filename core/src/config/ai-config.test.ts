@@ -24,7 +24,14 @@ describe('config/ai-config', () => {
         },
       });
 
-      expect(roles.MANAGER).toEqual({ PROVIDER: 'openai', BASE_URL: '', API_TOKEN: 'sk-abc', MODEL: 'gpt-4o-mini' });
+      expect(roles.MANAGER).toEqual({
+        PROVIDER: 'openai',
+        BASE_URL: '',
+        API_TOKEN: 'sk-abc',
+        MODEL: 'gpt-4o-mini',
+        // no num_ctx on the openai entry → default preset
+        NUM_CTX: 16384,
+      });
       expect(roles.WORKERS).toEqual({
         PROVIDER: 'ollama',
         BASE_URL: 'http://host:11434',
@@ -58,8 +65,32 @@ describe('config/ai-config', () => {
       const roles = resolveAiRoles({});
       expect(roles.MANAGER.PROVIDER).toBe('ollama');
       expect(roles.MANAGER.MODEL).toBe('gemma4:e2b');
+      expect(roles.MANAGER.NUM_CTX).toBe(16384);
       expect(roles.WORKERS.MODEL).toBe('qwen:3.5:2b');
       expect(roles.WORKERS.NUM_CTX).toBe(16384);
+    });
+
+    it('resolves the manager num_ctx from its own provider entry', () => {
+      const roles = resolveAiRoles({
+        providers: [
+          { provider: 'openrouter', base_url: '', api_token: 'sk-or', model: 'qwen', num_ctx: 80000 },
+          { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'gemma' },
+        ],
+        roles: { manager: { provider: 'openrouter' }, workers: { provider: 'ollama' } },
+      });
+
+      expect(roles.MANAGER.NUM_CTX).toBe(80000);
+      // no num_ctx on the ollama entry → default preset
+      expect(roles.WORKERS.NUM_CTX).toBe(16384);
+    });
+
+    it('coerces a stringy num_ctx on the provider entry', () => {
+      const roles = resolveAiRoles({
+        providers: [{ provider: 'openrouter', base_url: '', api_token: 'sk-or', model: 'qwen', num_ctx: '83222' }],
+        roles: { manager: { provider: 'openrouter' } },
+      });
+
+      expect(roles.MANAGER.NUM_CTX).toBe(83222);
     });
   });
 
@@ -156,6 +187,23 @@ describe('config/ai-config', () => {
         { provider: 'ollama', base_url: 'http://host:11434', api_token: '', model: 'qwen', num_ctx: 32768 },
       ]);
       expect((ai.roles as Record<string, unknown>).workers).toEqual({ provider: 'ollama' });
+    });
+
+    it('stores num_ctx from a manager role patch on the provider entry', () => {
+      const base = {
+        ai: {
+          providers: [{ provider: 'openrouter', base_url: '', api_token: 'sk-or', model: 'qwen' }],
+          roles: { manager: { provider: 'openrouter' }, workers: { provider: 'openrouter' } },
+        },
+      };
+
+      const out = applyAiRolePatch(base, 'manager', { provider: 'openrouter', model: 'qwen', num_ctx: 80000 });
+      const ai = out.ai as Record<string, unknown>;
+
+      expect(ai.providers).toEqual([
+        { provider: 'openrouter', base_url: '', api_token: 'sk-or', model: 'qwen', num_ctx: 80000 },
+      ]);
+      expect((ai.roles as Record<string, unknown>).manager).toEqual({ provider: 'openrouter' });
     });
   });
 
