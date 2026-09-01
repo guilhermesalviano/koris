@@ -6,7 +6,7 @@ import { IAuditService, AuditServiceFactory } from './audit/audit-service';
 import { generateId } from '../utils/generate-id';
 import { HTTP_ERROR_MESSAGES } from '../constants';
 
-export type AIErrorCode = 'aborted' | 'timeout' | 'authentication' | 'rate_limited' | 'unavailable' | 'malformed_response' | 'unknown';
+export type AIErrorCode = 'aborted' | 'timeout' | 'authentication' | 'rate_limited' | 'unavailable' | 'malformed_response' | 'context_length' | 'unknown';
 
 const DEFAULT_RETRY_ATTEMPTS = 2;
 const DEFAULT_RETRY_BACKOFF_MS = 1000;
@@ -208,6 +208,18 @@ export class AICompletionService implements IAICompletionService {
     }
     if (normalized.includes('timeout') || normalized.includes('timed out') || statusCode === 408 || statusCode === 504) {
       return new AIServiceError('timeout', userMessage, error, statusCode);
+    }
+    if (
+      normalized.includes('context length') ||
+      normalized.includes('context window') ||
+      normalized.includes('maximum context') ||
+      normalized.includes('too many tokens') ||
+      normalized.includes('reduce the length') ||
+      normalized.includes('reduce your prompt') ||
+      normalized.includes('prompt is too long') ||
+      statusCode === 413
+    ) {
+      return new AIServiceError('context_length', userMessage, error, statusCode);
     }
     if (statusCode != null && HTTP_ERROR_CODES[statusCode]) {
       return new AIServiceError(HTTP_ERROR_CODES[statusCode] as AIErrorCode, userMessage, error, statusCode);

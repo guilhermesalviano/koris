@@ -417,9 +417,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         },
         controller.signal,
         (rotatedSessionId) => {
-          // `/compact` ended the current session and opened a fresh one. Follow
-          // it so the next turn is routed to the new session (and its resumed
-          // summary / retrieved memory reach the model).
+          // `/compact` (or the manual-mode auto-compact) ended the current
+          // session and opened a fresh one. Follow it so the next turn is routed
+          // to the new session (and its resumed summary / memory reach the model).
           streamTargetRef.current = rotatedSessionId;
           if (inFlightRef.current) inFlightRef.current.sessionId = rotatedSessionId;
           setActiveSessionId(rotatedSessionId);

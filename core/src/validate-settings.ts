@@ -113,6 +113,15 @@ async function main() {
     config.LOG_LEVEL,
   );
 
+  check(
+    Number.isFinite(config.SESSION.COMPACT_THRESHOLD)
+      && config.SESSION.COMPACT_THRESHOLD >= 0.1
+      && config.SESSION.COMPACT_THRESHOLD <= 1,
+    'session.compact_threshold is a valid fraction',
+    `Got: ${config.SESSION.COMPACT_THRESHOLD}. Expected a number between 0.1 and 1.`,
+    `${Math.round(config.SESSION.COMPACT_THRESHOLD * 100)}% of manager num_ctx`,
+  );
+
   const channelsAllowingUnlisted = listLiveChannels()
     .filter((channel) => channel.loadConfig().allowUnlistedSenders === true)
     .map((channel) => channel.name);

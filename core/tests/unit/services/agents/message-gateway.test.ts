@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MessageGateway } from '../../../../src/services/agents/message-gateway';
 import { AIServiceError } from '../../../../src/services/ai-completion-service';
+import { config } from '../../../../src/config';
 import { applyTestConfigDefaults } from '../../../helpers/test-config';
 import type { ILogger } from '../../../../src/infrastructure/logger';
 
@@ -13,7 +14,12 @@ function makeDeps() {
     getSession: vi.fn().mockReturnValue({ id: 'session-1' }),
     forceRotate: vi.fn(),
   };
-  const messageService = { getHistory: vi.fn().mockReturnValue([]), getSessionId: vi.fn().mockReturnValue('session-1'), save: vi.fn() };
+  const messageService = {
+    getHistory: vi.fn().mockReturnValue([]),
+    getSessionId: vi.fn().mockReturnValue('session-1'),
+    getSessionMetadata: vi.fn().mockReturnValue({}),
+    save: vi.fn(),
+  };
   const memoryService = { upsert: vi.fn() };
 
   return {
@@ -349,6 +355,114 @@ describe('MessageGateway', () => {
       await gateway.handle('/compact', 'origin-1', { onSessionRotated });
 
       expect(onSessionRotated).toHaveBeenCalledWith('session-2');
+    });
+  });
+
+  describe('manual-mode auto-compact safety valve', () => {
+    let originalNumCtx: number;
+    let originalThreshold: number;
+
+    beforeEach(() => {
+      originalNumCtx = config.AI.MANAGER.NUM_CTX;
+      originalThreshold = config.SESSION.COMPACT_THRESHOLD;
+      Object.defineProperty(config.AI.MANAGER, 'NUM_CTX', { value: 20000, configurable: true, writable: true });
+      Object.defineProperty(config.SESSION, 'COMPACT_THRESHOLD', { value: 0.9, configurable: true, writable: true });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(config.AI.MANAGER, 'NUM_CTX', { value: originalNumCtx, configurable: true, writable: true });
+      Object.defineProperty(config.SESSION, 'COMPACT_THRESHOLD', { value: originalThreshold, configurable: true, writable: true });
+    });
+
+    it('proactively compacts before the turn when the session is near the context window', async () => {
+      applyTestConfigDefaults({ summarizerMode: 'manual' });
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'x'.repeat(80000) }] as never);
+      deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
+      deps.sessionService.getSession
+        .mockReturnValueOnce({ id: 'session-1' })
+        .mockReturnValue({ id: 'session-2' });
+      const onProgress = vi.fn();
+
+      const result = await gateway.handle('hello', 'origin-1', { onProgress });
+
+      expect(deps.backgroundDispatcher.compactConversation).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'session-1' }),
+      );
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith({ compactSummary: 'we covered X' });
+      expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
+      expect(result).toBe('assistant reply');
+      expect(onProgress).toHaveBeenCalledWith(expect.stringContaining('summarized'));
+    });
+
+    it('does not proactively compact a small session', async () => {
+      applyTestConfigDefaults({ summarizerMode: 'manual' });
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'short' }] as never);
+
+      await gateway.handle('hello', 'origin-1');
+
+      expect(deps.backgroundDispatcher.compactConversation).not.toHaveBeenCalled();
+      expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not auto-compact in auto summarizer mode even when the context is huge', async () => {
+      applyTestConfigDefaults({ summarizerMode: 'auto' });
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'x'.repeat(80000) }] as never);
+
+      await gateway.handle('hello', 'origin-1');
+
+      expect(deps.backgroundDispatcher.compactConversation).not.toHaveBeenCalled();
+    });
+
+    it('reactively compacts and retries once on a context_length error', async () => {
+      applyTestConfigDefaults({ summarizerMode: 'manual' });
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'hi' }] as never);
+      deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
+      deps.sessionService.getSession
+        .mockReturnValueOnce({ id: 'session-1' })
+        .mockReturnValue({ id: 'session-2' });
+      deps.mainAgent.run
+        .mockRejectedValueOnce(new AIServiceError('context_length', "maximum context length is 20000 tokens"))
+        .mockResolvedValueOnce('recovered reply');
+
+      const result = await gateway.handle('hello', 'origin-1');
+
+      expect(deps.mainAgent.run).toHaveBeenCalledTimes(2);
+      expect(deps.backgroundDispatcher.compactConversation).toHaveBeenCalledTimes(1);
+      expect(deps.backgroundDispatcher.compactConversation).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 'session-1' }),
+      );
+      expect(result).toBe('recovered reply');
+    });
+
+    it('retries only once, then rethrows a persistent context_length error', async () => {
+      applyTestConfigDefaults({ summarizerMode: 'manual' });
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'hi' }] as never);
+      deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
+      deps.mainAgent.run.mockRejectedValue(new AIServiceError('context_length', 'context length exceeded'));
+
+      await expect(gateway.handle('hello', 'origin-1')).rejects.toMatchObject({ code: 'context_length' });
+
+      expect(deps.mainAgent.run).toHaveBeenCalledTimes(2);
+      expect(deps.backgroundDispatcher.compactConversation).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not compact on a context_length error in auto mode', async () => {
+      applyTestConfigDefaults({ summarizerMode: 'auto' });
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'hi' }] as never);
+      deps.mainAgent.run.mockRejectedValueOnce(new AIServiceError('context_length', 'context length exceeded'));
+
+      await expect(gateway.handle('hello', 'origin-1')).rejects.toMatchObject({ code: 'context_length' });
+
+      expect(deps.backgroundDispatcher.compactConversation).not.toHaveBeenCalled();
+      expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
+        expect.objectContaining({ answerErrorCode: 'context_length' }),
+      );
     });
   });
 });

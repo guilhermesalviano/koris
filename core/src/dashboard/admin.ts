@@ -12,6 +12,7 @@ import {
 import { applyAiProviderPatch, applyAiRolePatch, applyAiEmbedPatch, loadCurrentOrExampleSettings, mergeSettingsPayload, writeSettingsFile } from '../config/settings-writer';
 import type { AiRolePatch, AiEmbedPatch } from '../config/settings-writer';
 import { DEFAULT_NUM_CTX } from '../config/ai-config';
+import { estimateSessionTokens, compactTriggerTokens } from '../services/agents/context-budget';
 import { addAllowedDomain } from '../services/security/allowed-domains';
 import { findGateBlocks } from '../services/security/gate-blocks';
 import { getSupportedProviders, getProviderCatalog, getProviderDefaultBaseUrl, clearProviderCache } from '../services/providers';
@@ -543,6 +544,34 @@ class AdminRouterFactory {
           errorCode: m.errorCode,
           createdAt: m.createdAt,
         })),
+      });
+    });
+
+    // Estimated context usage for a chat session — powers the small usage bar
+    // in the chat UI. `?sessionId=` targets the viewed session; without it the
+    // live web session is used. Mirrors what the manual-mode auto-compact check
+    // measures (`context-budget.ts`).
+    router.get('/chat/context', (req: Request, res: Response) => {
+      const requestedId = typeof req.query.sessionId === 'string' ? req.query.sessionId : '';
+      const session = requestedId
+        ? sessionRepo.findById(requestedId)
+        : sessionRepo.findLatestOpenByEntryChannel('web');
+      const limit = config.AI.MANAGER.NUM_CTX;
+      if (!session) {
+        res.json({ used: 0, limit, threshold: compactTriggerTokens() });
+        return;
+      }
+
+      // No limit arg → the same recent-history window the manager actually
+      // sends to the model (and that the auto-compact check measures).
+      const history = messageRepo.getBySessionId(session.id);
+      const compactSummary = typeof session.metadata?.compactSummary === 'string'
+        ? session.metadata.compactSummary
+        : undefined;
+      res.json({
+        used: estimateSessionTokens(history, compactSummary),
+        limit,
+        threshold: compactTriggerTokens(),
       });
     });
 
