@@ -21,9 +21,8 @@
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "bundler",
     "types": ["node"],
-    "baseUrl": ".",
     "paths": {
-      "@constants": ["core/src/constants"]
+      "@constants": ["./core/src/constants"]
     }
   },
   "include": ["core/src/**/*", "plugins/**/*", "apps/tui"],
