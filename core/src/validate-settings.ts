@@ -117,7 +117,7 @@ async function main() {
   advisory(
     !loadTelegramConfig().allowUnlistedSenders && !loadWhatsAppConfig().allowUnlistedSenders,
     'channel unlisted-sender access is valid',
-    'this means allow_unlisted_senders is on for a channel — senders not on that channel whitelist reach the agent (as untrusted)',
+    'but allow_unlisted_senders is on for a channel — senders not on that channel whitelist reach the agent (as untrusted)',
   );
 
   // ── 3. AI Provider ───────────────────────────────────────────────────────
