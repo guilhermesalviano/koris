@@ -75,11 +75,6 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
     trusted: true,
   },
   {
-    name: '/start',
-    summary: 'Welcome message',
-    channels: ['telegram'],
-  },
-  {
     name: '/exit',
     aliases: ['/quit', '/bye'],
     summary: 'How to leave the session',

@@ -4,7 +4,6 @@ import { getAvailableCommands, handleCommand, isCommand } from '../../../../src/
 describe('Command Handler', () => {
   describe('isCommand', () => {
     it('recognizes known commands and their aliases', () => {
-      expect(isCommand('/start')).toBe(true);
       expect(isCommand('/help')).toBe(true);
       expect(isCommand('/status')).toBe(true);
       expect(isCommand('/reset')).toBe(true); // alias of /clear
@@ -28,13 +27,6 @@ describe('Command Handler', () => {
   });
 
   describe('handleCommand', () => {
-    it('should handle /start command', () => {
-      const result = handleCommand('/start', { source: 'tui' });
-      expect(result.handled).toBe(true);
-      expect(result.response).toContain('Welcome');
-      expect(result.action).toBe('none');
-    });
-
     it('should handle /help command', () => {
       const result = handleCommand('/help', { source: 'tui' });
       expect(result.handled).toBe(true);
@@ -145,15 +137,6 @@ describe('Command Handler', () => {
       expect(whatsappHelp.response).not.toContain('*');
       expect(tuiHelp.response).not.toContain('*');
     });
-
-    it('renders /start with bold markdown for telegram and plain text otherwise', () => {
-      const telegramStart = handleCommand('/start', { source: 'telegram' });
-      const whatsappStart = handleCommand('/start', { source: 'whatsapp' });
-
-      expect(telegramStart.response).toContain('*Welcome to koris!*');
-      expect(whatsappStart.response).toContain('Welcome to koris!');
-      expect(whatsappStart.response).not.toContain('*');
-    });
   });
 
   describe('getAvailableCommands', () => {
@@ -180,9 +163,6 @@ describe('Command Handler', () => {
     });
 
     it('scopes channel-specific commands to their channel', () => {
-      expect(getAvailableCommands('telegram')).toContain('/start');
-      expect(getAvailableCommands('tui')).not.toContain('/start');
-
       expect(getAvailableCommands('tui')).toContain('/exit');
       expect(getAvailableCommands('telegram')).not.toContain('/exit');
     });
@@ -194,7 +174,7 @@ describe('Command Handler', () => {
 
   describe('CommandResult Structure', () => {
     it('should return proper CommandResult structure', () => {
-      const result = handleCommand('/start', { source: 'tui' });
+      const result = handleCommand('/help', { source: 'tui' });
       expect(result).toHaveProperty('response');
       expect(result).toHaveProperty('action');
       expect(result).toHaveProperty('handled');

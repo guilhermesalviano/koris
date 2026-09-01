@@ -14,9 +14,6 @@ export type { CommandSpec, CommandChannel } from './registry';
 
 export function handleCommand(command: string, context: CommandContext): CommandResult {
   switch (commandToken(command)) {
-    case '/start':
-      return handleStart(context);
-
     case '/help':
       return handleHelp(command, context);
 
@@ -57,35 +54,6 @@ export function handleCommand(command: string, context: CommandContext): Command
         handled: false,
       };
   }
-}
-
-function handleStart(context: CommandContext): CommandResult {
-  const message = context.source === 'telegram'
-    ? `👋 *Welcome to koris!*
-
-I'm an AI coding agent (provider: *${config.AI.MANAGER.PROVIDER}*). I can help you with:
-
-• Reading and analyzing code
-• Making file changes
-• Running commands
-• Answering coding questions
-
-Just send me a message with what you need!`
-    : `Welcome to koris!
-
-I'm an AI coding agent (provider: ${config.AI.MANAGER.PROVIDER}) that can help you with:
-• Reading and analyzing code
-• Making file changes
-• Running commands
-• Answering coding questions
-
-Type /help for available commands.`;
-
-  return {
-    response: message,
-    action: 'none',
-    handled: true,
-  };
 }
 
 function handleHelp(command: string, context: CommandContext): CommandResult {
