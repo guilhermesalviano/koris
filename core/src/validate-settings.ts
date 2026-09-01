@@ -12,8 +12,7 @@ import 'dotenv/config';
 import { existsSync } from 'fs';
 import { config } from './config';
 import { resolveConfigPaths, loadConfigFile } from './config/helpers';
-import { loadTelegramConfig } from '../../plugins/channels/telegram';
-import { loadWhatsAppConfig } from '../../plugins/channels/whatsapp';
+import { listLiveChannels } from '../../plugins/channels';
 import {
   VALID_LOG_LEVELS,
   isValidUrl,
@@ -114,10 +113,14 @@ async function main() {
     config.LOG_LEVEL,
   );
 
+  const channelsAllowingUnlisted = listLiveChannels()
+    .filter((channel) => channel.loadConfig().allowUnlistedSenders === true)
+    .map((channel) => channel.name);
+
   advisory(
-    !loadTelegramConfig().allowUnlistedSenders && !loadWhatsAppConfig().allowUnlistedSenders,
+    channelsAllowingUnlisted.length === 0,
     'channel unlisted-sender access is valid',
-    'but allow_unlisted_senders is on for a channel — senders not on that channel whitelist reach the agent (as untrusted)',
+    `but allow_unlisted_senders is on for: ${channelsAllowingUnlisted.join(', ') || 'a channel'} — senders not on that channel whitelist reach the agent (as untrusted)`,
   );
 
   // ── 3. AI Provider ───────────────────────────────────────────────────────

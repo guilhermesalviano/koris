@@ -50,10 +50,13 @@ const {
   },
   liveChannelRuntime: {
     startChannelLive: vi.fn(),
-    loadTelegramConfig: vi.fn(() => ({ token: '', whitelist: '', allowUnlistedSenders: false })),
-    loadWhatsAppConfig: vi.fn(() => ({ authFolder: '', whitelist: '', mentionId: '', allowUnlistedSenders: false })),
-    writeTelegramConfigPatch: vi.fn(),
-    writeWhatsAppConfigPatch: vi.fn(),
+    liveChannelNames: vi.fn(() => ['telegram', 'whatsapp']),
+    loadChannelConfig: vi.fn((name: string) =>
+      name === 'telegram'
+        ? { token: '', whitelist: '', allowUnlistedSenders: false }
+        : { authFolder: '', whitelist: '', mentionId: '', allowUnlistedSenders: false },
+    ),
+    writeChannelConfigPatch: vi.fn(),
     reprimeChannelRuntime: vi.fn(),
   },
   pluginSettingsRepo: { getEnabled: vi.fn(), setEnabled: vi.fn(), getAll: vi.fn() },

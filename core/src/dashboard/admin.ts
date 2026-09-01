@@ -16,12 +16,10 @@ import { findGateBlocks } from '../services/security/gate-blocks';
 import { getSupportedProviders, getProviderCatalog, getProviderDefaultBaseUrl, clearProviderCache } from '../services/providers';
 import {
   startChannelLive,
-  loadTelegramConfig,
-  loadWhatsAppConfig,
-  writeTelegramConfigPatch,
-  writeWhatsAppConfigPatch,
+  loadChannelConfig,
+  writeChannelConfigPatch,
   reprimeChannelRuntime,
-  type LiveChannelName,
+  liveChannelNames,
 } from './live-channel-runtime';
 import { ILogger } from '../infrastructure/logger';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
@@ -86,21 +84,30 @@ function maskSecret(value: string): string {
  * policy) from each plugin's own config.yml.
  */
 function buildChannelsSnapshot(pluginSettingsRepo: IPluginSettingsRepository) {
-  const telegram = loadTelegramConfig();
-  const whatsapp = loadWhatsAppConfig();
+  const telegram = (loadChannelConfig('telegram') ?? {}) as {
+    token?: string;
+    whitelist?: string;
+    allowUnlistedSenders?: boolean;
+  };
+  const whatsapp = (loadChannelConfig('whatsapp') ?? {}) as {
+    authFolder?: string;
+    whitelist?: string;
+    mentionId?: string;
+    allowUnlistedSenders?: boolean;
+  };
   return {
     TELEGRAM: {
       ENABLED: resolvePluginEnabled(pluginSettingsRepo, 'channels', 'telegram'),
-      BOT_TOKEN: telegram.token,
-      WHITELIST: telegram.whitelist,
-      ALLOW_UNLISTED_SENDERS: telegram.allowUnlistedSenders,
+      BOT_TOKEN: telegram.token ?? '',
+      WHITELIST: telegram.whitelist ?? '',
+      ALLOW_UNLISTED_SENDERS: telegram.allowUnlistedSenders ?? false,
     },
     WHATSAPP: {
       ENABLED: resolvePluginEnabled(pluginSettingsRepo, 'channels', 'whatsapp'),
-      AUTH_FOLDER: whatsapp.authFolder,
-      WHITELIST: whatsapp.whitelist,
-      MENTION_ID: whatsapp.mentionId,
-      ALLOW_UNLISTED_SENDERS: whatsapp.allowUnlistedSenders,
+      AUTH_FOLDER: whatsapp.authFolder ?? '',
+      WHITELIST: whatsapp.whitelist ?? '',
+      MENTION_ID: whatsapp.mentionId ?? '',
+      ALLOW_UNLISTED_SENDERS: whatsapp.allowUnlistedSenders ?? false,
     },
   };
 }
@@ -792,7 +799,7 @@ class AdminRouterFactory {
 
       if (family === 'channels') {
         if (enabled) {
-          startChannelLive(name as LiveChannelName, logger, gateway);
+          startChannelLive(name, logger, gateway);
         } else {
           ChannelsSingleton.getExistingInstance()?.stopChannel(name);
         }
@@ -875,7 +882,20 @@ class AdminRouterFactory {
 
       const rawPatch = patch as Record<string, unknown>;
       const channelsPatch = asRecord(rawPatch.channels);
-      const { telegram: telegramPatch, whatsapp: whatsappPatch, ...coreChannelsPatch } = channelsPatch ?? {};
+      // Split `channels.*` into live-channel `config.yml` patches (any key that
+      // matches a discovered live channel) and the rest, which stays in the
+      // core settings file. No channel is named here.
+      const liveNames = new Set(liveChannelNames());
+      const channelConfigPatches: { name: string; patch: Record<string, unknown> }[] = [];
+      const coreChannelsPatch: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(channelsPatch ?? {})) {
+        const record = asRecord(value);
+        if (liveNames.has(key) && record) {
+          channelConfigPatches.push({ name: key, patch: record });
+        } else {
+          coreChannelsPatch[key] = value;
+        }
+      }
       const corePatch: Record<string, unknown> = { ...rawPatch };
       if (channelsPatch) {
         corePatch.channels = coreChannelsPatch;
@@ -928,18 +948,10 @@ class AdminRouterFactory {
 
       // `enabled` is DB-backed now (see PATCH /plugins/:family/:name) — strip it
       // defensively so a stale cached frontend can't write it back into config.yml.
-      const telegramPatchRecord = asRecord(telegramPatch);
-      if (telegramPatchRecord) {
-        const { enabled: _enabled, ...rest } = telegramPatchRecord;
-        writeTelegramConfigPatch(rest);
-        reprimeChannelRuntime('telegram');
-      }
-
-      const whatsappPatchRecord = asRecord(whatsappPatch);
-      if (whatsappPatchRecord) {
-        const { enabled: _enabled, ...rest } = whatsappPatchRecord;
-        writeWhatsAppConfigPatch(rest);
-        reprimeChannelRuntime('whatsapp');
+      for (const { name, patch: channelPatch } of channelConfigPatches) {
+        const { enabled: _enabled, ...rest } = channelPatch;
+        writeChannelConfigPatch(name, rest);
+        reprimeChannelRuntime(name);
       }
 
       reloadConfig();
