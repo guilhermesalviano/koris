@@ -40,8 +40,7 @@ export default function ContextBar({ streaming, sessionId }: { streaming: boolea
   return (
     <div className="my-2 flex justify-end">
       <div
-        // className="w-40 select-none rounded-lg border border-subtle bg-bg-2/80 px-2.5 py-1.5 font-mono text-[10px] text-txt-3 backdrop-blur-md"
-        className="w-40"
+        className="w-40 font-mono text-[10px] text-txt-3"
         title={`Context ~${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()} tokens`}
       >
         <div className="mt-1 flex items-center justify-between">

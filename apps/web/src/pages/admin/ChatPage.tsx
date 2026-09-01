@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
 import { usePageTitle } from '../../lib/use-page-title';
 import ImageLightbox from '../../components/ImageLightbox';
 import ProviderPicker from '../../components/ProviderPicker';
 import ContextBar from '../../components/ContextBar';
-import { AttachIcon, BrokenImageIcon, CloseIcon, PlusIcon, RetryIcon, SendIcon, StopIcon } from '../../components/Icons';
+import { AttachIcon, BrokenImageIcon, CloseIcon, RetryIcon, SendIcon, StopIcon } from '../../components/Icons';
 import type { ImageAttachment } from '../../lib/types';
 
 const MAX_CHARS = 4000;
@@ -17,8 +17,7 @@ function imageSrc(image: ImageAttachment): string {
 
 export default function ChatPage() {
   const { sessionId } = useParams();
-  const navigate = useNavigate();
-  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, resendLast, cancel, openSession, sessions, activeSessionId, newChat, gateBlocks, allowDomain, dismissGateBlock } = useChat();
+  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, submit, resendLast, cancel, openSession, sessions, activeSessionId, gateBlocks, allowDomain, dismissGateBlock } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -49,11 +48,6 @@ export default function ChatPage() {
   }, [input]);
 
   const canSend = !streaming && (input.trim().length > 0 || attachments.length > 0);
-
-  async function handleNewChat() {
-    await newChat();
-    navigate('/admin/chat');
-  }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -203,14 +197,6 @@ export default function ChatPage() {
       <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-subtle px-4 py-2">
         <span className="truncate font-mono text-[11px] text-txt-3">{activeTitle || 'New chat'}</span>
         <ContextBar streaming={streaming} sessionId={activeSessionId} />
-        {/* <button
-          onClick={handleNewChat}
-          title="Start a new chat"
-          className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-strong bg-bg-3 px-2.5 py-1.5 text-[13px] text-txt transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2"
-        >
-          <PlusIcon className="h-3.5 w-3.5 fill-none stroke-current" />
-          New chat
-        </button> */}
       </div>
       {showEmptyState ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 px-4">

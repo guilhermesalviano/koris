@@ -194,6 +194,27 @@ function collectSettingsPayloadErrors(
       }
     }
 
+    // `num_ctx` (and model) live on the shared `ai.providers[]` entry keyed by
+    // provider name, so a manager + workers patch that names the same provider
+    // with different context sizes would silently clobber one on save. Reject it
+    // rather than lose the value.
+    const managerProfile = asRecord(ai.manager);
+    const workersProfile = asRecord(ai.workers);
+    if (
+      managerProfile
+      && workersProfile
+      && typeof managerProfile.provider === 'string'
+      && managerProfile.provider === workersProfile.provider
+      && managerProfile.num_ctx !== undefined && managerProfile.num_ctx !== ''
+      && workersProfile.num_ctx !== undefined && workersProfile.num_ctx !== ''
+      && Number(managerProfile.num_ctx) !== Number(workersProfile.num_ctx)
+    ) {
+      errors.push(
+        `ai.manager and ai.workers both use provider "${managerProfile.provider}", whose num_ctx is shared. `
+        + 'Set the same num_ctx for both roles, or point them at separate provider entries.',
+      );
+    }
+
     const embed = asRecord(ai.embed);
     if (embed) {
       const label = 'ai.embed';

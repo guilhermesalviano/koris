@@ -972,6 +972,48 @@ describe('AdminRouterFactory /settings', () => {
     expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
   });
 
+  it('POST /settings rejects manager+workers on one provider with conflicting num_ctx', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = {
+      ai: {
+        manager: { provider: 'openrouter', model: 'qwen/qwen3', num_ctx: 32768 },
+        workers: { provider: 'openrouter', model: 'qwen/qwen3', num_ctx: 8192 },
+      },
+    };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = res.json.mock.calls[0][0];
+    expect(body.details).toEqual(
+      expect.arrayContaining([expect.stringContaining('num_ctx is shared')]),
+    );
+    expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings allows manager+workers on one provider with matching num_ctx', () => {
+    settingsWriter.loadCurrentOrExampleSettings.mockReturnValueOnce({
+      ai: {
+        providers: [{ provider: 'openrouter', base_url: '', api_token: 'sk-or', model: 'qwen/qwen3' }],
+        roles: { manager: { provider: 'openrouter' }, workers: { provider: 'openrouter' } },
+      },
+    });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = {
+      ai: {
+        manager: { provider: 'openrouter', model: 'qwen/qwen3', num_ctx: 16384 },
+        workers: { provider: 'openrouter', model: 'qwen/qwen3', num_ctx: 16384 },
+      },
+    };
+    callRoute(router, req, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
   it('POST /settings upserts a valid num_ctx onto the provider entry', () => {
     settingsWriter.loadCurrentOrExampleSettings.mockReturnValueOnce({
       ai: {

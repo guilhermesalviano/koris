@@ -122,8 +122,8 @@ function buildConfig(): AppConfig {
     TTL_MS: Number(get('session.ttl_ms', String(3 * 60 * 60 * 1000))),
     SUMMARIZER_MODE: get('session.summarizer_mode', 'auto') === 'manual' ? 'manual' : 'auto',
     COMPACT_THRESHOLD: (() => {
-      const raw = Number(get('session.compact_threshold', '0.8'));
-      return Number.isFinite(raw) ? Math.min(1, Math.max(0.1, raw)) : 0.8;
+      const raw = Number(get('session.compact_threshold', '0.9'));
+      return Number.isFinite(raw) ? Math.min(1, Math.max(0.1, raw)) : 0.9;
     })(),
   },
   HEARTBEAT: get('heartbeat', 'true') === 'true',
