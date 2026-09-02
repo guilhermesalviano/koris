@@ -72,6 +72,10 @@ mac:
   # Unsigned for now — see apps/desktop/features/packaging.md to wire signing.
   identity: null
 
+dmg:
+  # No auto-update yet, so skip the delta-update metadata (.dmg.blockmap).
+  writeUpdateInfo: false
+
 win:
   target:
     - target: nsis
@@ -82,3 +86,5 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  # No auto-update yet, so skip the delta-update metadata (.exe.blockmap).
+  differentialPackage: false

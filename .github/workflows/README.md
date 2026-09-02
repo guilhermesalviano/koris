@@ -26,7 +26,8 @@ This directory contains CI workflows for linting, tests, and CodeQL.
 
 - **Trigger**: a GitHub Release being `published` (or manual `workflow_dispatch` with a tag)
 - **What it does**:
-  - Matrix over `ubuntu-latest`, `macos-13` (Intel), `macos-14` (Apple Silicon), `windows-latest`
+  - Matrix over `ubuntu-latest`, `macos-14` ×2 (arm64 native + x64 cross-build, since the
+    Intel `macos-13` runner was retired), `windows-latest`
   - Builds server + web + the Electron shell, then `pnpm desktop:stage` bundles a
     production `node_modules` (better-sqlite3 via its N-API prebuilds — no compile) and a
     standalone Node runtime
