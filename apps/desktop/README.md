@@ -65,10 +65,12 @@ pnpm desktop:package:dir     # unpacked app (fast, no installer)
 `memory/` and `logs/` are written there (the bundle stays read-only).
 
 **GitHub releases:** `.github/workflows/release-desktop.yml` builds the matrix
-(Linux / Windows / macOS x64 / macOS arm64) when a GitHub Release is **published** and
-uploads the installers to it via `electron-builder --publish always`. Release flow:
-`pnpm release <bump>` → review → commit → `git tag vX.Y.Z` → `git push --follow-tags` →
-publish the Release for that tag.
+(Linux / Windows / macOS x64 / macOS arm64) when a GitHub Release is **published**. It
+takes the version from the release **tag** (`v0.1.4-pre` → `0.1.4-pre`, passed as
+`KORIS_RELEASE_VERSION`) so the artifact names line up, builds with `--publish never`, then
+attaches the installers to the triggering release with `gh release upload <tag> --clobber`.
+Release flow: `pnpm release <bump>` → review → commit → `git tag vX.Y.Z` →
+`git push --follow-tags` → publish the Release for that tag.
 
 **Not done yet:** code signing / notarization (`identity: null`, unsigned) and app icons —
 see `features/packaging.md`.

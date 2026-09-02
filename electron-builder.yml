@@ -57,7 +57,7 @@ artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 
 linux:
   category: Utility
-  maintainer: guilhermesalviano <guilhermesalviano177@gmail.com>
+  maintainer: guilhermesalviano <koaris.project@gmail.com>
   target:
     - AppImage
     - deb
