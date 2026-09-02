@@ -157,6 +157,22 @@ describe('channel-agnostic end-to-end pipeline', () => {
     expect(texts.join('\n')).toContain('/help');
   });
 
+  it('refuses a slash command from an untrusted sender before the command layer', async () => {
+    const { gateway, mainAgent } = makeGatewayWithFakeAgent('unused');
+    const commandSpy = vi.spyOn(gateway, 'handle');
+    const { reply, texts } = makeReply();
+
+    const handled = await makeHandler(gateway, reply).handle(
+      'user-2',
+      inbound({ text: '/clear', isTrustedSender: false }),
+    );
+
+    expect(handled).toBe(true);
+    expect(commandSpy).not.toHaveBeenCalled();
+    expect(mainAgent.run).not.toHaveBeenCalled();
+    expect(texts.join('\n')).toContain('authorized users');
+  });
+
   it('replies with an error message when the main agent throws, without rejecting', async () => {
     const { gateway, mainAgent } = makeGatewayWithFakeAgent('unused');
     mainAgent.run.mockRejectedValue(new Error('provider unavailable'));

@@ -26,6 +26,7 @@ interface FormState {
   model: string;
   apiToken: string;
   baseUrl: string;
+  numCtx: string;
   showAdvanced: boolean;
 }
 
@@ -34,7 +35,7 @@ export default function ProvidersPage() {
   const [toastMsg, showToast, isError] = useToast();
   const [tab, setTab] = useState<TabKey>('manager');
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>({ model: '', apiToken: '', baseUrl: '', showAdvanced: false });
+  const [form, setForm] = useState<FormState>({ model: '', apiToken: '', baseUrl: '', numCtx: '', showAdvanced: false });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
   const [saving, setSaving] = useState(false);
@@ -65,6 +66,12 @@ export default function ProvidersPage() {
     return entry.model || entry.recommendedModel || '';
   }
 
+  function seedNumCtx(entry: ProviderCatalogEntry): string {
+    if (isCurrent(entry) && active.numCtx) return String(active.numCtx);
+    if (entry.storedNumCtx) return String(entry.storedNumCtx);
+    return '';
+  }
+
   function openProvider(entry: ProviderCatalogEntry) {
     setExpanded(entry.name);
     setTestResult(null);
@@ -72,6 +79,7 @@ export default function ProvidersPage() {
       model: seedModel(entry),
       apiToken: '',
       baseUrl: isCurrent(entry) && active.baseUrl ? active.baseUrl : '',
+      numCtx: seedNumCtx(entry),
       showAdvanced: false,
     });
   }
@@ -97,12 +105,18 @@ export default function ProvidersPage() {
     }
   }
 
+  function parsedNumCtx(): number | undefined {
+    const n = Math.floor(Number(form.numCtx.trim()));
+    return form.numCtx.trim() && Number.isFinite(n) && n > 0 ? n : undefined;
+  }
+
   function formInput(entry: ProviderCatalogEntry) {
     return {
       provider: entry.name,
       model: form.model.trim(),
       apiToken: form.apiToken,
       baseUrl: form.baseUrl.trim(),
+      numCtx: parsedNumCtx(),
     };
   }
 
@@ -142,6 +156,7 @@ export default function ProvidersPage() {
             model: model ?? (isCurrent(entry) ? active.model : entry.model || entry.recommendedModel || ''),
             apiToken: '',
             baseUrl: isCurrent(entry) ? active.baseUrl : entry.storedBaseUrl || '',
+            numCtx: expanded === entry.name ? parsedNumCtx() : undefined,
           });
       if (res.ok) {
         showToast(isEmbedTab ? `${entry.label} used for embeddings` : `${entry.label} set as ${tabLabel}`);
@@ -309,6 +324,28 @@ export default function ProvidersPage() {
                           }
                         />
                       </div>
+
+                      {!isEmbedTab && (
+                        <div>
+                          <label className={labelClass}>Context size</label>
+                          <input
+                            value={form.numCtx}
+                            onChange={(e) =>
+                              setForm((p) => ({ ...p, numCtx: e.target.value.replace(/[^\d]/g, '') }))
+                            }
+                            className={`${inputClass} font-mono`}
+                            name="num-ctx"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            placeholder={String(
+                              (current && active.numCtx) || entry.storedNumCtx || api.defaultNumCtx,
+                            )}
+                          />
+                          <p className="mt-1 font-mono text-[10px] text-txt-3">
+                            Caps tokens per request. Blank keeps the current value (default {api.defaultNumCtx}).
+                          </p>
+                        </div>
+                      )}
 
                       {!isEmbedTab && (
                         <div className="sm:col-span-2">

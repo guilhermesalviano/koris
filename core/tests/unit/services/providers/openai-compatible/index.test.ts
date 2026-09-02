@@ -104,6 +104,27 @@ describe('OpenAICompatibleAIProvider', () => {
     expect(headers.get('authorization')).toBe('Bearer nvapi-secret');
   });
 
+  it('sends max_tokens from numCtx and omits it when unset', async () => {
+    const okResponse = () =>
+      new Response(
+        JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }] }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    const fetchMock = vi.fn().mockImplementation(async () => okResponse()) as unknown as typeof fetch;
+    globalThis.fetch = fetchMock;
+
+    await new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model', numCtx: 8192 })
+      .chat({ messages: [{ role: 'user', content: 'hi' }] });
+    let body = JSON.parse((fetchMock as any).mock.calls[0][1].body);
+    expect(body.max_tokens).toBe(8192);
+
+    (fetchMock as any).mockClear();
+    await new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' })
+      .chat({ messages: [{ role: 'user', content: 'hi' }] });
+    body = JSON.parse((fetchMock as any).mock.calls[0][1].body);
+    expect(body.max_tokens).toBeUndefined();
+  });
+
   it('sends the openrouter attribution headers, other presets do not', async () => {
     const openrouterPreset = findOpenAICompatiblePreset('openrouter')!;
     const fetchMock = vi.fn().mockImplementation(async () =>

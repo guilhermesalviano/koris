@@ -69,6 +69,7 @@ class OpenAICompatibleAIProvider implements AIProvider {
   private readonly embeddingModel: string;
   private readonly embeddingEnabled: boolean;
   private readonly apiToken: string;
+  private readonly numCtx?: number;
 
   constructor(
     private readonly logger: ILogger,
@@ -81,6 +82,7 @@ class OpenAICompatibleAIProvider implements AIProvider {
     this.embeddingModel = opts?.embeddingModel ?? config.AI.EMBED.MODEL;
     this.embeddingEnabled = opts?.embeddingEnabled ?? config.AI.EMBED.ENABLED;
     this.apiToken = opts?.apiToken ?? config.AI.MANAGER.API_TOKEN;
+    this.numCtx = opts?.numCtx;
   }
 
   async complete(request: AIChatRequest, options?: AIChatOptions): Promise<AIResponse> {
@@ -435,6 +437,10 @@ class OpenAICompatibleAIProvider implements AIProvider {
 
     if (request.tools?.length) body['tools'] = request.tools;
     if (request.temperature != null) body['temperature'] = request.temperature;
+    // Configured context size doubles as the per-request output cap. Without it
+    // some providers (e.g. OpenRouter) reserve the model's full context window
+    // for their credit pre-check and reject the request.
+    if (typeof this.numCtx === 'number' && this.numCtx > 0) body['max_tokens'] = this.numCtx;
 
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',

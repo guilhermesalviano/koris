@@ -3,7 +3,8 @@ import { apiRequest, ApiRequestError } from './api';
 import type { ProviderCatalogEntry, ProviderRole, ProvidersResponse, ActiveProvider } from './types';
 import type { ConnectionTestResult } from './use-settings-form';
 
-const EMPTY_ACTIVE: ActiveProvider = { provider: '', model: '', baseUrl: '', hasToken: false };
+const EMPTY_ACTIVE: ActiveProvider = { provider: '', model: '', baseUrl: '', hasToken: false, numCtx: undefined };
+const DEFAULT_NUM_CTX = 16384;
 const EMPTY_EMBED: ActiveProvider & { enabled: boolean } = { ...EMPTY_ACTIVE, enabled: false };
 
 type ActiveState = Record<ProviderRole, ActiveProvider> & {
@@ -15,6 +16,7 @@ export interface ActivateInput {
   model: string;
   apiToken: string;
   baseUrl: string;
+  numCtx?: number;
 }
 
 export interface EmbedInput {
@@ -27,6 +29,7 @@ export interface EmbedInput {
 interface ProvidersContextValue {
   catalog: ProviderCatalogEntry[];
   active: ActiveState;
+  defaultNumCtx: number;
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
@@ -45,6 +48,7 @@ export function ProvidersProvider({ children }: { children: ReactNode }) {
     workers: EMPTY_ACTIVE,
     embed: EMPTY_EMBED,
   });
+  const [defaultNumCtx, setDefaultNumCtx] = useState(DEFAULT_NUM_CTX);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,6 +59,7 @@ export function ProvidersProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest<ProvidersResponse>('/providers');
       setCatalog(res.providers);
       setActive(res.active);
+      setDefaultNumCtx(res.defaultNumCtx ?? DEFAULT_NUM_CTX);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load providers');
     } finally {
@@ -84,6 +89,7 @@ export function ProvidersProvider({ children }: { children: ReactNode }) {
       model: input.model,
     };
     if (input.apiToken) profile.api_token = input.apiToken;
+    if (typeof input.numCtx === 'number' && input.numCtx > 0) profile.num_ctx = input.numCtx;
     return profile;
   };
 
@@ -132,7 +138,7 @@ export function ProvidersProvider({ children }: { children: ReactNode }) {
     [postSettings],
   );
 
-  const value: ProvidersContextValue = { catalog, active, loading, error, reload: load, test, saveProvider, activate, setEmbed };
+  const value: ProvidersContextValue = { catalog, active, defaultNumCtx, loading, error, reload: load, test, saveProvider, activate, setEmbed };
 
   return <ProvidersContext.Provider value={value}>{children}</ProvidersContext.Provider>;
 }

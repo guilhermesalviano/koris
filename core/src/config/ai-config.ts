@@ -23,16 +23,20 @@
  * layouts. Regenerate the file from `koris.example.json` if it drifts.
  */
 
+/** Default context size when a provider entry has no `num_ctx`. */
+export const DEFAULT_NUM_CTX = 16384;
+
 export interface ResolvedRoleProfile {
   PROVIDER: string;
   BASE_URL: string;
   API_TOKEN: string;
   MODEL: string;
-}
-
-export interface ResolvedWorkersProfile extends ResolvedRoleProfile {
   NUM_CTX: number;
 }
+
+// Kept as an alias so existing imports/type references still compile — every
+// role now carries NUM_CTX.
+export type ResolvedWorkersProfile = ResolvedRoleProfile;
 
 export interface ResolvedEmbedProfile {
   ENABLED: boolean;
@@ -76,6 +80,7 @@ const DEFAULT_MANAGER: ResolvedRoleProfile = {
   BASE_URL: '',
   API_TOKEN: '',
   MODEL: 'gemma4:e2b',
+  NUM_CTX: DEFAULT_NUM_CTX,
 };
 
 const DEFAULT_WORKERS: ResolvedWorkersProfile = {
@@ -83,7 +88,7 @@ const DEFAULT_WORKERS: ResolvedWorkersProfile = {
   BASE_URL: '',
   API_TOKEN: '',
   MODEL: 'qwen:3.5:2b',
-  NUM_CTX: 16384,
+  NUM_CTX: DEFAULT_NUM_CTX,
 };
 
 const DEFAULT_EMBED_PROVIDER = 'ollama';
@@ -143,6 +148,8 @@ function resolveRole(
     API_TOKEN: entry ? strOr(entry.api_token, fallback.API_TOKEN) : fallback.API_TOKEN,
     // The model comes from the provider entry, not the role pointer.
     MODEL: strOr(entry?.model, fallback.MODEL),
+    // Context size lives on the provider entry (coerces a stringy num_ctx).
+    NUM_CTX: numOr(entry?.num_ctx, fallback.NUM_CTX),
   };
 }
 
@@ -178,16 +185,11 @@ export function resolveAiRoles(aiRaw: unknown): ResolvedAiRoles {
   const roles = isRecord(ai.roles) ? ai.roles : {};
 
   const manager = resolveRole(roles.manager, providers, DEFAULT_MANAGER);
-  const workersBase = resolveRole(roles.workers, providers, DEFAULT_WORKERS);
-  const workersEntry = findEntry(providers, workersBase.PROVIDER);
+  const workers = resolveRole(roles.workers, providers, DEFAULT_WORKERS);
 
   return {
     MANAGER: manager,
-    WORKERS: {
-      ...workersBase,
-      // Context size lives on the workers provider entry.
-      NUM_CTX: numOr(workersEntry?.num_ctx, DEFAULT_WORKERS.NUM_CTX),
-    },
+    WORKERS: workers,
     EMBED: resolveEmbed(ai),
   };
 }

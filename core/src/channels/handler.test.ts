@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ChannelHandlerFactory } from './handler';
+import { COMMANDS_RESTRICTED_MESSAGE } from '../constants/commands';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../constants/thinking';
 import type { InboundChannelMessage } from './handler';
 
@@ -165,13 +166,42 @@ describe('channels/handler', () => {
     const { handler, gateway, reply } = makeHandler();
     gateway.handle.mockResolvedValue('pong');
 
-    await handler.handle('jid', message({ senderName: 'guilherme', text: '/help' }));
+    await handler.handle('jid', message({ senderName: 'guilherme', text: '/help', isTrustedSender: true }));
 
     expect(gateway.handle).toHaveBeenCalledWith(
       { text: '/help', images: undefined },
       'jid',
       expect.any(Object),
     );
+  });
+
+  it('refuses commands from untrusted senders before they reach the gateway', async () => {
+    const { handler, gateway, reply } = makeHandler();
+
+    const processed = await handler.handle('jid', message({ text: '/help', isTrustedSender: false }));
+
+    expect(processed).toBe(true);
+    expect(gateway.handle).not.toHaveBeenCalled();
+    expect(reply.sendText).toHaveBeenCalledWith('jid', COMMANDS_RESTRICTED_MESSAGE);
+  });
+
+  it('refuses commands from untrusted senders even behind a mention', async () => {
+    const { handler, gateway, reply } = makeHandler();
+
+    await handler.handle('jid', message({ text: `@${MENTION_ID} /compact`, isTrustedSender: false }));
+
+    expect(gateway.handle).not.toHaveBeenCalled();
+    expect(reply.sendText).toHaveBeenCalledWith('jid', COMMANDS_RESTRICTED_MESSAGE);
+  });
+
+  it('lets untrusted senders send normal (non-command) messages', async () => {
+    const { handler, gateway, reply } = makeHandler();
+    gateway.handle.mockResolvedValue('pong');
+
+    await handler.handle('jid', message({ text: 'hello there', isTrustedSender: false }));
+
+    expect(gateway.handle).toHaveBeenCalled();
+    expect(reply.sendText).toHaveBeenCalledWith('jid', 'pong');
   });
 
   it('strips the configured mention from the text', async () => {

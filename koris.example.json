@@ -7,7 +7,8 @@
   "learned_skills_limit": 10,
   "heartbeat": false,
   "session": {
-    "summarizer_mode": "manual"
+    "summarizer_mode": "manual",
+    "compact_threshold": 0.9
   },
   "ai": {
     "parallel": false,

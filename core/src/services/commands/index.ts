@@ -1,32 +1,37 @@
 import { config } from '../../config';
 import { handleUsageCommand } from './usage';
 import { addAllowedDomain } from '../security/allowed-domains';
+import {
+  commandToken,
+  findCommand,
+  isKnownCommand,
+  listCommandsFor,
+} from './registry';
 import type { CommandContext, CommandResult } from '../../types/commands';
 
+export { SLASH_COMMANDS, findCommand, isKnownCommand } from './registry';
+export type { CommandSpec, CommandChannel } from './registry';
+
 export function handleCommand(command: string, context: CommandContext): CommandResult {
-  const cmd = command.toLowerCase().split(' ')[0];
-
-  switch (cmd) {
-    case '/start':
-      return handleStart(context);
-
+  switch (commandToken(command)) {
     case '/help':
-      return handleHelp(context);
+      return handleHelp(command, context);
 
     case '/status':
       return handleStatus(context);
 
-    case '/stats':
-      return handleStats(context);
-
     case '/usage':
       return handleUsageCommand(command, context);
 
-    case '/clear':
-      return handleClear(context);
+    case '/whoami':
+      return handleWhoami(context);
 
+    case '/memory':
+      return { action: 'memory', handled: true };
+
+    case '/clear':
     case '/reset':
-      return handleReset(context);
+      return handleClear(context);
 
     case '/compact':
       return handleCompact(context);
@@ -43,7 +48,7 @@ export function handleCommand(command: string, context: CommandContext): Command
       return {
         response: formatMessage(
           `Unknown command: ${command}\nType /help for available commands`,
-          context.source
+          context.source,
         ),
         action: 'none',
         handled: false,
@@ -51,45 +56,34 @@ export function handleCommand(command: string, context: CommandContext): Command
   }
 }
 
-function handleStart(context: CommandContext): CommandResult {
-  const message = context.source === 'telegram'
-    ? `👋 *Welcome to koris!*
+function handleHelp(command: string, context: CommandContext): CommandResult {
+  const arg = command.trim().split(/\s+/)[1];
 
-I'm an AI coding agent (provider: *${config.AI.MANAGER.PROVIDER}*). I can help you with:
+  if (arg) {
+    const spec = findCommand(arg);
+    if (!spec) {
+      return formatCommandResult(
+        `Unknown command: ${arg}\nType /help for the full list.`,
+        context.source,
+      );
+    }
 
-• Reading and analyzing code
-• Making file changes
-• Running commands
-• Answering coding questions
+    const lines = [`*${spec.name}*`, '', `  ${spec.summary}`];
+    if (spec.usage) lines.push('', `  Usage: ${spec.usage}`);
+    if (spec.aliases?.length) lines.push('', `  Aliases: ${spec.aliases.join(', ')}`);
+    if (spec.trusted) lines.push('', '  Restricted to trusted senders.');
+    if (spec.details) lines.push('', spec.details);
+    return formatCommandResult(lines.join('\n'), context.source);
+  }
 
-Just send me a message with what you need!`
-    : `Welcome to koris!
+  const rows = listCommandsFor(context.source).map((spec) => {
+    const invocation = spec.usage ?? spec.name;
+    return `${invocation.padEnd(20)} ${spec.summary}`;
+  });
 
-I'm an AI coding agent (provider: ${config.AI.MANAGER.PROVIDER}) that can help you with:
-• Reading and analyzing code
-• Making file changes
-• Running commands
-• Answering coding questions
-
-Type /help for available commands.`;
-
-  return {
-    response: message,
-    action: 'none',
-    handled: true,
-  };
-}
-
-function handleHelp(context: CommandContext): CommandResult {
   const message = `*Available Commands:*
 
-/start - Welcome message
-/help - Show this help
-/status - Check bot status
-/usage - Token usage report (/usage 7, /usage today)
-/clear - Clear conversation history
-/compact - Summarize this session into memory and start a fresh one
-/allow <domain> - Add a domain to allowed_domains so I can reach it
+${rows.join('\n')}
 
 Send me any message to interact!`;
 
@@ -104,7 +98,7 @@ function handleStatus(context: CommandContext): CommandResult {
 • Connection: Active
 • AI Provider: *${config.AI.MANAGER.PROVIDER}*
 • Model: *${config.AI.MANAGER.MODEL}*
-• Ready to assist!`,
+• Session mode: *${config.SESSION.SUMMARIZER_MODE}*`,
       action: 'none',
       handled: true,
     };
@@ -113,97 +107,46 @@ function handleStatus(context: CommandContext): CommandResult {
   return {
     response: `Status:
 
-  Connection: Active
-  AI Provider: ${config.AI.MANAGER.PROVIDER}
-  Model: ${config.AI.MANAGER.MODEL}
-  Base URL: ${config.AI.MANAGER.BASE_URL}`,
+  Connection:   Active
+  AI Provider:  ${config.AI.MANAGER.PROVIDER}
+  Model:        ${config.AI.MANAGER.MODEL}
+  Base URL:     ${config.AI.MANAGER.BASE_URL}
+  Session mode: ${config.SESSION.SUMMARIZER_MODE}`,
     action: 'none',
     handled: true,
   };
 }
 
-function handleStats(context: CommandContext): CommandResult {
-  if (context.source === 'telegram') {
-    return {
-      response: `✅ *Bot Status*
+function handleWhoami(context: CommandContext): CommandResult {
+  const access = context.trusted
+    ? 'trusted — tools and learned skills enabled'
+    : 'standard — chat only, tools disabled';
 
-• Connection: Active
-• AI Provider: *${config.AI.MANAGER.PROVIDER}*
-• Ready to assist!`,
-      action: 'none',
-      handled: true,
-    };
-  }
+  const lines = [
+    '*Who you are to me*',
+    '',
+    `  Channel: ${context.source}`,
+    `  Access:  ${access}`,
+  ];
+  if (context.originId) lines.push(`  ID:      ${context.originId}`);
 
-  if (!context.session) {
-    return {
-      response: 'Session statistics not available',
-      action: 'none',
-      handled: true,
-    };
-  }
-
-  const uptime = Math.floor((Date.now() - context.session.startTime.getTime()) / 1000);
-  const minutes = Math.floor(uptime / 60);
-  const seconds = uptime % 60;
-
-  return {
-    response: `Session Statistics:
-
-  Messages: ${context.session.messageCount}
-  Uptime:   ${minutes}m ${seconds}s
-  Started:  ${context.session.startTime.toLocaleTimeString()}`,
-    action: 'none',
-    handled: true,
-  };
+  return formatCommandResult(lines.join('\n'), context.source);
 }
 
 function handleClear(context: CommandContext): CommandResult {
-  if (context.source === 'telegram') {
-    return {
-      response: '🗑️ Conversation history cleared!',
-      action: 'clear',
-      handled: true,
-    };
-  }
+  const response = context.source === 'telegram'
+    ? '🗑️ Cleared. Starting a fresh session.'
+    : 'Cleared. Starting a fresh session.';
 
-  return {
-    response: '',
-    action: 'clear',
-    handled: true,
-  };
-}
-
-function handleReset(context: CommandContext): CommandResult {
-  if (context.source === 'telegram') {
-    return {
-      response: '🔄 Session reset!',
-      action: 'reset',
-      handled: true,
-    };
-  }
-
-  return {
-    response: '✓ Session reset',
-    action: 'reset',
-    handled: true,
-  };
+  return { response, action: 'clear', handled: true };
 }
 
 function handleCompact(context: CommandContext): CommandResult {
-  if (context.source === 'telegram') {
-    return {
-      response: '🗜️ Compacting session — starting a fresh one with a summary of what we covered.',
-      action: 'compact',
-      handled: true,
-    };
-  }
+  const response = context.source === 'telegram'
+    ? '🗜️ Compacting session — starting a fresh one with a summary of what we covered.'
+    : 'Compacting session — starting a fresh one with a summary of what we covered.';
 
-  return {
-    response: 'Compacting session — starting a fresh one with a summary of what we covered.',
-    action: 'compact',
-    handled: true,
-  };
+  return { response, action: 'compact', handled: true };
 }
 
 function handleAllow(command: string, context: CommandContext): CommandResult {
@@ -232,19 +175,11 @@ function handleAllow(command: string, context: CommandContext): CommandResult {
 }
 
 function handleExit(context: CommandContext): CommandResult {
-  if (context.source === 'telegram') {
-    return {
-      response: 'Cannot exit Telegram bot. Use /start to restart.',
-      action: 'none',
-      handled: true,
-    };
-  }
+  const response = context.source === 'telegram'
+    ? 'This bot stays running. Use /clear to start a fresh session.'
+    : 'To leave koris, press Ctrl+C. Use /clear to start a fresh session.';
 
-  return {
-    response: '👋 Goodbye!',
-    action: 'exit' as const,
-    handled: true,
-  };
+  return { response: formatMessage(response, context.source), action: 'none', handled: true };
 }
 
 function formatMessage(message: string, channel: string): string {
@@ -264,22 +199,18 @@ function formatCommandResult(message: string, channel: string): CommandResult {
 }
 
 /**
- * Check if a message is a command
+ * Whether a message names a command koris handles. Matches the known command
+ * set (canonical names and aliases) rather than a bare leading slash, so an
+ * unrecognised `/something` flows to the agent like any other message.
  */
-// todo: do not limit commands with slash, but with a list of known commands
 export function isCommand(message: string): boolean {
-  return message.trim().startsWith('/');
+  return isKnownCommand(message);
 }
 
 /**
- * Get list of available commands
+ * Flat list of command tokens (canonical names + aliases) listable on a
+ * channel, for input completion.
  */
 export function getAvailableCommands(channel: string): string[] {
-  const commonCommands = ['/start', '/help', '/usage', '/clear', '/compact', '/allow'];
-
-  if (channel === 'tui') {
-    return [...commonCommands, '/stats', '/status', '/reset', '/exit', '/quit', '/bye'];
-  }
-  
-  return [...commonCommands, '/status'];
+  return listCommandsFor(channel).flatMap((spec) => [spec.name, ...(spec.aliases ?? [])]);
 }

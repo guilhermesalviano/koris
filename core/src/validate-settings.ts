@@ -113,6 +113,15 @@ async function main() {
     config.LOG_LEVEL,
   );
 
+  check(
+    Number.isFinite(config.SESSION.COMPACT_THRESHOLD)
+      && config.SESSION.COMPACT_THRESHOLD >= 0.1
+      && config.SESSION.COMPACT_THRESHOLD <= 1,
+    'session.compact_threshold is a valid fraction',
+    `Got: ${config.SESSION.COMPACT_THRESHOLD}. Expected a number between 0.1 and 1.`,
+    `${Math.round(config.SESSION.COMPACT_THRESHOLD * 100)}% of manager num_ctx`,
+  );
+
   const channelsAllowingUnlisted = listLiveChannels()
     .filter((channel) => channel.loadConfig().allowUnlistedSenders === true)
     .map((channel) => channel.name);
@@ -169,6 +178,13 @@ async function main() {
     'ai.manager.model is not empty',
     'Set ai.manager.model in koris.json',
     config.AI.MANAGER.MODEL,
+  );
+
+  check(
+    Number.isInteger(config.AI.MANAGER.NUM_CTX) && config.AI.MANAGER.NUM_CTX >= 512 && config.AI.MANAGER.NUM_CTX <= 131072,
+    'ai.manager.num_ctx is a valid context size',
+    `Got: ${config.AI.MANAGER.NUM_CTX}. Expected an integer between 512 and 131072.`,
+    `${config.AI.MANAGER.NUM_CTX} tokens`,
   );
 
   check(

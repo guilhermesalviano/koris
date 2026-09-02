@@ -11,6 +11,8 @@ import {
 } from '../config/validators';
 import { applyAiProviderPatch, applyAiRolePatch, applyAiEmbedPatch, loadCurrentOrExampleSettings, mergeSettingsPayload, writeSettingsFile } from '../config/settings-writer';
 import type { AiRolePatch, AiEmbedPatch } from '../config/settings-writer';
+import { DEFAULT_NUM_CTX } from '../config/ai-config';
+import { estimateSessionTokens, compactTriggerTokens } from '../services/agents/context-budget';
 import { addAllowedDomain } from '../services/security/allowed-domains';
 import { findGateBlocks } from '../services/security/gate-blocks';
 import { getSupportedProviders, getProviderCatalog, getProviderDefaultBaseUrl, clearProviderCache } from '../services/providers';
@@ -184,6 +186,33 @@ function collectSettingsPayloadErrors(
       if (typeof profile.model === 'string' && !profile.model.trim()) {
         errors.push(`${label}.model must not be empty.`);
       }
+      if (profile.num_ctx !== undefined && profile.num_ctx !== '') {
+        const numCtx = Number(profile.num_ctx);
+        if (!Number.isInteger(numCtx) || numCtx < 512 || numCtx > 131072) {
+          errors.push(`${label}.num_ctx must be an integer between 512 and 131072.`);
+        }
+      }
+    }
+
+    // `num_ctx` (and model) live on the shared `ai.providers[]` entry keyed by
+    // provider name, so a manager + workers patch that names the same provider
+    // with different context sizes would silently clobber one on save. Reject it
+    // rather than lose the value.
+    const managerProfile = asRecord(ai.manager);
+    const workersProfile = asRecord(ai.workers);
+    if (
+      managerProfile
+      && workersProfile
+      && typeof managerProfile.provider === 'string'
+      && managerProfile.provider === workersProfile.provider
+      && managerProfile.num_ctx !== undefined && managerProfile.num_ctx !== ''
+      && workersProfile.num_ctx !== undefined && workersProfile.num_ctx !== ''
+      && Number(managerProfile.num_ctx) !== Number(workersProfile.num_ctx)
+    ) {
+      errors.push(
+        `ai.manager and ai.workers both use provider "${managerProfile.provider}", whose num_ctx is shared. `
+        + 'Set the same num_ctx for both roles, or point them at separate provider entries.',
+      );
     }
 
     const embed = asRecord(ai.embed);
@@ -539,6 +568,34 @@ class AdminRouterFactory {
       });
     });
 
+    // Estimated context usage for a chat session — powers the small usage bar
+    // in the chat UI. `?sessionId=` targets the viewed session; without it the
+    // live web session is used. Mirrors what the manual-mode auto-compact check
+    // measures (`context-budget.ts`).
+    router.get('/chat/context', (req: Request, res: Response) => {
+      const requestedId = typeof req.query.sessionId === 'string' ? req.query.sessionId : '';
+      const session = requestedId
+        ? sessionRepo.findById(requestedId)
+        : sessionRepo.findLatestOpenByEntryChannel('web');
+      const limit = config.AI.MANAGER.NUM_CTX;
+      if (!session) {
+        res.json({ used: 0, limit, threshold: compactTriggerTokens() });
+        return;
+      }
+
+      // No limit arg → the same recent-history window the manager actually
+      // sends to the model (and that the auto-compact check measures).
+      const history = messageRepo.getBySessionId(session.id);
+      const compactSummary = typeof session.metadata?.compactSummary === 'string'
+        ? session.metadata.compactSummary
+        : undefined;
+      res.json({
+        used: estimateSessionTokens(history, compactSummary),
+        limit,
+        threshold: compactTriggerTokens(),
+      });
+    });
+
     router.get('/heartbeats', (_req: Request, res: Response) => {
       const now = new Date();
       res.json({
@@ -824,11 +881,18 @@ class AdminRouterFactory {
     });
 
     router.get('/providers', (_req: Request, res: Response) => {
-      const activeProfile = (profile: typeof config.AI.MANAGER) => ({
+      const activeProfile = (profile: {
+        PROVIDER: string;
+        MODEL: string;
+        BASE_URL: string;
+        API_TOKEN: string;
+        NUM_CTX?: number;
+      }) => ({
         provider: profile.PROVIDER,
         model: profile.MODEL,
         baseUrl: profile.BASE_URL,
         hasToken: !!profile.API_TOKEN?.trim(),
+        numCtx: profile.NUM_CTX,
       });
       const configured = new Set([config.AI.MANAGER.PROVIDER, config.AI.WORKERS.PROVIDER, config.AI.EMBED.PROVIDER]);
       // Surface every provider kept in ai.providers[] on disk with its saved
@@ -855,10 +919,14 @@ class AdminRouterFactory {
           model,
           storedBaseUrl: typeof stored?.base_url === 'string' ? stored.base_url : '',
           hasToken: typeof stored?.api_token === 'string' ? !!stored.api_token.trim() : false,
+          storedNumCtx: stored?.num_ctx !== undefined && Number.isFinite(Number(stored.num_ctx))
+            ? Number(stored.num_ctx)
+            : undefined,
         };
       });
       res.json({
         providers,
+        defaultNumCtx: DEFAULT_NUM_CTX,
         active: {
           manager: activeProfile(config.AI.MANAGER),
           workers: activeProfile(config.AI.WORKERS),

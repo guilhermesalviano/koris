@@ -6,6 +6,8 @@ import type {
   InboundChannelMessage,
   IMessageGateway,
 } from '../../../plugins/channels/contracts';
+import { COMMANDS_RESTRICTED_MESSAGE } from '../constants';
+import { isCommand } from '../services/commands';
 import { resolveResponse } from './utils';
 
 export type {
@@ -37,6 +39,12 @@ class ChannelHandler implements IChannelHandler {
     }
 
     const text = this.stripMention(message.text);
+
+    if (isCommand(text) && !message.isTrustedSender) {
+      await this.reply.sendText(target, COMMANDS_RESTRICTED_MESSAGE);
+      return true;
+    }
+
     const prompt = this.buildPrompt(message, text);
 
     try {

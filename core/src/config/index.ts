@@ -54,6 +54,14 @@ export interface AppConfig {
      * the sole way a session gets summarized (and rotated on demand).
      */
     SUMMARIZER_MODE: SummarizerMode;
+    /**
+     * Manual-mode safety valve: fraction (0.1–1) of the manager provider's
+     * context window (`ai.manager` num_ctx) at which a session is auto-compacted
+     * — summarized into memory and rotated — before the next turn, so a
+     * manual-mode session can't grow until it overflows the model. Ignored when
+     * SUMMARIZER_MODE is 'auto' (the per-turn summarizer already condenses).
+     */
+    COMPACT_THRESHOLD: number;
   };
   HEARTBEAT: boolean;
   AI: {
@@ -65,6 +73,7 @@ export interface AppConfig {
       BASE_URL: string;
       API_TOKEN: string;
       MODEL: string;
+      NUM_CTX: number;
     };
     WORKERS: {
       PROVIDER: string;
@@ -112,6 +121,10 @@ function buildConfig(): AppConfig {
   SESSION: {
     TTL_MS: Number(get('session.ttl_ms', String(3 * 60 * 60 * 1000))),
     SUMMARIZER_MODE: get('session.summarizer_mode', 'auto') === 'manual' ? 'manual' : 'auto',
+    COMPACT_THRESHOLD: (() => {
+      const raw = Number(get('session.compact_threshold', '0.9'));
+      return Number.isFinite(raw) ? Math.min(1, Math.max(0.1, raw)) : 0.9;
+    })(),
   },
   HEARTBEAT: get('heartbeat', 'true') === 'true',
   AI: (() => {
@@ -128,6 +141,8 @@ function buildConfig(): AppConfig {
       BASE_URL: envOr('ai.manager.base_url', roles.MANAGER.BASE_URL),
       API_TOKEN: envOr('ai.manager.api_token', roles.MANAGER.API_TOKEN),
       MODEL:   envOr('ai.manager.model', roles.MANAGER.MODEL),
+      // num_ctx is resolved from the manager provider entry. Env overrides apply.
+      NUM_CTX: Number(envOr('ai.manager.num_ctx', String(roles.MANAGER.NUM_CTX))),
     },
     WORKERS: {
       PROVIDER: process.env.VITEST === 'true' ? 'mock' : envOr('ai.workers.provider', roles.WORKERS.PROVIDER),

@@ -175,6 +175,9 @@ describe('AICompletionService', () => {
     ['HTTP 429 rate limit', 'rate_limited'],
     ['response missing content', 'malformed_response'],
     ['fetch failed', 'unavailable'],
+    ["OpenRouter /chat/completions failed (400): this model's maximum context length is 128000 tokens", 'context_length'],
+    ['Please reduce the length of the messages', 'context_length'],
+    ['NVIDIA /chat/completions failed (413): payload too large', 'context_length'],
   ] as const)('maps %s to %s', async (message, code) => {
     const { service } = makeService(vi.fn().mockRejectedValue(new Error(message)));
 
