@@ -5,7 +5,10 @@ ignoredBuiltDependencies:
   - '@whiskeysockets/baileys'
   - esbuild
   - protobufjs
+  # better-sqlite3 ships N-API prebuilds for every platform (loaded at runtime
+  # via node-gyp-build), so the implicit `node-gyp rebuild` is unnecessary — and
+  # it breaks CI on Windows runners that lack the MSVC C++ toolchain.
+  - better-sqlite3
 
 onlyBuiltDependencies:
-  - better-sqlite3
   - electron

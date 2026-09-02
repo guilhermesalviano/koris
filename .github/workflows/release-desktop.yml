@@ -56,6 +56,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Resolve release version
+        id: ver
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
       - name: Build server + web + desktop shell
         run: |
           pnpm build
@@ -64,7 +72,28 @@ jobs:
       - name: Stage bundled server + Node runtime
         run: pnpm desktop:stage
 
-      - name: Build and publish installers
-        run: node apps/desktop/scripts/package-desktop.mjs ${{ matrix.args }} --publish always
+      - name: Build installers
+        run: node apps/desktop/scripts/package-desktop.mjs ${{ matrix.args }} --publish never
+        env:
+          KORIS_RELEASE_VERSION: ${{ steps.ver.outputs.version }}
+
+      - name: Attach installers to the release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          shopt -s nullglob
+          files=(
+            dist-desktop-out/*.AppImage
+            dist-desktop-out/*.deb
+            dist-desktop-out/*.rpm
+            dist-desktop-out/*.dmg
+            dist-desktop-out/*.exe
+            dist-desktop-out/*.blockmap
+          )
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no installer artifacts found" >&2
+            exit 1
+          fi
+          printf '%s\n' "${files[@]}"
+          gh release upload "${{ steps.ver.outputs.tag }}" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"

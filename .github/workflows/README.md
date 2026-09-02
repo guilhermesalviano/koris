@@ -28,9 +28,11 @@ This directory contains CI workflows for linting, tests, and CodeQL.
 - **What it does**:
   - Matrix over `ubuntu-latest`, `macos-13` (Intel), `macos-14` (Apple Silicon), `windows-latest`
   - Builds server + web + the Electron shell, then `pnpm desktop:stage` bundles a
-    production `node_modules` (with `better-sqlite3`) and a standalone Node runtime
-  - `electron-builder --publish always` builds the installers (.dmg / .exe / .AppImage / .deb)
-    and uploads them as assets on the triggering Release
+    production `node_modules` (better-sqlite3 via its N-API prebuilds — no compile) and a
+    standalone Node runtime
+  - Builds the installers (.dmg / .exe / .AppImage / .deb) with the version taken from the
+    release **tag**, then `gh release upload <tag> --clobber` attaches them to the
+    triggering Release
 - **Secrets**: none required (uses `GITHUB_TOKEN`). Code signing is not wired yet —
   see `apps/desktop/features/packaging.md`.
 

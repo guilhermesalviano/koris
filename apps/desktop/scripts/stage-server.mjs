@@ -25,16 +25,15 @@ const prodPkg = {
   private: true,
   type: pkg.type,
   dependencies: pkg.dependencies ?? {},
-  // --ignore-workspace drops pnpm-workspace.yaml, so restate which native
-  // packages are allowed to run install scripts.
-  pnpm: { onlyBuiltDependencies: ['better-sqlite3'] },
 };
 
 writeFileSync(join(staging, 'package.json'), `${JSON.stringify(prodPkg, null, 2)}\n`);
 cpSync(join(root, 'pnpm-lock.yaml'), join(staging, 'pnpm-lock.yaml'));
 
+// --ignore-scripts: better-sqlite3 loads from its shipped N-API prebuilds, no
+// compile step needed (and MSVC isn't available on the Windows CI runner).
 execSync(
-  'pnpm install --prod --ignore-workspace --no-frozen-lockfile --config.confirmModulesPurge=false',
+  'pnpm install --prod --ignore-workspace --ignore-scripts --no-frozen-lockfile --config.confirmModulesPurge=false',
   { cwd: staging, stdio: 'inherit' },
 );
 

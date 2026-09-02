@@ -28,7 +28,9 @@ with a tag). Matrix:
 | `macos-14` | `.dmg` (arm64) |
 
 Each job: `pnpm build` → `pnpm build:desktop` → `pnpm desktop:stage` →
-`electron-builder --publish always` (auth via the default `GITHUB_TOKEN`).
+`package-desktop.mjs --publish never` (version from the release tag via
+`KORIS_RELEASE_VERSION`) → `gh release upload <tag> --clobber` attaches the installers to
+the triggering release (auth via the default `GITHUB_TOKEN`).
 
 Release flow: `pnpm release <bump>` → review → commit → `git tag vX.Y.Z` →
 `git push --follow-tags` → publish the Release for that tag (GitHub UI or
