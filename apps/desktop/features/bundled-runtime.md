@@ -1,37 +1,55 @@
-# Deferred: bundled runtime (run without a system Node)
+# Bundled runtime — IMPLEMENTED
 
-**Status:** not implemented. Today `apps/desktop/server-process.ts` spawns `node`
-(`KORIS_DESKTOP_NODE` override) from the user's `PATH`, with `cwd` = repo root, and the
-server reads/writes `dist-web/`, `memory/`, and `koris.json` relative to that cwd
-(`config.BASE_DIR = process.cwd()`). That is fine for `pnpm desktop` on a dev machine;
-it does not survive being packaged into an installer.
+The packaged desktop app runs the koris server with **no system Node**. How it fits together:
 
-## What a packaged build needs
+## What gets bundled
 
-1. **A Node runtime inside the app.** Options, easiest first:
-   - Ship a standalone Node binary in `extraResources` and point `KORIS_DESKTOP_NODE` at it.
-   - Re-exec Electron itself with `ELECTRON_RUN_AS_NODE=1` and `process.execPath` — **but**
-     then `better-sqlite3` loads against Electron's ABI, so it must be rebuilt with
-     `@electron/rebuild` at packaging time. Trade-off: no separate binary, but a native
-     rebuild step.
-   - `sea` (Node single-executable) — heavier setup.
+`scripts/stage-server.mjs` + `scripts/fetch-node.mjs` (run by `pnpm desktop:stage`) produce:
 
-2. **Relocatable paths.** `process.cwd()` is not writable in a packaged app. Introduce an
-   env-var / CLI seam in `core/src/config/index.ts` (or a wrapper entry) so the server can be
-   told:
-   - `dist-web/` location → inside `resources/` (read-only, in the asar-unpacked area or an
-     `extraResources` dir).
-   - `memory/` + `koris.json` location → `app.getPath('userData')` (writable, per-user).
-   Right now these are all `path.resolve(config.BASE_DIR, ...)`; they need to become
-   independently overridable.
+- `build-resources/server-node_modules/` — a pruned **production** `node_modules`. Built by
+  installing a stripped manifest (`dependencies` only, `pnpm.onlyBuiltDependencies:
+  [better-sqlite3]`) with `pnpm install --prod --ignore-workspace`. `better-sqlite3` v13
+  ships per-platform `prebuilds/*.node` for every OS/arch, so one staged tree works on all
+  targets — no cross-compilation.
+- `build-resources/server-package.json` — that stripped manifest.
+- `build-resources/node/` — a standalone Node binary downloaded from nodejs.org
+  (`bin/node` on macOS/Linux, `node.exe` on Windows). Version pinned in `fetch-node.mjs`
+  (`KORIS_BUNDLE_NODE_VERSION` to override), kept `>= 24` to match `engines.node`.
 
-3. **Bundle the server build + its prod deps.** `dist/`, `dist-web/`, and a pruned
-   `node_modules` containing the compiled `better-sqlite3` (matched to whichever runtime
-   option above was chosen) go into the packaged resources. `pnpm deploy --prod` or
-   `pnpm --filter . deploy` can produce the pruned tree.
+`electron-builder.yml` `extraResources` copies these plus `dist/`, `dist-web/`, `skills/`,
+`core/load/`, `heartbeats.default.json`, `koris.example.json` into `resources/server/` and
+the Node runtime into `resources/node/`, alongside `app.asar` (i.e. **outside** the asar,
+so the native `.node` files load normally).
 
-4. **First-run.** If no `koris.json` in userData, the SPA already redirects to `/setup`; make
-   sure the server writes the finished config into the userData dir, not the app bundle.
+## Relocatable paths — the `core/src/config` change
 
-See `packaging.md` for the electron-builder `files` / `extraResources` wiring that consumes
-all of the above.
+`config.BASE_DIR` used to be `process.cwd()` and anchored both read-only assets and writable
+state. It's now split:
+
+| | env var | default | holds |
+| --- | --- | --- | --- |
+| `config.BASE_DIR` | `KORIS_APP_DIR` | `process.cwd()` | read-only: `dist-web/`, `skills/`, `heartbeats.default.json`, `core/load/` |
+| `config.DATA_DIR` | `KORIS_DATA_DIR` | `process.cwd()` | writable: `koris.json`, `memory/`, `logs/` |
+
+`resolveConfigPaths()` / the settings-writer default their `cwd` to
+`resolveDataDir()` (`KORIS_DATA_DIR || process.cwd()`). In a normal checkout both env vars
+are unset, so everything still resolves to the repo root — no behaviour change, all tests
+green.
+
+`apps/desktop`:
+- spawns the server with `cwd = resources/server`, `KORIS_APP_DIR = resources/server`,
+  `KORIS_DATA_DIR = app.getPath('userData')`.
+- `main.ts` `seedDataDir()` copies the bundled `koris.example.json` into the data dir on
+  each launch (the setup wizard patches from it; the "configured" check only looks for
+  `koris.json`, so seeding the example is harmless).
+- pre-creates `<dataDir>/memory` and `<dataDir>/logs`.
+- points `CHANNELS_WHATSAPP_AUTH_FOLDER` at the data dir too.
+
+## Known gaps
+
+- Saving **channel plugin secrets** (`plugins/<family>/<name>/config.yml`) still writes
+  relative to the server cwd (read-only in a packaged app). Channels are opt-in and
+  disabled by default; wire a `KORIS_DATA_DIR`-based path into `plugins/config/writer.ts`
+  before promoting channel setup as a first-class packaged feature.
+- `pnpm onboard` / `pnpm validate` (separate CLIs) still use `process.cwd()` — fine, they
+  aren't run inside the packaged app.

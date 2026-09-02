@@ -38,7 +38,7 @@ Guidance for AI coding agents working in this repository.
 
 - `core/src/app.ts` — process entry point: wires DB, SessionManager, MessageGateway, channels, heartbeat, web server, TUI. Mode detection via argv flags.
 - `core/src/onboard.ts`, `core/src/validate-settings.ts` — CLI entry points (`pnpm onboard`, `pnpm validate`).
-- `core/src/config/` — loads `koris.json` into the typed `config` constant (`config/index.ts`). `config.BASE_DIR` is `process.cwd()`. Read-only; every module imports `config` directly.
+- `core/src/config/` — loads `koris.json` into the typed `config` constant (`config/index.ts`). `config.BASE_DIR` (read-only assets: `dist-web/`, `skills/`, `heartbeats.default.json`, `core/load/`) is `KORIS_APP_DIR || process.cwd()`; `config.DATA_DIR` (writable: `koris.json`, `memory/`, `logs/`) is `KORIS_DATA_DIR || process.cwd()`. Both equal the cwd in a normal checkout — the split only matters for the packaged desktop app. Read-only; every module imports `config` directly.
 - `core/src/constants/` — static prompt/agent text: main agent prompt, sub-agent prompts, thinking, TUI, command help.
 - `core/src/entities/` — plain data types: `message`, `session`, `memory`, `heartbeat`.
 - `core/src/types/` — TypeScript interfaces/typedefs (agents, chat, tools, workers, memory, etc.). Shared contracts live here.
@@ -54,6 +54,7 @@ Guidance for AI coding agents working in this repository.
 - `core/tests/` — Vitest suites: `unit/`, `integration/`, plus `helpers/test-config.ts` and `setup/vitest.setup.ts`.
 - `apps/tui/` — terminal UI wrapper (flat module, one file per concern, co-located `*.test.ts`).
 - `apps/web/` — the web frontend (React 19 SPA; see "Web frontend" below).
+- `apps/desktop/` — Electron shell that spawns/attaches the server and loads the web dashboard in a native window. Own `tsconfig.json` (→ `apps/desktop/out/`) and `package.json` (electron-builder needs it). Packaging: `electron-builder.yml` + `apps/desktop/scripts/` + `.github/workflows/release-desktop.yml`. See `apps/desktop/README.md`.
 - `plugins/registry.ts` — the shared, family-agnostic plugin kernel (`ExtensionPoint`, `PluginRegistry`, `buildRegistry`) used by both `plugins/channels/` and `plugins/tools/`.
 - `plugins/config/` — shared per-plugin `config.yml` helpers (`definePluginConfig`, loader, writer), parameterized by `family: 'channels' | 'tools'`. `plugins/channels/channel-config.ts` is a thin `family: 'channels'` preset wrapper over it.
 - `plugins/channels/` — the channel plugin system with inverted dependencies. `contracts.ts` (the dependency-free plugin SDK: `PluginContext`, channel/gateway/logger interfaces, `ADAPTERS`, `splitMessage`) + one folder per channel plugin (`telegram/`, `whatsapp/`), each exposing `create(context)`.

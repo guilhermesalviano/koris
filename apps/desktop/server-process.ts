@@ -1,11 +1,13 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
+import * as path from 'node:path';
 import {
   HEALTH_POLL_INTERVAL_MS,
   HEALTH_TIMEOUT_MS,
   HEALTH_URL,
+  dataDir,
   nodeBin,
-  repoRoot,
+  serverAppDir,
   serverEntry,
 } from './config';
 
@@ -51,11 +53,21 @@ export async function ensureServer(log: Logger): Promise<EnsureServerResult> {
     );
   }
 
+  for (const dir of ['memory', 'logs']) {
+    mkdirSync(path.join(dataDir, dir), { recursive: true });
+  }
+
   log(`Starting koris server: ${nodeBin} ${serverEntry}`);
   const child = spawn(nodeBin, [serverEntry], {
-    cwd: repoRoot,
+    cwd: serverAppDir,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env },
+    env: {
+      ...process.env,
+      KORIS_APP_DIR: serverAppDir,
+      KORIS_DATA_DIR: dataDir,
+      CHANNELS_WHATSAPP_AUTH_FOLDER:
+        process.env.CHANNELS_WHATSAPP_AUTH_FOLDER || path.join(dataDir, '.whatsapp_auth'),
+    },
   });
   managedChild = child;
 

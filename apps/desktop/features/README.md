@@ -1,10 +1,10 @@
 # `apps/desktop/features/` — deferred desktop features
 
-The first pass of the Electron app (`apps/desktop/`) is intentionally a thin shell:
-it manages the koris server process and loads the existing web dashboard from
-`http://localhost:3000` in a native window. Everything below is **not implemented yet**.
-Each `.ts` file here compiles and exports a named no-op that logs a warning if called;
-each `.md` file is a design note for work that touches packaging or other repos.
+The Electron app (`apps/desktop/`) is a thin shell: it manages the koris server process and
+loads the existing web dashboard from `http://localhost:3000` in a native window. Packaging
+to signed-less installers + GitHub Releases is wired up (see `packaging.md`,
+`bundled-runtime.md`). The `.ts` files below are still **not implemented** — each compiles
+and exports a named no-op that logs a warning if called.
 
 | File | Status | Summary |
 | --- | --- | --- |
@@ -15,8 +15,8 @@ each `.md` file is a design note for work that touches packaging or other repos.
 | `window-state.ts` | stub (no-op) | Persist window bounds + maximized/fullscreen + last route to `app.getPath('userData')` (e.g. `electron-store`), restore on launch. |
 | `global-shortcut.ts` | stub (no-op) | Global hotkey to summon the window / a quick-ask popover. |
 | `deep-links.ts` | stub (no-op) | Register the `koris://` protocol and route `koris://session/<id>`, `koris://setup`, etc. |
-| `bundled-runtime.md` | design note | Ship a Node binary + `dist/` + `dist-web/` + pruned `node_modules` (prebuilt `better-sqlite3`) so the app runs with no system Node; make `dist-web/`, `memory/`, and `koris.json` paths relocatable (they are all keyed off `process.cwd()` today). |
-| `packaging.md` | design note | `electron-builder` config per OS (macOS `dmg` + notarization, Windows `nsis`, Linux `AppImage`/`deb`), app icons, code signing, `files`/`extraResources` layout. |
+| `bundled-runtime.md` | **done** | Node binary + server tree + pruned `node_modules` are bundled; `KORIS_APP_DIR` / `KORIS_DATA_DIR` split the read-only bundle from the writable per-user data dir. File now records how it works. |
+| `packaging.md` | **mostly done** | `electron-builder.yml` + `scripts/` produce Linux/Windows/macOS installers, wired to GitHub Releases via `.github/workflows/release-desktop.yml`. Still TODO: code signing / notarization, real app icons. |
 | `api-base-url-seam.md` | design note | Only needed if we stop loading from `http://localhost:3000`: add a configurable API base URL to `apps/web/src/lib/api.ts` and switch `BrowserRouter` → `HashRouter`. |
 
 ## How to pick one up

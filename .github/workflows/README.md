@@ -22,6 +22,18 @@ This directory contains CI workflows for linting, tests, and CodeQL.
   - Coverage annotations and a coverage summary are posted as CI annotations
   - Uploads coverage to Codecov (single-package `coverage/` output)
 
+### `release-desktop.yml` — Release Desktop
+
+- **Trigger**: a GitHub Release being `published` (or manual `workflow_dispatch` with a tag)
+- **What it does**:
+  - Matrix over `ubuntu-latest`, `macos-13` (Intel), `macos-14` (Apple Silicon), `windows-latest`
+  - Builds server + web + the Electron shell, then `pnpm desktop:stage` bundles a
+    production `node_modules` (with `better-sqlite3`) and a standalone Node runtime
+  - `electron-builder --publish always` builds the installers (.dmg / .exe / .AppImage / .deb)
+    and uploads them as assets on the triggering Release
+- **Secrets**: none required (uses `GITHUB_TOKEN`). Code signing is not wired yet —
+  see `apps/desktop/features/packaging.md`.
+
 ### `codeql.yml` — CodeQL Analysis
 
 - **Trigger**: scheduled + manual dispatch

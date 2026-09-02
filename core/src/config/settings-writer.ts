@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname as pathDirname, join, normalize } from 'path';
-import { resolveConfigPaths } from './helpers';
+import { resolveConfigPaths, resolveDataDir } from './helpers';
 
 export { applyAiProviderPatch, applyAiRolePatch, applyAiEmbedPatch, upsertAiProvider } from './ai-config';
 export type { AiProviderPatch, AiRolePatch, AiEmbedPatch } from './ai-config';
@@ -22,7 +22,7 @@ export interface SettingsWriterOptions {
  * Mirrors the anchor logic in src/onboard.ts's resolveOnboardingAppRoot.
  */
 function resolveAppRoot(options?: SettingsWriterOptions): string {
-  const cwd = options?.cwd ?? process.cwd();
+  const cwd = options?.cwd ?? resolveDataDir();
   const dirname = options?.dirname ?? __dirname;
   const exists = options?.exists ?? existsSync;
 
@@ -39,7 +39,7 @@ function resolveAppRoot(options?: SettingsWriterOptions): string {
 }
 
 function resolveExampleSettingsPath(options?: SettingsWriterOptions): string {
-  const cwd = options?.cwd ?? process.cwd();
+  const cwd = options?.cwd ?? resolveDataDir();
   const dirname = options?.dirname ?? __dirname;
   const exists = options?.exists ?? existsSync;
   const configPath = resolveConfigPaths(cwd, dirname).find((candidate) => exists(candidate));
@@ -55,7 +55,7 @@ function resolveExampleSettingsPath(options?: SettingsWriterOptions): string {
  * koris.json (or koris.example.json) if one is found, else the app root.
  */
 export function resolveSettingsWritePath(options?: SettingsWriterOptions): string {
-  const cwd = options?.cwd ?? process.cwd();
+  const cwd = options?.cwd ?? resolveDataDir();
   const dirname = options?.dirname ?? __dirname;
   const exists = options?.exists ?? existsSync;
   const configPath = resolveConfigPaths(cwd, dirname).find((candidate) => exists(candidate));
@@ -80,7 +80,7 @@ export function loadExampleSettingsTemplate(options?: SettingsWriterOptions): Re
  * example template — the base a partial wizard payload gets merged onto.
  */
 export function loadCurrentOrExampleSettings(options?: SettingsWriterOptions): Record<string, unknown> {
-  const cwd = options?.cwd ?? process.cwd();
+  const cwd = options?.cwd ?? resolveDataDir();
   const dirname = options?.dirname ?? __dirname;
   const exists = options?.exists ?? existsSync;
   const readFile = options?.readFile ?? ((path: string) => readFileSync(path, 'utf-8'));

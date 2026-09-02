@@ -1,5 +1,7 @@
 import { app, BrowserWindow } from 'electron';
-import { isDev } from './config';
+import { copyFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { dataDir, exampleConfig, isDev, isPackaged } from './config';
 import { ensureServer, stopServer } from './server-process';
 import { applyMenu } from './menu';
 import { createWindow, getMainWindow, showApp, showError, showLoading } from './window';
@@ -28,8 +30,23 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
+function seedDataDir(): void {
+  if (!isPackaged) {
+    return;
+  }
+  mkdirSync(dataDir, { recursive: true });
+  // Refresh the example template the setup wizard patches from. Harmless if the
+  // user is already configured — the "configured" check only looks for koris.json.
+  try {
+    copyFileSync(exampleConfig, join(dataDir, 'koris.example.json'));
+  } catch (error: unknown) {
+    log(`could not seed koris.example.json: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 async function bootstrap(): Promise<void> {
   applyMenu();
+  seedDataDir();
   const win = createWindow();
   await showLoading(win);
 
