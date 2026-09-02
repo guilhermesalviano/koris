@@ -4,7 +4,7 @@ import { SUMMARIZATION_INSTRUCTIONS, COMPACT_INSTRUCTIONS } from '../../../../..
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
 import * as providerRegistry from '../../../../../../src/services/providers';
 import { config } from '../../../../../../src/config';
-import { sharedSubAgentQueue } from '../../../../../../src/services/sub-agents-queue/task-queue';
+import { sharedSubAgentQueue } from '../../../../../../src/services/agents/sub-agents/queue/task-queue';
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };

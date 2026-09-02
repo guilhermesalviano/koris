@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Heartbeat } from '../../../../../../src/services/agents/sub-agents/heartbeat/sub-agent';
 import { config } from '../../../../../../src/config';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
-import { sharedSubAgentQueue } from '../../../../../../src/services/sub-agents-queue/task-queue';
+import { sharedSubAgentQueue } from '../../../../../../src/services/agents/sub-agents/queue/task-queue';
 import { SYSTEM_BEAT_CLEAR_IMAGES } from '../../../../../../src/constants';
 
 function makeLogger(): ILogger {
