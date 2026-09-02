@@ -28,8 +28,6 @@ jobs:
         include:
           - os: ubuntu-latest
             args: --linux
-          - os: macos-13
-            args: --mac --x64
           - os: macos-14
             args: --mac --arm64
           - os: windows-latest

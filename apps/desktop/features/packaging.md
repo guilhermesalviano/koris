@@ -24,7 +24,6 @@ with a tag). Matrix:
 | --- | --- |
 | `ubuntu-latest` | `.AppImage`, `.deb` |
 | `windows-latest` | `.exe` (NSIS) |
-| `macos-13` | `.dmg` (x64) |
 | `macos-14` | `.dmg` (arm64) |
 
 Each job: `pnpm build` → `pnpm build:desktop` → `pnpm desktop:stage` →
