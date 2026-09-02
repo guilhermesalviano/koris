@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { OutboundMessageService } from '../../../../src/services/outbound/outbound-message-service';
+import { OutboundMessageService } from '../../../../src/services/outbound/message-service';
 import { OutboundMessage } from '../../../../src/entities/outbound-message';
 
 const logger = { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
