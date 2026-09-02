@@ -15,8 +15,8 @@ import { AgnosticExecutionToolFactory } from "../../../tools";
 import { IChannelsManager } from "../../../../channels";
 import { IChannelService, ChannelServiceFactory } from "../../../channel-service";
 import { IToolCallPipeline, ToolCallPipelineFactory } from "../../tool-call-pipeline";
-import { TaskQueue, sharedSubAgentQueue } from "../../../sub-agents-queue/task-queue";
-import { subAgentQueuesRegistry } from "../../../sub-agents-queue/sub-agent-queue-registry";
+import { TaskQueue, sharedSubAgentQueue } from "../queue/task-queue";
+import { subAgentQueuesRegistry } from "../queue/sub-agent-queue-registry";
 import { IImageRepository, ImageRepositoryFactory } from "../../../../repositories/image";
 
 class Heartbeat implements ISubAgent<Date> {

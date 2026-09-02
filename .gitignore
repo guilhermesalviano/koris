@@ -3,10 +3,6 @@ dist-web
 next-env.d.ts
 *.tsbuildinfo
 
-# The public website / marketplace / docs is its own independent repo,
-# checked out here for convenience. See github.com/guilhermesalviano/koris-hub
-koris-hub/
-
 node_modules
 
 .env
