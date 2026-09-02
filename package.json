@@ -1,6 +1,6 @@
 {
   "name": "/koris",
-  "version": "1.0.1",
+  "version": "0.1.3",
   "description": "Autonomous AI agent framework with pluggable channels, skills, persistent memory, and a web dashboard.",
   "main": "dist/core/src/app.js",
   "bin": {
@@ -26,7 +26,6 @@
     "dev:client": "vite",
     "lint": "tsc --noEmit -p tsconfig.json",
     "lint:client": "tsc --noEmit -p apps/web/tsconfig.json",
-    "lint:website": "tsc --noEmit -p website/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
@@ -34,9 +33,6 @@
     "test:mutation": "stryker run",
     "release": "tsx scripts/release.ts",
     "scaffold:tool": "tsx scripts/scaffold-tool-cli.ts",
-    "website:dev": "next dev website",
-    "website:build": "next build website",
-    "website:preview": "pnpm dlx serve website/out",
     "run": "pnpm app"
   },
   "repository": {

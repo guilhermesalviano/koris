@@ -9,22 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Web: first-run setup wizard (`/setup`) — configure the AI provider, Telegram/WhatsApp channels, web search, allowed domains, and personal info from the browser instead of hand-editing `koris.json`. Launches automatically when no `koris.json` is found.
-- Web: `Settings` page is now a live editor (reusing the setup wizard's form) instead of a read-only JSON dump, so configuration can be changed after first run too.
-- Server: settings changes made through the wizard/Settings page apply immediately — the AI provider and Telegram/WhatsApp channels reload without restarting the process.
-- CLI: on startup, if no `koris.json` is found, prints instructions pointing to the web setup wizard or the `pnpm onboard` CLI flow.
-- Landing page: rewrote the "How it works" section as a step-by-step walkthrough for downloading a release zip and running it, replacing the `git clone`-oriented steps.
-- Tools: `search_engine` now uses a self-hosted SearXNG instance (`ai.searxng_url`) as its primary provider — free, no per-query cost. The existing SerpAPI implementation (`ai.search_api_key`) is kept in code as a fallback, currently inactivated.
-
 ### Changed
-
-- Landing page: primary "download" call-to-action buttons now link to the latest GitHub release instead of the repository's home page.
 
 ### Fixed
 
 ### Removed
 
-## [1.0.1] - 2026-08-19
+## [0.1.3] - 2026-09-02
+
+### Added
+
+- Web: first-run setup wizard (`/setup`) — configure the AI provider, Telegram/WhatsApp channels, web search, allowed domains, and personal info from the browser instead of hand-editing `koris.json`. Launches automatically when no `koris.json` is found.
+- Web: `Settings` page is now a live editor (reusing the setup wizard's form) instead of a read-only JSON dump, so configuration can be changed after first run too.
+- Server: settings changes made through the wizard/Settings page apply immediately — the AI provider and Telegram/WhatsApp channels reload without restarting the process.
+- CLI: on startup, if no `koris.json` is found, prints instructions pointing to the web setup wizard or the `pnpm onboard` CLI flow.
+- Agent: when a human asks for documentation, plugins, skills, the marketplace, or the project website, the assistant now points them to https://hub.koaris.com.
+- Tools: `search_engine` now uses a self-hosted SearXNG instance (`ai.searxng_url`) as its primary provider — free, no per-query cost. The existing SerpAPI implementation (`ai.search_api_key`) is kept in code as a fallback, currently inactivated.
+
+### Changed
+
+- The public website, plugins marketplace, and documentation moved to a separate `koris-hub` repo; this repo no longer builds or serves a website.
+
+### Removed
+
+## [0.1.1] - 2026-08-19
 
 Web dashboard refresh: light/dark theme toggle, reorganized sidebar, and collapsible navigation.
 
@@ -44,7 +52,7 @@ Web dashboard refresh: light/dark theme toggle, reorganized sidebar, and collaps
 
 ### Removed
 
-## [1.0.0] - 2026-08-18
+## [0.1.0] - 2026-08-18
 
 First public release of Koris Assistant.
 

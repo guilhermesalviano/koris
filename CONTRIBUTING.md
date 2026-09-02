@@ -33,7 +33,6 @@ Pull requests to `main` or `develop` run the `Lint` and `Tests` CI workflows, so
 ```bash
 pnpm lint          # server type-check
 pnpm lint:client   # web frontend type-check
-pnpm lint:landing  # landing page type-check
 pnpm test          # full Vitest suite
 ```
 

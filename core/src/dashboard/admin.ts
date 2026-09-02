@@ -46,10 +46,10 @@ import { hasSpecificHour, isEveryMinute, isValidCronExpression, nextCronFire } f
 import { formatISO } from '../utils/date';
 import { activeRunsRegistry } from './active-runs';
 import { sharedSerialQueue } from '../services/providers/serial-queue';
-import { subAgentQueuesRegistry } from '../services/sub-agents-queue/sub-agent-queue-registry';
+import { subAgentQueuesRegistry } from '../services/agents/sub-agents/queue/sub-agent-queue-registry';
 import { OutboundMessageRepositoryFactory } from '../repositories/outbound-message';
 import { ChannelsSingleton } from '../channels';
-import { OutboundMessageServiceFactory } from '../services/outbound/outbound-message-service';
+import { OutboundMessageServiceFactory } from '../services/outbound/message-service';
 import { IMessageGateway } from '../services/agents/message-gateway';
 import { PluginSettingsRepositoryFactory, type IPluginSettingsRepository } from '../repositories/plugin-settings';
 import { resolvePluginEnabled } from '../services/plugins/plugin-enablement';

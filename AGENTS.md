@@ -28,10 +28,6 @@ Guidance for AI coding agents working in this repository.
 | `pnpm validate` | Validate `koris.json` against expected schema |
 | `pnpm lint` | Type-check server (`tsc --noEmit`) — run this after any change |
 | `pnpm lint:client` | Type-check the web frontend (`tsc --noEmit -p apps/web/tsconfig.json`) |
-| `pnpm lint:website` | Type-check the marketing website (`tsc --noEmit -p website/tsconfig.json`) |
-| `pnpm website:dev` | Next.js dev server for the marketing website (`website/`) |
-| `pnpm website:build` | Static-export the website (`next build website`) → `website/out/` |
-| `pnpm website:preview` | Serve the built website locally (`website/out/`) |
 | `pnpm test` | Run full Vitest suite (`vitest run`) |
 | `pnpm test:watch` | Watch mode |
 | `pnpm test:coverage` | Coverage report |
@@ -64,11 +60,9 @@ Guidance for AI coding agents working in this repository.
 - `plugins/tools/` — the AI-agent tool plugin system, same shape as `plugins/channels/`. `contracts.ts` (the dependency-free SDK: `ToolPluginContext`, `ToolDefinition`, `COMMANDS`) + one folder per tool (`curl-request/`, `set-beat/`, `list-beats/`, `update-beat/`, `delete-beat/`, `search-engine/`, `search-engine-restart/`, `issue/`, `send-message/`, `learn-sticker/`, `send-sticker/`, `unlearn-sticker/`, `create-tool/`), each exposing `create(context): Plugin | null`. Shared helpers: `runtime.ts` (arg coercion, safe child-process exec), `cron.ts` (cron validation for the beat tools).
 - `external/search/searxng/` — self-hosted SearXNG config/compose for the `search_engine` tool (`docker-compose.yml`, `settings.example.yml`).
 - `skills/` — markdown skill definitions, one folder per skill with a `SKILL.md` (front-matter `name`/`description` + body). Synced into the `learned_skills` table at startup and on file changes by `core/src/services/skills/skill-sync.ts`.
-- `website/` — the public marketing website, a statically-exported Next.js site (see "Website" below).
 - `scripts/` — helper scripts (`init.ts`, `release.ts`, `run_search_engine.sh` — pass `--restart` to force a `down`+`up` recreate instead of the default start-if-not-running, used by the `restart_search_engine` tool, `scaffold-tool.ts` + `scaffold-tool-cli.ts` for `pnpm scaffold:tool`).
 - `dist/` — build output (never edit).
 - `dist-web/` — built web frontend (never edit).
-- `website/out/` — built website (never edit).
 
 ## Core message flow (follow this to trace behavior)
 
@@ -143,10 +137,7 @@ Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/l
 
 ## Website
 
-- `website/` is a standalone Next.js (App Router) site, statically exported (`output: 'export'` in `website/next.config.ts`, no Node server needed) that is the public marketing page deployed to GitHub Pages. It shares the repo's root `node_modules`/`pnpm` install (`next` is a root dependency, styled with Tailwind v4 via `@tailwindcss/postcss`); there's no separate `package.json` here (single-package pnpm workspace).
-- `website/next.config.ts` sets `basePath: '/koris'` for the GitHub Pages project URL (`https://guilhermesalviano.github.io/koris`) and `images.unoptimized: true` (required for static export). Build output always lands in `website/out/` (Next forbids `distDir` escaping the project directory), kept separate from `dist/` and `dist-web/`.
-- Structure: `website/src/app/page.tsx` (the page) → `website/src/app/layout.tsx` (shared `<head>`/font) + `website/src/app/globals.css` (Tailwind `@theme` tokens for the page's own dark/teal palette — intentionally distinct from `apps/web/src/index.css`'s orange dashboard theme) + `website/src/components/` (`Hero`, `Feature`, `Footer`, `icons`).
-- Commands: `pnpm website:dev` (dev server), `pnpm website:build` (static export → `website/out/`), `pnpm website:preview` (serves `website/out/` via `pnpm dlx serve`), `pnpm lint:website` (type-check). `.github/workflows/deploy-website.yml` (manual `workflow_dispatch`, triggers on `website/**`) installs deps, runs `pnpm run website:build`, and publishes `website/out` to the `gh-pages` branch via `peaceiris/actions-gh-pages`.
+The public marketing website, the plugins marketplace, and the docs site now live in a **separate independent repo**, `koris-hub` (`git@github.com:guilhermesalviano/koris-hub.git`) — a standalone Next.js App-Router app (`output: 'export'`, `basePath: '/koris-hub'`) with its own `package.json`, deployed to GitHub Pages (`https://guilhermesalviano.github.io/koris-hub`) by its own `.github/workflows/deploy.yml`. The marketplace catalog is static JSON under `content/marketplace/`. This repo no longer builds or deploys any website; plugin/skill source still lives here (`plugins/`, `skills/`) and `koris-hub` only describes it.
 
 ## Conventions to follow
 

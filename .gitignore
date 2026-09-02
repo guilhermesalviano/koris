@@ -1,7 +1,5 @@
 dist
 dist-web
-website/.next
-website/out
 next-env.d.ts
 *.tsbuildinfo
 

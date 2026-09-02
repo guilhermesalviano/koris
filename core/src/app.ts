@@ -33,7 +33,7 @@ import { IDatabaseService } from './infrastructure/db-sqlite';
 import { Heartbeat } from './entities/heartbeat';
 import type { BeatType } from './types/beat';
 import { StickerRulesRepositoryFactory } from './repositories/sticker-rules';
-import { OutboundMessageServiceFactory } from './services/outbound/outbound-message-service';
+import { OutboundMessageServiceFactory } from './services/outbound/message-service';
 import { gateErrorForUrl } from './services/security/gate';
 import { PluginSettingsRepositoryFactory } from './repositories/plugin-settings';
 import { migrateLegacyPluginEnabledFlags, resolvePluginEnabled, type PluginIdentity } from './services/plugins/plugin-enablement';
