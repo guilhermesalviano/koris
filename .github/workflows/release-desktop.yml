@@ -89,7 +89,6 @@ jobs:
             dist-desktop-out/*.rpm
             dist-desktop-out/*.dmg
             dist-desktop-out/*.exe
-            dist-desktop-out/*.blockmap
           )
           if [ ${#files[@]} -eq 0 ]; then
             echo "no installer artifacts found" >&2
