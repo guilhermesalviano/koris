@@ -119,7 +119,6 @@ All commands are run via `pnpm` (or `pnpm run <script>`).
 | `clean` | Removes the `dist/` and `dist-web/` build output. |
 | `lint` | Type-checks the server with `tsc --noEmit`. |
 | `lint:client` | Type-checks the web frontend. |
-| `lint:website` | Type-checks the marketing website. |
 | `clear:memory` | Wipes the local SQLite database files under `core/memory/` (fresh state). |
 
 ### Testing
@@ -132,17 +131,11 @@ All commands are run via `pnpm` (or `pnpm run <script>`).
 | `test:coverage` | Runs the tests and reports code coverage. |
 | `test:mutation` | Runs mutation testing with Stryker to assess test-suite quality. |
 
-### Website
-
-| Script | Description |
-| --- | --- |
-| `website:dev` | Runs the Next.js dev server for the marketing website. |
-| `website:build` | Statically exports the website to `website/out/`. |
-| `website:preview` | Serves the built website locally. |
-
 ## Learn More
 
 For a deeper dive into the architecture (message flow, AI providers, plugins/skills, database schema), see [`AGENTS.md`](./AGENTS.md).
+
+The public website, plugins marketplace, and documentation live in a separate repo, [`koris-hub`](https://github.com/guilhermesalviano/koris-hub), deployed to GitHub Pages.
 
 ## Contributing
 

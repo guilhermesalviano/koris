@@ -6,7 +6,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./core/tests/setup/vitest.setup.ts'],
-    exclude: ['.stryker-tmp/**', 'node_modules/**'],
+    exclude: ['.stryker-tmp/**', '**/node_modules/**', 'koris-hub/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
