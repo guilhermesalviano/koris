@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { checkHealth, streamChat, cancelChat, apiRequest } from './api';
 import { clearResponseAlert, triggerResponseDone } from './response-alert';
 import type { ActiveRun, ActiveRunsResponse, AllowedDomainsResponse, GateBlock, GateBlocksResponse, ImageAttachment, SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
@@ -76,6 +77,7 @@ function mapMessages(messages: HistoryMessage[]): ChatMessage[] {
 }
 
 export function ChatProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
@@ -166,6 +168,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           setMessages([]);
         }
       } else {
+        if (streamTargetRef.current === target && inFlightRef.current?.sessionId === target) {
+          // A reply is still streaming into a freshly-rotated session (the
+          // navigation that follows a `/compact` / auto-compact rotation). Keep
+          // the in-progress exchange on screen instead of replacing it with
+          // history that doesn't include it yet.
+          setHistoryLoaded(true);
+          return;
+        }
+
         const detail = await apiRequest<SessionDetailResponse>(`/sessions/${target}`);
         if (token !== loadToken.current) return;
 
@@ -419,11 +430,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         (rotatedSessionId) => {
           // `/compact` (or the manual-mode auto-compact) ended the current
           // session and opened a fresh one. Follow it so the next turn is routed
-          // to the new session (and its resumed summary / memory reach the model).
+          // to the new session (and its resumed summary / memory reach the model),
+          // redirect the URL to the new chat, and refresh the sidebar list.
           streamTargetRef.current = rotatedSessionId;
           if (inFlightRef.current) inFlightRef.current.sessionId = rotatedSessionId;
           setActiveSessionId(rotatedSessionId);
           void loadSessions();
+          navigate(`/admin/chat/${rotatedSessionId}`);
         },
       );
 
@@ -453,7 +466,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       loadSessions();
       void refreshGateBlocks();
     }
-  }, [streaming, activeSessionId, loadSessions, refreshGateBlocks]);
+  }, [streaming, activeSessionId, loadSessions, refreshGateBlocks, navigate]);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();

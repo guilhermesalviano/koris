@@ -72,7 +72,7 @@ class MessageGateway implements IMessageGateway {
       });
 
       if (commandResult.action === 'compact') {
-        return this.handleCompact(sessionCtx, safeMessage, images, channel, commandResult.response || '', options);
+        return this.handleCompact(sessionCtx, channel, commandResult.response || '', options);
       }
 
       if (commandResult.action === 'clear') {
@@ -200,8 +200,6 @@ class MessageGateway implements IMessageGateway {
 
   private async handleCompact(
     ctx: SessionContext,
-    safeMessage: string,
-    images: ImageAttachment[] | undefined,
     channel: string,
     confirmation: string,
     options?: ProcessOptions,
@@ -210,17 +208,13 @@ class MessageGateway implements IMessageGateway {
       return 'Nothing to compact yet.';
     }
 
-    const { compactedSessionId } = await this.compactAndRotate(ctx, channel, options);
+    await this.compactAndRotate(ctx, channel, options);
 
-    // Record the `/compact` command against the session it compacted, not the
-    // fresh one — the new session must start empty.
-    this.backgroundDispatcher.persistConversation({
-      sessionId: compactedSessionId,
-      ask: safeMessage,
-      askImages: images,
-      answer: confirmation,
-      channel,
-    });
+    // Seed the fresh session with just the confirmation line so the new chat
+    // opens with a marker instead of a blank history. The `/compact` command
+    // itself is never persisted, and the compacted session keeps its own
+    // history untouched (the carried summary lives in session metadata).
+    ctx.messageService.save({ role: 'assistant', content: confirmation });
 
     return confirmation;
   }

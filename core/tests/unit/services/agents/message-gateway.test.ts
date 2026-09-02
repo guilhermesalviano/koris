@@ -294,7 +294,7 @@ describe('MessageGateway', () => {
   });
 
   describe('/compact', () => {
-    it('compacts the session, rotates it, and persists the exchange under the compacted session (never the fresh one)', async () => {
+    it('compacts and rotates, never persists the /compact exchange, and seeds the fresh session with just the confirmation line', async () => {
       const { gateway, deps } = makeGateway();
       deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'hi' }] as never);
       deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
@@ -312,12 +312,11 @@ describe('MessageGateway', () => {
         memoryService: deps.memoryService,
       });
       expect(deps.sessionService.forceRotate).toHaveBeenCalledWith({ compactSummary: 'we covered X' });
-      expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
-        expect.objectContaining({ sessionId: 'session-1', ask: '/compact' }),
-      );
-      expect(deps.backgroundDispatcher.persistConversation).not.toHaveBeenCalledWith(
-        expect.objectContaining({ sessionId: 'session-2' }),
-      );
+      expect(deps.messageService.save).toHaveBeenCalledWith({
+        role: 'assistant',
+        content: 'Compacting session — starting a fresh one with a summary of what we covered.',
+      });
+      expect(deps.backgroundDispatcher.persistConversation).not.toHaveBeenCalled();
       expect(result).toContain('Compacting');
     });
 
@@ -341,6 +340,10 @@ describe('MessageGateway', () => {
       await gateway.handle('/compact', 'origin-1');
 
       expect(deps.sessionService.forceRotate).toHaveBeenCalledWith(undefined);
+      expect(deps.messageService.save).toHaveBeenCalledWith({
+        role: 'assistant',
+        content: 'Compacting session — starting a fresh one with a summary of what we covered.',
+      });
     });
 
     it('notifies the caller of the rotated session id so a pinned client can follow it', async () => {
