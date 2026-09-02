@@ -1,5 +1,7 @@
 dist
 dist-web
+dist-desktop
+dist-desktop-out
 next-env.d.ts
 *.tsbuildinfo
 

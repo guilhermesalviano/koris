@@ -26,5 +26,5 @@
     }
   },
   "include": ["core/src/**/*", "plugins/**/*", "apps/tui"],
-  "exclude": ["node_modules", "dist", "dist-web", "apps/web", "koris-hub", "**/*.test.ts", "**/*.spec.ts"]
+  "exclude": ["node_modules", "dist", "dist-web", "dist-desktop", "apps/web", "apps/desktop", "koris-hub", "**/*.test.ts", "**/*.spec.ts"]
 }
