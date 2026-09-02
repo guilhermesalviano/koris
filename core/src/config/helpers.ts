@@ -11,7 +11,16 @@ const defaultFileIO: ConfigFileIO = {
   read: (path: string) => readFileSync(path, 'utf-8'),
 };
 
-export function resolveConfigPaths(cwd: string = process.cwd(), dirname: string = __dirname): string[] {
+/**
+ * Writable data root. In a normal checkout this is the cwd; a packaged desktop
+ * build sets KORIS_DATA_DIR to a per-user writable directory (the app bundle
+ * itself is read-only), so koris.json, memory/ and logs/ land there.
+ */
+export function resolveDataDir(cwd: string = process.cwd()): string {
+  return process.env.KORIS_DATA_DIR || cwd;
+}
+
+export function resolveConfigPaths(cwd: string = resolveDataDir(), dirname: string = __dirname): string[] {
   return Array.from(new Set([
     join(cwd, 'koris.json'),
     join(cwd, 'apps', 'client', 'koris.json'),
@@ -26,7 +35,7 @@ export function loadConfigFile(options?: {
   fileIO?: ConfigFileIO;
   onParseError?: (message: string) => void;
 }): Record<string, unknown> {
-  const cwd = options?.cwd ?? process.cwd();
+  const cwd = options?.cwd ?? resolveDataDir();
   const dirname = options?.dirname ?? __dirname;
   const fileIO = options?.fileIO ?? defaultFileIO;
 

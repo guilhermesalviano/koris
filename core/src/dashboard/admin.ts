@@ -870,7 +870,7 @@ class AdminRouterFactory {
     });
 
     router.get('/settings/status', (_req: Request, res: Response) => {
-      const configured = resolveConfigPaths(process.cwd(), __dirname).some(existsSync);
+      const configured = resolveConfigPaths().some(existsSync);
       res.json({ configured });
     });
 

@@ -1,0 +1,70 @@
+name: Release Desktop
+
+# Builds the Electron desktop app for macOS / Windows / Linux and uploads the
+# installers as assets on the GitHub Release that triggered the run.
+#
+# Flow: `pnpm release <bump>` -> review -> commit -> `git tag vX.Y.Z` ->
+# `git push --follow-tags` -> publish the Release for that tag in the GitHub UI
+# (or `gh release create vX.Y.Z --generate-notes`). This workflow then attaches
+# the executables to it.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and attach assets to (e.g. v1.2.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            args: --linux
+          - os: macos-13
+            args: --mac --x64
+          - os: macos-14
+            args: --mac --arm64
+          - os: windows-latest
+            args: --win --x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.18.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.x'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build server + web + desktop shell
+        run: |
+          pnpm build
+          pnpm build:desktop
+
+      - name: Stage bundled server + Node runtime
+        run: pnpm desktop:stage
+
+      - name: Build and publish installers
+        run: node apps/desktop/scripts/package-desktop.mjs ${{ matrix.args }} --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

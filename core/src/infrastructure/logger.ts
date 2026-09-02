@@ -42,7 +42,7 @@ class Logger implements ILogger {
 
 class LoggerFactory {
   static getOptions(silenceConsole = false) {
-    const logsDir = path.join(config.BASE_DIR, 'logs');
+    const logsDir = path.join(config.DATA_DIR, 'logs');
 
     const activeTransports: any[] = [];
 

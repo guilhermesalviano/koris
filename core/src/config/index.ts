@@ -40,7 +40,10 @@ export interface AppConfig {
   TIMEZONE: string;
   ENVIRONMENT: string;
   WEB_PORT: number;
+  /** Read-only application root (bundled code, dist-web/, skills/). */
   BASE_DIR: string;
+  /** Writable data root (koris.json, memory/, logs/). Same as BASE_DIR unless KORIS_DATA_DIR is set. */
+  DATA_DIR: string;
   GATEWAY_HOST: string;
   ALLOWED_DOMAINS: string[];
   LEARNED_SKILLS_LIMIT: number;
@@ -111,7 +114,8 @@ function buildConfig(): AppConfig {
   TIMEZONE:    get('timezone', 'America/Sao_Paulo'),
   ENVIRONMENT: get('environment', 'development'),
   WEB_PORT:    Number(get('web_port', '3000')),
-  BASE_DIR:    process.cwd(),
+  BASE_DIR:    process.env.KORIS_APP_DIR || process.cwd(),
+  DATA_DIR:    process.env.KORIS_DATA_DIR || process.cwd(),
   GATEWAY_HOST: get('gateway_host', 'http://localhost:3000'),
   ALLOWED_DOMAINS: get('allowed_domains', '')
     .split(',')

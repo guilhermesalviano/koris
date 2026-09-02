@@ -319,7 +319,7 @@ class DashboardServer implements WebServerHandle {
   }
 
   private logSetupInstructionsIfUnconfigured(): void {
-    const configured = resolveConfigPaths(process.cwd(), __dirname).some(existsSync);
+    const configured = resolveConfigPaths().some(existsSync);
     if (configured) {
       return;
     }
