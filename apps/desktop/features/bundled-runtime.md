@@ -13,7 +13,11 @@ ephemeral loopback port; the window loads that origin. Quit calls the handle's `
 
 - `build-resources/server-node_modules/` — a pruned **production** `node_modules`. Built by
   installing a stripped manifest (`dependencies` only) with `pnpm install --prod
-  --ignore-workspace --ignore-scripts`. `better-sqlite3` v13 ships per-platform
+  --ignore-workspace --ignore-scripts --config.node-linker=hoisted`. The **hoisted**
+  linker is required: pnpm's default `.pnpm` symlink store points at absolute paths in the
+  build tree, which dangle once the app is installed under `/opt` / an AppImage mount /
+  `C:\Program Files` — the first `require('winston')` then fails. `stage-server.mjs`
+  asserts the copied tree has zero symlinks. `better-sqlite3` v13 ships per-platform
   `prebuilds/*.node` for every OS/arch, resolved purely by `process.platform`/`arch`. They
   are **N-API** binaries — ABI-stable and Electron-compatible — so `require('better-sqlite3')`
   in the Electron main process loads them unmodified, **no `@electron/rebuild`**.
@@ -50,12 +54,16 @@ The whole server dependency graph (express, next, baileys, winston, better-sqlit
 loads in the Electron main process. A fatal server error takes the window down (previously
 an isolated child); `bootstrap()` wraps `startServer()` in `try/catch → showError`.
 
+## Channel plugin config
+
+`resolvePluginDir` (`plugins/config/loader.ts`) relocates `plugins/<family>/<name>/config.yml`
+to `<KORIS_DATA_DIR>/plugins/<family>/<name>/config.yml` whenever `KORIS_DATA_DIR` is set,
+so the setup wizard / admin panel can write channel config (Telegram bot token, WhatsApp
+whitelist, …) without hitting the read-only bundle. Unset `KORIS_DATA_DIR` (dev / `pnpm app`
+from the repo root) keeps the old behaviour — config next to the plugin sources.
+
 ## Known gaps
 
-- Saving **channel plugin secrets** (`plugins/<family>/<name>/config.yml`) still writes
-  relative to the server cwd. Channels are opt-in and disabled by default; wire a
-  `KORIS_DATA_DIR`-based path into `plugins/config/writer.ts` before promoting channel
-  setup as a first-class packaged feature.
 - `pnpm onboard` / `pnpm validate` (separate CLIs) still use `process.cwd()` — fine, they
   aren't run inside the packaged app.
 - `config.GATEWAY_HOST` defaults to `http://localhost:3000`; with the ephemeral port any

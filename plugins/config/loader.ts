@@ -54,34 +54,53 @@ export interface ResolvePluginDirOptions {
   filename?: string;
   /** Which `plugins/<family>/` tree this plugin lives under. Defaults to `'channels'` for source compatibility with pre-existing callers. */
   family?: PluginFamily;
+  /** Writable data root. Defaults to `KORIS_DATA_DIR`; when set, `config.yml` lives under `<dataDir>/plugins/<family>/<name>` instead of the (possibly read-only) bundle. */
+  dataDir?: string;
 }
 
 /**
- * Locates a plugin's own directory so its `config.yml` can be found at
- * runtime even from a compiled `dist/` build — `tsc` only compiles `.ts`
- * files, so `config.yml` never gets copied next to the compiled `.js`, and
- * `__dirname` alone (pointing at `dist/plugins/<family>/<name>`) would never
- * find it. Prefers `cwd`-relative candidates, which resolve correctly when
- * the app is run from the repo root (the normal case, mirroring how
- * `src/config/helpers.ts`'s `resolveConfigPaths` finds `koris.json`).
+ * Locates a plugin's own directory so its `config.yml` can be found — and
+ * written — at runtime even from a compiled `dist/` build (`tsc` only compiles
+ * `.ts`, so `config.yml` never lands next to the `.js`, and `__dirname` points
+ * at a `dist/` dir that may be read-only when packaged).
+ *
+ * Resolution order:
+ *   1. `<dataDir>/plugins/<family>/<name>` when `KORIS_DATA_DIR` is set — the
+ *      packaged desktop app splits a read-only bundle from a writable data dir,
+ *      so plugin config must live there (and stays writable for the setup UI).
+ *   2. `<cwd>/plugins/<family>/<name>` (and the `apps/client/` variant) — the
+ *      normal repo-root case, mirroring how `resolveConfigPaths` finds `koris.json`.
+ *   3. `fallbackDir` (the caller's own `__dirname`) — running `.ts` sources in dev.
+ * A candidate that already contains `config.yml` wins over a later one.
  */
 export function resolvePluginDir(pluginName: string, options: ResolvePluginDirOptions = {}): string {
   const cwd = options.cwd ?? process.cwd();
   const exists = options.exists ?? existsSync;
   const filename = options.filename ?? 'config.yml';
   const family = options.family ?? 'channels';
+  const dataDir = options.dataDir ?? process.env.KORIS_DATA_DIR;
 
-  const cwdCandidates = [
+  const dataDirCandidate = dataDir
+    ? normalize(join(dataDir, 'plugins', family, pluginName))
+    : undefined;
+
+  const candidates = [
+    ...(dataDirCandidate ? [dataDirCandidate] : []),
     join(cwd, 'plugins', family, pluginName),
     join(cwd, 'apps', 'client', 'plugins', family, pluginName),
   ].map((candidate) => normalize(candidate));
 
-  const found = cwdCandidates.find((candidate) => exists(join(candidate, filename)));
+  const found = candidates.find((candidate) => exists(join(candidate, filename)));
   if (found) {
     return found;
   }
 
-  return options.fallbackDir ? normalize(options.fallbackDir) : cwdCandidates[0];
+  // Nothing written yet: prefer the writable data dir when relocated, else the
+  // caller's own dir (dev), else the first cwd candidate.
+  if (dataDirCandidate) {
+    return dataDirCandidate;
+  }
+  return options.fallbackDir ? normalize(options.fallbackDir) : candidates[0];
 }
 
 /**
