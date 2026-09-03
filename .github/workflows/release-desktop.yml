@@ -70,10 +70,20 @@ jobs:
       - name: Stage bundled server + Node runtime
         run: pnpm desktop:stage
 
+      - name: Generate app icons
+        run: node apps/desktop/scripts/make-icons.mjs
+
       - name: Build installers
         run: node apps/desktop/scripts/package-desktop.mjs ${{ matrix.args }} --publish never
         env:
           KORIS_RELEASE_VERSION: ${{ steps.ver.outputs.version }}
+          # Empty until the repo secrets are added — builds stay unsigned.
+          # macOS also needs `identity: null` removed from electron-builder.yml.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Attach installers to the release
         shell: bash

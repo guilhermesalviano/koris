@@ -58,25 +58,39 @@ artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 linux:
   category: Utility
   maintainer: guilhermesalviano <koaris.project@gmail.com>
+  icon: build/icon.png
   target:
     - AppImage
     - deb
 
 mac:
   category: public.app-category.developer-tools
+  icon: build/icon.png
   target:
     - target: dmg
       arch:
         - x64
         - arm64
-  # Unsigned for now — see apps/desktop/features/packaging.md to wire signing.
+  # Signing is not wired yet: `identity: null` forces electron-builder to skip
+  # code signing so unsigned builds still succeed. To activate signing, remove
+  # this line and set CSC_LINK / CSC_KEY_PASSWORD; to also notarize, set
+  # APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID and `notarize: true`.
+  # See apps/desktop/features/packaging.md. The keys below are inert until then.
   identity: null
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
 
 dmg:
   # No auto-update yet, so skip the delta-update metadata (.dmg.blockmap).
   writeUpdateInfo: false
 
 win:
+  icon: build/icon.png
+  # electron-builder auto-consumes CSC_LINK / CSC_KEY_PASSWORD from the
+  # environment when present; unsigned otherwise.
   target:
     - target: nsis
       arch:
