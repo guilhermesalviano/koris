@@ -1,4 +1,4 @@
-import type { ImageAttachment, StickerReference } from '../contracts';
+import type { ILogger, ImageAttachment, StickerReference } from '../contracts';
 import { createBaileysLogger } from './baileys-logger';
 import { WhatsAppChannel } from './channel';
 import { isDuplicateMessage } from './dedupe';
@@ -11,14 +11,59 @@ import {
 } from './extract-message';
 import { resolveGroupName } from './group-name';
 import { downloadImageBase64, downloadQuotedImageBase64, toStickerReference } from './media';
+import { extractMentionedJids, isBotMentioned, jidToNumber } from './mention';
 import { isWhitelistedSender } from './sender';
 import { whatsappState } from './state';
 import type { ExtractedImage, ExtractedQuotedImage, ExtractedSticker, SocketLike, WhatsAppChannelStartOptions } from './types';
+
+function firstJidMatching(suffix: string, ...jids: (string | null | undefined)[]): string {
+  for (const jid of jids) {
+    if (jid && jid.includes(suffix)) {
+      const digits = jidToNumber(jid);
+      if (digits) return digits;
+    }
+  }
+  return '';
+}
+
+/**
+ * Learns the bot's own identities from a Baileys `Contact` (live `sock.user` or
+ * stored `creds.me`): its phone number (`@s.whatsapp.net`) and its LID (`@lid`).
+ * A mention in a LID-addressed group names the bot by LID, never by phone
+ * number, so both are needed. An explicit `bot_number` from config is never
+ * overwritten; the LID has no config and is always adopted once seen.
+ */
+function adoptBotIdentity(
+  source: { id?: string | null; lid?: string | null; phoneNumber?: string | null } | undefined,
+  logger: ILogger,
+): void {
+  if (!source) return;
+
+  if (!whatsappState.botNumber) {
+    const pn = firstJidMatching('@s.whatsapp.net', source.phoneNumber, source.id);
+    if (pn) {
+      whatsappState.botNumber = pn;
+      logger.info(`WhatsApp bot number auto-detected: ${pn}`);
+    }
+  }
+
+  if (!whatsappState.botLid) {
+    const lid = firstJidMatching('@lid', source.lid, source.id);
+    if (lid) {
+      whatsappState.botLid = lid;
+      logger.info(`WhatsApp bot LID auto-detected: ${lid}`);
+    }
+  }
+}
 
 export async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise<SocketLike> {
   const { makeWASocket, useMultiFileAuthState, DisconnectReason } = await import('@whiskeysockets/baileys');
   const qrcode = await import('qrcode-terminal');
   const { state, saveCreds } = await useMultiFileAuthState(options.authFolder);
+
+  // Seed the bot's identities from stored creds; `connection === 'open'` below
+  // refreshes them from the live socket (which is where the LID usually lands).
+  adoptBotIdentity(state.creds?.me, options.logger);
 
   const sock = makeWASocket({
     auth: state,
@@ -51,6 +96,21 @@ export async function startBaileysSocket(options: WhatsAppChannelStartOptions): 
     }
 
     if (connection === 'open') {
+      adoptBotIdentity(sock.user, options.logger);
+      // Backfill the LID from the signal store when the account object didn't carry one.
+      if (!whatsappState.botLid && whatsappState.botNumber) {
+        const pending = sock.signalRepository?.lidMapping?.getLIDForPN(`${whatsappState.botNumber}@s.whatsapp.net`);
+        if (pending) {
+          void pending
+            .then((lid) => {
+              if (lid && !whatsappState.botLid) {
+                whatsappState.botLid = jidToNumber(lid);
+                options.logger.info(`WhatsApp bot LID resolved via mapping: ${whatsappState.botLid}`);
+              }
+            })
+            .catch(() => {});
+        }
+      }
       options.logger.info('WhatsApp is ready!');
     }
   });
@@ -85,10 +145,11 @@ export async function startBaileysSocket(options: WhatsAppChannelStartOptions): 
 
       const text = image?.caption ?? rawText ?? '';
       const isGroup = jid.endsWith('@g.us');
-      const mentionsBot = isGroup && options.mentionId.length > 0 && text.includes(`@${options.mentionId}`);
+      const botIds = [whatsappState.botNumber, whatsappState.botLid];
+      const mentionsBot = isGroup && isBotMentioned(text, extractMentionedJids(msg), botIds);
       if (isGroup && !mentionsBot) continue;
 
-      void handleInboundMessage(options, sock, jid, senderName, text, image, sticker, quotedText, quotedImage, isWhitelisted, externalId ?? undefined).catch((err: Error) => {
+      void handleInboundMessage(options, sock, jid, senderName, text, image, sticker, quotedText, quotedImage, isWhitelisted, mentionsBot, externalId ?? undefined).catch((err: Error) => {
         options.logger.warn(`WhatsApp message handling error: ${err.message}`);
       });
     }
@@ -108,6 +169,7 @@ async function handleInboundMessage(
   quotedText: string | null,
   quotedImage: ExtractedQuotedImage | null,
   isWhitelistedSender: boolean,
+  mentionsBot: boolean,
   externalId?: string,
 ): Promise<void> {
   const images: ImageAttachment[] = [];
@@ -129,6 +191,7 @@ async function handleInboundMessage(
   const groupName = jid.endsWith('@g.us') ? await resolveGroupName(sock, jid, options.logger) : undefined;
   await channel.handleMessage(options.gateway, jid, senderName, text, images, {
     isWhitelistedSender,
+    mentionsBot,
     groupName,
     stickers,
     quotedText: quotedText ?? undefined,

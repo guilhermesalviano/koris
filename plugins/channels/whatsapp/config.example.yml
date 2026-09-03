@@ -1,5 +1,9 @@
 auth_folder: ./.whatsapp_auth
 whitelist: "NUMBER1,NUMBER2"
-mention_id: "THE_BOT_MENTION_ID"
+# The bot's own WhatsApp number, digits only (e.g. country code + area + number).
+# Used to detect @-mentions in group chats. Leave blank to auto-detect it from
+# the linked WhatsApp session once connected. The bot's LID (used by mentions in
+# LID-addressed groups) is always resolved from the session automatically.
+bot_number: "5511999998888"
 # When true, senders not on the whitelist still reach the agent, as untrusted (no tools/skills).
 allow_unlisted_senders: false

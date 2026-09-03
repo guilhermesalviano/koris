@@ -89,12 +89,16 @@ export function ChannelsStep({ api }: { api: SettingsFormApi }) {
         <div className="mt-3 space-y-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>Mention ID (for group chats)</label>
+              <label className={labelClass}>Bot number (for group mentions)</label>
               <input
-                value={whatsapp.mention_id}
-                onChange={(e) => api.update((prev) => ({ ...prev, whatsapp: { ...prev.whatsapp, mention_id: e.target.value } }))}
-                className={inputClass}
+                value={whatsapp.bot_number}
+                onChange={(e) => api.update((prev) => ({ ...prev, whatsapp: { ...prev.whatsapp, bot_number: e.target.value } }))}
+                className={`${inputClass} font-mono`}
+                placeholder="5511999998888"
               />
+              <p className="mt-1 font-mono text-[11px] text-txt-3">
+                Digits only. Leave blank to auto-detect it from the linked WhatsApp session.
+              </p>
             </div>
             <div>
               <label className={labelClass}>Whitelist (comma-separated numbers)</label>

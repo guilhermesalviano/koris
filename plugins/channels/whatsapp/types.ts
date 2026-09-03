@@ -3,7 +3,7 @@ import type { ILogger, IMessageGateway, ImageAttachment, StickerReference } from
 
 export interface WhatsAppChannelStartOptions {
   authFolder: string;
-  mentionId: string;
+  botNumber: string;
   gateway: IMessageGateway;
   logger: ILogger;
 }
@@ -11,7 +11,7 @@ export interface WhatsAppChannelStartOptions {
 export interface WhatsAppPluginOptions {
   isEnabled: () => boolean;
   authFolder: string;
-  mentionId: string;
+  botNumber: string;
 }
 
 export interface IWhatsAppChannel {
@@ -21,13 +21,15 @@ export interface IWhatsAppChannel {
     name: string,
     text: string,
     images?: ImageAttachment[],
-    options?: { isWhitelistedSender?: boolean; groupName?: string; stickers?: StickerReference[]; quotedText?: string; externalId?: string },
+    options?: { isWhitelistedSender?: boolean; mentionsBot?: boolean; groupName?: string; stickers?: StickerReference[]; quotedText?: string; externalId?: string },
   ): Promise<void>;
   sendText(jid: string, text: string): Promise<void>;
   sendSticker(jid: string, sticker: StickerReference): Promise<void>;
 }
 
 export interface SocketLike {
+  user?: { id?: string | null; lid?: string | null; phoneNumber?: string | null };
+  signalRepository?: { lidMapping?: { getLIDForPN(pn: string): Promise<string | null> } };
   sendMessage(jid: string, content: { text: string } | { forward: WAMessage }): Promise<unknown>;
   sendPresenceUpdate(presence: 'composing' | 'paused', jid: string): Promise<unknown>;
   groupMetadata(jid: string): Promise<{ subject?: string }>;

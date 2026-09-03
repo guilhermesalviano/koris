@@ -25,10 +25,10 @@ plugins/*/*/config.yml
 
 **/settings.yml
 
-core/temp/*
+temp/*
 core/memory/*
 !core/memory/.gitkeep
-!core/temp/.gitkeep
+!temp/.gitkeep
 
 memory/*
 !memory/.gitkeep

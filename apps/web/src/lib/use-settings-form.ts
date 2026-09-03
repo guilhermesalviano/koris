@@ -18,7 +18,7 @@ export interface RuntimeSettings {
   };
   CHANNELS?: {
     TELEGRAM?: { ENABLED?: boolean; BOT_TOKEN?: string; WHITELIST?: string; ALLOW_UNLISTED_SENDERS?: boolean };
-    WHATSAPP?: { ENABLED?: boolean; WHITELIST?: string; MENTION_ID?: string; ALLOW_UNLISTED_SENDERS?: boolean };
+    WHATSAPP?: { ENABLED?: boolean; WHITELIST?: string; BOT_NUMBER?: string; ALLOW_UNLISTED_SENDERS?: boolean };
   };
   ALLOWED_DOMAINS?: string[];
   PERSONAL_INFORMATION?: Record<string, string>;
@@ -38,7 +38,7 @@ export interface SettingsFormState {
   workers: AiProfileForm;
   search_api_key: string;
   telegram: { bot_token: string; whitelist: string; allow_unlisted_senders: boolean };
-  whatsapp: { mention_id: string; whitelist: string; allow_unlisted_senders: boolean };
+  whatsapp: { bot_number: string; whitelist: string; allow_unlisted_senders: boolean };
   allowed_domains: string[];
   personal_information: Record<string, string>;
 }
@@ -51,7 +51,7 @@ export const DEFAULT_FORM: SettingsFormState = {
   workers: { ...EMPTY_PROFILE },
   search_api_key: '',
   telegram: { bot_token: '', whitelist: '', allow_unlisted_senders: false },
-  whatsapp: { mention_id: '', whitelist: '', allow_unlisted_senders: false },
+  whatsapp: { bot_number: '', whitelist: '', allow_unlisted_senders: false },
   allowed_domains: [],
   personal_information: {},
 };
@@ -94,7 +94,7 @@ export function mapRuntimeToForm(data: RuntimeSettings): SettingsFormState {
       allow_unlisted_senders: data.CHANNELS?.TELEGRAM?.ALLOW_UNLISTED_SENDERS ?? false,
     },
     whatsapp: {
-      mention_id: data.CHANNELS?.WHATSAPP?.MENTION_ID ?? '',
+      bot_number: data.CHANNELS?.WHATSAPP?.BOT_NUMBER ?? '',
       whitelist: data.CHANNELS?.WHATSAPP?.WHITELIST ?? '',
       allow_unlisted_senders: data.CHANNELS?.WHATSAPP?.ALLOW_UNLISTED_SENDERS ?? false,
     },
@@ -129,7 +129,7 @@ export function buildChannelsPatch(form: SettingsFormState): Record<string, unkn
     channels: {
       telegram,
       whatsapp: {
-        mention_id: form.whatsapp.mention_id,
+        bot_number: form.whatsapp.bot_number,
         whitelist: form.whatsapp.whitelist,
         allow_unlisted_senders: form.whatsapp.allow_unlisted_senders,
       },
@@ -169,7 +169,7 @@ export function buildSettingsPatch(form: SettingsFormState): Record<string, unkn
         allow_unlisted_senders: form.telegram.allow_unlisted_senders,
       },
       whatsapp: {
-        mention_id: form.whatsapp.mention_id,
+        bot_number: form.whatsapp.bot_number,
         whitelist: form.whatsapp.whitelist,
         allow_unlisted_senders: form.whatsapp.allow_unlisted_senders,
       },
