@@ -27,7 +27,7 @@
     "dev:client": "vite",
     "desktop": "pnpm build && pnpm build:desktop && electron apps/desktop/out/main.js --no-sandbox",
     "desktop:dev": "pnpm build:desktop && KORIS_DESKTOP_DEV=1 electron apps/desktop/out/main.js --no-sandbox",
-    "desktop:stage": "node apps/desktop/scripts/stage-server.mjs && node apps/desktop/scripts/fetch-node.mjs",
+    "desktop:stage": "node apps/desktop/scripts/stage-server.mjs",
     "desktop:icons": "node apps/desktop/scripts/make-icons.mjs",
     "desktop:package": "pnpm build && pnpm build:desktop && pnpm desktop:stage && pnpm desktop:icons && node apps/desktop/scripts/package-desktop.mjs",
     "desktop:package:dir": "pnpm build && pnpm build:desktop && pnpm desktop:stage && pnpm desktop:icons && node apps/desktop/scripts/package-desktop.mjs --dir",

@@ -21,7 +21,7 @@ import { seedDefaultBeats } from './services/agents/sub-agents/heartbeat/default
 import { SkillsRepositoryFactory } from './repositories/skills';
 import { LearnedSkillsRepositoryFactory } from './repositories/learned-skills';
 import { SkillSyncSingleton } from './services/skills/skill-sync';
-import { DashboardServerFactory, WebServerHandle } from './dashboard';
+import { DashboardServerFactory, WebServerHandle, WebListenOptions } from './dashboard';
 import { createPlugins, buildRegistry } from '../../plugins/channels';
 import { createToolPlugins } from '../../plugins/tools';
 import { COMMANDS } from '../../plugins/tools/contracts';
@@ -143,12 +143,32 @@ class Application implements IApplication {
     private readonly logger: ILogger,
     private readonly source: Mode = resolveSessionSourceFromArgs(),
     private readonly modes: RuntimeModes = resolveRuntimeModes(),
+    private readonly webListen: WebListenOptions | undefined = undefined,
   ) {}
+
+  /** The port the web dashboard is bound to (0 before `start`/`startEmbedded`). */
+  get webPort(): number {
+    return this.runtime?.webServer?.port ?? 0;
+  }
 
   async start(): Promise<void> {
     this.runtime = await this.createCliRuntime();
     this.registerShutdownHandlers();
     this.startTuiIfEnabled();
+  }
+
+  /**
+   * Like `start()` but for running inside a host process (the Electron desktop
+   * app): the host owns the process lifecycle, so no signal / `beforeExit`
+   * handlers are installed. Call `stop()` from the host's shutdown hook.
+   */
+  async startEmbedded(): Promise<void> {
+    this.runtime = await this.createCliRuntime();
+    this.startTuiIfEnabled();
+  }
+
+  async stop(reason = 'stop'): Promise<void> {
+    await this.shutdown(reason);
   }
 
   private async createCliRuntime(): Promise<IRuntime> {
@@ -186,7 +206,7 @@ class Application implements IApplication {
 
     try {
       const webServer = this.modes.web
-        ? await DashboardServerFactory.create(this.logger, gateway, db).start()
+        ? await DashboardServerFactory.create(this.logger, gateway, db, this.webListen).start()
         : null;
 
       return { gateway, channels, heartbeat, webServer };
@@ -274,6 +294,35 @@ function resolveSessionSourceFromArgs(argv: string[] = process.argv): Mode {
   }
 
   return 'web';
+}
+
+export interface ServerHandle {
+  /** The loopback port the web dashboard is listening on. */
+  port: number;
+  /** Stop the web server, channels, heartbeat and skill sync. */
+  stop(): Promise<void>;
+}
+
+export interface StartServerOptions {
+  /** Defaults to `{ tui: false, web: true }`. */
+  modes?: Partial<RuntimeModes>;
+  /** Bind overrides for the dashboard, e.g. `{ host: '127.0.0.1', port: 0 }`. */
+  webListen?: WebListenOptions;
+}
+
+/**
+ * Start the koris runtime inside the current process and return a handle to
+ * stop it. Used by the Electron desktop app to run the server in-process
+ * instead of spawning `node dist/core/src/app.js`. Installs no signal handlers.
+ */
+export async function startServer(options: StartServerOptions = {}): Promise<ServerHandle> {
+  const modes: RuntimeModes = { tui: false, web: true, ...options.modes };
+  const application = new Application(logger, 'web', modes, options.webListen);
+  await application.startEmbedded();
+  return {
+    port: application.webPort,
+    stop: () => application.stop('embedded-host'),
+  };
 }
 
 const app = new Application(logger);

@@ -3,8 +3,8 @@ productName: koris
 executableName: koris
 copyright: Copyright © guilhermesalviano
 
-# The Electron main process has no native deps (better-sqlite3 rides in
-# extraResources, run by the bundled Node, not Electron). Skip the rebuild.
+# The app asar carries no node_modules, and the server tree in extraResources
+# (with better-sqlite3's N-API prebuilds) is copied verbatim, not rebuilt.
 npmRebuild: false
 
 # electron-builder is invoked with cwd = apps/desktop (via
@@ -24,9 +24,10 @@ files:
   - out/**/*
   - '!**/*.map'
 
-# The koris server tree + a standalone Node runtime ride alongside the asar in
-# Resources/. apps/desktop/config.ts resolves them via process.resourcesPath.
-# stage-server.mjs + fetch-node.mjs must run before packaging.
+# The koris server tree rides alongside the asar in Resources/server. The
+# Electron main process require()s it and runs it in-process (see
+# apps/desktop/server-runtime.ts), resolving the path via process.resourcesPath.
+# stage-server.mjs must run before packaging.
 extraResources:
   - from: ../../dist
     to: server/dist
@@ -45,8 +46,6 @@ extraResources:
     to: server/node_modules
   - from: ../../build-resources/server-package.json
     to: server/package.json
-  - from: ../../build-resources/node
-    to: node
 
 publish:
   provider: github

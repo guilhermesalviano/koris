@@ -2,14 +2,16 @@ import { app, BrowserWindow } from 'electron';
 import { copyFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { dataDir, exampleConfig, isDev, isPackaged } from './config';
-import { ensureServer, stopServer } from './server-process';
+import { startServer, stopServer } from './server-runtime';
 import { applyMenu } from './menu';
 import { createWindow, getMainWindow, showApp, showError, showLoading } from './window';
 
 const log = (line: string): void => console.log('[koris-desktop]', line);
 
-let managedServer = false;
+let serverStarted = false;
 let quitting = false;
+
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -51,9 +53,9 @@ async function bootstrap(): Promise<void> {
   await showLoading(win);
 
   try {
-    const result = await ensureServer(log);
-    managedServer = result.managed;
-    await showApp(win);
+    const server = await startServer(log);
+    serverStarted = true;
+    await showApp(win, server.origin);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     log(message);
@@ -78,11 +80,12 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', (event) => {
-  if (quitting || !managedServer) {
+  if (quitting || !serverStarted) {
     return;
   }
   quitting = true;
-  managedServer = false;
+  serverStarted = false;
   event.preventDefault();
-  void stopServer(log).finally(() => app.quit());
+  // Don't let a stuck server shutdown wedge the quit.
+  void Promise.race([stopServer(log), delay(5000)]).finally(() => app.quit());
 });

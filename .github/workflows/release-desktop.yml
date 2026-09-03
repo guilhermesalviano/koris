@@ -67,7 +67,7 @@ jobs:
           pnpm build
           pnpm build:desktop
 
-      - name: Stage bundled server + Node runtime
+      - name: Stage bundled server deps
         run: pnpm desktop:stage
 
       - name: Generate app icons

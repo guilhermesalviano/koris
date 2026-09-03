@@ -2,13 +2,15 @@
 
 **Status:** not implemented, and **not needed** for the current desktop design.
 
-The desktop app loads the SPA from `http://localhost:3000` — the exact origin the koris
-server serves it from — so every relative call in `apps/web/src/lib/api.ts` (`/api/chat`,
-`/api/admin/*`, `/health`) and `BrowserRouter` just work, unchanged.
+The desktop app now runs the server in-process (see `bundled-runtime.md`) but still on an
+HTTP listener — `http://127.0.0.1:<random-port>`, the exact origin the koris server serves
+the SPA from. So every relative call in `apps/web/src/lib/api.ts` (`/api/chat`,
+`/api/admin/*`, `/health`) and `BrowserRouter` still just work, unchanged: the ephemeral
+port is transparent because the window origin *is* the server origin.
 
-This note only matters if a future desktop mode stops using that origin — e.g. loading the
-bundle from `file://` or a custom `app://` protocol while the server listens on a Unix
-socket or a random port.
+This note only matters if a future desktop mode stops using an HTTP origin — e.g. loading
+the bundle from `file://` or a custom `app://` protocol while the server routes over IPC or
+a Unix socket.
 
 ## What it would take
 
