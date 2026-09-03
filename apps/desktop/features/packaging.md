@@ -35,22 +35,31 @@ Release flow: `pnpm release <bump>` → review → commit → `git tag vX.Y.Z` �
 `git push --follow-tags` → publish the Release for that tag (GitHub UI or
 `gh release create vX.Y.Z --generate-notes`).
 
+## App icons — DONE (placeholder art)
+
+`apps/desktop/build/icon.png` (1024×1024) is generated from `apps/web/public/logo.png` by
+`apps/desktop/scripts/make-icons.mjs` (`pnpm desktop:icons`, also run inside
+`desktop:package` / `:dir` and the release workflow). electron-builder derives the macOS
+`.icns` and Windows `.ico` from it. The current image is an **upscale of the 128px logo** —
+replace `apps/web/public/logo.png` with real ≥1024px art and re-run `pnpm desktop:icons`.
+
+## Code signing / notarization — HOOKS IN PLACE, NOT ACTIVE
+
+Builds are still unsigned (`mac.identity: null` forces electron-builder to skip signing).
+Users get "unidentified developer" / SmartScreen warnings. Everything else is wired:
+`electron-builder.yml` has the `mac` hardened-runtime / entitlements keys and
+`apps/desktop/build/entitlements.mac.plist` exists; `release-desktop.yml` already forwards
+the signing env vars (empty until the secrets are set).
+
+To activate:
+
+- **macOS:** add repo secrets `CSC_LINK` (base64 .p12), `CSC_KEY_PASSWORD`, and for
+  notarization `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`; then in
+  `electron-builder.yml` remove `mac.identity: null` and set `mac.notarize: true`.
+- **Windows:** add repo secrets `CSC_LINK` / `CSC_KEY_PASSWORD` (or an Azure Trusted
+  Signing / cloud HSM setup). electron-builder picks these up automatically — no yml change.
+
 ## Still TODO
-
-### App icons
-`apps/desktop/build/` has no icon yet — builds use the default Electron icon (a warning is
-printed). Add `icon.icns` / `icon.ico` / `icon.png` (≥512px) there; source art can start
-from `apps/web/public/logo.png` (only 128px today, needs redrawing).
-
-### Code signing / notarization
-Currently unsigned (`mac.identity: null`). Users get "unidentified developer" / SmartScreen
-warnings. To enable, add to the workflow and repo secrets:
-
-- **macOS:** `CSC_LINK` (base64 .p12), `CSC_KEY_PASSWORD`, and for notarization
-  `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`; set `mac.notarize: true` and
-  drop `identity: null`. Add `apps/desktop/build/entitlements.mac.plist`.
-- **Windows:** `CSC_LINK` / `CSC_KEY_PASSWORD` (or an Azure Trusted Signing / cloud HSM
-  setup). electron-builder picks these up automatically.
 
 ### Auto-update
 `features/auto-update.ts` is still a stub; once installers are signed, wire `electron-updater`

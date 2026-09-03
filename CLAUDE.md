@@ -11,15 +11,19 @@ The public website, plugins marketplace, and docs live in a separate independent
 ## Commands
 
 - Install: `pnpm install` (never `npm`/`yarn`)
-- Build (required before `pnpm app`): `pnpm build`
-- Run: `pnpm app` (web on :3000; add `--tui` for TUI, `telegram` for Telegram mode)
-- Type-check: `pnpm lint` (server), `pnpm lint:client` (`apps/web/`) — must pass, strict TS (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`)
+- Build (required before `pnpm app`): `pnpm build` (runs `pnpm clean` then compiles TS + `vite build`)
+- Clean build output: `pnpm clean` (`rm -rf dist dist-web`)
+- Run: `pnpm app` (web on :3000; add `--tui` for TUI)
+- Desktop app (Electron shell in `apps/desktop/`): `pnpm desktop` (build + launch), `pnpm desktop:dev` (launch with `KORIS_DESKTOP_DEV=1`), `pnpm desktop:package` (build platform installers), `pnpm desktop:package:dir` (unpacked dir only)
+- Type-check: `pnpm lint` (server), `pnpm lint:client` (`apps/web/`), `pnpm lint:desktop` (`apps/desktop/`) — must pass, strict TS (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`)
 - Test suite: `pnpm test`
 - Single test file: `pnpm vitest run tests/unit/path/to/file.test.ts`
 - Single test by name: `pnpm vitest run -t "test name"` (combine with a file path to scope further)
 - Watch mode: `pnpm test:watch`
+- Test UI: `pnpm test:ui`
 - Coverage: `pnpm test:coverage`
 - Mutation testing: `pnpm test:mutation` (Stryker; only mutates the files listed in `stryker.config.json`)
+- Scaffold a new tool: `pnpm scaffold:tool`
 - Validate settings: `pnpm validate`
 - Wipe local DB: `pnpm clear:memory`
 

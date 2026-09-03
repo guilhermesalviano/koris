@@ -6,7 +6,16 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./core/tests/setup/vitest.setup.ts'],
-    exclude: ['.stryker-tmp/**', '**/node_modules/**', 'koris-hub/**'],
+    // build-resources/** and dist-desktop-out/** hold the staged server tree
+    // (pnpm desktop:stage / desktop:package) — deps like Next ship their own
+    // *.test.js which vitest would otherwise try to run.
+    exclude: [
+      '.stryker-tmp/**',
+      '**/node_modules/**',
+      'koris-hub/**',
+      'build-resources/**',
+      'dist-desktop-out/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

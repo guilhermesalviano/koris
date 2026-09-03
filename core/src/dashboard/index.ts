@@ -19,6 +19,18 @@ import { activeRunsRegistry } from './active-runs';
 interface WebServerHandle {
   start(): Promise<WebServerHandle>;
   stop(): Promise<void>;
+  /** The port the HTTP server is actually bound to (0 until `start()` resolves). */
+  readonly port: number;
+}
+
+/**
+ * Optional listen overrides. When omitted the server binds `config.WEB_PORT` on
+ * all interfaces, exactly as it always has. The desktop app passes
+ * `{ host: '127.0.0.1', port: 0 }` to get an ephemeral loopback port.
+ */
+interface WebListenOptions {
+  host?: string;
+  port?: number;
 }
 
 interface RateLimitEntry {
@@ -301,18 +313,37 @@ class ChatRouteHandler {
 
 class DashboardServer implements WebServerHandle {
   private server: Server | null = null;
+  private boundPort = 0;
 
   constructor(
     private readonly logger: ILogger,
     private readonly gateway: IMessageGateway,
     private readonly db: IDatabaseService,
+    private readonly listen: WebListenOptions = {},
   ) {}
+
+  get port(): number {
+    return this.boundPort;
+  }
 
   async start(): Promise<WebServerHandle> {
     const app = this.createApp();
-    this.server = app.listen(config.WEB_PORT, () => {
-      this.logger.info(`Server running at http://localhost:${config.WEB_PORT}`);
-      this.logSetupInstructionsIfUnconfigured();
+    const requestedPort = this.listen.port ?? config.WEB_PORT;
+    const { host } = this.listen;
+
+    await new Promise<void>((resolve, reject) => {
+      const onListening = (): void => {
+        const address = server.address();
+        this.boundPort = typeof address === 'object' && address ? address.port : requestedPort;
+        this.logger.info(`Server running at http://localhost:${this.boundPort}`);
+        this.logSetupInstructionsIfUnconfigured();
+        resolve();
+      };
+      const server = host
+        ? app.listen(requestedPort, host, onListening)
+        : app.listen(requestedPort, onListening);
+      server.once('error', reject);
+      this.server = server;
     });
 
     return this;
@@ -325,7 +356,7 @@ class DashboardServer implements WebServerHandle {
     }
 
     this.logger.info(
-      `No koris.json found yet — open http://localhost:${config.WEB_PORT}/setup in your browser to finish setup, ` +
+      `No koris.json found yet — open http://localhost:${this.boundPort}/setup in your browser to finish setup, ` +
         'or run `pnpm onboard` for a CLI setup wizard instead.',
     );
   }
@@ -377,8 +408,13 @@ class DashboardServer implements WebServerHandle {
 }
 
 class DashboardServerFactory {
-  static create(logger: ILogger, gateway: IMessageGateway, db: IDatabaseService): WebServerHandle {
-    return new DashboardServer(logger, gateway, db);
+  static create(
+    logger: ILogger,
+    gateway: IMessageGateway,
+    db: IDatabaseService,
+    listen?: WebListenOptions,
+  ): WebServerHandle {
+    return new DashboardServer(logger, gateway, db, listen);
   }
 }
 
@@ -402,12 +438,18 @@ function createChatCancelHandler(gateway: IMessageGateway) {
   return new ChatRouteHandler(gateway).cancel;
 }
 
-async function startWebServer(logger: ILogger, gateway: IMessageGateway, db: IDatabaseService): Promise<WebServerHandle> {
-  return new DashboardServer(logger, gateway, db).start();
+async function startWebServer(
+  logger: ILogger,
+  gateway: IMessageGateway,
+  db: IDatabaseService,
+  listen?: WebListenOptions,
+): Promise<WebServerHandle> {
+  return new DashboardServer(logger, gateway, db, listen).start();
 }
 
 export {
   WebServerHandle,
+  WebListenOptions,
   DashboardServerFactory,
   createApp,
   serveIndexHandler,

@@ -23,7 +23,7 @@ Guidance for AI coding agents working in this repository.
 | `pnpm build` | Clean + compile TS → `dist/` and build the web frontend → `dist-web/` (required before `pnpm app`) |
 | `pnpm build:client` | Build only the web frontend (`vite build` → `dist-web/`) |
 | `pnpm dev:client` | Vite dev server (port 5173), proxies `/api` and `/health` to `localhost:3000` |
-| `pnpm app` | Run agent (web on port 3000). Add `--tui` for TUI, `telegram` for Telegram |
+| `pnpm app` | Run agent (web on port 3000). Add `--tui` for TUI |
 | `pnpm onboard` | First-time onboarding flow |
 | `pnpm validate` | Validate `koris.json` against expected schema |
 | `pnpm lint` | Type-check server (`tsc --noEmit`) — run this after any change |
@@ -54,7 +54,7 @@ Guidance for AI coding agents working in this repository.
 - `core/tests/` — Vitest suites: `unit/`, `integration/`, plus `helpers/test-config.ts` and `setup/vitest.setup.ts`.
 - `apps/tui/` — terminal UI wrapper (flat module, one file per concern, co-located `*.test.ts`).
 - `apps/web/` — the web frontend (React 19 SPA; see "Web frontend" below).
-- `apps/desktop/` — Electron shell that spawns/attaches the server and loads the web dashboard in a native window. Own `tsconfig.json` (→ `apps/desktop/out/`) and `package.json` (electron-builder needs it). Packaging: `electron-builder.yml` + `apps/desktop/scripts/` + `.github/workflows/release-desktop.yml`. See `apps/desktop/README.md`.
+- `apps/desktop/` — Electron shell that runs the koris server **in-process** (`server-runtime.ts` `require()`s `dist/core/src/app.js` and calls its exported `startServer()`; no child process, no bundled Node) on an ephemeral loopback port and loads the web dashboard from that origin in a native window. Own `tsconfig.json` (→ `apps/desktop/out/`) and `package.json` (electron-builder needs it). Packaging: `electron-builder.yml` + `apps/desktop/scripts/` + `.github/workflows/release-desktop.yml`. See `apps/desktop/README.md`.
 - `plugins/registry.ts` — the shared, family-agnostic plugin kernel (`ExtensionPoint`, `PluginRegistry`, `buildRegistry`) used by both `plugins/channels/` and `plugins/tools/`.
 - `plugins/config/` — shared per-plugin `config.yml` helpers (`definePluginConfig`, loader, writer), parameterized by `family: 'channels' | 'tools'`. `plugins/channels/channel-config.ts` is a thin `family: 'channels'` preset wrapper over it.
 - `plugins/channels/` — the channel plugin system with inverted dependencies. `contracts.ts` (the dependency-free plugin SDK: `PluginContext`, channel/gateway/logger interfaces, `ADAPTERS`, `splitMessage`) + one folder per channel plugin (`telegram/`, `whatsapp/`), each exposing `create(context)`.
