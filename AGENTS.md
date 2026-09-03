@@ -23,7 +23,7 @@ Guidance for AI coding agents working in this repository.
 | `pnpm build` | Clean + compile TS → `dist/` and build the web frontend → `dist-web/` (required before `pnpm app`) |
 | `pnpm build:client` | Build only the web frontend (`vite build` → `dist-web/`) |
 | `pnpm dev:client` | Vite dev server (port 5173), proxies `/api` and `/health` to `localhost:3000` |
-| `pnpm app` | Run agent (web on port 3000). Add `--tui` for TUI, `telegram` for Telegram |
+| `pnpm app` | Run agent (web on port 3000). Add `--tui` for TUI |
 | `pnpm onboard` | First-time onboarding flow |
 | `pnpm validate` | Validate `koris.json` against expected schema |
 | `pnpm lint` | Type-check server (`tsc --noEmit`) — run this after any change |
