@@ -11,7 +11,7 @@ type Listener = (data: unknown) => void;
 const listeners = new Map<string, Listener>();
 
 const fakeSock = {
-  user: { id: '5511999998888:7@s.whatsapp.net', lid: '162157312364643:7@lid' },
+  user: { id: '5511999998888:7@s.whatsapp.net', lid: '199999999998888:7@lid' },
   sendMessage: vi.fn().mockResolvedValue(undefined),
   sendPresenceUpdate: vi.fn().mockResolvedValue(undefined),
   groupMetadata: vi.fn().mockResolvedValue({ subject: 'Family' }),
@@ -258,7 +258,7 @@ describe('whatsapp plugin', () => {
   });
 
   it('recognizes a mention by the bot LID in a LID-addressed group and strips the token', async () => {
-    const { calls } = await start('pong', { botNumber: '5562936181410' });
+    const { calls } = await start('pong', { botNumber: '5562999998888' });
 
     // Baileys surfaces the bot's LID on `connection === 'open'`.
     const connUpdate = listeners.get('connection.update');
@@ -270,8 +270,8 @@ describe('whatsapp plugin', () => {
         key: { remoteJid: '120363407821582446@g.us', fromMe: false, id: 'MSG3d', participantAlt: '5511999999999@s.whatsapp.net', addressingMode: 'lid' },
         message: {
           extendedTextMessage: {
-            text: '@162157312364643 eai mano',
-            contextInfo: { mentionedJid: ['162157312364643@lid'] },
+            text: '@199999999998888 eai mano',
+            contextInfo: { mentionedJid: ['199999999998888@lid'] },
           },
         },
       }),

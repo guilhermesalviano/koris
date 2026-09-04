@@ -40,8 +40,8 @@ describe('rememberContactName / lookupContactName', () => {
 });
 
 describe('applyMentionNames', () => {
-  const BOT_PN = '5562936181410';
-  const BOT_LID = '162157312364643';
+  const BOT_PN = '5562999998888';
+  const BOT_LID = '199999999998888';
 
   it('swaps @<number> for @<name> for known users, in a LID group too', () => {
     rememberContactName(['5511999999999@s.whatsapp.net'], 'João');

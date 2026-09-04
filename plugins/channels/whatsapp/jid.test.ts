@@ -42,7 +42,7 @@ describe('resolveWhatsAppJid', () => {
   });
 
   it('prepends the bot country code when the number has none', async () => {
-    whatsappState.botNumber = '5562936181410';
+    whatsappState.botNumber = '5562999998888';
     const onWhatsApp = vi.fn().mockResolvedValue([
       { jid: '1199999999@s.whatsapp.net', exists: false },
       { jid: '551199999999@s.whatsapp.net', exists: true },

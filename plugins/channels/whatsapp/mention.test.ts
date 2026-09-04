@@ -45,8 +45,8 @@ describe('extractMentionedJids', () => {
 });
 
 describe('isBotMentioned', () => {
-  const PN = '5562936181410';
-  const LID = '162157312364643';
+  const PN = '5562999998888';
+  const LID = '199999999998888';
 
   it('is false when no bot id is known', () => {
     expect(isBotMentioned(`@${PN} hi`, [`${PN}@s.whatsapp.net`], ['', ''])).toBe(false);
@@ -57,11 +57,11 @@ describe('isBotMentioned', () => {
   });
 
   it('matches a LID mentionedJid (LID-addressed group)', () => {
-    expect(isBotMentioned('@162157312364643 eai mano', [`${LID}@lid`], [PN, LID])).toBe(true);
+    expect(isBotMentioned('@199999999998888 eai mano', [`${LID}@lid`], [PN, LID])).toBe(true);
   });
 
   it('matches a LID even when only the LID is known', () => {
-    expect(isBotMentioned('@162157312364643 eai mano', [`${LID}@lid`], ['', LID])).toBe(true);
+    expect(isBotMentioned('@199999999998888 eai mano', [`${LID}@lid`], ['', LID])).toBe(true);
   });
 
   it('falls back to an @<id> substring in the text', () => {
@@ -75,14 +75,14 @@ describe('isBotMentioned', () => {
 
 describe('stripBotMention', () => {
   it('removes an @<lid> token and tidies whitespace', () => {
-    expect(stripBotMention('@162157312364643 eai mano', ['5562936181410', '162157312364643'])).toBe('eai mano');
+    expect(stripBotMention('@199999999998888 eai mano', ['5562999998888', '199999999998888'])).toBe('eai mano');
   });
 
   it('removes an @<phone> token', () => {
-    expect(stripBotMention('hey @5562936181410 help', ['5562936181410', ''])).toBe('hey help');
+    expect(stripBotMention('hey @5562999998888 help', ['5562999998888', ''])).toBe('hey help');
   });
 
   it('leaves text untouched when no bot id appears', () => {
-    expect(stripBotMention('nothing to strip here', ['5562936181410', '162157312364643'])).toBe('nothing to strip here');
+    expect(stripBotMention('nothing to strip here', ['5562999998888', '199999999998888'])).toBe('nothing to strip here');
   });
 });
