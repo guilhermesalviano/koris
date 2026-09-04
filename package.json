@@ -1,6 +1,6 @@
 {
   "name": "/koris",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Autonomous AI agent framework with pluggable channels, skills, persistent memory, and a web dashboard.",
   "main": "dist/core/src/app.js",
   "bin": {
