@@ -94,7 +94,7 @@ function buildChannelsSnapshot(pluginSettingsRepo: IPluginSettingsRepository) {
   const whatsapp = (loadChannelConfig('whatsapp') ?? {}) as {
     authFolder?: string;
     whitelist?: string;
-    mentionId?: string;
+    botNumber?: string;
     allowUnlistedSenders?: boolean;
   };
   return {
@@ -108,7 +108,7 @@ function buildChannelsSnapshot(pluginSettingsRepo: IPluginSettingsRepository) {
       ENABLED: resolvePluginEnabled(pluginSettingsRepo, 'channels', 'whatsapp'),
       AUTH_FOLDER: whatsapp.authFolder ?? '',
       WHITELIST: whatsapp.whitelist ?? '',
-      MENTION_ID: whatsapp.mentionId ?? '',
+      BOT_NUMBER: whatsapp.botNumber ?? '',
       ALLOW_UNLISTED_SENDERS: whatsapp.allowUnlistedSenders ?? false,
     },
   };

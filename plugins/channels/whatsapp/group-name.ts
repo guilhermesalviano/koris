@@ -1,8 +1,16 @@
 import type { ILogger } from '../contracts';
 import { GROUP_NAME_TTL_MS } from './constants';
-import type { SocketLike } from './types';
+import { rememberContactName } from './contact-names';
+import type { GroupParticipantLite, SocketLike } from './types';
 
 const groupNameCache = new Map<string, { name: string; fetchedAt: number }>();
+
+function seedParticipantNames(participants: GroupParticipantLite[] | undefined): void {
+  for (const p of participants ?? []) {
+    const display = p.name ?? p.notify ?? p.verifiedName ?? undefined;
+    if (display) rememberContactName([p.id, p.lid, p.phoneNumber], display);
+  }
+}
 
 export async function resolveGroupName(sock: SocketLike, jid: string, logger: ILogger): Promise<string | undefined> {
   const cached = groupNameCache.get(jid);
@@ -12,6 +20,9 @@ export async function resolveGroupName(sock: SocketLike, jid: string, logger: IL
 
   try {
     const metadata = await sock.groupMetadata(jid);
+    // Feed participant display names into the contact-name cache so an
+    // @-mention of someone who hasn't spoken can still be resolved.
+    seedParticipantNames(metadata.participants);
     if (!metadata.subject) {
       return undefined;
     }

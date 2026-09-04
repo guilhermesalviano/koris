@@ -11,9 +11,11 @@ type Listener = (data: unknown) => void;
 const listeners = new Map<string, Listener>();
 
 const fakeSock = {
+  user: { id: '5511999998888:7@s.whatsapp.net', lid: '199999999998888:7@lid' },
   sendMessage: vi.fn().mockResolvedValue(undefined),
   sendPresenceUpdate: vi.fn().mockResolvedValue(undefined),
   groupMetadata: vi.fn().mockResolvedValue({ subject: 'Family' }),
+  onWhatsApp: vi.fn().mockResolvedValue(undefined),
   end: vi.fn(),
   ev: {
     on: vi.fn((event: string, handler: Listener) => {
@@ -35,6 +37,8 @@ vi.mock('@whiskeysockets/baileys', () => ({
 vi.mock('qrcode-terminal', () => ({ generate: vi.fn() }));
 
 import { WhatsAppChannelFactory, configureWhatsAppRuntime, _resetWhatsAppDedupeForTesting, create } from './index';
+import { _resetContactNamesForTesting } from './contact-names';
+import { whatsappState } from './state';
 import type { ChannelDefinition } from '../contracts';
 import type { PluginRegistry } from '../../registry';
 
@@ -70,14 +74,17 @@ function waMessage(overrides: Partial<WAMessage> = {}): WAMessage {
   } as WAMessage;
 }
 
-async function start(replyText: string, opts: { allowUntrusted?: boolean; whitelist?: string; mentionId?: string } = {}) {
+const BOT_NUMBER = '5511999998888';
+
+async function start(replyText: string, opts: { allowUntrusted?: boolean; whitelist?: string; botNumber?: string } = {}) {
   const { factory, calls } = makeChannelHandlerFactory(replyText);
+  const botNumber = opts.botNumber ?? BOT_NUMBER;
   configureWhatsAppRuntime({
     channelHandler: factory,
     config: {
       authFolder: '.test-wa-auth',
       whitelist: opts.whitelist ?? '',
-      mentionId: opts.mentionId ?? 'korisbot',
+      botNumber,
       allowUnlistedSenders: opts.allowUntrusted ?? true,
     },
   });
@@ -85,7 +92,7 @@ async function start(replyText: string, opts: { allowUntrusted?: boolean; whitel
   const gateway: IMessageGateway = { handle: vi.fn() };
   await WhatsAppChannelFactory.start({
     authFolder: '.test-wa-auth',
-    mentionId: opts.mentionId ?? 'korisbot',
+    botNumber,
     gateway,
     logger: makeLogger(),
   });
@@ -107,6 +114,9 @@ describe('whatsapp plugin', () => {
     vi.clearAllMocks();
     listeners.clear();
     _resetWhatsAppDedupeForTesting();
+    _resetContactNamesForTesting();
+    // session-derived LID leaks across tests otherwise (module singleton)
+    whatsappState.botLid = '';
   });
 
   afterEach(() => {
@@ -122,6 +132,18 @@ describe('whatsapp plugin', () => {
     expect(calls[0].target).toBe('5511999999999@s.whatsapp.net');
     expect(calls[0].message).toMatchObject({ text: 'hello there', isGroup: false });
     expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'pong' });
+  });
+
+  it('sends to a loosely-formatted number by canonicalizing it through onWhatsApp', async () => {
+    await start('n/a');
+    fakeSock.onWhatsApp.mockResolvedValueOnce([{ jid: '5511999999999@s.whatsapp.net', exists: true }]);
+
+    await WhatsAppChannelFactory.sendText('11 9 9999-9999', 'oi');
+
+    expect(fakeSock.onWhatsApp).toHaveBeenCalledWith(
+      '11999999999', '511999999999', '5511999999999', '55111999999999',
+    );
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'oi' });
   });
 
   it('splits a reply longer than the WhatsApp chunk limit into multiple sends', async () => {
@@ -170,7 +192,7 @@ describe('whatsapp plugin', () => {
   });
 
   it('ignores a group message that does not mention the bot', async () => {
-    const { calls } = await start('should not be sent', { mentionId: 'korisbot' });
+    const { calls } = await start('should not be sent');
 
     await emitUpsert([
       waMessage({
@@ -183,18 +205,163 @@ describe('whatsapp plugin', () => {
     expect(fakeSock.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('processes a group message that mentions the bot and resolves the group name', async () => {
-    const { calls } = await start('pong', { mentionId: 'korisbot' });
+  it('processes a group message that mentions the bot number as text and resolves the group name', async () => {
+    const { calls } = await start('pong');
 
     await emitUpsert([
       waMessage({
         key: { remoteJid: '1234-5678@g.us', fromMe: false, id: 'MSG3' },
-        message: { conversation: 'hey @korisbot help me' },
+        message: { conversation: `hey @${BOT_NUMBER} help me` },
       }),
     ]);
 
     expect(calls).toHaveLength(1);
     expect(calls[0].message).toMatchObject({ isGroup: true, mentionsBot: true, groupName: 'Family' });
+  });
+
+  it('processes a group message that mentions the bot via contextInfo.mentionedJid', async () => {
+    const { calls } = await start('pong');
+
+    await emitUpsert([
+      waMessage({
+        key: { remoteJid: '1234-5678@g.us', fromMe: false, id: 'MSG3b' },
+        message: {
+          extendedTextMessage: {
+            text: 'hey help me',
+            contextInfo: { mentionedJid: [`${BOT_NUMBER}@s.whatsapp.net`] },
+          },
+        },
+      }),
+    ]);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message).toMatchObject({ isGroup: true, mentionsBot: true });
+  });
+
+  it('auto-detects the bot number from the live socket when config leaves it blank', async () => {
+    const { calls } = await start('pong', { botNumber: '' });
+
+    // Baileys reports the linked account on `connection === 'open'`.
+    const connUpdate = listeners.get('connection.update');
+    if (!connUpdate) throw new Error('connection.update listener was never registered');
+    connUpdate({ connection: 'open' });
+
+    await emitUpsert([
+      waMessage({
+        key: { remoteJid: '1234-5678@g.us', fromMe: false, id: 'MSG3c' },
+        message: { conversation: `hey @${BOT_NUMBER} help me` },
+      }),
+    ]);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message).toMatchObject({ isGroup: true, mentionsBot: true });
+  });
+
+  it('recognizes a mention by the bot LID in a LID-addressed group and strips the token', async () => {
+    const { calls } = await start('pong', { botNumber: '5562999998888' });
+
+    // Baileys surfaces the bot's LID on `connection === 'open'`.
+    const connUpdate = listeners.get('connection.update');
+    if (!connUpdate) throw new Error('connection.update listener was never registered');
+    connUpdate({ connection: 'open' });
+
+    await emitUpsert([
+      waMessage({
+        key: { remoteJid: '120363407821582446@g.us', fromMe: false, id: 'MSG3d', participantAlt: '5511999999999@s.whatsapp.net', addressingMode: 'lid' },
+        message: {
+          extendedTextMessage: {
+            text: '@199999999998888 eai mano',
+            contextInfo: { mentionedJid: ['199999999998888@lid'] },
+          },
+        },
+      }),
+    ]);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message).toMatchObject({ isGroup: true, mentionsBot: true, text: 'eai mano' });
+  });
+
+  it('rewrites a third-party @-mention to @<name> from a previously-seen pushName, bot token stripped', async () => {
+    const { calls } = await start('pong');
+    const group = '120363407821582446@g.us';
+
+    // A plain group message (not mentioning the bot) — dropped by the gate, but
+    // its sender's name is cached for later.
+    await emitUpsert([
+      waMessage({
+        key: { remoteJid: group, fromMe: false, id: 'M-name', participant: '5511999999999@s.whatsapp.net' },
+        pushName: 'João',
+        message: { conversation: 'oi pessoal' },
+      }),
+    ]);
+    expect(calls).toHaveLength(0);
+
+    // Now someone mentions both João and the bot.
+    await emitUpsert([
+      waMessage({
+        key: { remoteJid: group, fromMe: false, id: 'M-mention', participant: '5599999999999@s.whatsapp.net' },
+        pushName: 'Guilherme',
+        message: {
+          extendedTextMessage: {
+            text: `@5511999999999 e @${BOT_NUMBER} vejam isso`,
+            contextInfo: { mentionedJid: ['5511999999999@s.whatsapp.net', `${BOT_NUMBER}@s.whatsapp.net`] },
+          },
+        },
+      }),
+    ]);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message).toMatchObject({
+      mentionsBot: true,
+      text: '@João e vejam isso',
+    });
+  });
+
+  it('leaves a @-mention of someone who has not spoken as the raw number', async () => {
+    const { calls } = await start('pong');
+
+    await emitUpsert([
+      waMessage({
+        key: { remoteJid: '120363407821582446@g.us', fromMe: false, id: 'M-unknown', participant: '5599999999999@s.whatsapp.net' },
+        pushName: 'Guilherme',
+        message: {
+          extendedTextMessage: {
+            text: `@5511999999999 e @${BOT_NUMBER} vejam`,
+            contextInfo: { mentionedJid: ['5511999999999@s.whatsapp.net', `${BOT_NUMBER}@s.whatsapp.net`] },
+          },
+        },
+      }),
+    ]);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message.text).toBe('@5511999999999 e vejam');
+  });
+
+  it('falls back to a group-participant name when the mentioned user has not spoken', async () => {
+    const { calls } = await start('pong');
+    const group = '120363111111111111@g.us';
+
+    // Nobody has spoken, but the group metadata carries a display name for them.
+    fakeSock.groupMetadata.mockResolvedValueOnce({
+      subject: 'Squad',
+      participants: [{ id: '5511999999999@s.whatsapp.net', notify: 'João' }],
+    });
+
+    await emitUpsert([
+      waMessage({
+        key: { remoteJid: group, fromMe: false, id: 'M-part', participant: '5599999999999@s.whatsapp.net' },
+        pushName: 'Guilherme',
+        message: {
+          extendedTextMessage: {
+            text: `@5511999999999 e @${BOT_NUMBER} vejam`,
+            contextInfo: { mentionedJid: ['5511999999999@s.whatsapp.net', `${BOT_NUMBER}@s.whatsapp.net`] },
+          },
+        },
+      }),
+    ]);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message).toMatchObject({ groupName: 'Squad', text: '@João e vejam' });
   });
 
   it('denies an untrusted sender instead of reaching the channel handler', async () => {
@@ -235,9 +402,9 @@ describe('whatsapp plugin', () => {
 
   it('detaches all listeners before ending the socket on stop(), so end() cannot trigger a reconnect', async () => {
     const { factory } = makeChannelHandlerFactory('n/a');
-    configureWhatsAppRuntime({ channelHandler: factory, config: { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot', allowUnlistedSenders: true } });
+    configureWhatsAppRuntime({ channelHandler: factory, config: { authFolder: '.test-wa-auth', whitelist: '', botNumber: '5511999998888', allowUnlistedSenders: true } });
     const gateway = { handle: vi.fn() };
-    const { stop } = await WhatsAppChannelFactory.start({ authFolder: '.test-wa-auth', mentionId: 'korisbot', gateway, logger: makeLogger() });
+    const { stop } = await WhatsAppChannelFactory.start({ authFolder: '.test-wa-auth', botNumber: '5511999998888', gateway, logger: makeLogger() });
 
     stop();
 
@@ -262,7 +429,7 @@ describe('whatsapp plugin', () => {
         channelHandler: makeChannelHandlerFactory('n/a').factory,
         pluginEnablement: { isEnabled: () => true },
       },
-      { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot', allowUnlistedSenders: true },
+      { authFolder: '.test-wa-auth', whitelist: '', botNumber: '5511999998888', allowUnlistedSenders: true },
     );
     plugin.setup(fakeRegistry);
 
@@ -285,7 +452,7 @@ describe('whatsapp plugin', () => {
         channelHandler: makeChannelHandlerFactory('n/a').factory,
         pluginEnablement: { isEnabled: () => false },
       },
-      { authFolder: '.test-wa-auth', whitelist: '', mentionId: 'korisbot', allowUnlistedSenders: true },
+      { authFolder: '.test-wa-auth', whitelist: '', botNumber: '5511999998888', allowUnlistedSenders: true },
     );
     plugin.setup(fakeRegistry);
 

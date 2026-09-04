@@ -13,7 +13,7 @@ export function createWhatsAppAdapter(options: WhatsAppPluginOptions): ChannelDe
     start: (logger: ILogger, gateway: IMessageGateway) => {
       let stopFn: (() => void) | null = null;
 
-      WhatsAppChannelFactory.start({ authFolder: options.authFolder, mentionId: options.mentionId, gateway, logger })
+      WhatsAppChannelFactory.start({ authFolder: options.authFolder, botNumber: options.botNumber, gateway, logger })
         .then(({ stop }) => { stopFn = stop; })
         .catch((err: Error) => logger.warn(`Failed to start WhatsApp: ${err.message}`));
 

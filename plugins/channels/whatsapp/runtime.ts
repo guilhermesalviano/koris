@@ -1,9 +1,10 @@
 import type { IChannelHandlerFactory } from '../contracts';
 import { loadWhatsAppConfig, type WhatsAppPluginConfig } from './config';
+import { normalizeNumber } from './mention';
 import { whatsappState } from './state';
 
 /**
- * Primes the module-level runtime state (channel handler, mention id,
+ * Primes the module-level runtime state (channel handler, bot number,
  * whitelist, trust policy) that `create()` normally sets once at boot, so a
  * caller can (re)start WhatsApp live — e.g. after the setup wizard changes
  * these values — without restarting the process. Re-reads `config.yml` from
@@ -17,7 +18,7 @@ export function configureWhatsAppRuntime(cfg: {
 }): WhatsAppPluginConfig {
   const resolved = cfg.config ?? loadWhatsAppConfig();
   whatsappState.channelHandler = cfg.channelHandler;
-  whatsappState.mentionId = resolved.mentionId;
+  whatsappState.botNumber = normalizeNumber(resolved.botNumber);
   whatsappState.whitelist = resolved.whitelist.split(',').map((num) => num.trim()).filter(Boolean);
   whatsappState.allowUntrusted = resolved.allowUnlistedSenders;
   return resolved;
