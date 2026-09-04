@@ -205,20 +205,20 @@ describe('Heartbeat', () => {
           cronExpression: '0 9 * * *',
           type: 'report',
           channel: 'whatsapp',
-          target: '5511948449969@s.whatsapp.net',
+          target: '5511999999999@s.whatsapp.net',
         }],
         completionResponse: { kind: 'message', text: 'group report' },
       });
       (channelService.resolveDelivery as ReturnType<typeof vi.fn>).mockReturnValue({
         channel: 'whatsapp',
-        target: '5511948449969@s.whatsapp.net',
+        target: '5511999999999@s.whatsapp.net',
       });
 
       await heartbeat.handler(now);
 
       expect(channelsManager.sendMessage).toHaveBeenCalledWith(
         'whatsapp',
-        '5511948449969@s.whatsapp.net',
+        '5511999999999@s.whatsapp.net',
         'group report',
       );
     });

@@ -59,7 +59,8 @@ export function create(context: ToolPluginContext): Plugin {
         name: TOOL_NAME,
         description:
           'Start a new outbound message to someone through a channel (Telegram or WhatsApp). ' +
-          'Provide the target (Telegram chat id or WhatsApp JID). "channel" is inferred from the current chat when messaging from a Telegram/WhatsApp chat; ' +
+          'Provide the target: a Telegram chat id, or for WhatsApp a phone number (digits, "+" and separators are fine) or a full JID. ' +
+          '"channel" is inferred from the current chat when messaging from a Telegram/WhatsApp chat; ' +
           'provide it explicitly otherwise. "content" must be the exact message body to send.',
         parameters: {
           channel: {
@@ -70,7 +71,7 @@ export function create(context: ToolPluginContext): Plugin {
           target: {
             type: 'string',
             required: true,
-            description: 'Recipient address on the channel (Telegram chat id or WhatsApp JID).',
+            description: 'Recipient on the channel: a Telegram chat id, or a WhatsApp phone number (e.g. "5511999998888" or "+55 11 99999-8888") or JID.',
           },
           content: {
             type: 'string',

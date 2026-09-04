@@ -9,6 +9,7 @@ import {
   extractQuotedText,
   extractText,
 } from './extract-message';
+import { applyMentionNames, rememberContactName } from './contact-names';
 import { resolveGroupName } from './group-name';
 import { downloadImageBase64, downloadQuotedImageBase64, toStickerReference } from './media';
 import { extractMentionedJids, isBotMentioned, jidToNumber } from './mention';
@@ -135,6 +136,10 @@ export async function startBaileysSocket(options: WhatsAppChannelStartOptions): 
 
       if (!jid || !senderName) continue;
 
+      // Learn this sender's display name from every message (even ones that
+      // don't mention the bot) so a later @-mention of them can be named.
+      rememberContactName([key.participant, key.participantAlt, key.remoteJid], senderName);
+
       const rawText = extractText(msg);
       const image = extractImage(msg);
       const sticker = extractQuotedSticker(msg);
@@ -146,10 +151,11 @@ export async function startBaileysSocket(options: WhatsAppChannelStartOptions): 
       const text = image?.caption ?? rawText ?? '';
       const isGroup = jid.endsWith('@g.us');
       const botIds = [whatsappState.botNumber, whatsappState.botLid];
-      const mentionsBot = isGroup && isBotMentioned(text, extractMentionedJids(msg), botIds);
+      const mentionedJids = extractMentionedJids(msg);
+      const mentionsBot = isGroup && isBotMentioned(text, mentionedJids, botIds);
       if (isGroup && !mentionsBot) continue;
 
-      void handleInboundMessage(options, sock, jid, senderName, text, image, sticker, quotedText, quotedImage, isWhitelisted, mentionsBot, externalId ?? undefined).catch((err: Error) => {
+      void handleInboundMessage(options, sock, jid, senderName, text, mentionedJids, image, sticker, quotedText, quotedImage, isWhitelisted, mentionsBot, externalId ?? undefined).catch((err: Error) => {
         options.logger.warn(`WhatsApp message handling error: ${err.message}`);
       });
     }
@@ -164,6 +170,7 @@ async function handleInboundMessage(
   jid: string,
   senderName: string,
   text: string,
+  mentionedJids: string[],
   image: ExtractedImage | null,
   sticker: ExtractedSticker | null,
   quotedText: string | null,
@@ -188,8 +195,12 @@ async function handleInboundMessage(
   }
 
   const channel = new WhatsAppChannel(sock);
+  // resolveGroupName also seeds the contact-name cache from group participants,
+  // so run it before rewriting `@<number>` mention tokens to `@<name>`.
   const groupName = jid.endsWith('@g.us') ? await resolveGroupName(sock, jid, options.logger) : undefined;
-  await channel.handleMessage(options.gateway, jid, senderName, text, images, {
+  const botIds = [whatsappState.botNumber, whatsappState.botLid];
+  const namedText = applyMentionNames(text, mentionedJids, botIds);
+  await channel.handleMessage(options.gateway, jid, senderName, namedText, images, {
     isWhitelistedSender,
     mentionsBot,
     groupName,

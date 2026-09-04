@@ -1,11 +1,11 @@
 import type { WAMessage } from '@whiskeysockets/baileys';
 import { splitMessage } from '../contracts';
 import type { ImageAttachment, IMessageGateway, StickerReference } from '../contracts';
-import { parseMentionTarget } from './jid';
+import { resolveWhatsAppJid } from './jid';
 import { isBotMentioned, stripBotMention } from './mention';
 import { NOT_AUTHORIZED_MESSAGE, TYPING_INTERVAL_MS, WHATSAPP_MESSAGE_LIMIT } from './constants';
 import { whatsappState } from './state';
-import type { IWhatsAppChannel, SocketLike } from './types';
+import type { IWhatsAppChannel, SocketLike, WhatsAppInboundOptions } from './types';
 
 export class WhatsAppChannel implements IWhatsAppChannel {
   constructor(
@@ -18,7 +18,7 @@ export class WhatsAppChannel implements IWhatsAppChannel {
     name: string,
     text: string,
     images?: ImageAttachment[],
-    options?: { isWhitelistedSender?: boolean; mentionsBot?: boolean; groupName?: string; stickers?: StickerReference[]; quotedText?: string; externalId?: string },
+    options?: WhatsAppInboundOptions,
   ): Promise<void> {
     const isTrustedSender = options?.isWhitelistedSender ?? false;
     if (!isTrustedSender && !whatsappState.allowUntrusted) {
@@ -36,7 +36,7 @@ export class WhatsAppChannel implements IWhatsAppChannel {
         sendText: (target: string, reply: string) => this.sendText(target, reply),
         sendError: async (target: string, message: string) => {
           const sock = await this.getSocket();
-          await sock.sendMessage(parseMentionTarget(target), { text: message });
+          await sock.sendMessage(await resolveWhatsAppJid(target, sock), { text: message });
         },
       },
     });
@@ -91,7 +91,7 @@ export class WhatsAppChannel implements IWhatsAppChannel {
 
   async sendText(jid: string, text: string): Promise<void> {
     const sock = await this.getSocket();
-    const target = parseMentionTarget(jid);
+    const target = await resolveWhatsAppJid(jid, sock);
     for (const chunk of splitMessage(text, WHATSAPP_MESSAGE_LIMIT)) {
       await sock.sendMessage(target, { text: chunk });
     }
@@ -99,7 +99,7 @@ export class WhatsAppChannel implements IWhatsAppChannel {
 
   async sendSticker(jid: string, sticker: StickerReference): Promise<void> {
     const sock = await this.getSocket();
-    const target = parseMentionTarget(jid);
+    const target = await resolveWhatsAppJid(jid, sock);
     const forwarded = { key: sticker.key, message: sticker.message } as WAMessage;
     await sock.sendMessage(target, { forward: forwarded });
   }

@@ -5,6 +5,7 @@ export const WHATSAPP_MESSAGE_LIMIT = 4_000;
 export const TYPING_INTERVAL_MS = 5_000;
 export const GROUP_NAME_TTL_MS = 60 * 60 * 1_000;
 export const DEDUPE_CACHE_LIMIT = 500;
+export const CONTACT_NAME_CACHE_LIMIT = 500;
 
 /**
  * `streaming`/`interactive` are false as-shipped: Baileys does support
