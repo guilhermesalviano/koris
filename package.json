@@ -41,6 +41,8 @@
     "test:mutation": "stryker run",
     "release": "tsx scripts/release.ts",
     "scaffold:tool": "tsx scripts/scaffold-tool-cli.ts",
+    "hub:list": "tsx scripts/hub-sync-cli.ts list",
+    "hub:pull": "tsx scripts/hub-sync-cli.ts pull",
     "run": "pnpm app"
   },
   "repository": {

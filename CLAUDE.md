@@ -24,6 +24,8 @@ The public website, plugins marketplace, and docs live in a separate independent
 - Coverage: `pnpm test:coverage`
 - Mutation testing: `pnpm test:mutation` (Stryker; only mutates the files listed in `stryker.config.json`)
 - Scaffold a new tool: `pnpm scaffold:tool`
+- List tools/skills available in `koris-hub` but not present locally: `pnpm hub:list`
+- Pull a tool/skill back from `koris-hub`: `pnpm hub:pull <slug>` (or `pnpm hub:pull --all`; add `--force` to overwrite an existing local copy)
 - Validate settings: `pnpm validate`
 - Wipe local DB: `pnpm clear:memory`
 
