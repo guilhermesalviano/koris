@@ -15,6 +15,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.1.4] - 2026-09-02
+
+### Added
+
+- Desktop app (`apps/desktop/`): Electron shell that spawns/attaches the server and loads the web dashboard in a native window — tray icon, native menu, native notifications, global shortcut, deep links, and window-state persistence. `pnpm desktop` (build + launch), `pnpm desktop:dev`, `pnpm desktop:package` / `pnpm desktop:package:dir` to build installers.
+- Config: `config.DATA_DIR` (writable: `koris.json`, `memory/`, `logs/`) is now tracked separately from `config.BASE_DIR` (read-only: `dist-web/`, `skills/`, bundled assets) — both default to the cwd in a normal checkout, but the packaged desktop app sets `KORIS_APP_DIR`/`KORIS_DATA_DIR` since its app bundle is read-only.
+- CI: `.github/workflows/release-desktop.yml` builds and publishes installers for Linux (`.deb`, `.AppImage`), macOS (arm64/x64 `.dmg`), and Windows (`.exe`) on release.
+
+### Changed
+
+- `pnpm-workspace.yaml`: `better-sqlite3` moved to `ignoredBuiltDependencies` (it ships N-API prebuilds, so the implicit `node-gyp rebuild` was unnecessary and broke CI on Windows runners without the MSVC toolchain); `electron` added to `onlyBuiltDependencies`.
+
+### Removed
+
+- macOS 13 from the desktop installer build matrix.
+- `.blockmap` files from desktop release artifacts.
+
 ## [0.1.3] - 2026-09-02
 
 ### Added
