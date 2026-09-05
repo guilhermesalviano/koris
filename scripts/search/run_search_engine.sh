@@ -2,16 +2,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SEARXNG_DIR="${PROJECT_DIR}/external/search/searxng"
+SEARXNG_DIR="${SCRIPT_DIR}/searxng"
 COMPOSE_FILE="${SEARXNG_DIR}/docker-compose.yml"
 # Must match docker-compose.yml's `../config` volume mount, resolved relative
 # to the compose file's own directory (Compose's project-directory default
-# when invoked with an explicit -f and no --project-directory) — NOT
-# PROJECT_DIR/config. A prior version of this script pointed at the wrong
-# directory, silently writing settings nothing ever read, which left the
-# container running on SearXNG's bare defaults (no `search.formats: json`)
-# and made every `search_engine` tool call fail with HTTP 403.
+# when invoked with an explicit -f and no --project-directory). A prior
+# version of this script pointed at the wrong directory, silently writing
+# settings nothing ever read, which left the container running on SearXNG's
+# bare defaults (no `search.formats: json`) and made every `search_engine`
+# tool call fail with HTTP 403.
 CONFIG_DIR="$(cd "${SEARXNG_DIR}/.." && pwd)/config"
 SETTINGS_EXAMPLE="${SEARXNG_DIR}/settings.example.yml"
 SETTINGS_FILE="${CONFIG_DIR}/settings.yml"

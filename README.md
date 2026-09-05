@@ -80,13 +80,15 @@ The `search_engine` tool uses a self-hosted [SearXNG](https://docs.searxng.org/)
 
 1. **Configure and start SearXNG** (requires Docker):
    ```bash
-   cd external/search/searxng
-   mkdir -p config
-   cp settings.example.yml config/settings.yml
-   openssl rand -hex 32   # paste the output as server.secret_key in config/settings.yml
+   cd scripts/search/searxng
+   mkdir -p ../config
+   cp settings.example.yml ../config/settings.yml
+   openssl rand -hex 32   # paste the output as server.secret_key in ../config/settings.yml
    docker compose up -d
    ```
-   Make sure `config/settings.yml` exists as a **file** before running `docker compose up` — if it doesn't, Docker will happily start anyway but silently create an empty directory in its place, which crashes the container. If you ever see `is a directory` errors in `docker logs koris-searxng`, run `docker compose down -v`, `rm -rf config`, and redo the steps above.
+   `../config` (i.e. `scripts/search/config`, a sibling of `searxng/`) must match `docker-compose.yml`'s volume mount — it's resolved relative to the compose file's own directory. Make sure `config/settings.yml` exists as a **file** before running `docker compose up` — if it doesn't, Docker will happily start anyway but silently create an empty directory in its place, which crashes the container. If you ever see `is a directory` errors in `docker logs koris-searxng`, run `docker compose down -v`, `rm -rf ../config`, and redo the steps above.
+   
+   Alternatively, just run `scripts/search/run_search_engine.sh` — it does all of the above for you (and is what the `search_engine`/`restart_search_engine` tools use).
 2. **Point the agent at it** — set `ai.searxng_url` in `koris.json`:
    ```json
    "ai": {
