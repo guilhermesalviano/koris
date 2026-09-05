@@ -52,7 +52,9 @@ const defaultFileIO: ScaffoldFileIO = {
 
 // Strict kebab-case: lowercase, no leading/trailing/consecutive hyphens, no
 // path separators or dots — rejected outright, never slugified/auto-fixed.
-const NAME_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+// Also reused by scripts/hub-sync.ts, since a koris-hub slug becomes a local
+// plugin folder name under the same rule.
+export const NAME_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
 function toPascalCase(kebab: string): string {
   return kebab.split('-').map((part) => part[0]!.toUpperCase() + part.slice(1)).join('');

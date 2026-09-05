@@ -15,7 +15,7 @@ export const isDev = !isPackaged || process.env.KORIS_DESKTOP_DEV === '1';
 // the app's resources dir (see electron-builder.yml).
 const devRepoRoot = path.resolve(__dirname, '..', '..', '..');
 
-/** Read-only root holding the compiled server, dist-web/, skills/, core/load/. */
+/** Read-only root holding the compiled server, dist-web/, plugins/skills/, core/load/. */
 export const serverAppDir = isPackaged
   ? path.join(process.resourcesPath, 'server')
   : devRepoRoot;

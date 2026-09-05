@@ -23,10 +23,12 @@ import { LearnedSkillsRepositoryFactory } from './repositories/learned-skills';
 import { SkillSyncSingleton } from './services/skills/skill-sync';
 import { DashboardServerFactory, WebServerHandle, WebListenOptions } from './dashboard';
 import { createPlugins, buildRegistry } from '../../plugins/channels';
-import { createToolPlugins } from '../../plugins/tools';
+import { createToolPlugins, TOOLS_DIR } from '../../plugins/tools';
 import { COMMANDS } from '../../plugins/tools/contracts';
 import { ToolPluginsSingleton } from './services/tools/registry-singleton';
+import { ToolSyncSingleton } from './services/tools/tool-sync';
 import { config } from './config';
+import path from 'node:path';
 import type { PluginContext } from '../../plugins/channels/contracts';
 import type { ToolPluginContext } from '../../plugins/tools/contracts';
 import { IDatabaseService } from './infrastructure/db-sqlite';
@@ -199,10 +201,21 @@ class Application implements IApplication {
       SkillsRepositoryFactory.create(this.logger),
       LearnedSkillsRepositoryFactory.create(db),
     );
+    const toolSync = ToolSyncSingleton.getInstance(
+      this.logger,
+      {
+        sourceDir: path.join(config.BASE_DIR, 'plugins', 'tools'),
+        distDir: TOOLS_DIR,
+        context: createToolPluginContext(this.logger, db),
+        registry,
+      },
+      toolPlugins.map((plugin) => plugin.name),
+    );
 
     channels.startAll();
     heartbeat.start();
     skillSync.start();
+    toolSync.start();
 
     try {
       const webServer = this.modes.web
@@ -255,6 +268,7 @@ class Application implements IApplication {
     this.runtime.channels.stopAll();
     this.runtime.heartbeat.stop();
     SkillSyncSingleton.getExistingInstance()?.stop();
+    ToolSyncSingleton.getExistingInstance()?.stop();
 
     try {
       await this.runtime.webServer?.stop();

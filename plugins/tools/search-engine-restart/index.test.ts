@@ -39,7 +39,7 @@ describe('restart_search_engine tool (orchestrator)', () => {
     expect(mockSpawnCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         command: 'bash',
-        args: ['/repo/scripts/run_search_engine.sh', '--restart'],
+        args: ['/repo/scripts/search/run_search_engine.sh', '--restart'],
       }),
     );
   });
@@ -90,7 +90,7 @@ describe('restart_search_engine tool (orchestrator)', () => {
     await executeRestartSearchEngine(mockLogger);
 
     expect(mockSpawnCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ args: [expect.stringContaining('scripts/run_search_engine.sh'), '--restart'] }),
+      expect.objectContaining({ args: [expect.stringContaining('scripts/search/run_search_engine.sh'), '--restart'] }),
     );
   });
 });

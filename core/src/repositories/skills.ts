@@ -46,7 +46,7 @@ class SkillsRepository {
   }
 
   get(): Skill[] {
-    const skillsPath = join(config.BASE_DIR, 'skills');
+    const skillsPath = join(config.BASE_DIR, 'plugins', 'skills');
     if (!existsSync(skillsPath)) return [];
 
     return readdirSync(skillsPath, { withFileTypes: true })
@@ -56,7 +56,7 @@ class SkillsRepository {
   }
 
   findByName(params: { name: string }): Skill | null {
-    const skillsPath = join(config.BASE_DIR, 'skills');
+    const skillsPath = join(config.BASE_DIR, 'plugins', 'skills');
     if (!existsSync(skillsPath)) return this.helperWarnAndReturn(this.logger, `Skill path not found.`);
 
     const entry = readdirSync(skillsPath, { withFileTypes: true })

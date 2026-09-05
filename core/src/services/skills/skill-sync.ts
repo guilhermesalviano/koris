@@ -43,14 +43,14 @@ class SkillSyncService implements ISkillSyncService {
     const removed = this.learnedSkillsRepo.deleteNotIn(skills.map(skill => skill.name));
 
     if (this.watching) {
-      this.registerWatchers(join(config.BASE_DIR, 'skills'));
+      this.registerWatchers(join(config.BASE_DIR, 'plugins', 'skills'));
     }
 
     this.logger.info(`[skill-sync] Synced ${skills.length} skills from disk (${removed} removed)`);
   }
 
   start(): void {
-    const skillsPath = join(config.BASE_DIR, 'skills');
+    const skillsPath = join(config.BASE_DIR, 'plugins', 'skills');
     mkdirSync(skillsPath, { recursive: true });
 
     this.watching = true;

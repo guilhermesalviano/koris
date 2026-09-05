@@ -21,6 +21,15 @@ class PluginCatalogSingleton {
   static getExistingInstance(): PluginIdentity[] {
     return PluginCatalogSingleton.instance ?? [];
   }
+
+  /**
+   * Adds identities discovered after boot (`ToolSyncService` hot-loading a
+   * newly pulled tool) to the cached catalog, so the admin "Installed" list
+   * and enablement resolution see it immediately.
+   */
+  static append(identities: PluginIdentity[]): void {
+    PluginCatalogSingleton.instance = [...(PluginCatalogSingleton.instance ?? []), ...identities];
+  }
 }
 
 export { PluginCatalogSingleton };

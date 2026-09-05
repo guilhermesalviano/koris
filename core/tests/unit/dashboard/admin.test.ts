@@ -18,6 +18,7 @@ const {
   pluginSettingsRepo,
   pluginCatalog,
   channelsManager,
+  hubSync,
 } = vi.hoisted(() => ({
   auditRepo: {
     count: vi.fn(),
@@ -62,6 +63,7 @@ const {
   pluginSettingsRepo: { getEnabled: vi.fn(), setEnabled: vi.fn(), getAll: vi.fn() },
   pluginCatalog: { getInstance: vi.fn(), getExistingInstance: vi.fn(() => []) },
   channelsManager: { getExistingInstance: vi.fn(() => undefined as { stopChannel: (name: string) => void } | undefined) },
+  hubSync: { listMissing: vi.fn(), pullEntry: vi.fn() },
 }));
 
 vi.mock('../../../src/repositories/audit-log', () => ({
@@ -123,6 +125,8 @@ vi.mock('../../../src/services/plugins/plugin-catalog-singleton', () => ({
 vi.mock('../../../src/channels', () => ({
   ChannelsSingleton: channelsManager,
 }));
+
+vi.mock('../../../../scripts/hub-sync', () => hubSync);
 
 import { AdminRouterFactory } from '../../../src/dashboard/admin';
 import { config } from '../../../src/config';
@@ -651,6 +655,64 @@ describe('AdminRouterFactory /plugins', () => {
 
     expect(pluginSettingsRepo.setEnabled).toHaveBeenCalledWith('channels', 'telegram', false);
     expect(stopChannel).toHaveBeenCalledWith('telegram');
+  });
+});
+
+describe('AdminRouterFactory /marketplace', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('GET /marketplace lists missing koris-hub entries, pinning baseDir to config.BASE_DIR', async () => {
+    hubSync.listMissing.mockResolvedValue([{ family: 'tool', slug: 'issue', summary: 'File a GitHub issue.' }]);
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/marketplace'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(hubSync.listMissing).toHaveBeenCalledWith({ baseDir: config.BASE_DIR });
+    expect(res.json).toHaveBeenCalledWith({ items: [{ family: 'tool', slug: 'issue', summary: 'File a GitHub issue.' }] });
+  });
+
+  it('GET /marketplace returns 502 when koris-hub is unreachable', async () => {
+    hubSync.listMissing.mockRejectedValue(new Error('Request to https://api.github.com/... failed: 500 Internal Server Error'));
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/marketplace'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(res.status).toHaveBeenCalledWith(502);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Request to https://api.github.com/... failed: 500 Internal Server Error' });
+  });
+
+  it('POST /marketplace/:slug/pull pulls the entry, pinning baseDir to config.BASE_DIR', async () => {
+    hubSync.pullEntry.mockResolvedValue({ family: 'tool', slug: 'issue', createdFiles: ['plugins/tools/issue/index.ts'] });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/marketplace/issue/pull'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(hubSync.pullEntry).toHaveBeenCalledWith('issue', { baseDir: config.BASE_DIR });
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      item: { family: 'tool', slug: 'issue', createdFiles: ['plugins/tools/issue/index.ts'] },
+    });
+  });
+
+  it('POST /marketplace/:slug/pull returns 400 when the plugin already exists locally', async () => {
+    hubSync.pullEntry.mockRejectedValue(new Error('"plugins/tools/issue" already exists locally. Pass --force to overwrite.'));
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/marketplace/issue/pull'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: '"plugins/tools/issue" already exists locally. Pass --force to overwrite.' });
   });
 });
 

@@ -23,6 +23,17 @@ class ToolPluginsSingleton {
   static getExistingInstance(): ToolDefinition[] {
     return ToolPluginsSingleton.instance ?? [];
   }
+
+  /**
+   * Swaps the cached definitions wholesale. Used by `ToolSyncService`
+   * (`tool-sync.ts`) after hot-loading a newly pulled tool plugin into the
+   * live `PluginRegistry` — every reader here goes through
+   * `getExistingInstance()` fresh per call, so this takes effect immediately
+   * with no restart.
+   */
+  static replace(definitions: ToolDefinition[]): void {
+    ToolPluginsSingleton.instance = definitions;
+  }
 }
 
 export { ToolPluginsSingleton };

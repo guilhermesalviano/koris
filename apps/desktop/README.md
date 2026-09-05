@@ -59,7 +59,7 @@ pnpm desktop:package:dir     # unpacked app (fast, no installer)
    version.
 
 **Packaged layout:** the Electron main bundle is in `app.asar`; the server tree
-(`dist/`, `dist-web/`, `skills/`, `core/load/`, `heartbeats.default.json`,
+(`dist/`, `dist-web/`, `plugins/skills/`, `core/load/`, `heartbeats.default.json`,
 `koris.example.json`, `node_modules/`) sits at `resources/server/`. At runtime `config.ts`
 resolves `serverAppDir` to `resources/server` (→ `KORIS_APP_DIR`) and `KORIS_DATA_DIR` to
 the OS per-user data dir, so `koris.json`, `memory/` and `logs/` are written there (the

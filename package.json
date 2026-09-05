@@ -9,7 +9,7 @@
   "files": [
     "dist",
     "dist-web",
-    "skills"
+    "plugins/skills"
   ],
   "packageManager": "pnpm@10.18.3",
   "engines": {
@@ -41,6 +41,8 @@
     "test:mutation": "stryker run",
     "release": "tsx scripts/release.ts",
     "scaffold:tool": "tsx scripts/scaffold-tool-cli.ts",
+    "hub:list": "tsx scripts/hub-sync-cli.ts list",
+    "hub:pull": "tsx scripts/hub-sync-cli.ts pull",
     "run": "pnpm app"
   },
   "repository": {
@@ -59,6 +61,7 @@
     "@whiskeysockets/baileys": "7.0.0-rc14",
     "better-sqlite3": "^13.0.3",
     "dotenv": "^17.4.2",
+    "esbuild": "^0.28.2",
     "express": "^5.2.1",
     "gray-matter": "^4.0.3",
     "ml-distance": "^4.1.0",

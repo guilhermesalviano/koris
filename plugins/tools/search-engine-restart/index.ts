@@ -13,14 +13,14 @@ const MAX_RESULT_OUTPUT = 20000;
 const RESTART_TIMEOUT_MS = 120000;
 
 /**
- * Restarts the local SearXNG container via `scripts/run_search_engine.sh --restart`
+ * Restarts the local SearXNG container via `scripts/search/run_search_engine.sh --restart`
  * (a full `docker compose down` + `up -d`, not just "start if not running") —
  * fixes both "container is down" and "container is up but running with the
  * wrong config" (e.g. a stale bind mount serving SearXNG's bare defaults,
  * which disables the JSON API and causes HTTP 403s from `search_engine`).
  */
 export async function executeRestartSearchEngine(logger: ILogger, baseDir: string = process.cwd()): Promise<ToolResult> {
-  const scriptPath = path.join(baseDir, 'scripts', 'run_search_engine.sh');
+  const scriptPath = path.join(baseDir, 'scripts', 'search', 'run_search_engine.sh');
   logger.info('Restarting SearXNG container', { scriptPath });
 
   try {

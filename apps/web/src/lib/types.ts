@@ -149,6 +149,16 @@ export interface PluginsResponse {
   items: PluginItem[];
 }
 
+export interface MarketplaceItem {
+  family: 'tool' | 'skill';
+  slug: string;
+  summary?: string;
+}
+
+export interface MarketplaceResponse {
+  items: MarketplaceItem[];
+}
+
 export interface ProviderCatalogEntry {
   name: string;
   label: string;
