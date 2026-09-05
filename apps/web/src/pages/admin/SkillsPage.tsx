@@ -76,7 +76,7 @@ export default function SkillsPage() {
           <div className="mt-4 space-y-2">
             {data.items.length === 0 && (
               <Card>
-                <EmptyState text="No skills found. Add a skills/<name>/SKILL.md folder to get started." />
+                <EmptyState text="No skills found. Add a plugins/skills/<name>/SKILL.md folder to get started." />
               </Card>
             )}
             {data.items.map((skill) => (

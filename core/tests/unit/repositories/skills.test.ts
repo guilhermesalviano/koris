@@ -45,7 +45,7 @@ describe('SkillsRepository', () => {
   });
 
   it('get parses SKILL.md files into skills', () => {
-    fsMock.existsSync.mockImplementation((path: string) => path.endsWith('SKILL.md') || path === '/base/skills');
+    fsMock.existsSync.mockImplementation((path: string) => path.endsWith('SKILL.md') || path === '/base/plugins/skills');
     fsMock.readdirSync.mockReturnValue([makeEntry('git')]);
     fsMock.readFileSync.mockReturnValue(SKILL_MD);
     const repository = new SkillsRepository(logger as never);
@@ -55,8 +55,8 @@ describe('SkillsRepository', () => {
     expect(skills).toEqual([
       { name: 'Git Helper', description: 'Git tips and commands', read_when: ['working with git'], content: '\n# Git Helper\nUse `git rebase`.' },
     ]);
-    expect(fsMock.readdirSync).toHaveBeenCalledWith('/base/skills', { withFileTypes: true });
-    expect(fsMock.readFileSync).toHaveBeenCalledWith('/base/skills/git/SKILL.md', 'utf-8');
+    expect(fsMock.readdirSync).toHaveBeenCalledWith('/base/plugins/skills', { withFileTypes: true });
+    expect(fsMock.readFileSync).toHaveBeenCalledWith('/base/plugins/skills/git/SKILL.md', 'utf-8');
   });
 
   it('get falls back to the folder name when frontmatter has no name', () => {
@@ -71,7 +71,7 @@ describe('SkillsRepository', () => {
   });
 
   it('get skips folders without a SKILL.md file and warns', () => {
-    fsMock.existsSync.mockImplementation((path: string) => path === '/base/skills');
+    fsMock.existsSync.mockImplementation((path: string) => path === '/base/plugins/skills');
     fsMock.readdirSync.mockReturnValue([makeEntry('broken')]);
     const repository = new SkillsRepository(logger as never);
 
@@ -99,7 +99,7 @@ describe('SkillsRepository', () => {
   });
 
   it('findByName returns null when the SKILL.md file is missing', () => {
-    fsMock.existsSync.mockImplementation((path: string) => path === '/base/skills');
+    fsMock.existsSync.mockImplementation((path: string) => path === '/base/plugins/skills');
     fsMock.readdirSync.mockReturnValue([makeEntry('git')]);
     const repository = new SkillsRepository(logger as never);
 
@@ -108,7 +108,7 @@ describe('SkillsRepository', () => {
   });
 
   it('findByName returns the skill including its content', () => {
-    fsMock.existsSync.mockImplementation((path: string) => path.endsWith('SKILL.md') || path === '/base/skills');
+    fsMock.existsSync.mockImplementation((path: string) => path.endsWith('SKILL.md') || path === '/base/plugins/skills');
     fsMock.readdirSync.mockReturnValue([makeEntry('git')]);
     fsMock.readFileSync.mockReturnValue(SKILL_MD);
     const repository = new SkillsRepository(logger as never);
@@ -122,8 +122,8 @@ describe('SkillsRepository', () => {
     });
     expect(skill?.content).toContain('# Git Helper');
     expect(skill?.content).toContain('Use `git rebase`.');
-    expect(fsMock.readdirSync).toHaveBeenCalledWith('/base/skills', { withFileTypes: true });
-    expect(fsMock.readFileSync).toHaveBeenCalledWith('/base/skills/git/SKILL.md', 'utf-8');
+    expect(fsMock.readdirSync).toHaveBeenCalledWith('/base/plugins/skills', { withFileTypes: true });
+    expect(fsMock.readFileSync).toHaveBeenCalledWith('/base/plugins/skills/git/SKILL.md', 'utf-8');
   });
 
   it('findByName falls back to an empty description when frontmatter has none', () => {

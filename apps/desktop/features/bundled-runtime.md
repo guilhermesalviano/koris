@@ -23,7 +23,7 @@ ephemeral loopback port; the window loads that origin. Quit calls the handle's `
   in the Electron main process loads them unmodified, **no `@electron/rebuild`**.
 - `build-resources/server-package.json` — that stripped manifest.
 
-`electron-builder.yml` `extraResources` copies these plus `dist/`, `dist-web/`, `skills/`,
+`electron-builder.yml` `extraResources` copies these plus `dist/`, `dist-web/`, `plugins/skills/`,
 `core/load/`, `heartbeats.default.json`, `koris.example.json` into `resources/server/`,
 **outside** `app.asar` (so `.node` files and the plugin loader's dynamic `require()`s work
 against real files on disk).
@@ -32,7 +32,7 @@ against real files on disk).
 
 | | env var | default | holds |
 | --- | --- | --- | --- |
-| `config.BASE_DIR` | `KORIS_APP_DIR` | `process.cwd()` | read-only: `dist-web/`, `skills/`, `heartbeats.default.json`, `core/load/` |
+| `config.BASE_DIR` | `KORIS_APP_DIR` | `process.cwd()` | read-only: `dist-web/`, `plugins/skills/`, `heartbeats.default.json`, `core/load/` |
 | `config.DATA_DIR` | `KORIS_DATA_DIR` | `process.cwd()` | writable: `koris.json`, `memory/`, `logs/` |
 
 Both env vars unset in a normal checkout → everything resolves to the repo root, no

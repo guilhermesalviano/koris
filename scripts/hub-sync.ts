@@ -5,9 +5,9 @@ import { NAME_PATTERN } from './scaffold-tool';
 /**
  * Pulls tool/skill plugin source from the `koris-hub` repo
  * (github.com/guilhermesalviano/koris-hub) into this repo's `plugins/tools/<slug>/`
- * or `skills/<slug>/` — the mirror image of what moved out in
+ * or `plugins/skills/<slug>/` — the mirror image of what moved out in
  * `f5bc0b2 "refactor: removing specific tools"`. koris-hub's own README documents
- * the layout this relies on: `koris-plugins/tools/<slug>/` and `koris-skills/<slug>/`,
+ * the layout this relies on: `koris-plugins/tools/<slug>/` and `koris-plugins/skills/<slug>/`,
  * each with a matching `content/marketplace/<family>/<slug>.json` metadata entry.
  * Both the dev CLI (`scripts/hub-sync-cli.ts`) call into this module.
  */
@@ -25,7 +25,7 @@ interface FamilyConfig {
 
 const FAMILIES: Record<HubFamily, FamilyConfig> = {
   tool: { hubDir: 'koris-plugins/tools', localDir: 'plugins/tools', catalogDir: 'content/marketplace/tools' },
-  skill: { hubDir: 'koris-skills', localDir: 'skills', catalogDir: 'content/marketplace/skills' },
+  skill: { hubDir: 'koris-plugins/skills', localDir: 'plugins/skills', catalogDir: 'content/marketplace/skills' },
 };
 
 const HUB_OWNER = 'guilhermesalviano';

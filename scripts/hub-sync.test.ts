@@ -52,14 +52,14 @@ const HUB_TREE = {
     { path: 'koris-plugins/tools/issue/index.test.ts', type: 'blob' as const },
     { path: 'koris-plugins/tools/list-beats/index.ts', type: 'blob' as const },
     { path: 'koris-plugins/tools/list-beats/index.test.ts', type: 'blob' as const },
-    { path: 'koris-skills/weather/SKILL.md', type: 'blob' as const },
-    { path: 'koris-skills/cat-fact/SKILL.md', type: 'blob' as const },
+    { path: 'koris-plugins/skills/weather/SKILL.md', type: 'blob' as const },
+    { path: 'koris-plugins/skills/cat-fact/SKILL.md', type: 'blob' as const },
   ],
   truncated: false,
 };
 
 const LOCAL_TOOLS_DIR = path.join(BASE_DIR, 'plugins/tools');
-const LOCAL_SKILLS_DIR = path.join(BASE_DIR, 'skills');
+const LOCAL_SKILLS_DIR = path.join(BASE_DIR, 'plugins/skills');
 
 describe('listMissing', () => {
   it('reports hub slugs not present locally, skipping stray files directly under the hub dir', async () => {
@@ -172,19 +172,19 @@ describe('pullEntry', () => {
     expect(io.written.get(path.join(LOCAL_TOOLS_DIR, 'list-beats', 'index.test.ts'))).toBe('tool test');
   });
 
-  it('downloads a skill slug into skills/<slug>', async () => {
+  it('downloads a skill slug into plugins/skills/<slug>', async () => {
     const io = makeIO();
     const http = makeHttp({
       tree: HUB_TREE,
       files: {
-        'https://raw.githubusercontent.com/guilhermesalviano/koris-hub/main/koris-skills/weather/SKILL.md': '# Weather',
+        'https://raw.githubusercontent.com/guilhermesalviano/koris-hub/main/koris-plugins/skills/weather/SKILL.md': '# Weather',
       },
     });
 
     const result = await pullEntry('weather', { baseDir: BASE_DIR, io, http });
 
     expect(result.family).toBe('skill');
-    expect(result.createdFiles).toEqual(['skills/weather/SKILL.md']);
+    expect(result.createdFiles).toEqual(['plugins/skills/weather/SKILL.md']);
     expect(io.written.get(path.join(LOCAL_SKILLS_DIR, 'weather', 'SKILL.md'))).toBe('# Weather');
   });
 });

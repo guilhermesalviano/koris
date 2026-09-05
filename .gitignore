@@ -58,5 +58,5 @@ plugins/tools/*
 !plugins/tools/set-beat/
 !plugins/tools/update-beat/
 
-skills/*
-!skills/cat-fact/
+plugins/skills/*
+!plugins/skills/cat-fact/

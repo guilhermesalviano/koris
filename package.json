@@ -9,7 +9,7 @@
   "files": [
     "dist",
     "dist-web",
-    "skills"
+    "plugins/skills"
   ],
   "packageManager": "pnpm@10.18.3",
   "engines": {
