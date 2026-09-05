@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
 import { usePageTitle } from '../../lib/use-page-title';
+import { chatSeparatorLabel } from '../../lib/date';
 import ImageLightbox from '../../components/ImageLightbox';
 import ProviderPicker from '../../components/ProviderPicker';
 import ContextBar from '../../components/ContextBar';
@@ -206,8 +207,18 @@ export default function ChatPage() {
       ) : (
         <>
       <div ref={chatRef} className="flex flex-1 flex-col gap-5 overflow-y-auto scroll-smooth px-5 py-6">
-        {messages.map((m) => (
-          <div key={m.id} className={`flex gap-2.5 animate-msg-in ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+        {messages.map((m, i) => {
+          const separator = chatSeparatorLabel(m.at, messages[i - 1]?.at);
+          return (
+          <Fragment key={m.id}>
+          {separator && (
+            <div className="flex items-center gap-3 px-1">
+              <div className="h-px flex-1 bg-subtle" />
+              <span className="font-mono text-[11px] text-txt-3">{separator}</span>
+              <div className="h-px flex-1 bg-subtle" />
+            </div>
+          )}
+          <div className={`flex gap-2.5 animate-msg-in ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
             {m.role === 'assistant' && (
               <div className="mt-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent font-mono text-[10px] font-medium text-white">ai</div>
             )}
@@ -272,7 +283,9 @@ export default function ChatPage() {
               {m.timestamp && <span className="px-1 font-mono text-[11px] text-txt-3">{m.timestamp}</span>}
             </div>
           </div>
-        ))}
+          </Fragment>
+          );
+        })}
       </div>
 
       {gateBlocks.length > 0 && (

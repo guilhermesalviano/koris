@@ -13,7 +13,10 @@ export interface ChatMessage {
   status?: string;
   pending?: boolean;
   error?: boolean;
+  /** Display-only "HH:MM" caption; deliberately empty while a reply is pending. */
   timestamp: string;
+  /** Creation time in epoch ms, for the thread's time separators. Never updated. */
+  at: number;
   backgroundRunKey?: string;
 }
 
@@ -73,6 +76,7 @@ function mapMessages(messages: HistoryMessage[]): ChatMessage[] {
     missingImages: m.missingImages,
     error: !!m.errorCode,
     timestamp: timeStr(new Date(m.createdAt)),
+    at: new Date(m.createdAt).getTime(),
   }));
 }
 
@@ -336,8 +340,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (alreadyPresent || alreadyAnswered) return prev;
 
         backgroundPendingRef.current = true;
-        const userMsg: ChatMessage = { id: nextId(), role: 'user', content: run.question, timestamp: timeStr(new Date(run.startedAt)) };
-        const assistantMsg: ChatMessage = { id: nextId(), role: 'assistant', content: '', pending: true, status: 'Processing in background…', timestamp: '', backgroundRunKey: run.startedAt };
+        const startedAt = new Date(run.startedAt).getTime();
+        const userMsg: ChatMessage = { id: nextId(), role: 'user', content: run.question, timestamp: timeStr(new Date(run.startedAt)), at: startedAt };
+        const assistantMsg: ChatMessage = { id: nextId(), role: 'assistant', content: '', pending: true, status: 'Processing in background…', timestamp: '', at: startedAt, backgroundRunKey: run.startedAt };
         return [...prev, userMsg, assistantMsg];
       });
       return;
@@ -371,6 +376,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         pending: true,
         status: inFlight.status ?? 'Thinking…',
         timestamp: '',
+        at: inFlight.userMsg.at,
       };
       return [...prev, userMsg, assistantMsg];
     });
@@ -393,9 +399,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setStreaming(true);
     streamingRef.current = true;
     clearResponseAlert();
-    const userMsg: ChatMessage = { id: nextId(), role: 'user', content: text, images, timestamp: timeStr(new Date()) };
+    const sentAt = Date.now();
+    const userMsg: ChatMessage = { id: nextId(), role: 'user', content: text, images, timestamp: timeStr(new Date()), at: sentAt };
     const assistantId = nextId();
-    setMessages((prev) => [...prev, userMsg, { id: assistantId, role: 'assistant', content: '', pending: true, timestamp: '' }]);
+    setMessages((prev) => [...prev, userMsg, { id: assistantId, role: 'assistant', content: '', pending: true, timestamp: '', at: sentAt }]);
 
     let accumulated = '';
 
