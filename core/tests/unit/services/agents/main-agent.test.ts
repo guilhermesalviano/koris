@@ -1,8 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MainAgent } from '../../../../src/services/agents/main-agent';
-import { RESTRICTED_EXECUTION_CONTRACT, TOOL_EXECUTION_CONTRACT } from '../../../../src/constants';
+import { RESTRICTED_EXECUTION_CONTRACT, SKILLS_AUTO_CLAUSE, TOOL_EXECUTION_CONTRACT } from '../../../../src/constants';
+import { replacePlaceholders } from '../../../../src/utils/prompt';
+import { config } from '../../../../src/config';
 import type { ILogger } from '../../../../src/infrastructure/logger';
 import type { Message } from '../../../../src/entities/message';
+
+// The contract's skills clause is chosen by `skills.mode`; these expectations
+// pin `auto` rather than inheriting the local koris.json.
+const AUTO_MODE_CONTRACT = replacePlaceholders(TOOL_EXECUTION_CONTRACT, { v1: SKILLS_AUTO_CLAUSE });
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
@@ -36,8 +42,15 @@ function makeMainAgent(overrides: Partial<{
 }
 
 describe('MainAgent', () => {
+  const originalSkillsMode = config.SKILLS.MODE;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    (config.SKILLS as { MODE: string }).MODE = 'auto';
+  });
+
+  afterEach(() => {
+    (config.SKILLS as { MODE: string }).MODE = originalSkillsMode;
   });
 
   it('returns a direct message response from chat completion', async () => {
@@ -123,7 +136,7 @@ describe('MainAgent', () => {
       expect.objectContaining({ runId: 'run-123' }),
       [],
       'session-1',
-      [TOOL_EXECUTION_CONTRACT],
+      [AUTO_MODE_CONTRACT],
       undefined,
       undefined,
     );
@@ -168,7 +181,7 @@ describe('MainAgent', () => {
       undefined,
       [],
       'session-1',
-      [TOOL_EXECUTION_CONTRACT, '# Resumed From Previous Session\nDiscussed the roadmap.'],
+      [AUTO_MODE_CONTRACT, '# Resumed From Previous Session\nDiscussed the roadmap.'],
       undefined,
       undefined,
     );
@@ -190,7 +203,7 @@ describe('MainAgent', () => {
       undefined,
       [],
       'session-1',
-      [TOOL_EXECUTION_CONTRACT],
+      [AUTO_MODE_CONTRACT],
       undefined,
       undefined,
     );

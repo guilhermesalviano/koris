@@ -11,6 +11,8 @@ import { IMainAgent, MainAgentFactory } from './main-agent';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import { ImageAttachment } from '../../types/messages';
 import { generateId } from '../../utils/generate-id';
+import { replacePlaceholders } from '../../utils/prompt';
+import { SKILL_INVOCATION_PROMPT } from '../../constants';
 import { ISessionContextFactory, SessionContextFactory, SessionContext } from './session-context';
 import { IBackgroundDispatcher, BackgroundDispatcherFactory } from './background-dispatcher';
 import { shouldAutoCompact } from './context-budget';
@@ -64,38 +66,48 @@ class MessageGateway implements IMessageGateway {
 
     const sessionCtx: SessionContext = { sessionService, messageService, memoryService };
 
+    let agentMessage = safeMessage;
+    let skillBlocks: string[] | undefined;
+
     if (isCommand(safeMessage)) {
       const commandResult = handleCommand(safeMessage, {
         source: channel,
         trusted: !!options?.toolsEnabled,
+        learnedSkillsEnabled: options?.learnedSkillsEnabled,
         originId,
       });
 
-      if (commandResult.action === 'compact') {
+      // A skill command is the one command that does not answer the turn: it
+      // loads that skill's documentation, then falls through to the agent.
+      const skillCommand = commandResult.action === 'skill' ? commandResult.skill : undefined;
+
+      if (skillCommand) {
+        agentMessage = skillCommand.args || `Run the "${skillCommand.name}" skill.`;
+        skillBlocks = [replacePlaceholders(SKILL_INVOCATION_PROMPT, {
+          v1: skillCommand.name,
+          v2: skillCommand.content,
+        })];
+      } else if (commandResult.action === 'compact') {
         return this.handleCompact(sessionCtx, channel, commandResult.response || '', options);
-      }
-
-      if (commandResult.action === 'clear') {
+      } else if (commandResult.action === 'clear') {
         return this.handleClear(sessionCtx, safeMessage, images, channel, commandResult.response || '', options);
-      }
-
-      if (commandResult.action === 'memory') {
+      } else if (commandResult.action === 'memory') {
         return this.handleMemory(sessionCtx, safeMessage, images, channel);
+      } else {
+        const response = commandResult.response || '';
+        this.backgroundDispatcher.persistConversation({
+          sessionId: sessionService.getSession().id,
+          ask: safeMessage,
+          askImages: images,
+          answer: response,
+          channel,
+        });
+        return response;
       }
-
-      const response = commandResult.response || '';
-      this.backgroundDispatcher.persistConversation({
-        sessionId: sessionService.getSession().id,
-        ask: safeMessage,
-        askImages: images,
-        answer: response,
-        channel,
-      });
-      return response;
     }
 
     const runId = options?.runId ?? generateId();
-    const turnOptions = { ...options, runId };
+    const turnOptions = { ...options, runId, ...(skillBlocks ? { skillBlocks } : {}) };
 
     // Manual-mode safety valve (proactive): if the session is near the manager's
     // context window, summarize it into memory and start fresh before this turn.
@@ -113,7 +125,7 @@ class MessageGateway implements IMessageGateway {
     while (response === undefined) {
       try {
         response = await this.mainAgent.run({
-          userMessage: safeMessage,
+          userMessage: agentMessage,
           channel,
           message: messageService,
           images,

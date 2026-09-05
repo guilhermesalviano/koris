@@ -134,9 +134,12 @@ export interface SkillItem {
   learned_at?: string | null;
 }
 
+export type SkillsMode = 'auto' | 'manual';
+
 export interface SkillsResponse {
   items: SkillItem[];
   limit: number;
+  mode: SkillsMode;
 }
 
 export interface PluginItem {

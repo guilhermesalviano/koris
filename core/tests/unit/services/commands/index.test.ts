@@ -1,5 +1,26 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { config } from '../../../../src/config';
+
+const getRecent = vi.fn().mockReturnValue([
+  { name: 'cat-fact', description: 'Random cat facts', content: 'Call catfact.ninja.' },
+  { name: 'weather', description: 'Forecasts', content: 'Call wttr.in.' },
+]);
+
+vi.mock('../../../../src/infrastructure/db-sqlite', () => ({
+  DatabaseServiceFactory: { create: () => ({}) },
+}));
+
+vi.mock('../../../../src/repositories/learned-skills', () => ({
+  LearnedSkillsRepositoryFactory: { create: () => ({ getRecent }) },
+}));
+
 import { getAvailableCommands, handleCommand, isCommand } from '../../../../src/services/commands';
+
+const originalSkillsMode = config.SKILLS.MODE;
+
+function setSkillsMode(mode: 'auto' | 'manual') {
+  (config.SKILLS as { MODE: string }).MODE = mode;
+}
 
 describe('Command Handler', () => {
   describe('isCommand', () => {
@@ -169,6 +190,172 @@ describe('Command Handler', () => {
 
     it('includes aliases so completion resolves them', () => {
       expect(getAvailableCommands('tui')).toContain('/reset');
+    });
+  });
+
+  describe('skill commands', () => {
+    afterEach(() => setSkillsMode(originalSkillsMode));
+
+    it('recognizes a skill as a command only in manual mode', () => {
+      setSkillsMode('manual');
+      expect(isCommand('/cat-fact tell me one')).toBe(true);
+      expect(isCommand('/skill cat-fact')).toBe(true);
+
+      setSkillsMode('auto');
+      expect(isCommand('/cat-fact tell me one')).toBe(false);
+    });
+
+    it('hands the skill body and the remaining text back to the gateway', () => {
+      setSkillsMode('manual');
+
+      const result = handleCommand('/cat-fact tell me one', { source: 'tui', trusted: true });
+
+      expect(result.action).toBe('skill');
+      expect(result.handled).toBe(true);
+      expect(result.skill).toEqual({
+        name: 'cat-fact',
+        content: 'Call catfact.ninja.',
+        args: 'tell me one',
+      });
+    });
+
+    it('resolves the explicit /skill form the same way', () => {
+      setSkillsMode('manual');
+
+      const result = handleCommand('/skill cat-fact tell me one', { source: 'tui', trusted: true });
+
+      expect(result.action).toBe('skill');
+      expect(result.skill).toMatchObject({ name: 'cat-fact', args: 'tell me one' });
+    });
+
+    it('refuses a skill command when learned skills are withheld from the sender', () => {
+      setSkillsMode('manual');
+
+      const result = handleCommand('/cat-fact', { source: 'tui', learnedSkillsEnabled: false });
+
+      expect(result.action).toBe('none');
+      expect(result.skill).toBeUndefined();
+      expect(result.response).toContain('trusted senders');
+    });
+
+    it('allows a skill command on a channel that never sets the flag, matching auto mode', () => {
+      setSkillsMode('manual');
+
+      // The web dashboard passes neither toolsEnabled nor learnedSkillsEnabled;
+      // PromptRepository treats that as "skills on", so the command must too.
+      const result = handleCommand('/cat-fact', { source: 'web' });
+
+      expect(result.action).toBe('skill');
+      expect(result.skill).toMatchObject({ name: 'cat-fact' });
+    });
+
+    it('explains itself when /skill is used in auto mode', () => {
+      setSkillsMode('auto');
+
+      const result = handleCommand('/skill cat-fact', { source: 'tui', trusted: true });
+
+      expect(result.action).toBe('none');
+      expect(result.response).toContain('skills.mode');
+    });
+
+    it('lists the available skills when /skill names an unknown one', () => {
+      setSkillsMode('manual');
+
+      const result = handleCommand('/skill nope', { source: 'tui', trusted: true });
+
+      expect(result.action).toBe('none');
+      expect(result.response).toContain('No enabled skill named "nope"');
+      expect(result.response).toContain('/cat-fact');
+    });
+
+    it('leaves an unknown slash message to the agent', () => {
+      setSkillsMode('manual');
+
+      expect(isCommand('/nope')).toBe(false);
+      expect(handleCommand('/nope', { source: 'tui', trusted: true }).handled).toBe(false);
+    });
+
+    it('lists skills in /help and completion only in manual mode', () => {
+      setSkillsMode('manual');
+      expect(handleCommand('/help', { source: 'tui' }).response).toContain('/cat-fact');
+      expect(getAvailableCommands('tui')).toContain('/cat-fact');
+      expect(getAvailableCommands('tui')).toContain('/skill');
+
+      setSkillsMode('auto');
+      expect(handleCommand('/help', { source: 'tui' }).response).not.toContain('/cat-fact');
+      expect(getAvailableCommands('tui')).not.toContain('/cat-fact');
+      expect(getAvailableCommands('tui')).not.toContain('/skill');
+    });
+  });
+
+  describe('/skills', () => {
+    afterEach(() => setSkillsMode(originalSkillsMode));
+
+    it('lists every skill as a command in manual mode', () => {
+      setSkillsMode('manual');
+
+      const result = handleCommand('/skills', { source: 'tui' });
+
+      expect(result.action).toBe('none');
+      expect(result.handled).toBe(true);
+      expect(result.response).toContain('Skills (2)');
+      expect(result.response).toContain('/cat-fact');
+      expect(result.response).toContain('Random cat facts');
+      expect(result.response).toContain('/weather');
+      expect(result.response).toContain('Forecasts');
+      expect(result.response).toContain('/skill <name>');
+    });
+
+    it('lists skills without slashes in auto mode, since they are already loaded', () => {
+      setSkillsMode('auto');
+
+      const result = handleCommand('/skills', { source: 'tui' });
+
+      expect(result.response).toContain('Skills (2)');
+      expect(result.response).toContain('cat-fact');
+      expect(result.response).not.toContain('/cat-fact');
+      expect(result.response).toContain('already part of my context');
+    });
+
+    it('is recognised as a command in both modes', () => {
+      setSkillsMode('manual');
+      expect(isCommand('/skills')).toBe(true);
+
+      setSkillsMode('auto');
+      expect(isCommand('/skills')).toBe(true);
+    });
+
+    it('is offered for completion and listed in /help in both modes', () => {
+      setSkillsMode('manual');
+      expect(getAvailableCommands('tui')).toContain('/skills');
+      expect(handleCommand('/help', { source: 'tui' }).response).toContain('/skills');
+
+      setSkillsMode('auto');
+      expect(getAvailableCommands('tui')).toContain('/skills');
+      expect(handleCommand('/help', { source: 'tui' }).response).toContain('/skills');
+    });
+
+    it('refuses when learned skills are withheld from the sender', () => {
+      setSkillsMode('manual');
+
+      const result = handleCommand('/skills', { source: 'tui', learnedSkillsEnabled: false });
+
+      expect(result.response).toContain('trusted senders');
+      expect(result.response).not.toContain('cat-fact');
+    });
+
+    it('says so when nothing is enabled', () => {
+      setSkillsMode('manual');
+      getRecent.mockReturnValueOnce([]);
+
+      expect(handleCommand('/skills', { source: 'tui' }).response).toContain('No skills are enabled');
+    });
+
+    it('does not shadow the /skill loader', () => {
+      setSkillsMode('manual');
+
+      expect(handleCommand('/skill cat-fact', { source: 'tui' }).action).toBe('skill');
+      expect(handleCommand('/skills', { source: 'tui' }).action).toBe('none');
     });
   });
 

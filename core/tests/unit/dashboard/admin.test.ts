@@ -494,7 +494,8 @@ describe('AdminRouterFactory /skills', () => {
           learned_at: null,
         },
       ],
-      limit: config.LEARNED_SKILLS_LIMIT,
+      limit: config.SKILLS.LIMIT,
+      mode: config.SKILLS.MODE,
     });
   });
 
@@ -851,6 +852,43 @@ describe('AdminRouterFactory /settings', () => {
     const body = res.json.mock.calls[0][0];
     expect(body.details).toEqual(expect.arrayContaining([expect.stringContaining('web_port')]));
     expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings rejects an unrecognised skills.mode', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { skills: { mode: 'nope' } };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = res.json.mock.calls[0][0];
+    expect(body.details).toEqual(expect.arrayContaining([expect.stringContaining('skills.mode')]));
+    expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings rejects a non-positive skills.limit', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { skills: { limit: 0 } };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = res.json.mock.calls[0][0];
+    expect(body.details).toEqual(expect.arrayContaining([expect.stringContaining('skills.limit')]));
+    expect(settingsWriter.writeSettingsFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings accepts a skills mode patch', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { skills: { mode: 'manual' } };
+    callRoute(router, req, res);
+
+    expect(res.status).not.toHaveBeenCalledWith(400);
+    expect(settingsWriter.writeSettingsFile).toHaveBeenCalled();
   });
 
   it('POST /settings rejects an unsupported AI provider', () => {

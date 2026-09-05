@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PageShell, Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
 import { apiRequest } from '../../lib/api';
-import type { SkillItem, SkillsResponse } from '../../lib/types';
+import type { SkillItem, SkillsMode, SkillsResponse } from '../../lib/types';
 
 export default function SkillsPage() {
   const [data, setData] = useState<SkillsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resyncing, setResyncing] = useState(false);
+  const [savingMode, setSavingMode] = useState(false);
   const [toastMsg, showToast, isError] = useToast();
 
   const load = useCallback(async () => {
@@ -36,6 +37,24 @@ export default function SkillsPage() {
     }
   }
 
+  async function setMode(mode: SkillsMode) {
+    if (!data || data.mode === mode || savingMode) return;
+    setSavingMode(true);
+    try {
+      await apiRequest('/settings', { method: 'POST', body: JSON.stringify({ skills: { mode } }) });
+      showToast(
+        mode === 'manual'
+          ? 'Skills load on demand — run one with /<skill-name>'
+          : 'Skills load into every message',
+      );
+      load();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Mode change failed', true);
+    } finally {
+      setSavingMode(false);
+    }
+  }
+
   async function resync() {
     setResyncing(true);
     try {
@@ -50,7 +69,7 @@ export default function SkillsPage() {
   }
 
   const enabledCount = data?.items.filter((s) => s.enabled).length ?? 0;
-  const inContext = data ? Math.min(enabledCount, data.limit) : 0;
+  const surfaced = data ? Math.min(enabledCount, data.limit) : 0;
 
   return (
     <PageShell title="Skills" description="Available and learned skills" onRefresh={load}>
@@ -61,7 +80,10 @@ export default function SkillsPage() {
           <Card>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <div className="font-mono text-[11px] uppercase tracking-wide text-txt-3">
-                {data.items.length} skill{data.items.length === 1 ? '' : 's'} · {enabledCount} enabled · {inContext} in LLM context (limit {data.limit})
+                {data.items.length} skill{data.items.length === 1 ? '' : 's'} · {enabledCount} enabled ·{' '}
+                {data.mode === 'manual'
+                  ? `${surfaced} callable as /commands (limit ${data.limit})`
+                  : `${surfaced} in LLM context (limit ${data.limit})`}
               </div>
               <button
                 onClick={resync}
@@ -70,6 +92,26 @@ export default function SkillsPage() {
               >
                 {resyncing ? 'Resyncing…' : 'Resync from disk'}
               </button>
+            </div>
+
+            <div className="mt-3 border-t border-subtle pt-3">
+              <div className="font-mono text-[11px] uppercase tracking-wide text-txt-3">Ingestion mode</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <ModeOption
+                  label="Auto"
+                  hint="Every enabled skill's full instructions ride along in each message."
+                  active={data.mode === 'auto'}
+                  disabled={savingMode}
+                  onSelect={() => setMode('auto')}
+                />
+                <ModeOption
+                  label="Manual"
+                  hint="Only names and descriptions. Load one for a turn with /<skill-name>."
+                  active={data.mode === 'manual'}
+                  disabled={savingMode}
+                  onSelect={() => setMode('manual')}
+                />
+              </div>
             </div>
           </Card>
 
@@ -87,6 +129,39 @@ export default function SkillsPage() {
       )}
       <Toast message={toastMsg} isError={isError} />
     </PageShell>
+  );
+}
+
+function ModeOption({
+  label,
+  hint,
+  active,
+  disabled,
+  onSelect,
+}: {
+  label: string;
+  hint: string;
+  active: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      onClick={onSelect}
+      disabled={disabled || active}
+      aria-pressed={active}
+      className={`flex-1 basis-64 rounded-lg border px-3 py-2 text-left disabled:opacity-60 ${
+        active
+          ? 'border-accent bg-accent/10'
+          : 'border-subtle bg-bg-3 hover:border-accent hover:bg-bg-3'
+      }`}
+    >
+      <div className={`font-mono text-[11px] uppercase tracking-wide ${active ? 'text-accent-2' : 'text-txt-2'}`}>
+        {label}
+        {active && ' · active'}
+      </div>
+      <div className="mt-1 text-xs text-txt-3">{hint}</div>
+    </button>
   );
 }
 

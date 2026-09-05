@@ -1,5 +1,7 @@
 import { IToolsQueue, ToolsQueueFactory } from '../tools-queue';
-import { RESTRICTED_EXECUTION_CONTRACT, TOOL_EXECUTION_CONTRACT } from '../../constants';
+import { RESTRICTED_EXECUTION_CONTRACT, SKILLS_AUTO_CLAUSE, SKILLS_MANUAL_CLAUSE, TOOL_EXECUTION_CONTRACT } from '../../constants';
+import { replacePlaceholders } from '../../utils/prompt';
+import { config } from '../../config';
 import type { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import type { IMessageService } from '../message-service';
 import type { ILogger } from '../../infrastructure/logger';
@@ -39,7 +41,13 @@ class MainAgent implements IMainAgent {
     const messageHistory = message.getHistory();
     const toolContracts = options?.toolsEnabled === false
       ? [RESTRICTED_EXECUTION_CONTRACT]
-      : [TOOL_EXECUTION_CONTRACT];
+      : [replacePlaceholders(TOOL_EXECUTION_CONTRACT, {
+          v1: config.SKILLS.MODE === 'manual' ? SKILLS_MANUAL_CLAUSE : SKILLS_AUTO_CLAUSE,
+        })];
+
+    for (const block of options?.skillBlocks ?? []) {
+      toolContracts.push(block);
+    }
 
     const compactSummary = message.getSessionMetadata().compactSummary;
     if (typeof compactSummary === 'string' && compactSummary) {

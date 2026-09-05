@@ -168,6 +168,19 @@ function collectSettingsPayloadErrors(
     errors.push('gateway_host must be a valid URL.');
   }
 
+  const skills = asRecord(payload.skills);
+  if (skills) {
+    if (skills.mode !== undefined && skills.mode !== 'auto' && skills.mode !== 'manual') {
+      errors.push('skills.mode must be "auto" or "manual".');
+    }
+    if (skills.limit !== undefined && skills.limit !== '') {
+      const limit = Number(skills.limit);
+      if (!Number.isInteger(limit) || limit < 1) {
+        errors.push('skills.limit must be a positive integer.');
+      }
+    }
+  }
+
   const ai = asRecord(payload.ai);
   if (ai) {
     // `ai.<role>` = save + activate for that role; `ai.provider` = save only.
@@ -337,7 +350,7 @@ class AdminRouterFactory {
         memories: memoryRepo.count(),
         heartbeats: beats.length,
         learnedSkills: learnedSkillsRepo.count(),
-        learnedSkillsLimit: config.LEARNED_SKILLS_LIMIT,
+        learnedSkillsLimit: config.SKILLS.LIMIT,
         skills: skillsRepo.get().length,
         outboundMessages: outboundRepo.count(),
         auditErrors: auditRepo.count({ status: 'error' }),
@@ -793,7 +806,7 @@ class AdminRouterFactory {
         };
       });
 
-      res.json({ items, limit: config.LEARNED_SKILLS_LIMIT });
+      res.json({ items, limit: config.SKILLS.LIMIT, mode: config.SKILLS.MODE });
     });
 
     router.patch('/skills/:name', (req: Request, res: Response) => {

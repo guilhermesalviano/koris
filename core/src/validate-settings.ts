@@ -11,7 +11,7 @@
 import 'dotenv/config';
 import { existsSync } from 'fs';
 import { config } from './config';
-import { resolveConfigPaths, loadConfigFile } from './config/helpers';
+import { resolveConfigPaths, loadConfigFile, deepGet } from './config/helpers';
 import { listLiveChannels } from '../../plugins/channels';
 import {
   VALID_LOG_LEVELS,
@@ -111,6 +111,26 @@ async function main() {
     'log_level is valid',
     `Got: "${config.LOG_LEVEL}". Must be one of: ${VALID_LOG_LEVELS.join(', ')}.`,
     config.LOG_LEVEL,
+  );
+
+  // `config.SKILLS` coerces anything unrecognised to a safe default, so the raw
+  // file value is what tells the user they typo'd a mode.
+  const rawSettings = loadConfigFile({ cwd: process.cwd(), dirname: __dirname, onParseError: () => {} });
+  const rawSkillsMode = deepGet(rawSettings, 'skills.mode');
+  const rawSkillsLimit = deepGet(rawSettings, 'skills.limit') ?? deepGet(rawSettings, 'learned_skills_limit');
+
+  check(
+    rawSkillsMode === undefined || rawSkillsMode === 'auto' || rawSkillsMode === 'manual',
+    'skills.mode is valid',
+    `Got: ${JSON.stringify(rawSkillsMode)}. Must be "auto" (inject every skill body every turn) or "manual" (load one on demand via /<skill>).`,
+    config.SKILLS.MODE,
+  );
+
+  check(
+    rawSkillsLimit === undefined || (Number.isInteger(Number(rawSkillsLimit)) && Number(rawSkillsLimit) > 0),
+    'skills.limit is a positive integer',
+    `Got: ${JSON.stringify(rawSkillsLimit)}. Must be a positive integer.`,
+    String(config.SKILLS.LIMIT),
   );
 
   check(
