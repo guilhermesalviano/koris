@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiRequest, ApiRequestError } from './api';
+import type { SkillsMode } from './types';
 
 export interface RuntimeAiProfile {
   PROVIDER?: string;
@@ -22,6 +23,7 @@ export interface RuntimeSettings {
   };
   ALLOWED_DOMAINS?: string[];
   PERSONAL_INFORMATION?: Record<string, string>;
+  SKILLS?: { MODE?: SkillsMode; LIMIT?: number };
 }
 
 export interface AiProfileForm {
@@ -41,6 +43,8 @@ export interface SettingsFormState {
   whatsapp: { bot_number: string; whitelist: string; allow_unlisted_senders: boolean };
   allowed_domains: string[];
   personal_information: Record<string, string>;
+  skills_mode: SkillsMode;
+  skills_limit: string;
 }
 
 const EMPTY_PROFILE: AiProfileForm = { provider: 'ollama', base_url: '', api_token: '', model: '', num_ctx: '' };
@@ -54,6 +58,8 @@ export const DEFAULT_FORM: SettingsFormState = {
   whatsapp: { bot_number: '', whitelist: '', allow_unlisted_senders: false },
   allowed_domains: [],
   personal_information: {},
+  skills_mode: 'auto',
+  skills_limit: '10',
 };
 
 /** A value containing the masking marker means a real secret is already stored server-side. */
@@ -100,6 +106,8 @@ export function mapRuntimeToForm(data: RuntimeSettings): SettingsFormState {
     },
     allowed_domains: data.ALLOWED_DOMAINS ?? [],
     personal_information: data.PERSONAL_INFORMATION ?? {},
+    skills_mode: data.SKILLS?.MODE === 'manual' ? 'manual' : 'auto',
+    skills_limit: data.SKILLS?.LIMIT === undefined ? '' : String(data.SKILLS.LIMIT),
   };
 }
 
@@ -152,6 +160,18 @@ export function buildGeneralPatch(form: SettingsFormState): Record<string, unkno
   }
 
   return patch;
+}
+
+/** Patch for the Configuration modal's Skills section. */
+export function buildSkillsPatch(form: SettingsFormState): Record<string, unknown> {
+  const skills: Record<string, unknown> = { mode: form.skills_mode };
+
+  const limit = Number(form.skills_limit);
+  if (form.skills_limit.trim() !== '' && Number.isInteger(limit) && limit > 0) {
+    skills.limit = limit;
+  }
+
+  return { skills };
 }
 
 /** Builds the partial snake_case payload for POST /settings from the current form state. */

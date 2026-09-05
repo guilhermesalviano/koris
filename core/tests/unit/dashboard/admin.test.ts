@@ -462,82 +462,6 @@ describe('AdminRouterFactory /skills', () => {
     vi.clearAllMocks();
   });
 
-  it('GET /skills merges disk skills with learned state and the limit', () => {
-    skillsRepo.get.mockReturnValue([
-      { name: 'git', description: 'Git skill', read_when: ['when needed'], content: 'run rebase' },
-      { name: 'docker', description: 'Docker skill', read_when: null, content: 'run compose' },
-    ] as never);
-    learnedSkillsRepo.getAll.mockReturnValue([
-      { name: 'git', enabled: false, learned_at: '2026-01-01 00:00:00' },
-    ] as never);
-
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
-    const res = makeResponse();
-    callRoute(router, makeRequest('GET', '/skills'), res);
-
-    expect(res.json).toHaveBeenCalledWith({
-      items: [
-        {
-          name: 'git',
-          description: 'Git skill',
-          read_when: ['when needed'],
-          content: 'run rebase',
-          enabled: false,
-          learned_at: '2026-01-01 00:00:00',
-        },
-        {
-          name: 'docker',
-          description: 'Docker skill',
-          read_when: null,
-          content: 'run compose',
-          enabled: true,
-          learned_at: null,
-        },
-      ],
-      limit: config.SKILLS.LIMIT,
-      mode: config.SKILLS.MODE,
-    });
-  });
-
-  it('PATCH /skills/:name toggles the enabled flag', () => {
-    learnedSkillsRepo.setEnabled.mockReturnValue(true);
-    learnedSkillsRepo.getByName.mockReturnValue({ name: 'git', enabled: false });
-
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
-    const res = makeResponse();
-    const req = makeRequest('PATCH', '/skills/git');
-    req.body = { enabled: false };
-    callRoute(router, req, res);
-
-    expect(learnedSkillsRepo.setEnabled).toHaveBeenCalledWith('git', false);
-    expect(res.json).toHaveBeenCalledWith({ success: true, skill: { name: 'git', enabled: false } });
-  });
-
-  it('PATCH /skills/:name rejects a non-boolean enabled value', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
-    const res = makeResponse();
-    const req = makeRequest('PATCH', '/skills/git');
-    req.body = { enabled: 'yes' };
-    callRoute(router, req, res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: 'enabled must be a boolean' });
-    expect(learnedSkillsRepo.setEnabled).not.toHaveBeenCalled();
-  });
-
-  it('PATCH /skills/:name returns 404 when the skill is unknown', () => {
-    learnedSkillsRepo.setEnabled.mockReturnValue(false);
-
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
-    const res = makeResponse();
-    const req = makeRequest('PATCH', '/skills/missing');
-    req.body = { enabled: true };
-    callRoute(router, req, res);
-
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Skill not found' });
-  });
-
   it('POST /skills/sync triggers a resync when initialized', () => {
     skillSync.getExistingInstance.mockReturnValue(skillSync);
 
@@ -569,6 +493,10 @@ describe('AdminRouterFactory /plugins', () => {
       { family: 'tools', name: 'curl-request' },
       { family: 'channels', name: 'telegram' },
     ]);
+    // `/plugins` now also reads the skills repos; default them to empty so each
+    // test opts into skill rows explicitly.
+    skillsRepo.get.mockReturnValue([]);
+    learnedSkillsRepo.getAll.mockReturnValue([]);
   });
 
   it('GET /plugins lists every catalog entry with its resolved enabled state', () => {
@@ -585,6 +513,85 @@ describe('AdminRouterFactory /plugins', () => {
         { family: 'channels', name: 'telegram', enabled: false },
       ],
     });
+  });
+
+  it('GET /plugins appends skills, merging disk entries with their learned state', () => {
+    skillsRepo.get.mockReturnValue([
+      { name: 'git', description: 'Git skill', read_when: ['when needed'], content: 'run rebase' },
+      { name: 'docker', description: 'Docker skill', read_when: null, content: 'run compose' },
+    ] as never);
+    learnedSkillsRepo.getAll.mockReturnValue([
+      { name: 'git', enabled: false, learned_at: '2026-01-01 00:00:00' },
+    ] as never);
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/plugins'), res);
+
+    const { items } = res.json.mock.calls[0][0];
+    expect(items.filter((i: { family: string }) => i.family === 'skills')).toEqual([
+      {
+        family: 'skills',
+        name: 'git',
+        enabled: false,
+        description: 'Git skill',
+        read_when: ['when needed'],
+        content: 'run rebase',
+        learned_at: '2026-01-01 00:00:00',
+      },
+      {
+        family: 'skills',
+        name: 'docker',
+        // A skill on disk that has never been synced still lists as enabled.
+        enabled: true,
+        description: 'Docker skill',
+        read_when: null,
+        content: 'run compose',
+        learned_at: null,
+      },
+    ]);
+  });
+
+  it('PATCH /plugins/skills/:name writes through the learned-skills store, not plugin_settings', () => {
+    learnedSkillsRepo.setEnabled.mockReturnValue(true);
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/plugins/skills/git');
+    req.body = { enabled: false };
+    callRoute(router, req, res);
+
+    expect(learnedSkillsRepo.setEnabled).toHaveBeenCalledWith('git', false);
+    expect(pluginSettingsRepo.setEnabled).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      item: { family: 'skills', name: 'git', enabled: false },
+    });
+  });
+
+  it('PATCH /plugins/skills/:name returns 404 for an unknown skill', () => {
+    learnedSkillsRepo.setEnabled.mockReturnValue(false);
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/plugins/skills/missing');
+    req.body = { enabled: true };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Skill not found' });
+  });
+
+  it('PATCH /plugins/skills/:name rejects a non-boolean enabled value', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/plugins/skills/git');
+    req.body = { enabled: 'yes' };
+    callRoute(router, req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'enabled must be a boolean' });
+    expect(learnedSkillsRepo.setEnabled).not.toHaveBeenCalled();
   });
 
   it('PATCH /plugins/:family/:name rejects an invalid family', () => {

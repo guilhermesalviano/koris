@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildChannelsPatch, buildSettingsPatch, mapRuntimeToForm, DEFAULT_FORM } from './use-settings-form';
+import { buildChannelsPatch, buildSettingsPatch, buildSkillsPatch, mapRuntimeToForm, DEFAULT_FORM } from './use-settings-form';
 
 describe('use-settings-form: allow_unlisted_senders', () => {
   it('maps ALLOW_UNLISTED_SENDERS from the runtime snapshot into the form', () => {
@@ -52,5 +52,30 @@ describe('use-settings-form: num_ctx', () => {
     }) as { ai: { manager: Record<string, unknown>; workers: Record<string, unknown> } };
     expect(withValue.ai.manager.num_ctx).toBe(32768);
     expect(withValue.ai.workers.num_ctx).toBeUndefined();
+  });
+});
+
+describe('use-settings-form: skills', () => {
+  it('maps SKILLS from the runtime settings', () => {
+    const form = mapRuntimeToForm({ SKILLS: { MODE: 'manual', LIMIT: 4 } });
+
+    expect(form.skills_mode).toBe('manual');
+    expect(form.skills_limit).toBe('4');
+  });
+
+  it('falls back to auto when SKILLS is absent or unrecognised', () => {
+    expect(mapRuntimeToForm({}).skills_mode).toBe('auto');
+    expect(mapRuntimeToForm({ SKILLS: { MODE: 'nope' as never } }).skills_mode).toBe('auto');
+  });
+
+  it('builds a skills patch with mode and limit', () => {
+    expect(buildSkillsPatch({ ...DEFAULT_FORM, skills_mode: 'manual', skills_limit: '5' }))
+      .toEqual({ skills: { mode: 'manual', limit: 5 } });
+  });
+
+  it('omits an empty or invalid limit so the server keeps the stored one', () => {
+    expect(buildSkillsPatch({ ...DEFAULT_FORM, skills_limit: '' })).toEqual({ skills: { mode: 'auto' } });
+    expect(buildSkillsPatch({ ...DEFAULT_FORM, skills_limit: '0' })).toEqual({ skills: { mode: 'auto' } });
+    expect(buildSkillsPatch({ ...DEFAULT_FORM, skills_limit: 'abc' })).toEqual({ skills: { mode: 'auto' } });
   });
 });

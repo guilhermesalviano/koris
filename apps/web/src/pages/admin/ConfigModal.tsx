@@ -1,10 +1,11 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import Modal from '../../components/Modal';
-import { ChannelsIcon, ProvidersIcon, SessionsIcon, SettingsIcon } from '../../components/Icons';
+import { ChannelsIcon, ProvidersIcon, SessionsIcon, SettingsIcon, SkillsIcon } from '../../components/Icons';
 import SessionsPage from './SessionsPage';
 import ChannelsPage from './ChannelsPage';
 import ProvidersPage from './ProvidersPage';
 import GeneralPage from './GeneralPage';
+import SkillsSettingsPage from './SkillsSettingsPage';
 
 type IconComponent = ComponentType<{ className?: string }>;
 
@@ -19,6 +20,7 @@ const SECTIONS: Section[] = [
   { id: 'providers', label: 'Providers', Icon: ProvidersIcon, Component: ProvidersPage },
   { id: 'channels', label: 'Channels', Icon: ChannelsIcon, Component: ChannelsPage },
   { id: 'sessions', label: 'Sessions', Icon: SessionsIcon, Component: SessionsPage },
+  { id: 'skills', label: 'Skills', Icon: SkillsIcon, Component: SkillsSettingsPage },
   { id: 'general', label: 'General', Icon: SettingsIcon, Component: GeneralPage },
 ];
 

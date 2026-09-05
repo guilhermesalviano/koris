@@ -1,4 +1,6 @@
-import { Card, EmptyState, Toggle, Toast, useToast } from './AdminUI';
+import { useState } from 'react';
+import { Card, EmptyState, Toggle, Toast, useToast, formatDate } from './AdminUI';
+import { apiRequest } from '../lib/api';
 import type { UsePluginsApi } from '../lib/use-plugins';
 import type { PluginItem } from '../lib/types';
 
@@ -9,7 +11,7 @@ function humanize(name: string): string {
     .join(' ');
 }
 
-const FAMILY_ORDER: PluginItem['family'][] = ['tools', 'channels'];
+const FAMILY_ORDER: PluginItem['family'][] = ['tools', 'channels', 'skills'];
 
 function groupByFamily(items: PluginItem[]): [PluginItem['family'], PluginItem[]][] {
   const groups = new Map<PluginItem['family'], PluginItem[]>();
@@ -40,14 +42,51 @@ function PluginRow({ item, onToggle }: { item: PluginItem; onToggle: () => void 
   );
 }
 
+/**
+ * A skill row carries its own documentation, so it gets a card rather than the
+ * one-line toggle a tool or channel needs.
+ */
+function SkillRow({ item, onToggle }: { item: PluginItem; onToggle: () => void }) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-xs text-accent-2">{item.name}</span>
+            {item.learned_at && (
+              <span className="font-mono text-[10px] text-txt-3">synced {formatDate(item.learned_at)}</span>
+            )}
+          </div>
+          {item.description && <div className="mt-1 text-sm text-txt-2">{item.description}</div>}
+        </div>
+        <Toggle checked={item.enabled} onChange={onToggle} label={`Toggle ${humanize(item.name)}`} />
+      </div>
+    </Card>
+  );
+}
+
 export default function PluginsList({ api }: { api: UsePluginsApi }) {
   const [toastMsg, showToast, isError] = useToast();
+  const [resyncing, setResyncing] = useState(false);
 
   async function handleToggle(item: PluginItem) {
     try {
       await api.toggle(item);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to update plugin', true);
+    }
+  }
+
+  async function resyncSkills() {
+    setResyncing(true);
+    try {
+      await apiRequest('/skills/sync', { method: 'POST' });
+      showToast('Skills resynced');
+      api.reload();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Resync failed', true);
+    } finally {
+      setResyncing(false);
     }
   }
 
@@ -61,12 +100,33 @@ export default function PluginsList({ api }: { api: UsePluginsApi }) {
 
       {!api.error && !api.loading && api.items.length > 0 && groups.map(([family, items]) => (
         <div key={family}>
-          <div className="mb-2 font-mono text-[11px] uppercase tracking-wide text-txt-3">{humanize(family)}</div>
-          <Card className="grid grid-cols-1 gap-x-6 p-4 sm:grid-cols-2">
-            {items.map((item) => (
-              <PluginRow key={item.name} item={item} onToggle={() => handleToggle(item)} />
-            ))}
-          </Card>
+          <div className="mb-2 flex items-center gap-3">
+            <div className="font-mono text-[11px] uppercase tracking-wide text-txt-3">{humanize(family)}</div>
+            {family === 'skills' && (
+              <button
+                type="button"
+                onClick={resyncSkills}
+                disabled={resyncing}
+                className="ml-auto rounded-lg border border-subtle bg-bg-3 px-3 py-1 font-mono text-[11px] text-txt-2 hover:border-accent hover:text-accent-2 disabled:opacity-50"
+              >
+                {resyncing ? 'Resyncing…' : 'Resync from disk'}
+              </button>
+            )}
+          </div>
+
+          {family === 'skills' ? (
+            <div className="space-y-2">
+              {items.map((item) => (
+                <SkillRow key={item.name} item={item} onToggle={() => handleToggle(item)} />
+              ))}
+            </div>
+          ) : (
+            <Card className="grid grid-cols-1 gap-x-6 p-4 sm:grid-cols-2">
+              {items.map((item) => (
+                <PluginRow key={item.name} item={item} onToggle={() => handleToggle(item)} />
+              ))}
+            </Card>
+          )}
         </div>
       ))}
       <Toast message={toastMsg} isError={isError} />
