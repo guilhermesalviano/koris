@@ -1,5 +1,6 @@
 import { config } from '../../config';
 import { handleUsageCommand } from './usage';
+import { isSkillCommand, listSkillCommands, listSkills, resolveSkillCommand } from './skills';
 import { addAllowedDomain } from '../security/allowed-domains';
 import {
   commandToken,
@@ -11,6 +12,7 @@ import type { CommandContext, CommandResult } from '../../types/commands';
 
 export { SLASH_COMMANDS, findCommand, isKnownCommand } from './registry';
 export type { CommandSpec, CommandChannel } from './registry';
+export { isSkillCommand, listSkillCommands, listSkills, resolveSkillCommand } from './skills';
 
 export function handleCommand(command: string, context: CommandContext): CommandResult {
   switch (commandToken(command)) {
@@ -39,12 +41,21 @@ export function handleCommand(command: string, context: CommandContext): Command
     case '/allow':
       return handleAllow(command, context);
 
+    case '/skills':
+      return handleSkills(context);
+
+    case '/skill':
+      return handleSkill(command, context);
+
     case '/exit':
     case '/quit':
     case '/bye':
       return handleExit(context);
 
-    default:
+    default: {
+      const skill = resolveSkillCommand(command);
+      if (skill) return runSkill(skill, context);
+
       return {
         response: formatMessage(
           `Unknown command: ${command}\nType /help for available commands`,
@@ -53,7 +64,92 @@ export function handleCommand(command: string, context: CommandContext): Command
         action: 'none',
         handled: false,
       };
+    }
   }
+}
+
+function handleSkills(context: CommandContext): CommandResult {
+  if (context.learnedSkillsEnabled === false) {
+    return formatCommandResult('Skills are only available to trusted senders.', context.source);
+  }
+
+  const skills = listSkills();
+  if (skills.length === 0) {
+    return formatCommandResult(
+      'No skills are enabled. Add a plugins/skills/<name>/SKILL.md folder to teach me one.',
+      context.source,
+    );
+  }
+
+  const manualMode = config.SKILLS.MODE === 'manual';
+  const rows = skills.map((skill) => {
+    const invocation = manualMode ? `/${skill.name}` : skill.name;
+    return `  ${invocation.padEnd(24)} ${skill.description}`;
+  });
+
+  const footer = manualMode
+    ? 'Run one with `/<name> <request>` (or `/skill <name> <request>`) to load its instructions for that message.'
+    : 'These are already part of my context on every message — just ask.';
+
+  const message = `*Skills* (${skills.length})
+
+${rows.join('\n')}
+
+${footer}`;
+
+  return formatCommandResult(message, context.source);
+}
+
+function handleSkill(command: string, context: CommandContext): CommandResult {
+  if (config.SKILLS.MODE !== 'manual') {
+    return formatCommandResult(
+      'Skills are already loaded into my context on every message (skills.mode = "auto"). ' +
+      'Switch skills.mode to "manual" to load them on demand instead.',
+      context.source,
+    );
+  }
+
+  const name = command.trim().split(/\s+/)[1];
+  if (!name) {
+    return formatCommandResult(
+      `Usage: /skill <name> [request]\n\n${formatSkillList()}`,
+      context.source,
+    );
+  }
+
+  const skill = resolveSkillCommand(command);
+  if (!skill) {
+    return formatCommandResult(
+      `No enabled skill named "${name}".\n\n${formatSkillList()}`,
+      context.source,
+    );
+  }
+
+  return runSkill(skill, context);
+}
+
+/**
+ * Hand the turn to the agent with the skill's documentation injected. Skills
+ * follow the same trust gate as the context-injected ones
+ * (`learnedSkillsEnabled`), so an untrusted sender never reaches one.
+ */
+function runSkill(
+  skill: { name: string; content: string; args: string },
+  context: CommandContext,
+): CommandResult {
+  if (context.learnedSkillsEnabled === false) {
+    return formatCommandResult('Skills are only available to trusted senders.', context.source);
+  }
+
+  return { action: 'skill', skill, handled: true };
+}
+
+function formatSkillList(): string {
+  const skills = listSkillCommands();
+  if (skills.length === 0) return 'No skills are enabled.';
+
+  const rows = skills.map((skill) => `  /${skill.name}${skill.description ? ` — ${skill.description}` : ''}`);
+  return `Skills:\n${rows.join('\n')}`;
 }
 
 function handleHelp(command: string, context: CommandContext): CommandResult {
@@ -76,14 +172,16 @@ function handleHelp(command: string, context: CommandContext): CommandResult {
     return formatCommandResult(lines.join('\n'), context.source);
   }
 
-  const rows = listCommandsFor(context.source).map((spec) => {
+  const rows = listableCommands(context.source).map((spec) => {
     const invocation = spec.usage ?? spec.name;
     return `${invocation.padEnd(20)} ${spec.summary}`;
   });
 
+  const skillSection = config.SKILLS.MODE === 'manual' ? `\n\n${formatSkillList()}` : '';
+
   const message = `*Available Commands:*
 
-${rows.join('\n')}
+${rows.join('\n')}${skillSection}
 
 Send me any message to interact!`;
 
@@ -204,7 +302,17 @@ function formatCommandResult(message: string, channel: string): CommandResult {
  * unrecognised `/something` flows to the agent like any other message.
  */
 export function isCommand(message: string): boolean {
-  return isKnownCommand(message);
+  return isKnownCommand(message) || isSkillCommand(message);
+}
+
+/**
+ * Specs listable on a channel, minus `/skill` when `skills.mode` is `auto`
+ * (there is nothing to load on demand in that mode).
+ */
+function listableCommands(channel: string) {
+  return listCommandsFor(channel).filter(
+    (spec) => spec.name !== '/skill' || config.SKILLS.MODE === 'manual',
+  );
 }
 
 /**
@@ -212,5 +320,8 @@ export function isCommand(message: string): boolean {
  * channel, for input completion.
  */
 export function getAvailableCommands(channel: string): string[] {
-  return listCommandsFor(channel).flatMap((spec) => [spec.name, ...(spec.aliases ?? [])]);
+  return [
+    ...listableCommands(channel).flatMap((spec) => [spec.name, ...(spec.aliases ?? [])]),
+    ...listSkillCommands().map((skill) => `/${skill.name}`),
+  ];
 }

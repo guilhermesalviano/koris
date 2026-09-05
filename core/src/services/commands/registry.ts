@@ -75,6 +75,24 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
     trusted: true,
   },
   {
+    name: '/skills',
+    summary: 'List the skills I have loaded',
+    details:
+      'Shows every enabled skill and what it is for. In `skills.mode: "manual"` ' +
+      'each one is callable as `/<name>`; in `auto` mode they are already part ' +
+      'of my prompt and need no command.',
+  },
+  {
+    name: '/skill',
+    summary: 'Load one skill\'s instructions for this message',
+    usage: '/skill <name> [request]',
+    trusted: true,
+    details:
+      'Only in `skills.mode: "manual"`, where skill documentation is kept out of ' +
+      'the prompt until asked for. `/<skill-name> <request>` is the same thing in ' +
+      'short form. `/help` lists the skills available as commands.',
+  },
+  {
     name: '/exit',
     aliases: ['/quit', '/bye'],
     summary: 'How to leave the session',
