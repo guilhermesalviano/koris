@@ -54,6 +54,7 @@ import { IMessageGateway } from '../services/agents/message-gateway';
 import { PluginSettingsRepositoryFactory, type IPluginSettingsRepository } from '../repositories/plugin-settings';
 import { resolvePluginEnabled } from '../services/plugins/plugin-enablement';
 import { PluginCatalogSingleton } from '../services/plugins/plugin-catalog-singleton';
+import { listMissing, pullEntry } from '../../../scripts/hub-sync';
 
 const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN', 'SERPAPI_KEY', 'SEARCH_API_KEY']);
 
@@ -863,6 +864,29 @@ class AdminRouterFactory {
       }
 
       res.json({ success: true, item: { family, name, enabled } });
+    });
+
+    // koris-hub marketplace: tools/skills whose source moved out of this repo
+    // (see scripts/hub-sync.ts and AGENTS.md's "Website" section). `baseDir`
+    // is pinned to config.BASE_DIR — the repo root when self-hosted — since
+    // hub-sync's own default (relative to its compiled location under
+    // dist/scripts/) would resolve into dist/ once this module is bundled.
+    router.get('/marketplace', async (_req: Request, res: Response) => {
+      try {
+        const items = await listMissing({ baseDir: config.BASE_DIR });
+        res.json({ items });
+      } catch (err) {
+        res.status(502).json({ error: err instanceof Error ? err.message : 'Failed to reach koris-hub.' });
+      }
+    });
+
+    router.post('/marketplace/:slug/pull', async (req: Request, res: Response) => {
+      try {
+        const item = await pullEntry(String(req.params.slug), { baseDir: config.BASE_DIR });
+        res.status(201).json({ success: true, item });
+      } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to pull from koris-hub.' });
+      }
     });
 
     router.get('/settings', (_req: Request, res: Response) => {
