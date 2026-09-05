@@ -61,6 +61,7 @@
     "@whiskeysockets/baileys": "7.0.0-rc14",
     "better-sqlite3": "^13.0.3",
     "dotenv": "^17.4.2",
+    "esbuild": "^0.28.2",
     "express": "^5.2.1",
     "gray-matter": "^4.0.3",
     "ml-distance": "^4.1.0",

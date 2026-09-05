@@ -34,6 +34,9 @@ function createToolPlugins(options: CreateToolPluginsOptions = {}): Plugin[] {
     });
 }
 
+/** The directory `createToolPlugins` scans by default — where a hot-reloaded tool's compiled output must land for `require()` to find it (see `core/src/services/tools/tool-sync.ts`). */
+export const TOOLS_DIR = __dirname;
+
 export { createToolPlugins };
 export { buildRegistry, PluginRegistry } from '../registry';
 export type { Plugin };

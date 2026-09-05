@@ -57,7 +57,8 @@ async function runPull(argv: string[]): Promise<void> {
   console.log(
     '\nNote: new plugin folders stay untracked by git by default (see the tools/skills ' +
     'allowlist in .gitignore) — add a `!` rule there if you want to commit one.\n' +
-    'Next: pnpm build && restart the app — the plugin loader only discovers plugins at startup.',
+    'A running koris process picks this up on its own within ~500ms (SkillSyncService / ' +
+    'ToolSyncService) — no rebuild or restart needed.',
   );
 }
 

@@ -54,7 +54,7 @@ export default function MarketplaceList({ api }: { api: UseMarketplaceApi }) {
   async function handlePull(item: MarketplaceItem) {
     try {
       await api.pull(item);
-      showToast(`Pulled "${humanize(item.slug)}" — run pnpm build and restart the app to activate it.`);
+      showToast(`Pulled "${humanize(item.slug)}" — active within a few seconds, no restart needed.`);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to pull from koris-hub', true);
     }
