@@ -24,38 +24,38 @@ Optimized specifically for CPU inference on an **Intel 2018 Mac mini** (and simi
 
 ## Prerequisites
 
-- **Python 3.9+**
-- **ffmpeg** (required for decoding non-WAV audio):
-  - macOS: `brew install ffmpeg`
-  - Ubuntu/Debian: `sudo apt update && sudo apt install -y ffmpeg`
+- **Docker & Docker Compose** (Recommended for cross-platform, zero-dependency execution):
+  - macOS / Windows: [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+  - Linux: `docker` and `docker compose` plugin (`sudo apt install docker-compose-plugin`)
+- *(Optional - for running directly on host without Docker)*:
+  - Python 3.9+ and `ffmpeg` (`brew install ffmpeg` or `sudo apt install ffmpeg`)
 
 ---
 
-## Quick Start
+## Quick Start (Docker - Recommended)
 
-### 1. Setup Environment & Download Model
-
-To install with the recommended **`whisper-small`** model (for optimal Portuguese transcription):
-
-```bash
-pnpm audio:setup
-# Or specifically choose model size:
-pnpm audio:setup:small   # Recommended for Portuguese
-pnpm audio:setup:base    # Faster baseline
-pnpm audio:setup:tiny    # Ultra-lightweight
-# Or directly:
-bash scripts/audio/setup.sh small
-```
-
-### 2. Start the Server
-
-Start the FastAPI HTTP sidecar (defaults to `127.0.0.1:6006`):
+### 1. Start the Container
+Run the automated Docker runner (auto-builds container, mounts models, and verifies readiness):
 
 ```bash
 pnpm audio:start
 # Or directly:
-bash scripts/audio/run.sh
+bash scripts/audio/run_audio_sidecar.sh
+
+# To force a full container restart / recreate:
+bash scripts/audio/run_audio_sidecar.sh --restart
 ```
+
+### 2. Manage Models (Optional)
+By default, the setup downloads and uses `whisper-small` into `./models/whisper-small` (the sweet spot for Portuguese accuracy). You can download different model sizes onto the host at any time:
+
+```bash
+pnpm audio:setup:small   # Default & recommended for Portuguese (~480MB)
+pnpm audio:setup:base    # Faster baseline (~140MB)
+pnpm audio:setup:tiny    # Ultra-lightweight (~70MB)
+```
+
+The container automatically mounts `./models` and auto-detects the highest capability model present.
 
 ---
 

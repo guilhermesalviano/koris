@@ -47,7 +47,7 @@
     "audio:setup:small": "bash scripts/audio/setup.sh small",
     "audio:setup:base": "bash scripts/audio/setup.sh base",
     "audio:setup:tiny": "bash scripts/audio/setup.sh tiny",
-    "audio:start": "bash scripts/audio/run.sh",
+    "audio:start": "bash scripts/audio/run_audio_sidecar.sh",
     "run": "pnpm app"
   },
   "repository": {
