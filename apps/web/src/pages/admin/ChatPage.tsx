@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
@@ -35,11 +35,24 @@ export default function ChatPage() {
 
   // Auto-scroll to the latest message whenever the conversation changes
   // (new message, streaming delta, or returning to this page with history).
-  useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight;
-    }
-  }, [messages]);
+  //
+  // Opening a chat must *start* at the newest message. The container is
+  // `scroll-smooth`, so a plain scrollTop assignment animates all the way down
+  // from the top — which reads as the chat opening on its oldest messages. The
+  // first positioning of a session is therefore an instant jump, in a layout
+  // effect so it lands before the browser paints; later updates within the same
+  // session keep the smooth follow.
+  const positionedFor = useRef<string | null | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const el = chatRef.current;
+    if (!el) return;
+
+    const isFirstPositioning = positionedFor.current !== activeSessionId;
+    el.scrollTo({ top: el.scrollHeight, behavior: isFirstPositioning ? 'instant' : 'smooth' });
+
+    if (messages.length > 0) positionedFor.current = activeSessionId;
+  }, [messages, activeSessionId]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -213,9 +226,9 @@ export default function ChatPage() {
           <Fragment key={m.id}>
           {separator && (
             <div className="flex items-center gap-3 px-1">
-              <div className="h-px flex-1 bg-subtle" />
+              <div className="h-px flex-1 bg-[#1c1c21]" />
               <span className="font-mono text-[11px] text-txt-3">{separator}</span>
-              <div className="h-px flex-1 bg-subtle" />
+              <div className="h-px flex-1 bg-[#1c1c21]" />
             </div>
           )}
           <div className={`flex gap-2.5 animate-msg-in ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
