@@ -1,14 +1,6 @@
 name: "CodeQL Analysis"
 
 on:
-  push:
-    branches: [ main, develop ]
-    paths:
-      - 'core/**'
-      - 'plugins/**'
-      - 'apps/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
   pull_request:
     branches: [ main, develop ]
     paths:
