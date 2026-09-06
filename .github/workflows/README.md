@@ -11,24 +11,21 @@ This directory contains the CI/CD workflows for quality checks, automated testin
   - `pull_request`: branches `[ main, develop ]`
   - `workflow_dispatch`
 - **Concurrency**: Automatically cancels in-progress runs for the same branch/PR (`cancel-in-progress: true`).
-- **Parallel Jobs**:
-  1. **`lint` (Code Quality & Type Check)**:
-     - Runs `pnpm lint` (core & server TypeScript type-check)
-     - Runs `pnpm lint:client` (web SPA client type-check)
-     - Runs `pnpm lint:desktop` (Electron desktop shell type-check)
-     - Runs `pnpm validate` (system settings & schema validation)
-  2. **`test` (Unit & Integration Tests)**:
-     - Runs Vitest test suite with V8 coverage (`pnpm run test:coverage --reporter=verbose`)
-     - Strictly fails CI on test failures
-     - Evaluates code coverage against baseline guards (lines: 74%, statements: 74%, functions: 77%, branches: 67%) to prevent coverage regression, aiming towards an 80% target
-     - Posts structured summary table to `$GITHUB_STEP_SUMMARY`
-     - Uploads coverage artifact and Codecov report
-  3. **`build` (Production Build Verification)**:
-     - Runs `pnpm build` (core server compilation + Vite client build)
-     - Runs `pnpm build:desktop` (desktop shell compilation)
-  4. **`security` (Security Validations)**:
-     - Scans git history for exposed credentials/API keys with **Gitleaks** (`gitleaks/gitleaks-action@v2`)
-     - Audits newly introduced dependencies on PRs for known vulnerabilities and licensing with **GitHub Dependency Review** (`actions/dependency-review-action@v4`)
+- **Parallel Jobs (Economized for Minimum Processing Usage)**:
+  1. **`build-and-test` (Production Build & Test Verification)**:
+     - Installs dependencies once on a single runner to eliminate redundant VM startup overhead.
+     - Runs `pnpm build` (core server compilation + Vite client build) and `pnpm build:desktop` (desktop shell compilation).
+     - Runs Vitest test suite with V8 coverage (`pnpm run test:coverage --reporter=verbose`).
+     - Strictly fails CI on test failures.
+     - Evaluates code coverage against baseline guards (lines: 74%, statements: 74%, functions: 77%, branches: 67%) to prevent coverage regression, aiming towards an 80% target.
+     - Posts structured summary table to `$GITHUB_STEP_SUMMARY`.
+     - Uploads coverage artifact and Codecov report.
+  2. **`security` (Security Validations)**:
+     - Lightweight, zero-install security runner executing in parallel (~10-15s).
+     - Scans git history for exposed credentials/API keys with **Gitleaks** (`gitleaks/gitleaks-action@v2`).
+     - Audits newly introduced dependencies on PRs for known vulnerabilities and licensing with **GitHub Dependency Review** (`actions/dependency-review-action@v4`).
+- **Local Offloading**:
+  - All TypeScript typechecking (`pnpm lint`, `pnpm lint:client`, `pnpm lint:desktop`) and system configuration validation (`pnpm validate`) are delegated to Husky (`.husky/pre-push`), eliminating dedicated linting runners and drastically reducing billable GitHub Actions minutes.
 
 ### `codeql.yml` — CodeQL Static Analysis
 

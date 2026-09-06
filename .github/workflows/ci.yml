@@ -15,8 +15,8 @@ permissions:
   contents: read
 
 jobs:
-  lint:
-    name: Code Quality & Type Check
+  build-and-test:
+    name: Build & Test
     runs-on: ubuntu-latest
 
     steps:
@@ -38,40 +38,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint server & core
-        run: pnpm lint
+      - name: Build server & web client
+        run: pnpm build
 
-      - name: Lint web client
-        run: pnpm lint:client
-
-      - name: Lint desktop app
-        run: pnpm lint:desktop
-
-      - name: Validate settings
-        run: pnpm validate
-
-  test:
-    name: Unit & Integration Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10.18.3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24.x'
-          cache: 'pnpm'
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Build desktop shell
+        run: pnpm build:desktop
 
       - name: Run tests with coverage
         run: pnpm run test:coverage --reporter=verbose
@@ -226,35 +197,6 @@ jobs:
           files: ./coverage/coverage-final.json
           flags: unittests
           fail_ci_if_error: false
-
-  build:
-    name: Production Build Verification
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10.18.3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24.x'
-          cache: 'pnpm'
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build server & web client
-        run: pnpm build
-
-      - name: Build desktop shell
-        run: pnpm build:desktop
 
   security:
     name: Security Validations
