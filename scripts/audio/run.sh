@@ -1,18 +1,8 @@
 #!/usr/bin/env bash
 #
-# run.sh - Run sherpa-onnx STT audio sidecar
+# run.sh - Runs the audio sidecar (delegates to Docker Compose runner)
 #
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_PYTHON="${SCRIPT_DIR}/.venv/bin/python"
-
-if [ ! -f "$VENV_PYTHON" ]; then
-  echo "Error: Virtual environment not found at ${SCRIPT_DIR}/.venv" >&2
-  echo "Please run setup first:" >&2
-  echo "  bash ${SCRIPT_DIR}/setup.sh" >&2
-  exit 1
-fi
-
-cd "$SCRIPT_DIR"
-exec "$VENV_PYTHON" server.py "$@"
+exec bash "${SCRIPT_DIR}/run_audio_sidecar.sh" "$@"
