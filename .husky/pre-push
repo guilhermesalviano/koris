@@ -1,0 +1,5 @@
+pnpm lint
+pnpm lint:client
+pnpm lint:desktop
+pnpm validate
+pnpm test
