@@ -1,9 +1,29 @@
 name: "CodeQL Analysis"
 
 on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'core/**'
+      - 'plugins/**'
+      - 'apps/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'core/**'
+      - 'plugins/**'
+      - 'apps/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
   schedule:
     - cron: '0 2 * * 1'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
