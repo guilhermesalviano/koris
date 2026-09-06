@@ -69,3 +69,51 @@ describe('config/index reloadConfig', () => {
     expect((config.AI.WORKERS as Record<string, unknown>).EMBED_MODEL).toBeUndefined();
   });
 });
+
+describe('config/index skills', () => {
+  function reloadWith(settings: Record<string, unknown>) {
+    const dir = createTempDir();
+    writeFileSync(join(dir, 'koris.json'), JSON.stringify(settings));
+    reloadConfig({ cwd: dir, dirname: dir });
+  }
+
+  it('defaults to auto mode with a limit of 10', () => {
+    reloadWith({});
+
+    expect(config.SKILLS.MODE).toBe('auto');
+    expect(config.SKILLS.LIMIT).toBe(10);
+  });
+
+  it('reads skills.mode and skills.limit', () => {
+    reloadWith({ skills: { mode: 'manual', limit: 3 } });
+
+    expect(config.SKILLS.MODE).toBe('manual');
+    expect(config.SKILLS.LIMIT).toBe(3);
+  });
+
+  it('falls back to auto for an unrecognised mode', () => {
+    reloadWith({ skills: { mode: 'nope' } });
+
+    expect(config.SKILLS.MODE).toBe('auto');
+  });
+
+  it('falls back to 10 for a non-positive or non-integer limit', () => {
+    reloadWith({ skills: { limit: 0 } });
+    expect(config.SKILLS.LIMIT).toBe(10);
+
+    reloadWith({ skills: { limit: 'many' } });
+    expect(config.SKILLS.LIMIT).toBe(10);
+  });
+
+  it('still honours the legacy top-level learned_skills_limit', () => {
+    reloadWith({ learned_skills_limit: 4 });
+
+    expect(config.SKILLS.LIMIT).toBe(4);
+  });
+
+  it('prefers skills.limit over the legacy key', () => {
+    reloadWith({ learned_skills_limit: 4, skills: { limit: 7 } });
+
+    expect(config.SKILLS.LIMIT).toBe(7);
+  });
+});

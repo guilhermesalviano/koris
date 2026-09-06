@@ -337,6 +337,16 @@ describe('PromptRepository extraSystemBlocks', () => {
 });
 
 describe('PromptRepository learned skills gating', () => {
+  const originalSkillsMode = config.SKILLS.MODE;
+
+  beforeEach(() => {
+    (config.SKILLS as { MODE: string }).MODE = 'auto';
+  });
+
+  afterEach(() => {
+    (config.SKILLS as { MODE: string }).MODE = originalSkillsMode;
+  });
+
   it('injects learned skills into the system prompt by default', async () => {
     const repository = makeRepository({
       learnedSkillsRepository: {
@@ -372,6 +382,81 @@ describe('PromptRepository learned skills gating', () => {
 
     expect(messages[0].content).not.toContain('# Learned Skills Content');
     expect(messages[0].content).not.toContain('### Skill: docs');
+  });
+});
+
+describe('PromptRepository skills mode', () => {
+  const originalMode = config.SKILLS.MODE;
+
+  afterEach(() => {
+    (config.SKILLS as { MODE: string }).MODE = originalMode;
+  });
+
+  function repositoryWithSkills() {
+    return makeRepository({
+      learnedSkillsRepository: {
+        getRecent: vi.fn().mockReturnValue([
+          { name: 'docs', description: 'Doc helper', content: 'Use docs first.', read_when: ['when needed'] },
+          { name: 'weather', description: 'Forecasts', content: 'Call the forecast API.', read_when: null },
+        ]),
+      },
+    });
+  }
+
+  it('lists skills as commands without their bodies in manual mode', async () => {
+    (config.SKILLS as { MODE: string }).MODE = 'manual';
+
+    const { messages } = await repositoryWithSkills().build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+    });
+
+    expect(messages[0].content).toContain('# Available Skills');
+    expect(messages[0].content).toContain('- /docs — Doc helper (read when: when needed)');
+    expect(messages[0].content).toContain('- /weather — Forecasts');
+
+    expect(messages[0].content).not.toContain('# Learned Skills Content');
+    expect(messages[0].content).not.toContain('### Skill: docs');
+    expect(messages[0].content).not.toContain('Use docs first.');
+    expect(messages[0].content).not.toContain('Call the forecast API.');
+  });
+
+  it('keeps injecting full skill bodies in auto mode', async () => {
+    (config.SKILLS as { MODE: string }).MODE = 'auto';
+
+    const { messages } = await repositoryWithSkills().build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+    });
+
+    expect(messages[0].content).toContain('# Learned Skills Content');
+    expect(messages[0].content).toContain('### Skill: docs');
+    expect(messages[0].content).toContain('Use docs first.');
+    expect(messages[0].content).not.toContain('# Available Skills');
+  });
+
+  it('still honours the trust gate in manual mode', async () => {
+    (config.SKILLS as { MODE: string }).MODE = 'manual';
+
+    const { messages } = await repositoryWithSkills().build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+      learnedSkillsEnabled: false,
+    });
+
+    expect(messages[0].content).not.toContain('# Available Skills');
+    expect(messages[0].content).not.toContain('- /docs');
+  });
+
+  it('emits no skills block at all when nothing is enabled', async () => {
+    (config.SKILLS as { MODE: string }).MODE = 'manual';
+
+    const { messages } = await makeRepository().build({
+      userMessage: 'Hello',
+      channel: 'whatsapp',
+    });
+
+    expect(messages[0].content).not.toContain('# Available Skills');
   });
 });
 

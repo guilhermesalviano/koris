@@ -3,10 +3,10 @@ import { NOT_AUTHORIZED_PERMISSION } from "./http-errors";
 export const TOOL_EXECUTION_CONTRACT = `
 # Tool Execution Contract
 
-Relevant skill documentation is already available in your **SYSTEM** context. Ensure the human's request is entirely resolved through tool calls.
+Ensure the human's request is entirely resolved through tool calls.
 
 ### EXECUTION RULES
-- **Skills first:** If a task matches a skill, follow that skill's instructions and use its tools.
+{v1}
 - **Clarification:** if the human's request is ambiguous, ask for clarification instead of guessing.
 - **Confirmation:** if a tool's description says it REQUIRES CONFIRMATION, do not call it yet — ask the human a direct question restating the exact parameters you intend to use, and requesting any that are missing. Only call the tool after the human explicitly confirms in a follow-up message.
 - **Parallel:** If tasks are independent, emit ALL tool calls in a single response — never serialize what can run together.
@@ -19,6 +19,35 @@ Before responding to the human, answer internally:
 
 If **no** → call the missing tools.
 If **yes** → compose the final response using only the tool results.
+`;
+
+/**
+ * Skills clause of the Tool Execution Contract, substituted for `{v1}`.
+ * `auto` mode injects every skill body up front; `manual` mode keeps only the
+ * `# Available Skills` index, so the model must point the human at the command
+ * instead of following instructions it does not have.
+ */
+export const SKILLS_AUTO_CLAUSE = `- **Skills first:** Relevant skill documentation is already available in your **SYSTEM** context. If a task matches a skill, follow that skill's instructions and use its tools.`;
+
+export const SKILLS_MANUAL_CLAUSE = `- **Skills on demand:** Skill documentation is NOT in your context — the "# Available Skills" section lists only names and descriptions. If a task matches one, do not guess its steps: tell the human to run its command (e.g. \`/weather Rio\`) and stop.`;
+
+/**
+ * Prefix of the `# Available Skills` block in `manual` mode, explaining to the
+ * model that the bodies are absent and how the human pulls one in.
+ */
+export const SKILL_COMMAND_INDEX_INTRO = `These skills exist but their instructions are NOT loaded. The human runs one with its command (\`/<name> <request>\`, or \`/skill <name> <request>\`), which loads that skill's documentation for that turn.`;
+
+/**
+ * Wrapper around a skill body pulled in by a `/<skill>` command, so the model
+ * ties the human's (often terse) request to the documentation it just received.
+ * `{v1}` = skill name, `{v2}` = the skill's stored documentation.
+ */
+export const SKILL_INVOCATION_PROMPT = `
+# Skill Invoked: {v1}
+
+The human ran \`/{v1}\`. Their message is a request to be answered with this skill — read it in that light, and follow the documentation below even if the message alone is terse or ambiguous.
+
+{v2}
 `;
 
 export const RESTRICTED_EXECUTION_CONTRACT = `

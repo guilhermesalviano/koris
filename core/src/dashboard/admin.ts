@@ -168,6 +168,19 @@ function collectSettingsPayloadErrors(
     errors.push('gateway_host must be a valid URL.');
   }
 
+  const skills = asRecord(payload.skills);
+  if (skills) {
+    if (skills.mode !== undefined && skills.mode !== 'auto' && skills.mode !== 'manual') {
+      errors.push('skills.mode must be "auto" or "manual".');
+    }
+    if (skills.limit !== undefined && skills.limit !== '') {
+      const limit = Number(skills.limit);
+      if (!Number.isInteger(limit) || limit < 1) {
+        errors.push('skills.limit must be a positive integer.');
+      }
+    }
+  }
+
   const ai = asRecord(payload.ai);
   if (ai) {
     // `ai.<role>` = save + activate for that role; `ai.provider` = save only.
@@ -303,6 +316,28 @@ class AdminRouterFactory {
     const auditRepo = AuditLogRepositoryFactory.create(db);
     const pluginSettingsRepo = PluginSettingsRepositoryFactory.create(db);
 
+    /**
+     * Skills as plugin rows, for the shared `/plugins` listing. Disk decides
+     * which skills exist; the `learned_skills` row only supplies state, so a
+     * skill that has not been synced yet still lists as enabled.
+     */
+    function listSkillPlugins() {
+      const learnedByName = new Map(learnedSkillsRepo.getAll().map((skill) => [skill.name, skill]));
+
+      return skillsRepo.get().map((skill) => {
+        const learned = learnedByName.get(skill.name);
+        return {
+          family: 'skills' as const,
+          name: skill.name,
+          enabled: learned ? learned.enabled : true,
+          description: skill.description,
+          read_when: skill.read_when ?? null,
+          content: skill.content ?? null,
+          learned_at: learned ? learned.learned_at : null,
+        };
+      });
+    }
+
     router.get('/overview', async (_req: Request, res: Response) => {
       const health = await healthCheck(logger);
 
@@ -337,7 +372,7 @@ class AdminRouterFactory {
         memories: memoryRepo.count(),
         heartbeats: beats.length,
         learnedSkills: learnedSkillsRepo.count(),
-        learnedSkillsLimit: config.LEARNED_SKILLS_LIMIT,
+        learnedSkillsLimit: config.SKILLS.LIMIT,
         skills: skillsRepo.get().length,
         outboundMessages: outboundRepo.count(),
         auditErrors: auditRepo.count({ status: 'error' }),
@@ -778,40 +813,6 @@ class AdminRouterFactory {
       res.json({ success: true });
     });
 
-    router.get('/skills', (_req: Request, res: Response) => {
-      const learnedByName = new Map(learnedSkillsRepo.getAll().map(skill => [skill.name, skill]));
-
-      const items = skillsRepo.get().map((skill) => {
-        const learned = learnedByName.get(skill.name);
-        return {
-          name: skill.name,
-          description: skill.description,
-          read_when: skill.read_when ?? null,
-          content: skill.content ?? null,
-          enabled: learned ? learned.enabled : true,
-          learned_at: learned ? learned.learned_at : null,
-        };
-      });
-
-      res.json({ items, limit: config.LEARNED_SKILLS_LIMIT });
-    });
-
-    router.patch('/skills/:name', (req: Request, res: Response) => {
-      const enabled = req.body?.enabled;
-      if (typeof enabled !== 'boolean') {
-        res.status(400).json({ error: 'enabled must be a boolean' });
-        return;
-      }
-
-      const updated = learnedSkillsRepo.setEnabled(String(req.params.name), enabled);
-      if (!updated) {
-        res.status(404).json({ error: 'Skill not found' });
-        return;
-      }
-
-      res.json({ success: true, skill: learnedSkillsRepo.getByName(String(req.params.name)) });
-    });
-
     router.post('/skills/sync', (_req: Request, res: Response) => {
       const sync = SkillSyncSingleton.getExistingInstance();
       if (!sync) {
@@ -830,13 +831,13 @@ class AdminRouterFactory {
         enabled: resolvePluginEnabled(pluginSettingsRepo, family, name),
       }));
 
-      res.json({ items });
+      res.json({ items: [...items, ...listSkillPlugins()] });
     });
 
     router.patch('/plugins/:family/:name', (req: Request, res: Response) => {
       const family = req.params.family;
-      if (family !== 'tools' && family !== 'channels') {
-        res.status(400).json({ error: "family must be 'tools' or 'channels'." });
+      if (family !== 'tools' && family !== 'channels' && family !== 'skills') {
+        res.status(400).json({ error: "family must be 'tools', 'channels' or 'skills'." });
         return;
       }
 
@@ -847,6 +848,20 @@ class AdminRouterFactory {
       }
 
       const name = String(req.params.name);
+
+      // Skills are listed alongside plugins but keep their own store: their
+      // enabled flag is a column on the `learned_skills` content row, not a
+      // `plugin_settings` entry, and they are never in the plugin catalog.
+      if (family === 'skills') {
+        if (!learnedSkillsRepo.setEnabled(name, enabled)) {
+          res.status(404).json({ error: 'Skill not found' });
+          return;
+        }
+
+        res.json({ success: true, item: { family, name, enabled } });
+        return;
+      }
+
       const catalog = PluginCatalogSingleton.getExistingInstance();
       if (!catalog.some((p) => p.family === family && p.name === name)) {
         res.status(404).json({ error: 'Plugin not found' });

@@ -4,7 +4,10 @@
   "log_level": "debug",
   "gateway_host": "http://localhost:3000",
   "allowed_domains": [],
-  "learned_skills_limit": 10,
+  "skills": {
+    "mode": "auto",
+    "limit": 10
+  },
   "heartbeat": false,
   "session": {
     "summarizer_mode": "manual",

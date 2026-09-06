@@ -13,7 +13,6 @@ import {
   PlusIcon,
   QueueIcon,
   SettingsIcon,
-  SkillsIcon,
   SunIcon,
 } from '../../components/Icons';
 import PluginsModal from './PluginsModal';
@@ -22,7 +21,6 @@ import ChatPage from './ChatPage';
 import OverviewPage from './OverviewPage';
 import MemoriesPage from './MemoriesPage';
 import HeartbeatsPage from './HeartbeatsPage';
-import SkillsPage from './SkillsPage';
 import QueuePage from './QueuePage';
 import AuditPage from './AuditPage';
 import { ChatProvider, useChat } from '../../lib/chat-context';
@@ -33,7 +31,6 @@ const NAV_ICONS = {
   overview: OverviewIcon,
   memories: MemoriesIcon,
   heartbeats: HeartbeatsIcon,
-  skills: SkillsIcon,
   queue: QueueIcon,
   audit: AuditIcon,
 };
@@ -42,7 +39,6 @@ const MAIN_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] 
   { to: '/admin/overview', label: 'Overview', icon: 'overview' },
   { to: '/admin/memories', label: 'Memories', icon: 'memories' },
   { to: '/admin/heartbeats', label: 'Beats', icon: 'heartbeats' },
-  { to: '/admin/skills', label: 'Skills', icon: 'skills' },
   { to: '/admin/queue', label: 'Queue', icon: 'queue' },
   { to: '/admin/audit', label: 'Audit', icon: 'audit' },
 ];
@@ -458,7 +454,6 @@ export default function AdminLayout() {
               <Route path="overview" element={<OverviewPage />} />
               <Route path="memories" element={<MemoriesPage />} />
               <Route path="heartbeats" element={<HeartbeatsPage />} />
-              <Route path="skills" element={<SkillsPage />} />
               <Route path="queue" element={<QueuePage />} />
               <Route path="audit" element={<AuditPage />} />
               <Route path="*" element={<Navigate to="/admin/chat" replace />} />

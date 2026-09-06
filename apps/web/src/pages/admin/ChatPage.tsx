@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { renderMarkdown } from '../../lib/markdown';
 import { useChat } from '../../lib/chat-context';
 import { usePageTitle } from '../../lib/use-page-title';
+import { chatSeparatorLabel } from '../../lib/date';
 import ImageLightbox from '../../components/ImageLightbox';
 import ProviderPicker from '../../components/ProviderPicker';
 import ContextBar from '../../components/ContextBar';
@@ -34,11 +35,24 @@ export default function ChatPage() {
 
   // Auto-scroll to the latest message whenever the conversation changes
   // (new message, streaming delta, or returning to this page with history).
-  useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight;
-    }
-  }, [messages]);
+  //
+  // Opening a chat must *start* at the newest message. The container is
+  // `scroll-smooth`, so a plain scrollTop assignment animates all the way down
+  // from the top — which reads as the chat opening on its oldest messages. The
+  // first positioning of a session is therefore an instant jump, in a layout
+  // effect so it lands before the browser paints; later updates within the same
+  // session keep the smooth follow.
+  const positionedFor = useRef<string | null | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const el = chatRef.current;
+    if (!el) return;
+
+    const isFirstPositioning = positionedFor.current !== activeSessionId;
+    el.scrollTo({ top: el.scrollHeight, behavior: isFirstPositioning ? 'instant' : 'smooth' });
+
+    if (messages.length > 0) positionedFor.current = activeSessionId;
+  }, [messages, activeSessionId]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -206,8 +220,18 @@ export default function ChatPage() {
       ) : (
         <>
       <div ref={chatRef} className="flex flex-1 flex-col gap-5 overflow-y-auto scroll-smooth px-5 py-6">
-        {messages.map((m) => (
-          <div key={m.id} className={`flex gap-2.5 animate-msg-in ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+        {messages.map((m, i) => {
+          const separator = chatSeparatorLabel(m.at, messages[i - 1]?.at);
+          return (
+          <Fragment key={m.id}>
+          {separator && (
+            <div className="flex items-center gap-3 px-1">
+              <div className="h-px flex-1 bg-[#1c1c21]" />
+              <span className="font-mono text-[11px] text-txt-3">{separator}</span>
+              <div className="h-px flex-1 bg-[#1c1c21]" />
+            </div>
+          )}
+          <div className={`flex gap-2.5 animate-msg-in ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
             {m.role === 'assistant' && (
               <div className="mt-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent font-mono text-[10px] font-medium text-white">ai</div>
             )}
@@ -272,7 +296,9 @@ export default function ChatPage() {
               {m.timestamp && <span className="px-1 font-mono text-[11px] text-txt-3">{m.timestamp}</span>}
             </div>
           </div>
-        ))}
+          </Fragment>
+          );
+        })}
       </div>
 
       {gateBlocks.length > 0 && (

@@ -1,4 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
+import { config } from '../../src/config';
+
+const getRecent = vi.fn().mockReturnValue([
+  { name: 'cat-fact', description: 'Random cat facts', content: 'Skill docs: call catfact.ninja.' },
+]);
+
+vi.mock('../../src/infrastructure/db-sqlite', () => ({
+  DatabaseServiceFactory: { create: () => ({}) },
+}));
+
+vi.mock('../../src/repositories/learned-skills', () => ({
+  LearnedSkillsRepositoryFactory: { create: () => ({ getRecent }) },
+}));
 import { ChannelHandlerFactory } from '../../src/channels/handler';
 import { MessageGateway } from '../../src/services/agents/message-gateway';
 import { splitMessage } from '../../../plugins/channels/contracts';
@@ -155,6 +168,52 @@ describe('channel-agnostic end-to-end pipeline', () => {
 
     expect(mainAgent.run).not.toHaveBeenCalled();
     expect(texts.join('\n')).toContain('/help');
+  });
+
+  it('loads a skill and falls through to the agent when a skill command is used', async () => {
+    const originalMode = config.SKILLS.MODE;
+    (config.SKILLS as { MODE: string }).MODE = 'manual';
+
+    try {
+      const { gateway, mainAgent } = makeGatewayWithFakeAgent('Cats sleep a lot.');
+      const { reply, texts } = makeReply();
+
+      await makeHandler(gateway, reply).handle('user-1', inbound({ text: '/cat-fact tell me one' }));
+
+      expect(mainAgent.run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userMessage: 'tell me one',
+          options: expect.objectContaining({
+            skillBlocks: [expect.stringContaining('Skill docs: call catfact.ninja.')],
+          }),
+        }),
+      );
+      expect(texts.join('\n')).toContain('Cats sleep a lot.');
+
+      const block = mainAgent.run.mock.calls[0][0].options.skillBlocks[0] as string;
+      expect(block).toContain('# Skill Invoked: cat-fact');
+    } finally {
+      (config.SKILLS as { MODE: string }).MODE = originalMode;
+    }
+  });
+
+  it('leaves a skill command to the agent as plain text in auto mode', async () => {
+    const originalMode = config.SKILLS.MODE;
+    (config.SKILLS as { MODE: string }).MODE = 'auto';
+
+    try {
+      const { gateway, mainAgent } = makeGatewayWithFakeAgent('Sure.');
+      const { reply } = makeReply();
+
+      await makeHandler(gateway, reply).handle('user-1', inbound({ text: '/cat-fact tell me one' }));
+
+      expect(mainAgent.run).toHaveBeenCalledWith(
+        expect.objectContaining({ userMessage: '/cat-fact tell me one' }),
+      );
+      expect(mainAgent.run.mock.calls[0][0].options.skillBlocks).toBeUndefined();
+    } finally {
+      (config.SKILLS as { MODE: string }).MODE = originalMode;
+    }
   });
 
   it('refuses a slash command from an untrusted sender before the command layer', async () => {

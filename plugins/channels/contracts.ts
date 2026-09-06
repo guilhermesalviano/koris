@@ -45,6 +45,8 @@ export type ProcessOptions = {
   sessionId?: string;
   runId?: string;
   channel?: string;
+  /** Skill documentation loaded for this turn only, by a `/<skill>` command. */
+  skillBlocks?: string[];
 };
 
 export type InboundInput = string | { text: string; images?: ImageAttachment[]; stickers?: StickerReference[] };

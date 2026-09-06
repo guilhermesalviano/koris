@@ -9,7 +9,7 @@ import { IMemoryRepository, MemoryRepositoryFactory } from './memory';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { ILogger } from '../infrastructure/logger';
 import { InjectManager } from '../services/inject-manager';
-import { SYSTEM_PROMPT, IMAGE_ANALYSIS_INSTRUCTION } from '../constants';
+import { SYSTEM_PROMPT, IMAGE_ANALYSIS_INSTRUCTION, SKILL_COMMAND_INDEX_INTRO } from '../constants';
 import { config } from '../config';
 import { sanitizePrompt, SanitizeStats } from '../utils/prompt-sanitizer';
 
@@ -98,7 +98,10 @@ class PromptRepository implements IPromptRepository {
     if (injectedContent) systemBlocks.push(`# Personality\n${injectedContent}`);
 
     const learnedSkills = this.buildLearnedSkills({ learnedSkillsEnabled });
-    if (learnedSkills) systemBlocks.push(`# Learned Skills Content\n${learnedSkills}`);
+    if (learnedSkills) {
+      const heading = config.SKILLS.MODE === 'manual' ? '# Available Skills' : '# Learned Skills Content';
+      systemBlocks.push(`${heading}\n${learnedSkills}`);
+    }
 
     const stickerRules = (toolsEnabled ?? true) ? this.buildStickerRules(channel) : '';
     if (stickerRules) systemBlocks.push(`# Learned Stickers\n${stickerRules}`);
@@ -176,10 +179,23 @@ class PromptRepository implements IPromptRepository {
       return '';
     }
 
-    const learnedSkillsLimit = config.LEARNED_SKILLS_LIMIT;
+    const skills = this.learnedSkillsRepository.getRecent(config.SKILLS.LIMIT);
 
-    return this.learnedSkillsRepository
-      .getRecent(learnedSkillsLimit)
+    if (config.SKILLS.MODE === 'manual') {
+      if (skills.length === 0) return '';
+
+      const index = skills
+        .map(skill => {
+          const description = skill.description ? ` — ${skill.description}` : '';
+          const readWhen = skill.read_when?.length ? ` (read when: ${skill.read_when.join(', ')})` : '';
+          return `- /${skill.name}${description}${readWhen}`;
+        })
+        .join('\n');
+
+      return `${SKILL_COMMAND_INDEX_INTRO}\n${index}`.slice(0, 15000);
+    }
+
+    return skills
       .map(skill => {
         const header = `### Skill: ${skill.name}`;
         const description = skill.description ? `\n${skill.description}` : '';

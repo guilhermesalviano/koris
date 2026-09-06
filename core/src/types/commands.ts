@@ -4,6 +4,12 @@ export interface CommandContext {
   source: string;
   /** Whether the sender is trusted (tools enabled). Gates config-mutating commands. */
   trusted?: boolean;
+  /**
+   * Whether learned skills are available to this sender. Mirrors
+   * `PromptRepository`: only an explicit `false` withholds them, so a channel
+   * that never sets it (the web dashboard) keeps them.
+   */
+  learnedSkillsEnabled?: boolean;
   /** Stable id of the conversation origin (chat/user), surfaced by `/whoami`. */
   originId?: string;
   session?: {
@@ -20,8 +26,14 @@ export interface CommandResult {
    * - `clear`   — rotate into a fresh, empty session
    * - `compact` — summarise this session into memory, then rotate
    * - `memory`  — reply with the summary carried into this session
+   * - `skill`   — run the turn through the agent with `skill.content` injected
    * - `none`    — nothing beyond sending `response`
    */
-  action?: 'clear' | 'compact' | 'memory' | 'none';
+  action?: 'clear' | 'compact' | 'memory' | 'skill' | 'none';
+  /**
+   * Set when `action === 'skill'`: the skill documentation to inject for this
+   * one turn, and whatever the human typed after the skill name.
+   */
+  skill?: { name: string; content: string; args: string };
   handled: boolean;
 }

@@ -34,6 +34,7 @@ function getPersonalInformation(): Record<string, string> {
 }
 
 export type SummarizerMode = 'auto' | 'manual';
+export type SkillsMode = 'auto' | 'manual';
 
 export interface AppConfig {
   LOG_LEVEL: string;
@@ -46,7 +47,17 @@ export interface AppConfig {
   DATA_DIR: string;
   GATEWAY_HOST: string;
   ALLOWED_DOMAINS: string[];
-  LEARNED_SKILLS_LIMIT: number;
+  SKILLS: {
+    /**
+     * 'auto': every enabled skill's full body is injected into the system
+     * prompt on every turn.
+     * 'manual': skills stay out of the prompt (only a one-line index remains) —
+     * the `/<skill-name>` command is the sole way one gets loaded, for that turn.
+     */
+    MODE: SkillsMode;
+    /** Maximum number of enabled skills surfaced to the LLM. */
+    LIMIT: number;
+  };
   SESSION: {
     /** Sessions auto-rotate once idle past this long, regardless of mode. */
     TTL_MS: number;
@@ -121,7 +132,13 @@ function buildConfig(): AppConfig {
     .split(',')
     .map((domain) => domain.trim().toLowerCase())
     .filter(Boolean),
-  LEARNED_SKILLS_LIMIT: Number(get('learned_skills_limit', '10')),
+  SKILLS: {
+    MODE: get('skills.mode', 'auto') === 'manual' ? 'manual' : 'auto',
+    LIMIT: (() => {
+      const raw = Number(get('skills.limit', get('learned_skills_limit', '10')));
+      return Number.isInteger(raw) && raw > 0 ? raw : 10;
+    })(),
+  },
   SESSION: {
     TTL_MS: Number(get('session.ttl_ms', String(3 * 60 * 60 * 1000))),
     SUMMARIZER_MODE: get('session.summarizer_mode', 'auto') === 'manual' ? 'manual' : 'auto',

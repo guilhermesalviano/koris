@@ -125,24 +125,17 @@ export interface OutboundResponse {
   items: OutboundMessageItem[];
 }
 
-export interface SkillItem {
-  name: string;
-  description: string;
-  read_when?: string[] | null;
-  content?: string | null;
-  enabled: boolean;
-  learned_at?: string | null;
-}
-
-export interface SkillsResponse {
-  items: SkillItem[];
-  limit: number;
-}
+export type SkillsMode = 'auto' | 'manual';
 
 export interface PluginItem {
-  family: 'tools' | 'channels';
+  family: 'tools' | 'channels' | 'skills';
   name: string;
   enabled: boolean;
+  /** Skills carry documentation with them; tools and channels do not. */
+  description?: string;
+  read_when?: string[] | null;
+  content?: string | null;
+  learned_at?: string | null;
 }
 
 export interface PluginsResponse {
