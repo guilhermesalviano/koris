@@ -6,11 +6,37 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${SCRIPT_DIR}/.venv"
-MODEL_DIR="${SCRIPT_DIR}/models/whisper-tiny"
 REQ_FILE="${SCRIPT_DIR}/requirements.txt"
 OS_NAME="$(uname -s)"
 
-echo "=== Koris Audio Sidecar Setup ==="
+# Model selection: small (recommended for Portuguese), base, or tiny
+MODEL_SIZE="${1:-small}"
+case "$MODEL_SIZE" in
+  small)
+    ARCHIVE_NAME="sherpa-onnx-whisper-small.tar.bz2"
+    MODEL_DIR="${SCRIPT_DIR}/models/whisper-small"
+    MODEL_PREFIX="small"
+    FALLBACK_URL="https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/main/${ARCHIVE_NAME}"
+    ;;
+  base)
+    ARCHIVE_NAME="sherpa-onnx-whisper-base.tar.bz2"
+    MODEL_DIR="${SCRIPT_DIR}/models/whisper-base"
+    MODEL_PREFIX="base"
+    FALLBACK_URL="https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main/${ARCHIVE_NAME}"
+    ;;
+  tiny)
+    ARCHIVE_NAME="sherpa-onnx-whisper-tiny.tar.bz2"
+    MODEL_DIR="${SCRIPT_DIR}/models/whisper-tiny"
+    MODEL_PREFIX="tiny"
+    FALLBACK_URL="https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/main/${ARCHIVE_NAME}"
+    ;;
+  *)
+    echo "Usage: $0 [small|base|tiny] (default: small)" >&2
+    exit 1
+    ;;
+esac
+
+echo "=== Koris Audio Sidecar Setup (Model: whisper-${MODEL_SIZE}) ==="
 
 # 1. Check Python 3
 if ! command -v python3 &>/dev/null; then
@@ -52,21 +78,19 @@ echo "==> Installing Python dependencies..."
 "${VENV_DIR}/bin/pip" install -r "$REQ_FILE" --quiet
 echo "[OK] Python dependencies installed."
 
-# 5. Download and unpack Whisper tiny int8 model
+# 5. Download and unpack Whisper model
 mkdir -p "$MODEL_DIR"
 
-ENCODER_FILE="${MODEL_DIR}/tiny-encoder.int8.onnx"
-DECODER_FILE="${MODEL_DIR}/tiny-decoder.int8.onnx"
-TOKENS_FILE="${MODEL_DIR}/tiny-tokens.txt"
+ENCODER_FILE="${MODEL_DIR}/${MODEL_PREFIX}-encoder.int8.onnx"
+DECODER_FILE="${MODEL_DIR}/${MODEL_PREFIX}-decoder.int8.onnx"
+TOKENS_FILE="${MODEL_DIR}/${MODEL_PREFIX}-tokens.txt"
 
 if [ -s "$ENCODER_FILE" ] && [ -s "$DECODER_FILE" ] && [ -s "$TOKENS_FILE" ]; then
-  echo "==> Whisper tiny int8 model files already exist in ${MODEL_DIR}. Skipping download."
+  echo "==> Whisper ${MODEL_SIZE} int8 model files already exist in ${MODEL_DIR}. Skipping download."
 else
-  echo "==> Downloading sherpa-onnx-whisper-tiny int8 model..."
-  ARCHIVE_NAME="sherpa-onnx-whisper-tiny.tar.bz2"
+  echo "==> Downloading sherpa-onnx-whisper-${MODEL_SIZE} int8 model..."
   TEMP_ARCHIVE="${MODEL_DIR}/${ARCHIVE_NAME}.tmp"
   PRIMARY_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/${ARCHIVE_NAME}"
-  FALLBACK_URL="https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/main/${ARCHIVE_NAME}"
 
   DOWNLOAD_SUCCESS=false
 

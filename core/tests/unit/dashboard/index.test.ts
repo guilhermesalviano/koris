@@ -512,6 +512,28 @@ describe('createAudioTranscribeHandler', () => {
     );
   });
 
+  it('passes language parameter from body or query to transcribe service', async () => {
+    mockTranscribe.mockResolvedValue({ text: 'Texto em qualquer idioma' });
+
+    const { createAudioTranscribeHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioTranscribeHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    const base64Audio = Buffer.from('fake-audio-bytes').toString('base64');
+    req.body = { audio: base64Audio, language: 'auto' };
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ text: 'Texto em qualquer idioma' });
+    expect(mockTranscribe).toHaveBeenCalledWith(
+      Buffer.from('fake-audio-bytes'),
+      { mimeType: undefined, filename: undefined, language: 'auto' },
+    );
+  });
+
   it('handles base64 data URL prefix correctly', async () => {
     mockTranscribe.mockResolvedValue({ text: 'Speech from data url' });
 

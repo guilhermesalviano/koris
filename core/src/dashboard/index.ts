@@ -319,6 +319,7 @@ class AudioTranscribeRouteHandler {
     let audioBuffer: Buffer | null = null;
     let mimeType: string | undefined;
     let filename: string | undefined;
+    let language: string | undefined;
 
     if (Buffer.isBuffer(req.body)) {
       audioBuffer = req.body;
@@ -327,12 +328,15 @@ class AudioTranscribeRouteHandler {
         mimeType = contentType.split(';')[0].trim();
       }
     } else if (req.body && typeof req.body === 'object') {
-      const body = req.body as { audio?: unknown; mimeType?: unknown; filename?: unknown };
+      const body = req.body as { audio?: unknown; mimeType?: unknown; filename?: unknown; language?: unknown };
       if (typeof body.mimeType === 'string' && body.mimeType) {
         mimeType = body.mimeType;
       }
       if (typeof body.filename === 'string' && body.filename) {
         filename = body.filename;
+      }
+      if (typeof body.language === 'string' && body.language) {
+        language = body.language;
       }
       if (typeof body.audio === 'string') {
         const audioStr = body.audio;
@@ -356,6 +360,9 @@ class AudioTranscribeRouteHandler {
     if (typeof req.query?.filename === 'string' && !filename) {
       filename = req.query.filename;
     }
+    if (typeof req.query?.language === 'string' && !language) {
+      language = req.query.language;
+    }
 
     if (!audioBuffer || audioBuffer.length === 0) {
       res.status(400).json({ error: 'Audio data is required and must not be empty' });
@@ -364,7 +371,11 @@ class AudioTranscribeRouteHandler {
 
     try {
       const service = getAudioTranscriptionService(this.logger);
-      const result = await service.transcribe(audioBuffer, { mimeType, filename });
+      const transcribeOpts: { mimeType?: string; filename?: string; language?: string } = { mimeType, filename };
+      if (language !== undefined) {
+        transcribeOpts.language = language;
+      }
+      const result = await service.transcribe(audioBuffer, transcribeOpts);
       if (result.error) {
         const statusCode = result.error.includes('disabled') ? 400 : 500;
         res.status(statusCode).json({ error: result.error });

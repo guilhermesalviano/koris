@@ -95,6 +95,28 @@ describe('AudioTranscriptionService', () => {
       const fileBlob = capturedFormData?.get('file') as Blob;
       expect(fileBlob).toBeDefined();
     });
+
+    it('allows overriding configured language via options.language (including auto)', async () => {
+      config.AUDIO.STT.ENABLED = true;
+      config.AUDIO.STT.LANGUAGE = 'pt';
+
+      let capturedFormData: FormData | undefined;
+      const fetchMock = vi.fn().mockImplementation(async (_url: string, opts: RequestInit) => {
+        capturedFormData = opts.body as FormData;
+        return new Response(JSON.stringify({ text: 'Multilingual result' }), { status: 200 });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const service = new AudioTranscriptionService();
+
+      // Overriding pt with auto should omit the language field
+      await service.transcribe(Buffer.from('audio-bytes'), { language: 'auto' });
+      expect(capturedFormData?.get('language')).toBeNull();
+
+      // Overriding with specific language code
+      await service.transcribe(Buffer.from('audio-bytes'), { language: 'es' });
+      expect(capturedFormData?.get('language')).toBe('es');
+    });
   });
 
   describe('server error / 500 response', () => {

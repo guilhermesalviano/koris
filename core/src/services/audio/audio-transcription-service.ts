@@ -11,6 +11,7 @@ export interface TranscribeOptions {
   filename?: string;
   mimeType?: string;
   signal?: AbortSignal;
+  language?: string;
 }
 
 export interface IAudioTranscriptionService {
@@ -61,8 +62,9 @@ export class AudioTranscriptionService implements IAudioTranscriptionService {
       const formData = new FormData();
       formData.append('file', blob, filename);
 
-      if (config.AUDIO.STT.LANGUAGE && config.AUDIO.STT.LANGUAGE !== 'auto') {
-        formData.append('language', config.AUDIO.STT.LANGUAGE);
+      const targetLanguage = options?.language !== undefined ? options.language : config.AUDIO.STT.LANGUAGE;
+      if (targetLanguage && targetLanguage.toLowerCase() !== 'auto') {
+        formData.append('language', targetLanguage);
       }
 
       const response = await this.fetchFn(endpoint, {

@@ -34,7 +34,85 @@ logger = logging.getLogger("audio-sidecar")
 
 # Environment and paths
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_DIR = os.getenv("SHERPA_MODEL_DIR", str(BASE_DIR / "models" / "whisper-tiny"))
+
+def resolve_model_files(base_dir: str):
+    """Locates the whisper ONNX model files and tokens.txt inside base_dir or its subdirectories."""
+    p = Path(base_dir)
+    candidates = [
+        p,
+        p / "sherpa-onnx-whisper-small",
+        p / "sherpa-onnx-whisper-base",
+        p / "sherpa-onnx-whisper-tiny",
+        p / "whisper-small",
+        p / "whisper-base",
+        p / "whisper-tiny",
+    ]
+
+    encoder_names = [
+        "small-encoder.int8.onnx", "base-encoder.int8.onnx", "tiny-encoder.int8.onnx",
+        "encoder.int8.onnx",
+        "small-encoder.onnx", "base-encoder.onnx", "tiny-encoder.onnx",
+        "encoder.onnx",
+    ]
+    decoder_names = [
+        "small-decoder.int8.onnx", "base-decoder.int8.onnx", "tiny-decoder.int8.onnx",
+        "decoder.int8.onnx",
+        "small-decoder.onnx", "base-decoder.onnx", "tiny-decoder.onnx",
+        "decoder.onnx",
+    ]
+    tokens_names = [
+        "small-tokens.txt", "base-tokens.txt", "tiny-tokens.txt",
+        "tokens.txt",
+    ]
+
+    for candidate in candidates:
+        if not candidate.is_dir():
+            continue
+
+        encoder = None
+        for name in encoder_names:
+            target = candidate / name
+            if target.is_file() and target.stat().st_size > 0:
+                encoder = str(target)
+                break
+
+        decoder = None
+        for name in decoder_names:
+            target = candidate / name
+            if target.is_file() and target.stat().st_size > 0:
+                decoder = str(target)
+                break
+
+        tokens = None
+        for name in tokens_names:
+            target = candidate / name
+            if target.is_file() and target.stat().st_size > 0:
+                tokens = str(target)
+                break
+
+        if encoder and decoder and tokens:
+            return encoder, decoder, tokens
+
+    return None, None, None
+
+def get_default_model_dir() -> str:
+    """Finds the best available model directory, prioritizing small -> base -> tiny."""
+    if "SHERPA_MODEL_DIR" in os.environ:
+        return os.environ["SHERPA_MODEL_DIR"]
+    models_root = BASE_DIR / "models"
+    for candidate_name in [
+        "whisper-small", "sherpa-onnx-whisper-small",
+        "whisper-base", "sherpa-onnx-whisper-base",
+        "whisper-tiny", "sherpa-onnx-whisper-tiny"
+    ]:
+        candidate_dir = models_root / candidate_name
+        if candidate_dir.is_dir():
+            enc, dec, tok = resolve_model_files(str(candidate_dir))
+            if enc and dec and tok:
+                return str(candidate_dir)
+    return str(models_root / "whisper-small")
+
+MODEL_DIR = get_default_model_dir()
 
 def get_num_threads() -> int:
     """Cap threads to 2-3 to prevent CPU thermal throttling on 2018 Mac mini."""
@@ -65,42 +143,6 @@ WHISPER_LANGUAGES = {
 }
 
 
-def resolve_model_files(base_dir: str):
-    """Locates the whisper ONNX model files and tokens.txt inside base_dir."""
-    p = Path(base_dir)
-    candidates = [p, p / "sherpa-onnx-whisper-tiny"]
-
-    for candidate in candidates:
-        if not candidate.is_dir():
-            continue
-
-        encoder = None
-        for name in ["tiny-encoder.int8.onnx", "encoder.int8.onnx", "tiny-encoder.onnx", "encoder.onnx"]:
-            target = candidate / name
-            if target.is_file() and target.stat().st_size > 0:
-                encoder = str(target)
-                break
-
-        decoder = None
-        for name in ["tiny-decoder.int8.onnx", "decoder.int8.onnx", "tiny-decoder.onnx", "decoder.onnx"]:
-            target = candidate / name
-            if target.is_file() and target.stat().st_size > 0:
-                decoder = str(target)
-                break
-
-        tokens = None
-        for name in ["tiny-tokens.txt", "tokens.txt"]:
-            target = candidate / name
-            if target.is_file() and target.stat().st_size > 0:
-                tokens = str(target)
-                break
-
-        if encoder and decoder and tokens:
-            return encoder, decoder, tokens
-
-    return None, None, None
-
-
 def normalize_language(lang: Optional[str]) -> str:
     """Normalizes input language string. Returns empty string for auto-detection."""
     if not lang:
@@ -129,8 +171,10 @@ def get_recognizer(language: Optional[str] = None) -> "sherpa_onnx.OfflineRecogn
             f"Whisper model files not found in '{MODEL_DIR}'. Please run setup.sh first."
         )
 
+    model_label = Path(encoder).name.split("-")[0]
     logger.info(
-        "Initializing OfflineRecognizer (whisper-tiny int8, num_threads=%d, language='%s')",
+        "Initializing OfflineRecognizer (%s int8, num_threads=%d, language='%s')",
+        model_label,
         NUM_THREADS,
         lang_key or "auto",
     )
@@ -151,7 +195,8 @@ def get_recognizer(language: Optional[str] = None) -> "sherpa_onnx.OfflineRecogn
 def load_audio_to_pcm16_samples(file_bytes: bytes, filename: Optional[str] = None) -> np.ndarray:
     """
     Converts incoming audio bytes (OGG/Opus, WebM, MP3, M4A, WAV, etc.)
-    into 16kHz mono 16-bit PCM float32 samples in range [-1.0, 1.0].
+    into 16kHz mono 16-bit PCM float32 samples in range [-1.0, 1.0],
+    applying volume normalization for superior Whisper feature extraction.
     """
     if not file_bytes:
         return np.array([], dtype=np.float32)
@@ -175,6 +220,12 @@ def load_audio_to_pcm16_samples(file_bytes: bytes, filename: Optional[str] = Non
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+
+    # Normalize audio levels (raises quiet voice recordings and boosts dynamic range)
+    try:
+        audio = audio.normalize()
+    except Exception as norm_err:
+        logger.debug("Audio normalization skipped: %s", norm_err)
 
     # Resample to 16kHz, single channel (mono), 16-bit depth (2 bytes)
     audio = audio.set_frame_rate(16000).set_channels(1).set_sample_width(2)

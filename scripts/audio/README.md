@@ -1,17 +1,21 @@
 # Koris Audio Transcription Sidecar (sherpa-onnx)
 
-A lightweight, local speech-to-text (STT) HTTP sidecar for Koris using [`sherpa-onnx`](https://github.com/k2-fsa/sherpa-onnx) and the quantized `whisper-tiny` int8 model.
+A lightweight, local speech-to-text (STT) HTTP sidecar for Koris using [`sherpa-onnx`](https://github.com/k2-fsa/sherpa-onnx) and quantized `whisper` int8 models.
 
-Optimized specifically for CPU inference on an **Intel 2018 Mac mini** (and similar low-spec host machines).
+Optimized specifically for CPU inference on an **Intel 2018 Mac mini** (and similar host machines), with tailored support for **Portuguese** and multilingual audio notes.
 
 ---
 
 ## Features
 
 - **OpenAI Compatible Endpoint**: Ingest audio at `POST /v1/audio/transcriptions` (and alias `POST /transcribe`) via `multipart/form-data`.
-- **Broad Audio Format Support**: Converts any incoming audio format (OGG/Opus, WebM, MP3, M4A, WAV, etc.) to 16kHz mono 16-bit PCM using `pydub` and `ffmpeg`.
+- **Broad Audio Format Support**: Converts any incoming audio format (OGG/Opus from WhatsApp, WebM from Web, MP3, M4A, WAV, etc.) to 16kHz mono 16-bit PCM using `pydub` and `ffmpeg`.
+- **Dynamic Gain Normalization**: Automatically normalizes audio volume prior to inference, ensuring quiet voice notes from WhatsApp are clearly transcribed.
+- **Model Options & Portuguese Quality**:
+  - `whisper-small` (*Recommended default*): ~480MB RAM footprint. Cuts word error rate dramatically (>60% reduction over tiny) and handles Brazilian accents, slang, contractions (*tá*, *pra*, *né*). Takes ~2.5–4.0s for a 5s voice note on a 2018 Mac mini.
+  - `whisper-base`: ~140MB RAM footprint. Faster alternative (~1s), good baseline accuracy.
+  - `whisper-tiny`: ~70MB RAM footprint. Ultra-lightweight for low-spec embedded hardware.
 - **CPU & Thermal Management**:
-  - Uses the quantized int8 Whisper tiny model (~70MB RAM footprint).
   - Defaults to 2 compute threads (`SHERPA_NUM_THREADS=2`) to prevent thermal throttling on Intel Core i3/i5/i7.
   - Serializes incoming transcription requests with an `asyncio.Lock()` (1 concurrent transcription at a time) to prevent CPU spikes.
 - **Fast Startup & Health Checks**: `GET /health` returns service status and loaded model details.
@@ -31,12 +35,16 @@ Optimized specifically for CPU inference on an **Intel 2018 Mac mini** (and simi
 
 ### 1. Setup Environment & Download Model
 
-Run the automated setup script to create `.venv`, install requirements, and download the `whisper-tiny` int8 model:
+To install with the recommended **`whisper-small`** model (for optimal Portuguese transcription):
 
 ```bash
 pnpm audio:setup
+# Or specifically choose model size:
+pnpm audio:setup:small   # Recommended for Portuguese
+pnpm audio:setup:base    # Faster baseline
+pnpm audio:setup:tiny    # Ultra-lightweight
 # Or directly:
-bash scripts/audio/setup.sh
+bash scripts/audio/setup.sh small
 ```
 
 ### 2. Start the Server
