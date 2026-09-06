@@ -9,6 +9,59 @@ VENV_DIR="${SCRIPT_DIR}/.venv"
 REQ_FILE="${SCRIPT_DIR}/requirements.txt"
 OS_NAME="$(uname -s)"
 
+# TTS mode: download a Piper voice pair (.onnx + .onnx.json) and exit.
+# No virtualenv or Whisper model is needed for this — the voice files are
+# consumed by piper-tts inside the sidecar container.
+if [ "${1:-}" = "tts" ]; then
+  VOICE_NAME="${2:-en_US-lessac-medium}"
+  PIPER_DIR="${SCRIPT_DIR}/models/piper"
+
+  case "$VOICE_NAME" in
+    en_US-lessac-medium) HF_SUBPATH="en/en_US/lessac/medium" ;;
+    en_US-amy-medium)    HF_SUBPATH="en/en_US/amy/medium" ;;
+    en_GB-alba-medium)   HF_SUBPATH="en/en_GB/alba/medium" ;;
+    *)
+      echo "Unknown Piper voice '${VOICE_NAME}'." >&2
+      echo "Add its Hugging Face subpath to scripts/audio/setup.sh, or place" >&2
+      echo "${VOICE_NAME}.onnx and ${VOICE_NAME}.onnx.json into ${PIPER_DIR}/ manually." >&2
+      exit 1
+      ;;
+  esac
+
+  BASE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/${HF_SUBPATH}"
+  mkdir -p "$PIPER_DIR"
+
+  echo "=== Koris Audio Sidecar Setup (Piper voice: ${VOICE_NAME}) ==="
+
+  for ext in onnx onnx.json; do
+    TARGET="${PIPER_DIR}/${VOICE_NAME}.${ext}"
+    if [ -s "$TARGET" ]; then
+      echo "==> ${VOICE_NAME}.${ext} already exists in ${PIPER_DIR}. Skipping download."
+      continue
+    fi
+    URL="${BASE_URL}/${VOICE_NAME}.${ext}"
+    echo "==> Downloading ${URL}"
+    if command -v curl &>/dev/null; then
+      curl -fSL --progress-bar -o "$TARGET" "$URL"
+    elif command -v wget &>/dev/null; then
+      wget -q --show-progress -O "$TARGET" "$URL"
+    else
+      echo "Error: curl or wget is required to download voice files." >&2
+      exit 1
+    fi
+    if [ ! -s "$TARGET" ]; then
+      rm -f "$TARGET"
+      echo "Error: Failed to download ${URL}" >&2
+      exit 1
+    fi
+  done
+
+  echo ""
+  echo "=== Piper voice ready in ${PIPER_DIR} ==="
+  echo "Enable TTS by setting audio.tts.enabled = true in koris.json, then: pnpm audio:start"
+  exit 0
+fi
+
 # Model selection: small (recommended for Portuguese), base, or tiny
 MODEL_SIZE="${1:-small}"
 case "$MODEL_SIZE" in

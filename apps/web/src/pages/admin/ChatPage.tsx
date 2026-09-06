@@ -1,13 +1,13 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { renderMarkdown } from '../../lib/markdown';
-import { useChat } from '../../lib/chat-context';
+import { renderMarkdown, stripMarkdown } from '../../lib/markdown';
+import { useChat, type ChatMessage } from '../../lib/chat-context';
 import { usePageTitle } from '../../lib/use-page-title';
 import { chatSeparatorLabel } from '../../lib/date';
 import ImageLightbox from '../../components/ImageLightbox';
 import ProviderPicker from '../../components/ProviderPicker';
 import ContextBar from '../../components/ContextBar';
-import { AttachIcon, BrokenImageIcon, CloseIcon, MicIcon, RetryIcon, SendIcon, SquareIcon, StopIcon } from '../../components/Icons';
+import { AttachIcon, BrokenImageIcon, CloseIcon, MicIcon, RetryIcon, SendIcon, SpeakerIcon, SquareIcon, StopIcon } from '../../components/Icons';
 import type { ImageAttachment } from '../../lib/types';
 
 const MAX_CHARS = 4000;
@@ -56,16 +56,34 @@ export default function ChatPage() {
     }
   });
 
+  const [speakingId, setSpeakingId] = useState<number | null>(null);
+  const [loadingSpeakId, setLoadingSpeakId] = useState<number | null>(null);
+  const [autoPlay, setAutoPlay] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('koris_voice_autoplay') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const isDiscardingRef = useRef(false);
   const autoSendRef = useRef(autoSend);
+  const autoPlayRef = useRef(autoPlay);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speechCacheRef = useRef<Map<number, string>>(new Map());
+  const lastAutoPlayedIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     autoSendRef.current = autoSend;
   }, [autoSend]);
+
+  useEffect(() => {
+    autoPlayRef.current = autoPlay;
+  }, [autoPlay]);
 
   function showToast(msg: string) {
     if (setToast) setToast(msg);
@@ -226,6 +244,84 @@ export default function ChatPage() {
       setIsTranscribing(false);
     }
   }
+
+  function stopPlayback() {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    setSpeakingId(null);
+  }
+
+  async function handleSpeak(m: ChatMessage) {
+    if (speakingId === m.id) {
+      stopPlayback();
+      return;
+    }
+
+    stopPlayback();
+
+    let url = speechCacheRef.current.get(m.id);
+    if (!url) {
+      setLoadingSpeakId(m.id);
+      try {
+        const res = await fetch('/api/audio/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: stripMarkdown(m.content) }),
+        });
+
+        if (!res.ok) {
+          const isJson = (res.headers.get('content-type') || '').includes('application/json');
+          const data = isJson ? await res.json().catch(() => ({})) : null;
+          showToast((data && (data as { error?: string }).error) || `Speech failed (${res.status})`);
+          return;
+        }
+
+        url = URL.createObjectURL(await res.blob());
+        speechCacheRef.current.set(m.id, url);
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Speech failed');
+        return;
+      } finally {
+        setLoadingSpeakId(null);
+      }
+    }
+
+    try {
+      const audio = audioRef.current ?? new Audio();
+      audioRef.current = audio;
+      audio.src = url;
+      audio.onended = () => setSpeakingId(null);
+      setSpeakingId(m.id);
+      await audio.play();
+    } catch (err) {
+      setSpeakingId(null);
+      if (err instanceof Error && err.name === 'AbortError') return;
+      showToast(err instanceof Error ? err.message : 'Audio playback failed');
+    }
+  }
+
+  useEffect(() => {
+    if (!autoPlayRef.current || streaming) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== 'assistant' || last.pending || last.error || !last.content) return;
+    if (lastAutoPlayedIdRef.current === last.id) return;
+    lastAutoPlayedIdRef.current = last.id;
+    void handleSpeak(last);
+  }, [messages, streaming]);
+
+  useEffect(() => {
+    const cache = speechCacheRef.current;
+    return () => {
+      audioRef.current?.pause();
+      for (const url of cache.values()) {
+        URL.revokeObjectURL(url);
+      }
+      cache.clear();
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -496,6 +592,23 @@ export default function ChatPage() {
             />
             <span>Auto-send</span>
           </label>
+          <label className="flex cursor-pointer items-center gap-1.5 select-none hover:text-txt-2 transition-colors" title="Automatically play assistant replies as speech">
+            <input
+              type="checkbox"
+              checked={autoPlay}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setAutoPlay(checked);
+                try {
+                  localStorage.setItem('koris_voice_autoplay', String(checked));
+                } catch {
+                  // ignore localStorage errors
+                }
+              }}
+              className="h-3 w-3 rounded border-strong bg-bg-2 text-accent accent-accent focus:ring-1 focus:ring-accent"
+            />
+            <span>Auto-play replies</span>
+          </label>
         </div>
         <div className="flex min-w-0 items-center gap-2">
           <span className="hidden shrink-0 sm:inline">{footerHint}</span>
@@ -590,6 +703,31 @@ export default function ChatPage() {
                 >
                   <RetryIcon className="h-3 w-3 fill-none stroke-current" />
                   Resend
+                </button>
+              )}
+              {m.role === 'assistant' && !m.pending && !m.error && m.content && !streaming && (
+                <button
+                  onClick={() => void handleSpeak(m)}
+                  disabled={loadingSpeakId === m.id}
+                  title={speakingId === m.id ? 'Stop playback' : 'Play as speech'}
+                  className="mt-0.5 flex items-center gap-1 self-start rounded-lg border border-strong bg-bg-3 px-2 py-1 font-mono text-[11px] text-txt-2 transition-colors duration-150 hover:border-accent hover:text-accent-2 disabled:opacity-50"
+                >
+                  {loadingSpeakId === m.id ? (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-accent animate-ping" />
+                      Loading…
+                    </>
+                  ) : speakingId === m.id ? (
+                    <>
+                      <SquareIcon className="h-3 w-3 fill-current" />
+                      Stop
+                    </>
+                  ) : (
+                    <>
+                      <SpeakerIcon className="h-3 w-3 fill-none stroke-current" />
+                      Play
+                    </>
+                  )}
                 </button>
               )}
               {m.timestamp && <span className="px-1 font-mono text-[11px] text-txt-3">{m.timestamp}</span>}

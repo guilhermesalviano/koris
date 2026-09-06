@@ -1,8 +1,13 @@
-# Koris Audio Transcription Sidecar (sherpa-onnx)
+# Koris Audio Sidecar (sherpa-onnx + Piper)
 
-A lightweight, local speech-to-text (STT) HTTP sidecar for Koris using [`sherpa-onnx`](https://github.com/k2-fsa/sherpa-onnx) and quantized `whisper` int8 models.
+A lightweight, local HTTP sidecar for Koris providing:
 
-Optimized specifically for CPU inference on an **Intel 2018 Mac mini** (and similar host machines), with tailored support for **Portuguese** and multilingual audio notes.
+- **Speech-to-text (STT)** via [`sherpa-onnx`](https://github.com/k2-fsa/sherpa-onnx) and quantized `whisper` int8 models.
+- **Text-to-speech (TTS)** via [Piper](https://github.com/OHF-Voice/piper1-gpl) neural voices.
+
+Both run in the **same container / same port** (`6006`). Optimized for CPU inference on an **Intel 2018 Mac mini** (and similar host machines), with tailored STT support for **Portuguese** and multilingual audio notes.
+
+> **CPU note:** STT and TTS each serialize their own requests with a separate `asyncio.Lock`, but they share one uvicorn process — a transcription and a synthesis running at the same time will contend for CPU on the host.
 
 ---
 
@@ -18,7 +23,8 @@ Optimized specifically for CPU inference on an **Intel 2018 Mac mini** (and simi
 - **CPU & Thermal Management**:
   - Defaults to 2 compute threads (`SHERPA_NUM_THREADS=2`) to prevent thermal throttling on Intel Core i3/i5/i7.
   - Serializes incoming transcription requests with an `asyncio.Lock()` (1 concurrent transcription at a time) to prevent CPU spikes.
-- **Fast Startup & Health Checks**: `GET /health` returns service status and loaded model details.
+- **Fast Startup & Health Checks**: `GET /health` returns service status, loaded model details, and Piper TTS voice state.
+- **Text-to-Speech (Piper)**: `POST /v1/audio/speech` (and alias `POST /synthesize`) takes a JSON body and returns `audio/wav` bytes. Voices are `.onnx` + `.onnx.json` pairs from [`rhasspy/piper-voices`](https://huggingface.co/rhasspy/piper-voices), stored in `./models/piper/`. Default voice: `en_US-lessac-medium`.
 
 ---
 
@@ -56,6 +62,18 @@ pnpm audio:setup:tiny    # Ultra-lightweight (~70MB)
 ```
 
 The container automatically mounts `./models` and auto-detects the highest capability model present.
+
+### 3. Download a Piper TTS Voice (Optional)
+Only needed if you enable text-to-speech (`audio.tts.enabled = true` in `koris.json`). `pnpm audio:start` auto-downloads the default voice if `./models/piper/` is empty; you can also fetch it explicitly:
+
+```bash
+pnpm audio:setup:tts     # Default voice en_US-lessac-medium (~63MB)
+# other known voices:
+bash scripts/audio/setup.sh tts en_US-amy-medium
+bash scripts/audio/setup.sh tts en_GB-alba-medium
+```
+
+Voice files land in `./models/piper/<voice>.onnx` (+ `.onnx.json`). To use a voice not in the built-in list, add its Hugging Face subpath to `scripts/audio/setup.sh`, or drop the two files into `./models/piper/` by hand.
 
 ---
 
@@ -107,6 +125,25 @@ Optional parameters:
 - `temperature`: float (ignored by greedy search, accepted for OpenAI SDK compatibility).
 - `response_format`: `"json"` (default, returns `{"text": ...}`) or `"text"` (returns plain text string).
 
+### 3. OpenAI Text-to-Speech (`/v1/audio/speech` or `/synthesize`)
+
+Send a JSON body; the response is raw `audio/wav` bytes:
+
+```bash
+curl http://127.0.0.1:6006/v1/audio/speech \
+  -H 'Content-Type: application/json' \
+  -d '{"input": "Hello world", "voice": "en_US-lessac-medium"}' \
+  --output out.wav
+```
+
+Body fields:
+- `input` (required): the text to speak. Rejected with `400` if empty or longer than `PIPER_MAX_CHARS`.
+- `voice`: voice name, matching a file in `./models/piper/`. Defaults to `PIPER_DEFAULT_VOICE`.
+- `speed`: `1.0` = normal, `>1.0` faster, `<1.0` slower (mapped internally to Piper `length_scale`).
+- `model`, `response_format`: accepted for OpenAI SDK compatibility (only WAV is produced).
+
+Returns `503` if `piper-tts` is not installed or the requested voice files are missing.
+
 ---
 
 ## Environment Variables
@@ -117,6 +154,9 @@ Optional parameters:
 | `PORT` | `6006` | Port to bind HTTP server |
 | `SHERPA_NUM_THREADS` | `2` | Number of CPU compute threads for ONNX runtime (1–4) |
 | `SHERPA_MODEL_DIR` | `scripts/audio/models/whisper-tiny` | Directory containing model `.onnx` and `tokens.txt` files |
+| `PIPER_VOICE_DIR` | `scripts/audio/models/piper` | Directory containing Piper `<voice>.onnx` + `<voice>.onnx.json` pairs |
+| `PIPER_DEFAULT_VOICE` | `en_US-lessac-medium` | Voice used when a request omits `voice` |
+| `PIPER_MAX_CHARS` | `6000` | Max `input` length accepted by `/v1/audio/speech` |
 | `LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 
 ---

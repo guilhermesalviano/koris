@@ -14,6 +14,7 @@ import type { ImageAttachment } from '../types/messages';
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { getAudioTranscriptionService } from '../services/audio/audio-transcription-service';
+import { getSpeechSynthesisService } from '../services/audio/audio-synthesis-service';
 import { AdminRouterFactory } from './admin';
 import { activeRunsRegistry } from './active-runs';
 
@@ -390,6 +391,47 @@ class AudioTranscribeRouteHandler {
   };
 }
 
+class SpeechSynthesizeRouteHandler {
+  constructor(private readonly logger: ILogger) {}
+
+  readonly handle = async (req: Request, res: Response): Promise<void> => {
+    let text: string | undefined;
+    let voice: string | undefined;
+
+    if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+      const body = req.body as { text?: unknown; voice?: unknown };
+      if (typeof body.text === 'string') {
+        text = body.text;
+      }
+      if (typeof body.voice === 'string' && body.voice) {
+        voice = body.voice;
+      }
+    }
+
+    if (!text || !text.trim()) {
+      res.status(400).json({ error: 'Text is required and must not be empty' });
+      return;
+    }
+
+    try {
+      const service = getSpeechSynthesisService(this.logger);
+      const result = await service.synthesize(text, voice ? { voice } : undefined);
+      if (result.error || !result.audio) {
+        const errorMsg = result.error || 'Audio synthesis produced no audio.';
+        const statusCode = /disabled|exceeds maximum length/.test(errorMsg) ? 400 : 500;
+        res.status(statusCode).json({ error: errorMsg });
+        return;
+      }
+      res.status(200).setHeader('Content-Type', result.contentType);
+      res.send(result.audio);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`[SpeechSynthesizeRouteHandler] Audio synthesis error: ${message}`);
+      res.status(500).json({ error: message });
+    }
+  };
+}
+
 class DashboardServer implements WebServerHandle {
   private server: Server | null = null;
   private boundPort = 0;
@@ -463,6 +505,7 @@ class DashboardServer implements WebServerHandle {
     const chatHandler = new ChatRouteHandler(this.gateway);
     const healthHandler = new HealthRouteHandler(this.logger);
     const audioTranscribeHandler = new AudioTranscribeRouteHandler(this.logger);
+    const audioSpeakHandler = new SpeechSynthesizeRouteHandler(this.logger);
     const adminRouter = AdminRouterFactory.create(this.logger, this.db, this.gateway);
 
     app.use(express.json({ limit: '25mb' }));
@@ -471,6 +514,7 @@ class DashboardServer implements WebServerHandle {
     app.post('/api/chat', chatHandler.handle);
     app.post('/api/chat/cancel', chatHandler.cancel);
     app.post('/api/audio/transcribe', audioTranscribeHandler.handle);
+    app.post('/api/audio/speak', audioSpeakHandler.handle);
     app.use('/api/admin', adminRouter);
     app.get('/health', healthHandler.handle);
 
@@ -524,6 +568,10 @@ function createAudioTranscribeHandler(logger: ILogger) {
   return new AudioTranscribeRouteHandler(logger).handle;
 }
 
+function createAudioSpeakHandler(logger: ILogger) {
+  return new SpeechSynthesizeRouteHandler(logger).handle;
+}
+
 async function startWebServer(
   logger: ILogger,
   gateway: IMessageGateway,
@@ -544,5 +592,7 @@ export {
   createChatCancelHandler,
   AudioTranscribeRouteHandler,
   createAudioTranscribeHandler,
+  SpeechSynthesizeRouteHandler,
+  createAudioSpeakHandler,
   startWebServer,
 };

@@ -37,6 +37,13 @@ if [ "$has_model" = "false" ]; then
   bash "${SCRIPT_DIR}/setup.sh" small
 fi
 
+# 2b. Check for a Piper TTS voice, auto-download the default if missing
+if ! ls "${MODELS_DIR}"/piper/*.onnx &>/dev/null 2>&1; then
+  echo "==> No Piper voice found in ${MODELS_DIR}/piper."
+  echo "==> Automatically downloading default Piper voice..."
+  bash "${SCRIPT_DIR}/setup.sh" tts
+fi
+
 # 3. Handle --restart flag
 if [ "${1:-}" = "--restart" ]; then
   echo "Restarting audio sidecar container..."
