@@ -40,6 +40,7 @@ import { gateErrorForUrl } from './services/security/gate';
 import { PluginSettingsRepositoryFactory } from './repositories/plugin-settings';
 import { migrateLegacyPluginEnabledFlags, resolvePluginEnabled, type PluginIdentity } from './services/plugins/plugin-enablement';
 import { PluginCatalogSingleton } from './services/plugins/plugin-catalog-singleton';
+import { getAudioTranscriptionService } from './services/audio/audio-transcription-service';
 
 const logger = LoggerFactory.create();
 const MODES = ['tui', 'web'] as const;
@@ -53,6 +54,7 @@ function createPluginContext(logger: ILogger, gateway: IMessageGateway, db: IDat
     pluginEnablement: {
       isEnabled: (name) => resolvePluginEnabled(pluginSettingsRepo, 'channels', name),
     },
+    audioTranscriber: getAudioTranscriptionService(logger),
   };
 }
 

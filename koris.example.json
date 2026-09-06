@@ -40,6 +40,14 @@
       "health_ms": 5000
     }
   },
+  "audio": {
+    "stt": {
+      "enabled": false,
+      "endpoint": "http://127.0.0.1:6006/v1/audio/transcriptions",
+      "language": "auto",
+      "timeout_ms": 30000
+    }
+  },
   "github": {
     "token": "ghp_xxx",
     "owner": "your-github-username-or-org"

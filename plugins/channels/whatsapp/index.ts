@@ -6,6 +6,7 @@ import { NOT_AUTHORIZED_MESSAGE } from './constants';
 import { _resetWhatsAppDedupeForTesting } from './dedupe';
 import { WhatsAppChannelFactory } from './factory';
 import { configureWhatsAppRuntime } from './runtime';
+import { whatsappState } from './state';
 import type { IWhatsAppChannel } from './types';
 
 const whatsappChannel = WhatsAppChannelFactory.create();
@@ -48,9 +49,11 @@ export const liveChannel: LiveChannelDescriptor = {
 export function create(context: PluginContext, configOverride?: WhatsAppPluginConfig): Plugin {
   const cfg = configOverride ?? loadWhatsAppConfig();
 
+  whatsappState.audioTranscriber = context.audioTranscriber;
   configureWhatsAppRuntime({
     channelHandler: context.channelHandler,
     config: cfg,
+    audioTranscriber: context.audioTranscriber,
   });
 
   return createWhatsAppPlugin({

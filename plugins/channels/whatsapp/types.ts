@@ -1,11 +1,12 @@
 import type { WAMessage } from '@whiskeysockets/baileys';
-import type { ILogger, IMessageGateway, ImageAttachment, StickerReference } from '../contracts';
+import type { AudioTranscriber, ILogger, IMessageGateway, ImageAttachment, StickerReference } from '../contracts';
 
 export interface WhatsAppChannelStartOptions {
   authFolder: string;
   botNumber: string;
   gateway: IMessageGateway;
   logger: ILogger;
+  audioTranscriber?: AudioTranscriber;
 }
 
 export interface WhatsAppPluginOptions {
@@ -84,4 +85,11 @@ export interface QuotedMessageInfo {
   quotedMessage: Record<string, unknown>;
   stanzaId?: string;
   participant?: string;
+}
+
+export interface ExtractedAudio {
+  mimetype?: string;
+  seconds?: number;
+  ptt?: boolean;
+  message: WAMessage;
 }

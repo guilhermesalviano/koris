@@ -30,6 +30,7 @@ export function extractMentionedJids(msg: WAMessage): string[] {
   return [
     ...readMentionedJids(content['extendedTextMessage']),
     ...readMentionedJids(content['imageMessage']),
+    ...readMentionedJids(content['audioMessage']),
   ];
 }
 

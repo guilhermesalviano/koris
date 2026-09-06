@@ -240,9 +240,17 @@ export interface IPluginEnablementGateway {
   isEnabled(name: string): boolean;
 }
 
+export interface AudioTranscriber {
+  transcribe(
+    audio: Buffer,
+    options?: { filename?: string; mimeType?: string }
+  ): Promise<{ text: string; error?: string }>;
+}
+
 export interface PluginContext {
   logger: ILogger;
   gateway: IMessageGateway;
   channelHandler: IChannelHandlerFactory;
   pluginEnablement: IPluginEnablementGateway;
+  audioTranscriber?: AudioTranscriber;
 }
