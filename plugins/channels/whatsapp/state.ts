@@ -1,4 +1,4 @@
-import type { IChannelHandlerFactory } from '../contracts';
+import type { AudioTranscriber, IChannelHandlerFactory } from '../contracts';
 import type { SocketLike } from './types';
 
 export const whatsappState = {
@@ -10,4 +10,5 @@ export const whatsappState = {
   whitelist: [] as string[],
   allowUntrusted: false,
   activeSocket: null as SocketLike | null,
+  audioTranscriber: undefined as AudioTranscriber | undefined,
 };

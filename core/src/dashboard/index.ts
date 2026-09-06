@@ -13,6 +13,7 @@ import { IMessageGateway } from '../services/agents/message-gateway';
 import type { ImageAttachment } from '../types/messages';
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
+import { getAudioTranscriptionService } from '../services/audio/audio-transcription-service';
 import { AdminRouterFactory } from './admin';
 import { activeRunsRegistry } from './active-runs';
 
@@ -311,6 +312,84 @@ class ChatRouteHandler {
   }
 }
 
+class AudioTranscribeRouteHandler {
+  constructor(private readonly logger: ILogger) {}
+
+  readonly handle = async (req: Request, res: Response): Promise<void> => {
+    let audioBuffer: Buffer | null = null;
+    let mimeType: string | undefined;
+    let filename: string | undefined;
+    let language: string | undefined;
+
+    if (Buffer.isBuffer(req.body)) {
+      audioBuffer = req.body;
+      const contentType = req.headers['content-type'];
+      if (typeof contentType === 'string') {
+        mimeType = contentType.split(';')[0].trim();
+      }
+    } else if (req.body && typeof req.body === 'object') {
+      const body = req.body as { audio?: unknown; mimeType?: unknown; filename?: unknown; language?: unknown };
+      if (typeof body.mimeType === 'string' && body.mimeType) {
+        mimeType = body.mimeType;
+      }
+      if (typeof body.filename === 'string' && body.filename) {
+        filename = body.filename;
+      }
+      if (typeof body.language === 'string' && body.language) {
+        language = body.language;
+      }
+      if (typeof body.audio === 'string') {
+        const audioStr = body.audio;
+        if (audioStr.startsWith('data:')) {
+          const match = audioStr.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            mimeType = mimeType || match[1];
+            audioBuffer = Buffer.from(match[2], 'base64');
+          } else {
+            audioBuffer = Buffer.from(audioStr, 'base64');
+          }
+        } else {
+          audioBuffer = Buffer.from(audioStr, 'base64');
+        }
+      }
+    }
+
+    if (typeof req.query?.mimeType === 'string' && !mimeType) {
+      mimeType = req.query.mimeType;
+    }
+    if (typeof req.query?.filename === 'string' && !filename) {
+      filename = req.query.filename;
+    }
+    if (typeof req.query?.language === 'string' && !language) {
+      language = req.query.language;
+    }
+
+    if (!audioBuffer || audioBuffer.length === 0) {
+      res.status(400).json({ error: 'Audio data is required and must not be empty' });
+      return;
+    }
+
+    try {
+      const service = getAudioTranscriptionService(this.logger);
+      const transcribeOpts: { mimeType?: string; filename?: string; language?: string } = { mimeType, filename };
+      if (language !== undefined) {
+        transcribeOpts.language = language;
+      }
+      const result = await service.transcribe(audioBuffer, transcribeOpts);
+      if (result.error) {
+        const statusCode = result.error.includes('disabled') ? 400 : 500;
+        res.status(statusCode).json({ error: result.error });
+        return;
+      }
+      res.status(200).json({ text: result.text });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`[AudioTranscribeRouteHandler] Audio transcription error: ${message}`);
+      res.status(500).json({ error: message });
+    }
+  };
+}
+
 class DashboardServer implements WebServerHandle {
   private server: Server | null = null;
   private boundPort = 0;
@@ -383,12 +462,15 @@ class DashboardServer implements WebServerHandle {
     const indexHandler = new IndexRouteHandler(publicDir);
     const chatHandler = new ChatRouteHandler(this.gateway);
     const healthHandler = new HealthRouteHandler(this.logger);
+    const audioTranscribeHandler = new AudioTranscribeRouteHandler(this.logger);
     const adminRouter = AdminRouterFactory.create(this.logger, this.db, this.gateway);
 
     app.use(express.json({ limit: '25mb' }));
+    app.use(express.raw({ type: ['audio/*', 'application/octet-stream'], limit: '25mb' }));
     app.use(express.static(publicDir));
     app.post('/api/chat', chatHandler.handle);
     app.post('/api/chat/cancel', chatHandler.cancel);
+    app.post('/api/audio/transcribe', audioTranscribeHandler.handle);
     app.use('/api/admin', adminRouter);
     app.get('/health', healthHandler.handle);
 
@@ -438,6 +520,10 @@ function createChatCancelHandler(gateway: IMessageGateway) {
   return new ChatRouteHandler(gateway).cancel;
 }
 
+function createAudioTranscribeHandler(logger: ILogger) {
+  return new AudioTranscribeRouteHandler(logger).handle;
+}
+
 async function startWebServer(
   logger: ILogger,
   gateway: IMessageGateway,
@@ -456,5 +542,7 @@ export {
   createHealthHandler,
   createChatHandler,
   createChatCancelHandler,
+  AudioTranscribeRouteHandler,
+  createAudioTranscribeHandler,
   startWebServer,
 };

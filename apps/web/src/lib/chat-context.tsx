@@ -39,7 +39,8 @@ interface ChatContextValue {
   serverHealthy: boolean;
   historyLoaded: boolean;
   toast: string | null;
-  submit: () => Promise<void>;
+  setToast: (msg: string | null) => void;
+  submit: (overrideText?: string) => Promise<void>;
   resendLast: () => Promise<void>;
   cancel: () => void;
   fillPrompt: (text: string) => void;
@@ -481,8 +482,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (sid) void cancelChat(sid);
   }, []);
 
-  const submit = useCallback(async () => {
-    const text = input;
+  const submit = useCallback(async (overrideText?: string) => {
+    const text = typeof overrideText === 'string' ? overrideText : input;
     const images = attachments;
     if ((!text.trim() && images.length === 0) || streaming) return;
     setInput('');
@@ -514,6 +515,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     serverHealthy,
     historyLoaded,
     toast,
+    setToast,
     submit,
     resendLast,
     cancel,

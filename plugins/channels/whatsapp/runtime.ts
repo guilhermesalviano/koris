@@ -1,4 +1,4 @@
-import type { IChannelHandlerFactory } from '../contracts';
+import type { AudioTranscriber, IChannelHandlerFactory } from '../contracts';
 import { loadWhatsAppConfig, type WhatsAppPluginConfig } from './config';
 import { normalizeNumber } from './mention';
 import { whatsappState } from './state';
@@ -15,11 +15,15 @@ import { whatsappState } from './state';
 export function configureWhatsAppRuntime(cfg: {
   channelHandler: IChannelHandlerFactory;
   config?: WhatsAppPluginConfig;
+  audioTranscriber?: AudioTranscriber;
 }): WhatsAppPluginConfig {
   const resolved = cfg.config ?? loadWhatsAppConfig();
   whatsappState.channelHandler = cfg.channelHandler;
   whatsappState.botNumber = normalizeNumber(resolved.botNumber);
   whatsappState.whitelist = resolved.whitelist.split(',').map((num) => num.trim()).filter(Boolean);
   whatsappState.allowUntrusted = resolved.allowUnlistedSenders;
+  if ('audioTranscriber' in cfg) {
+    whatsappState.audioTranscriber = cfg.audioTranscriber;
+  }
   return resolved;
 }

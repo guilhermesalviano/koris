@@ -112,6 +112,14 @@ export interface AppConfig {
     };
     PROMPT_SANITIZER: boolean;
   };
+  AUDIO: {
+    STT: {
+      ENABLED: boolean;
+      ENDPOINT: string;
+      LANGUAGE?: string;
+      TIMEOUT_MS: number;
+    };
+  };
   GITHUB: {
     TOKEN: string;
     OWNER: string;
@@ -192,6 +200,17 @@ function buildConfig(): AppConfig {
     PROMPT_SANITIZER: get('ai.prompt_sanitizer', 'false') === 'true',
     };
   })(),
+  AUDIO: {
+    STT: {
+      ENABLED: get('audio.stt.enabled', 'false') === 'true',
+      ENDPOINT: get('audio.stt.endpoint', 'http://127.0.0.1:6006/v1/audio/transcriptions'),
+      LANGUAGE: get('audio.stt.language', 'auto'),
+      TIMEOUT_MS: (() => {
+        const raw = Number(get('audio.stt.timeout_ms', '30000'));
+        return Number.isFinite(raw) && raw > 0 ? raw : 30000;
+      })(),
+    },
+  },
   GITHUB: {
     TOKEN: get('github.token', ''),
     OWNER: get('github.owner', ''),

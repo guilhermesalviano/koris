@@ -4,12 +4,14 @@ export interface TestConfigPatch {
   heartbeatEnabled?: boolean;
   summarizerMode?: SummarizerMode;
   subagentsParallel?: boolean;
+  audioSttEnabled?: boolean;
 }
 
 const DEFAULTS: Required<TestConfigPatch> = {
   heartbeatEnabled: true,
   summarizerMode: 'auto',
   subagentsParallel: false,
+  audioSttEnabled: false,
 };
 
 export function applyTestConfigDefaults(patch: TestConfigPatch = {}): void {
@@ -32,4 +34,12 @@ export function applyTestConfigDefaults(patch: TestConfigPatch = {}): void {
     configurable: true,
     writable: true,
   });
+
+  if (config.AUDIO?.STT) {
+    Object.defineProperty(config.AUDIO.STT, 'ENABLED', {
+      value: values.audioSttEnabled,
+      configurable: true,
+      writable: true,
+    });
+  }
 }
