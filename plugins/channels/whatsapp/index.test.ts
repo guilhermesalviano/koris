@@ -37,6 +37,7 @@ vi.mock('@whiskeysockets/baileys', () => ({
 vi.mock('qrcode-terminal', () => ({ generate: vi.fn() }));
 
 import { WhatsAppChannelFactory, configureWhatsAppRuntime, _resetWhatsAppDedupeForTesting, create } from './index';
+import { WhatsAppChannel } from './channel';
 import { _resetContactNamesForTesting } from './contact-names';
 import { whatsappState } from './state';
 import type { ChannelDefinition } from '../contracts';
@@ -147,6 +148,23 @@ describe('whatsapp plugin', () => {
       '11999999999', '511999999999', '5511999999999', '55111999999999',
     );
     expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'oi' });
+  });
+
+  it('sends audio as a push-to-talk voice note, forcing the opus codec mimetype', async () => {
+    await start('n/a');
+
+    await new WhatsAppChannel().sendAudio(
+      '5511999999999@s.whatsapp.net',
+      Buffer.from('ogg-opus-bytes'),
+      { mimeType: 'audio/ogg', seconds: 3.4 },
+    );
+
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', {
+      audio: expect.any(Buffer),
+      ptt: true,
+      mimetype: 'audio/ogg; codecs=opus',
+      seconds: 3,
+    });
   });
 
   it('splits a reply longer than the WhatsApp chunk limit into multiple sends', async () => {

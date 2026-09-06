@@ -13,6 +13,7 @@ import { IMessageGateway } from '../services/agents/message-gateway';
 import type { ImageAttachment } from '../types/messages';
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
+import { SessionRepositoryFactory } from '../repositories/session';
 import { getAudioTranscriptionService } from '../services/audio/audio-transcription-service';
 import { getSpeechSynthesisService } from '../services/audio/audio-synthesis-service';
 import { AdminRouterFactory } from './admin';
@@ -95,7 +96,22 @@ class HealthRouteHandler {
 }
 
 class ChatRouteHandler {
-  constructor(private readonly gateway: IMessageGateway) {}
+  constructor(
+    private readonly gateway: IMessageGateway,
+    private readonly db?: IDatabaseService,
+  ) {}
+
+  private readResponseMode(sessionId: string | undefined): 'text' | 'voice' {
+    if (!sessionId || !this.db) {
+      return 'text';
+    }
+    try {
+      const session = SessionRepositoryFactory.create(this.db).findById(sessionId);
+      return session?.metadata?.responseMode === 'voice' ? 'voice' : 'text';
+    } catch {
+      return 'text';
+    }
+  }
 
   readonly handle = async (req: Request, res: Response): Promise<void> => {
     const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
@@ -110,6 +126,7 @@ class ChatRouteHandler {
     }
 
     const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId : undefined;
+    let currentSessionId = sessionId;
 
     // The AI run is decoupled from the client connection: when the browser
     // disconnects (tab close/reload, navigating away) we keep processing so
@@ -156,6 +173,7 @@ class ChatRouteHandler {
           });
         },
         onSessionRotated: (newSessionId: string) => {
+          currentSessionId = newSessionId;
           if (clientClosed) {
             return;
           }
@@ -169,6 +187,8 @@ class ChatRouteHandler {
       if (clientClosed) {
         return;
       }
+
+      writeSse({ type: 'mode', mode: this.readResponseMode(currentSessionId) });
 
       res.write('data: [DONE]\n\n');
       res.end();
@@ -502,7 +522,7 @@ class DashboardServer implements WebServerHandle {
     const app = express();
     const publicDir = path.resolve(config.BASE_DIR, './dist-web');
     const indexHandler = new IndexRouteHandler(publicDir);
-    const chatHandler = new ChatRouteHandler(this.gateway);
+    const chatHandler = new ChatRouteHandler(this.gateway, this.db);
     const healthHandler = new HealthRouteHandler(this.logger);
     const audioTranscribeHandler = new AudioTranscribeRouteHandler(this.logger);
     const audioSpeakHandler = new SpeechSynthesizeRouteHandler(this.logger);

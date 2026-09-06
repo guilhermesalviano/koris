@@ -59,6 +59,7 @@ function adoptBotIdentity(
 }
 
 export async function startBaileysSocket(options: WhatsAppChannelStartOptions): Promise<SocketLike> {
+  whatsappState.logger = options.logger;
   const { makeWASocket, useMultiFileAuthState, DisconnectReason } = await import('@whiskeysockets/baileys');
   const qrcode = await import('qrcode-terminal');
   const { state, saveCreds } = await useMultiFileAuthState(options.authFolder);

@@ -26,6 +26,16 @@ function metadataString(metadata: Record<string, unknown> | undefined, key: stri
   return typeof value === 'string' && value ? value : undefined;
 }
 
+// Session metadata keys that are a conversation preference rather than a
+// property of one thread, so they must survive `/clear` and `/compact`
+// rotation. `lastActivityAt` / `compactSummary` deliberately do not.
+function carryForwardMetadata(
+  metadata: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  const responseMode = metadataString(metadata, 'responseMode');
+  return responseMode ? { responseMode } : undefined;
+}
+
 // User-facing explanation shown when a manual-mode session is auto-compacted.
 const COMPACTION_NOTICE = {
   proactive: "This conversation got long enough to crowd the model's context window, so I summarized what we've covered into memory and started a fresh session. Nothing is lost — carry on.",
@@ -93,6 +103,8 @@ class MessageGateway implements IMessageGateway {
         return this.handleClear(sessionCtx, safeMessage, images, channel, commandResult.response || '', options);
       } else if (commandResult.action === 'memory') {
         return this.handleMemory(sessionCtx, safeMessage, images, channel);
+      } else if (commandResult.action === 'mode') {
+        return this.handleMode(sessionCtx, safeMessage, images, channel, commandResult.mode);
       } else {
         const response = commandResult.response || '';
         this.backgroundDispatcher.persistConversation({
@@ -255,12 +267,53 @@ class MessageGateway implements IMessageGateway {
       channel,
     });
 
-    ctx.sessionService.forceRotate();
+    const carried = carryForwardMetadata(ctx.sessionService.getSession().metadata);
+    if (carried) {
+      ctx.sessionService.forceRotate(carried);
+    } else {
+      ctx.sessionService.forceRotate();
+    }
     const freshSessionId = ctx.sessionService.getSession().id;
     options?.onSessionRotated?.(freshSessionId);
     this.logger.info(`Cleared session ${clearedSessionId} → ${freshSessionId} (${channel})`);
 
     return confirmation;
+  }
+
+  // `/mode [text|voice]`: read or set this conversation's reply format. The
+  // flag lives in session metadata and is carried through `/clear` and
+  // `/compact` rotation so it survives history resets.
+  private handleMode(
+    ctx: SessionContext,
+    safeMessage: string,
+    images: ImageAttachment[] | undefined,
+    channel: string,
+    mode: 'text' | 'voice' | undefined,
+  ): ProcessedMessage {
+    const current = metadataString(ctx.sessionService.getSession().metadata, 'responseMode') === 'voice'
+      ? 'voice'
+      : 'text';
+
+    let response: string;
+    if (!mode) {
+      response = `Reply mode is "${current}". Use /mode voice or /mode text to change it.`;
+    } else {
+      ctx.sessionService.updateMetadata({ responseMode: mode });
+      response = `Reply mode set to "${mode}".`;
+      if (mode === 'voice' && !config.AUDIO.TTS.ENABLED) {
+        response += ' Note: text-to-speech is disabled in config, so replies stay text until it is enabled.';
+      }
+    }
+
+    this.backgroundDispatcher.persistConversation({
+      sessionId: ctx.sessionService.getSession().id,
+      ask: safeMessage,
+      askImages: images,
+      answer: response,
+      channel,
+    });
+
+    return response;
   }
 
   // `/memory`: surface the summary a prior `/compact` (or the auto-compaction
@@ -307,7 +360,12 @@ class MessageGateway implements IMessageGateway {
       memoryService,
     });
 
-    sessionService.forceRotate(result ? { compactSummary: result.content } : undefined);
+    const carried = carryForwardMetadata(sessionService.getSession().metadata);
+    const rotateMetadata = {
+      ...carried,
+      ...(result ? { compactSummary: result.content } : {}),
+    };
+    sessionService.forceRotate(Object.keys(rotateMetadata).length > 0 ? rotateMetadata : undefined);
     options?.onSessionRotated?.(sessionService.getSession().id);
     this.logger.info(`Compacted session ${compactedSessionId} → ${sessionService.getSession().id} (${channel})`);
     return { compactedSessionId, rotated: true };

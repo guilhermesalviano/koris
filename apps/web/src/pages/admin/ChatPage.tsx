@@ -37,7 +37,7 @@ function blobToBase64(blob: Blob): Promise<string> {
 
 export default function ChatPage() {
   const { sessionId } = useParams();
-  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, setToast, submit, resendLast, cancel, openSession, sessions, activeSessionId, gateBlocks, allowDomain, dismissGateBlock } = useChat();
+  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, setToast, submit, resendLast, cancel, openSession, sessions, activeSessionId, gateBlocks, allowDomain, dismissGateBlock, responseMode } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -58,13 +58,6 @@ export default function ChatPage() {
 
   const [speakingId, setSpeakingId] = useState<number | null>(null);
   const [loadingSpeakId, setLoadingSpeakId] = useState<number | null>(null);
-  const [autoPlay, setAutoPlay] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('koris_voice_autoplay') === 'true';
-    } catch {
-      return false;
-    }
-  });
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -72,7 +65,6 @@ export default function ChatPage() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const isDiscardingRef = useRef(false);
   const autoSendRef = useRef(autoSend);
-  const autoPlayRef = useRef(autoPlay);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speechCacheRef = useRef<Map<number, string>>(new Map());
   const lastAutoPlayedIdRef = useRef<number | null>(null);
@@ -80,10 +72,6 @@ export default function ChatPage() {
   useEffect(() => {
     autoSendRef.current = autoSend;
   }, [autoSend]);
-
-  useEffect(() => {
-    autoPlayRef.current = autoPlay;
-  }, [autoPlay]);
 
   function showToast(msg: string) {
     if (setToast) setToast(msg);
@@ -304,13 +292,13 @@ export default function ChatPage() {
   }
 
   useEffect(() => {
-    if (!autoPlayRef.current || streaming) return;
+    if (responseMode !== 'voice' || streaming) return;
     const last = messages[messages.length - 1];
     if (!last || last.role !== 'assistant' || last.pending || last.error || !last.content) return;
     if (lastAutoPlayedIdRef.current === last.id) return;
     lastAutoPlayedIdRef.current = last.id;
     void handleSpeak(last);
-  }, [messages, streaming]);
+  }, [messages, streaming, responseMode]);
 
   useEffect(() => {
     const cache = speechCacheRef.current;
@@ -592,23 +580,6 @@ export default function ChatPage() {
             />
             <span>Auto-send</span>
           </label>
-          <label className="flex cursor-pointer items-center gap-1.5 select-none hover:text-txt-2 transition-colors" title="Automatically play assistant replies as speech">
-            <input
-              type="checkbox"
-              checked={autoPlay}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                setAutoPlay(checked);
-                try {
-                  localStorage.setItem('koris_voice_autoplay', String(checked));
-                } catch {
-                  // ignore localStorage errors
-                }
-              }}
-              className="h-3 w-3 rounded border-strong bg-bg-2 text-accent accent-accent focus:ring-1 focus:ring-accent"
-            />
-            <span>Auto-play replies</span>
-          </label>
         </div>
         <div className="flex min-w-0 items-center gap-2">
           <span className="hidden shrink-0 sm:inline">{footerHint}</span>
@@ -705,7 +676,7 @@ export default function ChatPage() {
                   Resend
                 </button>
               )}
-              {m.role === 'assistant' && !m.pending && !m.error && m.content && !streaming && (
+              {responseMode === 'voice' && m.role === 'assistant' && !m.pending && !m.error && m.content && !streaming && (
                 <button
                   onClick={() => void handleSpeak(m)}
                   disabled={loadingSpeakId === m.id}

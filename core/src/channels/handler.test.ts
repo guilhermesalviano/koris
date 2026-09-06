@@ -1,10 +1,23 @@
-import { describe, expect, it, vi } from 'vitest';
-import { ChannelHandlerFactory } from './handler';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ChannelHandlerFactory, configureChannelHandler } from './handler';
 import { COMMANDS_RESTRICTED_MESSAGE } from '../constants/commands';
 import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../constants/thinking';
 import type { InboundChannelMessage } from './handler';
 
+const { mockSynthesize } = vi.hoisted(() => ({ mockSynthesize: vi.fn() }));
+vi.mock('../services/audio/audio-synthesis-service', () => ({
+  getSpeechSynthesisService: () => ({ synthesize: mockSynthesize }),
+}));
+
 const MENTION_ID = '162157312364643';
+
+function configureMode(mode: 'text' | 'voice'): void {
+  configureChannelHandler({
+    sessionManager: {
+      getSessionService: () => ({ getSession: () => ({ metadata: { responseMode: mode } }) }),
+    } as never,
+  });
+}
 
 function makeHandler() {
   const gateway = { handle: vi.fn() };
@@ -278,5 +291,65 @@ describe('channels/handler', () => {
     await handler.handle('jid', message({}));
 
     expect(reply.sendError).toHaveBeenCalledWith('jid', '❌ Sorry, I ran into an unexpected problem. Could you try again?');
+  });
+
+  describe('voice mode', () => {
+    afterEach(() => {
+      configureChannelHandler({ sessionManager: undefined as never });
+      mockSynthesize.mockReset();
+    });
+
+    function makeVoiceHandler() {
+      const gateway = { handle: vi.fn().mockResolvedValue('the spoken reply') };
+      const reply = { sendText: vi.fn(), sendError: vi.fn(), sendAudio: vi.fn() };
+      const handler = ChannelHandlerFactory.create({ channel: 'test-channel', gateway, reply });
+      return { handler, gateway, reply };
+    }
+
+    it('synthesizes and sends audio instead of text when the conversation is in voice mode', async () => {
+      configureMode('voice');
+      mockSynthesize.mockResolvedValue({ audio: Buffer.from('ogg-bytes'), contentType: 'audio/ogg', seconds: 2 });
+      const { handler, reply } = makeVoiceHandler();
+
+      await handler.handle('jid', message({ text: 'hi' }));
+
+      expect(mockSynthesize).toHaveBeenCalledWith('the spoken reply', { format: 'ogg' });
+      expect(reply.sendAudio).toHaveBeenCalledWith('jid', expect.any(Buffer), { mimeType: 'audio/ogg', seconds: 2 });
+      expect(reply.sendText).not.toHaveBeenCalled();
+    });
+
+    it('falls back to text with a note when synthesis fails', async () => {
+      configureMode('voice');
+      mockSynthesize.mockResolvedValue({ audio: null, contentType: '', error: 'sidecar offline' });
+      const { handler, reply } = makeVoiceHandler();
+
+      await handler.handle('jid', message({ text: 'hi' }));
+
+      expect(reply.sendAudio).not.toHaveBeenCalled();
+      expect(reply.sendText).toHaveBeenNthCalledWith(1, 'jid', 'the spoken reply');
+      expect(reply.sendText).toHaveBeenNthCalledWith(2, 'jid', expect.stringContaining('sidecar offline'));
+    });
+
+    it('sends text when the conversation is in text mode', async () => {
+      configureMode('text');
+      const { handler, reply } = makeVoiceHandler();
+
+      await handler.handle('jid', message({ text: 'hi' }));
+
+      expect(mockSynthesize).not.toHaveBeenCalled();
+      expect(reply.sendText).toHaveBeenCalledWith('jid', 'the spoken reply');
+    });
+
+    it('sends text when the channel has no sendAudio, even in voice mode', async () => {
+      configureMode('voice');
+      const gateway = { handle: vi.fn().mockResolvedValue('the spoken reply') };
+      const reply = { sendText: vi.fn(), sendError: vi.fn() };
+      const handler = ChannelHandlerFactory.create({ channel: 'test-channel', gateway, reply });
+
+      await handler.handle('jid', message({ text: 'hi' }));
+
+      expect(mockSynthesize).not.toHaveBeenCalled();
+      expect(reply.sendText).toHaveBeenCalledWith('jid', 'the spoken reply');
+    });
   });
 });

@@ -51,6 +51,8 @@ interface ChatContextValue {
   gateBlocks: GateBlock[];
   allowDomain: (domain: string) => Promise<void>;
   dismissGateBlock: (domain: string) => void;
+  /** Server-reported reply mode for the active conversation (set via `/mode`). */
+  responseMode: 'text' | 'voice';
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -94,6 +96,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [backgroundRun, setBackgroundRun] = useState<ActiveRun | null>(null);
   const [gateBlocks, setGateBlocks] = useState<GateBlock[]>([]);
+  const [responseMode, setResponseMode] = useState<'text' | 'voice'>('text');
   const dismissedDomainsRef = useRef<Set<string>>(new Set());
   const loadToken = useRef(0);
   const pendingNewChatRef = useRef(false);
@@ -446,6 +449,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           void loadSessions();
           navigate(`/admin/chat/${rotatedSessionId}`);
         },
+        (mode) => setResponseMode(mode),
       );
 
       setMessages((prev) => prev.map((m) => (m.id === assistantId
@@ -527,6 +531,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     gateBlocks,
     allowDomain,
     dismissGateBlock,
+    responseMode,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

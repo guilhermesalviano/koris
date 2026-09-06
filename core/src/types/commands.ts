@@ -27,13 +27,19 @@ export interface CommandResult {
    * - `compact` — summarise this session into memory, then rotate
    * - `memory`  — reply with the summary carried into this session
    * - `skill`   — run the turn through the agent with `skill.content` injected
+   * - `mode`    — set (or, when `mode` is unset, report) this conversation's reply mode
    * - `none`    — nothing beyond sending `response`
    */
-  action?: 'clear' | 'compact' | 'memory' | 'skill' | 'none';
+  action?: 'clear' | 'compact' | 'memory' | 'skill' | 'mode' | 'none';
   /**
    * Set when `action === 'skill'`: the skill documentation to inject for this
    * one turn, and whatever the human typed after the skill name.
    */
   skill?: { name: string; content: string; args: string };
+  /**
+   * Set when `action === 'mode'` and the user asked to change the mode. Absent
+   * means the user typed `/mode` alone and wants the current setting reported.
+   */
+  mode?: 'text' | 'voice';
   handled: boolean;
 }

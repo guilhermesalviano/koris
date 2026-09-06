@@ -5,11 +5,13 @@ import type { ILogger } from '../../infrastructure/logger';
 export interface AudioSynthesisResult {
   audio: Buffer | null;
   contentType: string;
+  seconds?: number;
   error?: string;
 }
 
 export interface SynthesizeOptions {
   voice?: string;
+  format?: 'wav' | 'ogg';
   signal?: AbortSignal;
 }
 
@@ -67,6 +69,7 @@ export class AudioSynthesisService implements ISpeechSynthesisService {
       : timeoutSignal;
 
     try {
+      const format = options?.format ?? 'wav';
       const response = await this.fetchFn(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -74,7 +77,7 @@ export class AudioSynthesisService implements ISpeechSynthesisService {
           input: text,
           voice: options?.voice || config.AUDIO.TTS.VOICE,
           speed: config.AUDIO.TTS.SPEED,
-          response_format: 'wav',
+          response_format: format,
         }),
         signal,
       });
@@ -102,8 +105,10 @@ export class AudioSynthesisService implements ISpeechSynthesisService {
         return { audio: null, contentType: '', error: errorMsg };
       }
 
-      const contentType = response.headers.get('content-type') || 'audio/wav';
-      return { audio, contentType };
+      const contentType = response.headers.get('content-type') || (format === 'ogg' ? 'audio/ogg' : 'audio/wav');
+      const durationHeader = Number(response.headers.get('x-audio-duration-seconds'));
+      const seconds = Number.isFinite(durationHeader) && durationHeader > 0 ? durationHeader : undefined;
+      return { audio, contentType, seconds };
     } catch (err: unknown) {
       const error = err as Error & { cause?: Error & { code?: string } };
 

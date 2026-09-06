@@ -10,6 +10,7 @@ import wave
 import logging
 import asyncio
 import tempfile
+import subprocess
 from pathlib import Path
 from typing import Optional, Dict
 from contextlib import asynccontextmanager
@@ -322,6 +323,35 @@ def run_synthesis(text: str, voice_name: Optional[str] = None, speed: float = 1.
     return buf.getvalue()
 
 
+def wav_duration_seconds(wav_bytes: bytes) -> float:
+    """Reads the duration of a WAV blob from its header."""
+    try:
+        with wave.open(io.BytesIO(wav_bytes), "rb") as w:
+            frames = w.getnframes()
+            rate = w.getframerate()
+            return round(frames / rate, 3) if rate else 0.0
+    except Exception:
+        return 0.0
+
+
+def transcode_wav_to_ogg(wav_bytes: bytes) -> bytes:
+    """Transcodes WAV bytes to OGG/Opus via ffmpeg (bundled in the container).
+    OGG/Opus is what WhatsApp expects for a push-to-talk voice note."""
+    proc = subprocess.run(
+        [
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-i", "pipe:0",
+            "-c:a", "libopus", "-b:a", "24k", "-application", "voip",
+            "-f", "ogg", "pipe:1",
+        ],
+        input=wav_bytes,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+    return proc.stdout
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -536,6 +566,7 @@ async def speech_handler(req: SpeechRequest) -> Response:
         )
 
     speed = req.speed if (req.speed and req.speed > 0) else 1.0
+    fmt = (req.response_format or "wav").lower()
 
     # Serialize synthesis calls to prevent CPU overload
     async with synthesis_lock:
@@ -554,7 +585,25 @@ async def speech_handler(req: SpeechRequest) -> Response:
                 detail=f"Synthesis failed: {e}",
             )
 
-    return Response(content=wav_bytes, media_type="audio/wav")
+    headers = {"X-Audio-Duration-Seconds": str(wav_duration_seconds(wav_bytes))}
+
+    if fmt in ("ogg", "opus"):
+        try:
+            ogg_bytes = await asyncio.to_thread(transcode_wav_to_ogg, wav_bytes)
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="ffmpeg is not available for OGG transcoding.",
+            )
+        except subprocess.CalledProcessError as e:
+            logger.error("ffmpeg transcode failed: %s", e.stderr.decode(errors="replace"))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="OGG transcoding failed.",
+            )
+        return Response(content=ogg_bytes, media_type="audio/ogg", headers=headers)
+
+    return Response(content=wav_bytes, media_type="audio/wav", headers=headers)
 
 
 @app.post("/v1/audio/speech", summary="OpenAI-compatible text-to-speech")

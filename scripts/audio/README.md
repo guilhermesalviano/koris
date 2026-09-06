@@ -140,7 +140,12 @@ Body fields:
 - `input` (required): the text to speak. Rejected with `400` if empty or longer than `PIPER_MAX_CHARS`.
 - `voice`: voice name, matching a file in `./models/piper/`. Defaults to `PIPER_DEFAULT_VOICE`.
 - `speed`: `1.0` = normal, `>1.0` faster, `<1.0` slower (mapped internally to Piper `length_scale`).
-- `model`, `response_format`: accepted for OpenAI SDK compatibility (only WAV is produced).
+- `response_format`: `"wav"` (default) or `"ogg"` / `"opus"`. `"ogg"` pipes the WAV through
+  ffmpeg to OGG/Opus (`Content-Type: audio/ogg`) — the format WhatsApp needs for a
+  push-to-talk voice note.
+- `model`: accepted for OpenAI SDK compatibility (ignored).
+
+Every response carries an `X-Audio-Duration-Seconds` header (read from the synthesized WAV).
 
 Returns `503` if `piper-tts` is not installed or the requested voice files are missing.
 

@@ -124,6 +124,28 @@ describe('AudioSynthesisService', () => {
       expect(capturedBody?.voice).toBe('en_GB-alba-medium');
     });
 
+    it('requests ogg and reports the duration header when format is "ogg"', async () => {
+      config.AUDIO.TTS.ENABLED = true;
+
+      let capturedBody: Record<string, unknown> | undefined;
+      const fetchMock = vi.fn().mockImplementation(async (_url: string, opts: RequestInit) => {
+        capturedBody = JSON.parse(opts.body as string);
+        return new Response(Buffer.from('OggS...opus'), {
+          status: 200,
+          headers: { 'Content-Type': 'audio/ogg', 'X-Audio-Duration-Seconds': '3.5' },
+        });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const service = new AudioSynthesisService();
+      const result = await service.synthesize('Hi there', { format: 'ogg' });
+
+      expect(capturedBody?.response_format).toBe('ogg');
+      expect(result.contentType).toBe('audio/ogg');
+      expect(result.seconds).toBe(3.5);
+      expect(result.audio?.toString()).toBe('OggS...opus');
+    });
+
     it('treats an empty-body 200 response as an error', async () => {
       config.AUDIO.TTS.ENABLED = true;
 
