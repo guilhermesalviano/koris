@@ -40,6 +40,22 @@
       "health_ms": 5000
     }
   },
+  "audio": {
+    "stt": {
+      "enabled": false,
+      "endpoint": "http://127.0.0.1:6006/v1/audio/transcriptions",
+      "language": "auto",
+      "timeout_ms": 30000
+    },
+    "tts": {
+      "enabled": false,
+      "endpoint": "http://127.0.0.1:6006/v1/audio/speech",
+      "voice": "en_US-lessac-medium",
+      "speed": 1.0,
+      "max_input_chars": 5000,
+      "timeout_ms": 30000
+    }
+  },
   "github": {
     "token": "ghp_xxx",
     "owner": "your-github-username-or-org"

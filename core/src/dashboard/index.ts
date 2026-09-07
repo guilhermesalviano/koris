@@ -13,6 +13,9 @@ import { IMessageGateway } from '../services/agents/message-gateway';
 import type { ImageAttachment } from '../types/messages';
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
+import { SessionRepositoryFactory } from '../repositories/session';
+import { getAudioTranscriptionService } from '../services/audio/audio-transcription-service';
+import { getSpeechSynthesisService } from '../services/audio/audio-synthesis-service';
 import { AdminRouterFactory } from './admin';
 import { activeRunsRegistry } from './active-runs';
 
@@ -93,7 +96,22 @@ class HealthRouteHandler {
 }
 
 class ChatRouteHandler {
-  constructor(private readonly gateway: IMessageGateway) {}
+  constructor(
+    private readonly gateway: IMessageGateway,
+    private readonly db?: IDatabaseService,
+  ) {}
+
+  private readResponseMode(sessionId: string | undefined): 'text' | 'voice' {
+    if (!sessionId || !this.db) {
+      return 'text';
+    }
+    try {
+      const session = SessionRepositoryFactory.create(this.db).findById(sessionId);
+      return session?.metadata?.responseMode === 'voice' ? 'voice' : 'text';
+    } catch {
+      return 'text';
+    }
+  }
 
   readonly handle = async (req: Request, res: Response): Promise<void> => {
     const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
@@ -108,6 +126,7 @@ class ChatRouteHandler {
     }
 
     const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId : undefined;
+    let currentSessionId = sessionId;
 
     // The AI run is decoupled from the client connection: when the browser
     // disconnects (tab close/reload, navigating away) we keep processing so
@@ -154,6 +173,7 @@ class ChatRouteHandler {
           });
         },
         onSessionRotated: (newSessionId: string) => {
+          currentSessionId = newSessionId;
           if (clientClosed) {
             return;
           }
@@ -167,6 +187,8 @@ class ChatRouteHandler {
       if (clientClosed) {
         return;
       }
+
+      writeSse({ type: 'mode', mode: this.readResponseMode(currentSessionId) });
 
       res.write('data: [DONE]\n\n');
       res.end();
@@ -311,6 +333,125 @@ class ChatRouteHandler {
   }
 }
 
+class AudioTranscribeRouteHandler {
+  constructor(private readonly logger: ILogger) {}
+
+  readonly handle = async (req: Request, res: Response): Promise<void> => {
+    let audioBuffer: Buffer | null = null;
+    let mimeType: string | undefined;
+    let filename: string | undefined;
+    let language: string | undefined;
+
+    if (Buffer.isBuffer(req.body)) {
+      audioBuffer = req.body;
+      const contentType = req.headers['content-type'];
+      if (typeof contentType === 'string') {
+        mimeType = contentType.split(';')[0].trim();
+      }
+    } else if (req.body && typeof req.body === 'object') {
+      const body = req.body as { audio?: unknown; mimeType?: unknown; filename?: unknown; language?: unknown };
+      if (typeof body.mimeType === 'string' && body.mimeType) {
+        mimeType = body.mimeType;
+      }
+      if (typeof body.filename === 'string' && body.filename) {
+        filename = body.filename;
+      }
+      if (typeof body.language === 'string' && body.language) {
+        language = body.language;
+      }
+      if (typeof body.audio === 'string') {
+        const audioStr = body.audio;
+        if (audioStr.startsWith('data:')) {
+          const match = audioStr.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            mimeType = mimeType || match[1];
+            audioBuffer = Buffer.from(match[2], 'base64');
+          } else {
+            audioBuffer = Buffer.from(audioStr, 'base64');
+          }
+        } else {
+          audioBuffer = Buffer.from(audioStr, 'base64');
+        }
+      }
+    }
+
+    if (typeof req.query?.mimeType === 'string' && !mimeType) {
+      mimeType = req.query.mimeType;
+    }
+    if (typeof req.query?.filename === 'string' && !filename) {
+      filename = req.query.filename;
+    }
+    if (typeof req.query?.language === 'string' && !language) {
+      language = req.query.language;
+    }
+
+    if (!audioBuffer || audioBuffer.length === 0) {
+      res.status(400).json({ error: 'Audio data is required and must not be empty' });
+      return;
+    }
+
+    try {
+      const service = getAudioTranscriptionService(this.logger);
+      const transcribeOpts: { mimeType?: string; filename?: string; language?: string } = { mimeType, filename };
+      if (language !== undefined) {
+        transcribeOpts.language = language;
+      }
+      const result = await service.transcribe(audioBuffer, transcribeOpts);
+      if (result.error) {
+        const statusCode = result.error.includes('disabled') ? 400 : 500;
+        res.status(statusCode).json({ error: result.error });
+        return;
+      }
+      res.status(200).json({ text: result.text });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`[AudioTranscribeRouteHandler] Audio transcription error: ${message}`);
+      res.status(500).json({ error: message });
+    }
+  };
+}
+
+class SpeechSynthesizeRouteHandler {
+  constructor(private readonly logger: ILogger) {}
+
+  readonly handle = async (req: Request, res: Response): Promise<void> => {
+    let text: string | undefined;
+    let voice: string | undefined;
+
+    if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+      const body = req.body as { text?: unknown; voice?: unknown };
+      if (typeof body.text === 'string') {
+        text = body.text;
+      }
+      if (typeof body.voice === 'string' && body.voice) {
+        voice = body.voice;
+      }
+    }
+
+    if (!text || !text.trim()) {
+      res.status(400).json({ error: 'Text is required and must not be empty' });
+      return;
+    }
+
+    try {
+      const service = getSpeechSynthesisService(this.logger);
+      const result = await service.synthesize(text, voice ? { voice } : undefined);
+      if (result.error || !result.audio) {
+        const errorMsg = result.error || 'Audio synthesis produced no audio.';
+        const statusCode = /disabled|exceeds maximum length/.test(errorMsg) ? 400 : 500;
+        res.status(statusCode).json({ error: errorMsg });
+        return;
+      }
+      res.status(200).setHeader('Content-Type', result.contentType);
+      res.send(result.audio);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`[SpeechSynthesizeRouteHandler] Audio synthesis error: ${message}`);
+      res.status(500).json({ error: message });
+    }
+  };
+}
+
 class DashboardServer implements WebServerHandle {
   private server: Server | null = null;
   private boundPort = 0;
@@ -381,14 +522,19 @@ class DashboardServer implements WebServerHandle {
     const app = express();
     const publicDir = path.resolve(config.BASE_DIR, './dist-web');
     const indexHandler = new IndexRouteHandler(publicDir);
-    const chatHandler = new ChatRouteHandler(this.gateway);
+    const chatHandler = new ChatRouteHandler(this.gateway, this.db);
     const healthHandler = new HealthRouteHandler(this.logger);
+    const audioTranscribeHandler = new AudioTranscribeRouteHandler(this.logger);
+    const audioSpeakHandler = new SpeechSynthesizeRouteHandler(this.logger);
     const adminRouter = AdminRouterFactory.create(this.logger, this.db, this.gateway);
 
     app.use(express.json({ limit: '25mb' }));
+    app.use(express.raw({ type: ['audio/*', 'application/octet-stream'], limit: '25mb' }));
     app.use(express.static(publicDir));
     app.post('/api/chat', chatHandler.handle);
     app.post('/api/chat/cancel', chatHandler.cancel);
+    app.post('/api/audio/transcribe', audioTranscribeHandler.handle);
+    app.post('/api/audio/speak', audioSpeakHandler.handle);
     app.use('/api/admin', adminRouter);
     app.get('/health', healthHandler.handle);
 
@@ -438,6 +584,14 @@ function createChatCancelHandler(gateway: IMessageGateway) {
   return new ChatRouteHandler(gateway).cancel;
 }
 
+function createAudioTranscribeHandler(logger: ILogger) {
+  return new AudioTranscribeRouteHandler(logger).handle;
+}
+
+function createAudioSpeakHandler(logger: ILogger) {
+  return new SpeechSynthesizeRouteHandler(logger).handle;
+}
+
 async function startWebServer(
   logger: ILogger,
   gateway: IMessageGateway,
@@ -456,5 +610,9 @@ export {
   createHealthHandler,
   createChatHandler,
   createChatCancelHandler,
+  AudioTranscribeRouteHandler,
+  createAudioTranscribeHandler,
+  SpeechSynthesizeRouteHandler,
+  createAudioSpeakHandler,
   startWebServer,
 };

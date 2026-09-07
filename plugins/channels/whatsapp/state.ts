@@ -1,8 +1,10 @@
-import type { IChannelHandlerFactory } from '../contracts';
+import type { AudioTranscriber, IChannelHandlerFactory, ILogger } from '../contracts';
 import type { SocketLike } from './types';
 
 export const whatsappState = {
   channelHandler: undefined as unknown as IChannelHandlerFactory,
+  /** Set on socket start so send helpers can log outside the inbound handler. */
+  logger: undefined as ILogger | undefined,
   /** The bot's phone number (digits), from `bot_number` config or auto-detected. */
   botNumber: '',
   /** The bot's LID (digits), auto-detected from the session — mentions in LID-addressed groups use this. */
@@ -10,4 +12,5 @@ export const whatsappState = {
   whitelist: [] as string[],
   allowUntrusted: false,
   activeSocket: null as SocketLike | null,
+  audioTranscriber: undefined as AudioTranscriber | undefined,
 };

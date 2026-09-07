@@ -168,6 +168,15 @@ export interface InboundChannelMessage {
 export interface ChannelReply {
   sendText(target: string, text: string): Promise<void>;
   sendError(target: string, message: string): Promise<void>;
+  /**
+   * Deliver a reply as an audio voice note. Optional: channels that cannot
+   * send audio simply omit it and the handler falls back to `sendText`.
+   */
+  sendAudio?(
+    target: string,
+    audio: Buffer,
+    opts?: { mimeType?: string; seconds?: number },
+  ): Promise<void>;
 }
 
 export interface ChannelHandlerOptions {
@@ -240,9 +249,17 @@ export interface IPluginEnablementGateway {
   isEnabled(name: string): boolean;
 }
 
+export interface AudioTranscriber {
+  transcribe(
+    audio: Buffer,
+    options?: { filename?: string; mimeType?: string }
+  ): Promise<{ text: string; error?: string }>;
+}
+
 export interface PluginContext {
   logger: ILogger;
   gateway: IMessageGateway;
   channelHandler: IChannelHandlerFactory;
   pluginEnablement: IPluginEnablementGateway;
+  audioTranscriber?: AudioTranscriber;
 }

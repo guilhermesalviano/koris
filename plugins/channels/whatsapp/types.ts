@@ -1,11 +1,12 @@
 import type { WAMessage } from '@whiskeysockets/baileys';
-import type { ILogger, IMessageGateway, ImageAttachment, StickerReference } from '../contracts';
+import type { AudioTranscriber, ILogger, IMessageGateway, ImageAttachment, StickerReference } from '../contracts';
 
 export interface WhatsAppChannelStartOptions {
   authFolder: string;
   botNumber: string;
   gateway: IMessageGateway;
   logger: ILogger;
+  audioTranscriber?: AudioTranscriber;
 }
 
 export interface WhatsAppPluginOptions {
@@ -33,6 +34,7 @@ export interface IWhatsAppChannel {
     options?: WhatsAppInboundOptions,
   ): Promise<void>;
   sendText(jid: string, text: string): Promise<void>;
+  sendAudio(jid: string, audio: Buffer, opts?: { mimeType?: string; seconds?: number }): Promise<void>;
   sendSticker(jid: string, sticker: StickerReference): Promise<void>;
 }
 
@@ -49,7 +51,13 @@ export interface SocketLike {
   user?: { id?: string | null; lid?: string | null; phoneNumber?: string | null };
   signalRepository?: { lidMapping?: { getLIDForPN(pn: string): Promise<string | null> } };
   onWhatsApp?(...phoneNumbers: string[]): Promise<{ jid: string; exists: boolean }[] | undefined>;
-  sendMessage(jid: string, content: { text: string } | { forward: WAMessage }): Promise<unknown>;
+  sendMessage(
+    jid: string,
+    content:
+      | { text: string }
+      | { forward: WAMessage }
+      | { audio: Buffer; ptt?: boolean; mimetype?: string; seconds?: number },
+  ): Promise<unknown>;
   sendPresenceUpdate(presence: 'composing' | 'paused', jid: string): Promise<unknown>;
   groupMetadata(jid: string): Promise<{ subject?: string; participants?: GroupParticipantLite[] }>;
   end(err: Error | undefined): void;
@@ -81,6 +89,22 @@ export interface ExtractedQuotedImage {
 }
 
 export interface QuotedMessageInfo {
+  quotedMessage: Record<string, unknown>;
+  stanzaId?: string;
+  participant?: string;
+}
+
+export interface ExtractedAudio {
+  mimetype?: string;
+  seconds?: number;
+  ptt?: boolean;
+  message: WAMessage;
+}
+
+export interface ExtractedQuotedAudio {
+  mimetype?: string;
+  seconds?: number;
+  ptt?: boolean;
   quotedMessage: Record<string, unknown>;
   stanzaId?: string;
   participant?: string;

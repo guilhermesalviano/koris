@@ -112,6 +112,22 @@ export interface AppConfig {
     };
     PROMPT_SANITIZER: boolean;
   };
+  AUDIO: {
+    STT: {
+      ENABLED: boolean;
+      ENDPOINT: string;
+      LANGUAGE?: string;
+      TIMEOUT_MS: number;
+    };
+    TTS: {
+      ENABLED: boolean;
+      ENDPOINT: string;
+      VOICE: string;
+      SPEED: number;
+      MAX_INPUT_CHARS: number;
+      TIMEOUT_MS: number;
+    };
+  };
   GITHUB: {
     TOKEN: string;
     OWNER: string;
@@ -192,6 +208,34 @@ function buildConfig(): AppConfig {
     PROMPT_SANITIZER: get('ai.prompt_sanitizer', 'false') === 'true',
     };
   })(),
+  AUDIO: {
+    STT: {
+      ENABLED: get('audio.stt.enabled', 'false') === 'true',
+      ENDPOINT: get('audio.stt.endpoint', 'http://127.0.0.1:6006/v1/audio/transcriptions'),
+      LANGUAGE: get('audio.stt.language', 'auto'),
+      TIMEOUT_MS: (() => {
+        const raw = Number(get('audio.stt.timeout_ms', '30000'));
+        return Number.isFinite(raw) && raw > 0 ? raw : 30000;
+      })(),
+    },
+    TTS: {
+      ENABLED: get('audio.tts.enabled', 'false') === 'true',
+      ENDPOINT: get('audio.tts.endpoint', 'http://127.0.0.1:6006/v1/audio/speech'),
+      VOICE: get('audio.tts.voice', 'en_US-lessac-medium'),
+      SPEED: (() => {
+        const raw = Number(get('audio.tts.speed', '1.0'));
+        return Number.isFinite(raw) && raw > 0 ? raw : 1.0;
+      })(),
+      MAX_INPUT_CHARS: (() => {
+        const raw = Number(get('audio.tts.max_input_chars', '5000'));
+        return Number.isInteger(raw) && raw > 0 ? raw : 5000;
+      })(),
+      TIMEOUT_MS: (() => {
+        const raw = Number(get('audio.tts.timeout_ms', '30000'));
+        return Number.isFinite(raw) && raw > 0 ? raw : 30000;
+      })(),
+    },
+  },
   GITHUB: {
     TOKEN: get('github.token', ''),
     OWNER: get('github.owner', ''),

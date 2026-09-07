@@ -39,7 +39,8 @@ interface ChatContextValue {
   serverHealthy: boolean;
   historyLoaded: boolean;
   toast: string | null;
-  submit: () => Promise<void>;
+  setToast: (msg: string | null) => void;
+  submit: (overrideText?: string) => Promise<void>;
   resendLast: () => Promise<void>;
   cancel: () => void;
   fillPrompt: (text: string) => void;
@@ -50,6 +51,8 @@ interface ChatContextValue {
   gateBlocks: GateBlock[];
   allowDomain: (domain: string) => Promise<void>;
   dismissGateBlock: (domain: string) => void;
+  /** Server-reported reply mode for the active conversation (set via `/mode`). */
+  responseMode: 'text' | 'voice';
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -93,6 +96,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [backgroundRun, setBackgroundRun] = useState<ActiveRun | null>(null);
   const [gateBlocks, setGateBlocks] = useState<GateBlock[]>([]);
+  const [responseMode, setResponseMode] = useState<'text' | 'voice'>('text');
   const dismissedDomainsRef = useRef<Set<string>>(new Set());
   const loadToken = useRef(0);
   const pendingNewChatRef = useRef(false);
@@ -445,6 +449,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           void loadSessions();
           navigate(`/admin/chat/${rotatedSessionId}`);
         },
+        (mode) => setResponseMode(mode),
       );
 
       setMessages((prev) => prev.map((m) => (m.id === assistantId
@@ -481,8 +486,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (sid) void cancelChat(sid);
   }, []);
 
-  const submit = useCallback(async () => {
-    const text = input;
+  const submit = useCallback(async (overrideText?: string) => {
+    const text = typeof overrideText === 'string' ? overrideText : input;
     const images = attachments;
     if ((!text.trim() && images.length === 0) || streaming) return;
     setInput('');
@@ -514,6 +519,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     serverHealthy,
     historyLoaded,
     toast,
+    setToast,
     submit,
     resendLast,
     cancel,
@@ -525,6 +531,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     gateBlocks,
     allowDomain,
     dismissGateBlock,
+    responseMode,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

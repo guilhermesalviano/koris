@@ -107,6 +107,31 @@ describe('Command Handler', () => {
       expect(result.response).toBeTruthy();
     });
 
+    it('parses /mode with no arg as a query', () => {
+      const result = handleCommand('/mode', { source: 'whatsapp' });
+      expect(result).toEqual({ action: 'mode', handled: true });
+    });
+
+    it('parses /mode voice and /mode text', () => {
+      expect(handleCommand('/mode voice', { source: 'whatsapp' })).toEqual({
+        action: 'mode',
+        mode: 'voice',
+        handled: true,
+      });
+      expect(handleCommand('/mode TEXT', { source: 'web' })).toEqual({
+        action: 'mode',
+        mode: 'text',
+        handled: true,
+      });
+    });
+
+    it('rejects an unknown /mode argument with usage text', () => {
+      const result = handleCommand('/mode loud', { source: 'tui' });
+      expect(result.action).toBe('none');
+      expect(result.handled).toBe(true);
+      expect(result.response).toContain('Usage: /mode');
+    });
+
     it('refuses /allow for untrusted senders', () => {
       const result = handleCommand('/allow example.com', { source: 'tui', trusted: false });
       expect(result.handled).toBe(true);

@@ -1,5 +1,5 @@
 import type { WAMessage } from '@whiskeysockets/baileys';
-import type { ExtractedImage, ExtractedQuotedImage, ExtractedSticker, QuotedMessageInfo } from './types';
+import type { ExtractedAudio, ExtractedImage, ExtractedQuotedAudio, ExtractedQuotedImage, ExtractedSticker, QuotedMessageInfo } from './types';
 
 export function getQuotedMessageInfo(msg: WAMessage): QuotedMessageInfo | null {
   if (!msg.message || typeof msg.message !== 'object') return null;
@@ -100,5 +100,39 @@ export function extractQuotedImage(msg: WAMessage): ExtractedQuotedImage | null 
     quotedMessage: quoted.quotedMessage,
     stanzaId: quoted.stanzaId,
     participant: quoted.participant,
+  };
+}
+
+export function extractQuotedAudio(msg: WAMessage): ExtractedQuotedAudio | null {
+  const quoted = getQuotedMessageInfo(msg);
+  if (!quoted) return null;
+
+  const audioMessage = quoted.quotedMessage['audioMessage'];
+  if (!audioMessage || typeof audioMessage !== 'object') return null;
+
+  const audio = audioMessage as Record<string, unknown>;
+  return {
+    mimetype: typeof audio['mimetype'] === 'string' && audio['mimetype'] ? audio['mimetype'] : 'audio/ogg; codecs=opus',
+    seconds: typeof audio['seconds'] === 'number' ? audio['seconds'] : undefined,
+    ptt: typeof audio['ptt'] === 'boolean' ? audio['ptt'] : undefined,
+    quotedMessage: quoted.quotedMessage,
+    stanzaId: quoted.stanzaId,
+    participant: quoted.participant,
+  };
+}
+
+export function extractAudio(msg: WAMessage): ExtractedAudio | null {
+  if (!msg.message || typeof msg.message !== 'object') return null;
+
+  const content = msg.message as Record<string, unknown>;
+  const audioMessage = content['audioMessage'];
+  if (!audioMessage || typeof audioMessage !== 'object') return null;
+
+  const audio = audioMessage as Record<string, unknown>;
+  return {
+    mimetype: typeof audio['mimetype'] === 'string' && audio['mimetype'] ? audio['mimetype'] : 'audio/ogg; codecs=opus',
+    seconds: typeof audio['seconds'] === 'number' ? audio['seconds'] : undefined,
+    ptt: typeof audio['ptt'] === 'boolean' ? audio['ptt'] : undefined,
+    message: msg,
   };
 }

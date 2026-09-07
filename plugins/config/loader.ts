@@ -72,6 +72,13 @@ export interface ResolvePluginDirOptions {
  *      normal repo-root case, mirroring how `resolveConfigPaths` finds `koris.json`.
  *   3. `fallbackDir` (the caller's own `__dirname`) — running `.ts` sources in dev.
  * A candidate that already contains `config.yml` wins over a later one.
+ *
+ * When nothing exists yet, a first-time write must NOT land in `fallbackDir`
+ * from a compiled build: there `__dirname` is `dist/plugins/<family>/<name>`,
+ * which `pnpm clean` (`rm -rf dist`) wipes on every `pnpm build` — silently
+ * discarding whatever the setup UI saved (whitelist, bot number, …). So when
+ * we can see we're running inside the repo (`<cwd>/plugins/<family>` exists),
+ * that writable, build-stable dir wins over `fallbackDir`.
  */
 export function resolvePluginDir(pluginName: string, options: ResolvePluginDirOptions = {}): string {
   const cwd = options.cwd ?? process.cwd();
@@ -95,11 +102,19 @@ export function resolvePluginDir(pluginName: string, options: ResolvePluginDirOp
     return found;
   }
 
-  // Nothing written yet: prefer the writable data dir when relocated, else the
-  // caller's own dir (dev), else the first cwd candidate.
+  // Nothing written yet: prefer the writable data dir when relocated.
   if (dataDirCandidate) {
     return dataDirCandidate;
   }
+  // Then the repo-root plugins tree when we're clearly running inside the repo,
+  // so a first-time write survives `pnpm build`'s `rm -rf dist` (unlike
+  // `fallbackDir`, which from a compiled build points at `dist/`). In dev with
+  // `.ts` sources, `__dirname` already IS this path, so behaviour is unchanged.
+  const repoFamilyDir = normalize(join(cwd, 'plugins', family));
+  if (exists(repoFamilyDir)) {
+    return normalize(join(repoFamilyDir, pluginName));
+  }
+  // Last resort: the caller's own dir (detached execution outside any repo).
   return options.fallbackDir ? normalize(options.fallbackDir) : candidates[0];
 }
 

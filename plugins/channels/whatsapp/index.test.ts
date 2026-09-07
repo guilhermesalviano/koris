@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IChannelHandlerFactory, IMessageGateway, ILogger } from '../contracts';
+import type { AudioTranscriber, IChannelHandlerFactory, IMessageGateway, ILogger } from '../contracts';
 import type { WAMessage } from '@whiskeysockets/baileys';
 
 // This suite proves the whatsapp plugin is testable with zero core imports:
@@ -37,6 +37,7 @@ vi.mock('@whiskeysockets/baileys', () => ({
 vi.mock('qrcode-terminal', () => ({ generate: vi.fn() }));
 
 import { WhatsAppChannelFactory, configureWhatsAppRuntime, _resetWhatsAppDedupeForTesting, create } from './index';
+import { WhatsAppChannel } from './channel';
 import { _resetContactNamesForTesting } from './contact-names';
 import { whatsappState } from './state';
 import type { ChannelDefinition } from '../contracts';
@@ -76,7 +77,7 @@ function waMessage(overrides: Partial<WAMessage> = {}): WAMessage {
 
 const BOT_NUMBER = '5511999998888';
 
-async function start(replyText: string, opts: { allowUntrusted?: boolean; whitelist?: string; botNumber?: string } = {}) {
+async function start(replyText: string, opts: { allowUntrusted?: boolean; whitelist?: string; botNumber?: string; audioTranscriber?: AudioTranscriber } = {}) {
   const { factory, calls } = makeChannelHandlerFactory(replyText);
   const botNumber = opts.botNumber ?? BOT_NUMBER;
   configureWhatsAppRuntime({
@@ -87,6 +88,7 @@ async function start(replyText: string, opts: { allowUntrusted?: boolean; whitel
       botNumber,
       allowUnlistedSenders: opts.allowUntrusted ?? true,
     },
+    audioTranscriber: opts.audioTranscriber,
   });
 
   const gateway: IMessageGateway = { handle: vi.fn() };
@@ -95,6 +97,7 @@ async function start(replyText: string, opts: { allowUntrusted?: boolean; whitel
     botNumber,
     gateway,
     logger: makeLogger(),
+    audioTranscriber: opts.audioTranscriber,
   });
 
   return { calls, gateway };
@@ -117,6 +120,7 @@ describe('whatsapp plugin', () => {
     _resetContactNamesForTesting();
     // session-derived LID leaks across tests otherwise (module singleton)
     whatsappState.botLid = '';
+    whatsappState.audioTranscriber = undefined;
   });
 
   afterEach(() => {
@@ -144,6 +148,23 @@ describe('whatsapp plugin', () => {
       '11999999999', '511999999999', '5511999999999', '55111999999999',
     );
     expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'oi' });
+  });
+
+  it('sends audio as a push-to-talk voice note, forcing the opus codec mimetype', async () => {
+    await start('n/a');
+
+    await new WhatsAppChannel().sendAudio(
+      '5511999999999@s.whatsapp.net',
+      Buffer.from('ogg-opus-bytes'),
+      { mimeType: 'audio/ogg', seconds: 3.4 },
+    );
+
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', {
+      audio: expect.any(Buffer),
+      ptt: true,
+      mimetype: 'audio/ogg; codecs=opus',
+      seconds: 3,
+    });
   });
 
   it('splits a reply longer than the WhatsApp chunk limit into multiple sends', async () => {
@@ -457,5 +478,217 @@ describe('whatsapp plugin', () => {
     plugin.setup(fakeRegistry);
 
     expect(registered?.enabled()).toBe(false);
+  });
+
+  it('transcribes a voice note message and passes formatted prompt to channel handler', async () => {
+    const audioTranscriber: AudioTranscriber = {
+      transcribe: vi.fn().mockResolvedValue({ text: 'transcribed voice note' }),
+    };
+    const { calls } = await start('pong', { audioTranscriber });
+
+    await emitUpsert([
+      waMessage({
+        message: {
+          audioMessage: { mimetype: 'audio/ogg; codecs=opus', seconds: 4, ptt: true },
+        },
+      }),
+    ]);
+
+    expect(downloadMediaMessage).toHaveBeenCalled();
+    expect(audioTranscriber.transcribe).toHaveBeenCalledWith(
+      Buffer.from('fake-bytes'),
+      { mimeType: 'audio/ogg; codecs=opus', filename: 'voice.ogg' },
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message.text).toBe('[Voice message]: transcribed voice note');
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'pong' });
+  });
+
+  it('transcribes a quoted voice note into the quotedText context', async () => {
+    const audioTranscriber: AudioTranscriber = {
+      transcribe: vi.fn().mockResolvedValue({ text: 'the quoted note' }),
+    };
+    const { calls } = await start('pong', { audioTranscriber });
+
+    await emitUpsert([
+      waMessage({
+        message: {
+          extendedTextMessage: {
+            text: 'what did they say?',
+            contextInfo: {
+              stanzaId: 'Q1',
+              participant: '5511999999999@s.whatsapp.net',
+              quotedMessage: { audioMessage: { mimetype: 'audio/ogg; codecs=opus', seconds: 4 } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    expect(downloadMediaMessage).toHaveBeenCalled();
+    expect(audioTranscriber.transcribe).toHaveBeenCalledWith(
+      Buffer.from('fake-bytes'),
+      { mimeType: 'audio/ogg; codecs=opus', filename: 'voice.ogg' },
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message.text).toBe('what did they say?');
+    expect(calls[0].message.quotedText).toBe('[Voice message]: the quoted note');
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'pong' });
+  });
+
+  it('still answers the reply when a quoted voice note cannot be downloaded', async () => {
+    downloadMediaMessage.mockRejectedValueOnce(new Error('media expired'));
+    const audioTranscriber: AudioTranscriber = { transcribe: vi.fn() };
+    const { calls } = await start('pong', { audioTranscriber });
+
+    await emitUpsert([
+      waMessage({
+        message: {
+          extendedTextMessage: {
+            text: 'and this one?',
+            contextInfo: {
+              stanzaId: 'Q2',
+              participant: '5511999999999@s.whatsapp.net',
+              quotedMessage: { audioMessage: { seconds: 2 } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    expect(audioTranscriber.transcribe).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message.text).toBe('and this one?');
+    expect(calls[0].message.quotedText).toBeUndefined();
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'pong' });
+    expect(fakeSock.sendMessage).not.toHaveBeenCalledWith(
+      '5511999999999@s.whatsapp.net',
+      expect.objectContaining({ text: expect.stringContaining('⚠️') }),
+    );
+  });
+
+  it('sends direct reply when downloading audio buffer fails', async () => {
+    downloadMediaMessage.mockRejectedValueOnce(new Error('Network failure'));
+    const audioTranscriber: AudioTranscriber = {
+      transcribe: vi.fn(),
+    };
+    const { calls } = await start('pong', { audioTranscriber });
+
+    await emitUpsert([
+      waMessage({
+        message: {
+          audioMessage: { seconds: 3 },
+        },
+      }),
+    ]);
+
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith(
+      '5511999999999@s.whatsapp.net',
+      { text: '⚠️ Could not download voice message.' },
+    );
+    expect(calls).toHaveLength(0);
+    expect(audioTranscriber.transcribe).not.toHaveBeenCalled();
+  });
+
+  it('sends direct reply when audioTranscriber is not available', async () => {
+    const { calls } = await start('pong');
+
+    await emitUpsert([
+      waMessage({
+        message: {
+          audioMessage: { seconds: 2 },
+        },
+      }),
+    ]);
+
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith(
+      '5511999999999@s.whatsapp.net',
+      { text: '⚠️ Voice transcription is not available.' },
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it('sends direct reply and does not invoke LLM when transcription returns error', async () => {
+    const audioTranscriber: AudioTranscriber = {
+      transcribe: vi.fn().mockResolvedValue({ text: '', error: 'STT service unreachable' }),
+    };
+    const { calls } = await start('pong', { audioTranscriber });
+
+    await emitUpsert([
+      waMessage({
+        message: {
+          audioMessage: { seconds: 5 },
+        },
+      }),
+    ]);
+
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith(
+      '5511999999999@s.whatsapp.net',
+      { text: '⚠️ Could not transcribe voice message: STT service unreachable' },
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it('processes a voice message in a group when bot is mentioned via contextInfo', async () => {
+    const audioTranscriber: AudioTranscriber = {
+      transcribe: vi.fn().mockResolvedValue({ text: 'group audio instructions' }),
+    };
+    const { calls } = await start('pong', { audioTranscriber });
+
+    await emitUpsert([
+      waMessage({
+        key: { remoteJid: '1234-5678@g.us', fromMe: false, id: 'MSG-G-AUDIO' },
+        message: {
+          audioMessage: {
+            contextInfo: { mentionedJid: [`${BOT_NUMBER}@s.whatsapp.net`] },
+          },
+        },
+      }),
+    ]);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message).toMatchObject({
+      isGroup: true,
+      mentionsBot: true,
+      text: '[Voice message]: group audio instructions',
+    });
+  });
+
+  it('ignores a voice message in a group when bot is not mentioned', async () => {
+    const audioTranscriber: AudioTranscriber = {
+      transcribe: vi.fn(),
+    };
+    const { calls } = await start('pong', { audioTranscriber });
+
+    await emitUpsert([
+      waMessage({
+        key: { remoteJid: '1234-5678@g.us', fromMe: false, id: 'MSG-G-AUDIO2' },
+        message: {
+          audioMessage: { seconds: 10 },
+        },
+      }),
+    ]);
+
+    expect(calls).toHaveLength(0);
+    expect(fakeSock.sendMessage).not.toHaveBeenCalled();
+    expect(audioTranscriber.transcribe).not.toHaveBeenCalled();
+  });
+
+  it('sets whatsappState.audioTranscriber when plugin created via create()', () => {
+    const audioTranscriber: AudioTranscriber = {
+      transcribe: vi.fn().mockResolvedValue({ text: 'hello' }),
+    };
+    create(
+      {
+        logger: makeLogger(),
+        gateway: { handle: vi.fn() },
+        channelHandler: makeChannelHandlerFactory('n/a').factory,
+        pluginEnablement: { isEnabled: () => true },
+        audioTranscriber,
+      },
+      { authFolder: '.test-wa-auth', whitelist: '', botNumber: '5511999998888', allowUnlistedSenders: true },
+    );
+
+    expect(whatsappState.audioTranscriber).toBe(audioTranscriber);
   });
 });

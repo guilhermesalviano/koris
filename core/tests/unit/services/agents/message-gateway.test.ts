@@ -11,8 +11,9 @@ function makeLogger(): ILogger {
 
 function makeDeps() {
   const sessionService = {
-    getSession: vi.fn().mockReturnValue({ id: 'session-1' }),
+    getSession: vi.fn().mockReturnValue({ id: 'session-1', metadata: {} }),
     forceRotate: vi.fn(),
+    updateMetadata: vi.fn(),
   };
   const messageService = {
     getHistory: vi.fn().mockReturnValue([]),
@@ -391,6 +392,51 @@ describe('MessageGateway', () => {
 
       expect(deps.sessionService.forceRotate).not.toHaveBeenCalled();
       expect(result).toBe('This session is already empty.');
+    });
+
+    it('carries responseMode forward when clearing a voice-mode session', async () => {
+      const { gateway, deps } = makeGateway();
+      deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'hi' }] as never);
+      deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
+      deps.sessionService.getSession.mockReturnValue({ id: 'session-1', metadata: { responseMode: 'voice' } });
+
+      await gateway.handle('/clear', 'origin-1', { onSessionRotated: vi.fn() });
+
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith({ responseMode: 'voice' });
+    });
+  });
+
+  describe('/mode', () => {
+    it('sets voice mode via updateMetadata without calling the main agent', async () => {
+      const { gateway, deps } = makeGateway('whatsapp');
+
+      const result = await gateway.handle('/mode voice', 'origin-1');
+
+      expect(deps.mainAgent.run).not.toHaveBeenCalled();
+      expect(deps.sessionService.updateMetadata).toHaveBeenCalledWith({ responseMode: 'voice' });
+      expect(result).toContain('voice');
+      expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
+        expect.objectContaining({ ask: '/mode voice', answer: expect.stringContaining('voice') }),
+      );
+    });
+
+    it('reports the current mode when called with no argument', async () => {
+      const { gateway, deps } = makeGateway('whatsapp');
+      deps.sessionService.getSession.mockReturnValue({ id: 'session-1', metadata: { responseMode: 'voice' } });
+
+      const result = await gateway.handle('/mode', 'origin-1');
+
+      expect(deps.sessionService.updateMetadata).not.toHaveBeenCalled();
+      expect(result).toContain('voice');
+    });
+
+    it('notes when text-to-speech is disabled in config', async () => {
+      const { gateway } = makeGateway('whatsapp');
+      config.AUDIO.TTS.ENABLED = false;
+
+      const result = await gateway.handle('/mode voice', 'origin-1');
+
+      expect(result).toContain('disabled');
     });
   });
 

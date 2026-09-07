@@ -10,19 +10,36 @@ type AsyncHandler = (req: Request, res: Response) => Promise<void>;
 const {
   mockHealthCheck,
   mockAgentHandle,
+  mockTranscribe,
+  mockSynthesize,
 } = vi.hoisted(() => ({
   mockHealthCheck: vi.fn(),
   mockAgentHandle: vi.fn(),
+  mockTranscribe: vi.fn(),
+  mockSynthesize: vi.fn(),
 }));
 
 vi.mock('../../../src/services/provider-health-service', () => ({
   healthCheck: mockHealthCheck,
 }));
 
+vi.mock('../../../src/services/audio/audio-transcription-service', () => ({
+  getAudioTranscriptionService: vi.fn(() => ({
+    transcribe: mockTranscribe,
+  })),
+}));
+
+vi.mock('../../../src/services/audio/audio-synthesis-service', () => ({
+  getSpeechSynthesisService: vi.fn(() => ({
+    synthesize: mockSynthesize,
+  })),
+}));
+
 interface MockResponse {
   sendFile: ReturnType<typeof vi.fn>;
   status: ReturnType<typeof vi.fn>;
   json: ReturnType<typeof vi.fn>;
+  send: ReturnType<typeof vi.fn>;
   setHeader: ReturnType<typeof vi.fn>;
   flushHeaders: ReturnType<typeof vi.fn>;
   write: ReturnType<typeof vi.fn>;
@@ -51,6 +68,7 @@ function makeResponse(): Response & MockResponse {
     sendFile: vi.fn(),
     status: vi.fn(),
     json: vi.fn(),
+    send: vi.fn(),
     setHeader: vi.fn(),
     flushHeaders: vi.fn(),
     write: vi.fn(),
@@ -63,6 +81,8 @@ function makeResponse(): Response & MockResponse {
 
   res.status.mockReturnValue(res);
   res.json.mockReturnValue(res);
+  res.setHeader.mockReturnValue(res);
+  res.send.mockReturnValue(res);
 
   return res;
 }
@@ -457,5 +477,244 @@ describe('createChatCancelHandler', () => {
 
     resolveAgent('done');
     await chatPromise;
+  });
+});
+
+describe('createAudioTranscribeHandler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockTranscribe.mockReset();
+  });
+
+  it('returns 400 when audio data is missing or empty', async () => {
+    const { createAudioTranscribeHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioTranscribeHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    req.body = {};
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Audio data is required and must not be empty' });
+    expect(mockTranscribe).not.toHaveBeenCalled();
+  });
+
+  it('transcribes base64 audio and returns 200 with text', async () => {
+    mockTranscribe.mockResolvedValue({ text: 'Hello world' });
+
+    const { createAudioTranscribeHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioTranscribeHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    const base64Audio = Buffer.from('fake-audio-bytes').toString('base64');
+    req.body = { audio: base64Audio, mimeType: 'audio/webm', filename: 'test.webm' };
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ text: 'Hello world' });
+    expect(mockTranscribe).toHaveBeenCalledWith(
+      Buffer.from('fake-audio-bytes'),
+      { mimeType: 'audio/webm', filename: 'test.webm' },
+    );
+  });
+
+  it('passes language parameter from body or query to transcribe service', async () => {
+    mockTranscribe.mockResolvedValue({ text: 'Texto em qualquer idioma' });
+
+    const { createAudioTranscribeHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioTranscribeHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    const base64Audio = Buffer.from('fake-audio-bytes').toString('base64');
+    req.body = { audio: base64Audio, language: 'auto' };
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ text: 'Texto em qualquer idioma' });
+    expect(mockTranscribe).toHaveBeenCalledWith(
+      Buffer.from('fake-audio-bytes'),
+      { mimeType: undefined, filename: undefined, language: 'auto' },
+    );
+  });
+
+  it('handles base64 data URL prefix correctly', async () => {
+    mockTranscribe.mockResolvedValue({ text: 'Speech from data url' });
+
+    const { createAudioTranscribeHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioTranscribeHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    const base64Data = Buffer.from('audio-data').toString('base64');
+    req.body = { audio: `data:audio/ogg;base64,${base64Data}` };
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ text: 'Speech from data url' });
+    expect(mockTranscribe).toHaveBeenCalledWith(
+      Buffer.from('audio-data'),
+      { mimeType: 'audio/ogg', filename: undefined },
+    );
+  });
+
+  it('handles raw audio binary Buffer body', async () => {
+    mockTranscribe.mockResolvedValue({ text: 'Raw buffer speech' });
+
+    const { createAudioTranscribeHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioTranscribeHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    const rawBuffer = Buffer.from('raw-audio-data');
+    req.body = rawBuffer;
+    req.headers = { 'content-type': 'audio/wav; charset=binary' };
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ text: 'Raw buffer speech' });
+    expect(mockTranscribe).toHaveBeenCalledWith(
+      rawBuffer,
+      { mimeType: 'audio/wav', filename: undefined },
+    );
+  });
+
+  it('returns 400 when transcription is disabled in config', async () => {
+    mockTranscribe.mockResolvedValue({ text: '', error: 'Audio transcription is disabled in config.' });
+
+    const { createAudioTranscribeHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioTranscribeHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    req.body = { audio: Buffer.from('bytes').toString('base64') };
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Audio transcription is disabled in config.' });
+  });
+
+  it('returns 500 when transcription fails with error', async () => {
+    mockTranscribe.mockResolvedValue({ text: '', error: 'Server error 500' });
+
+    const { createAudioTranscribeHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioTranscribeHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    req.body = { audio: Buffer.from('bytes').toString('base64') };
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Server error 500' });
+  });
+});
+
+describe('createAudioSpeakHandler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSynthesize.mockReset();
+  });
+
+  it('returns 400 when text is missing or empty', async () => {
+    const { createAudioSpeakHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioSpeakHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    req.body = { text: '   ' };
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Text is required and must not be empty' });
+    expect(mockSynthesize).not.toHaveBeenCalled();
+  });
+
+  it('synthesizes text and returns 200 with audio bytes and content type', async () => {
+    const audio = Buffer.from('RIFF....WAVE');
+    mockSynthesize.mockResolvedValue({ audio, contentType: 'audio/wav' });
+
+    const { createAudioSpeakHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioSpeakHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    req.body = { text: 'Hello world', voice: 'en_US-lessac-medium' };
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(mockSynthesize).toHaveBeenCalledWith('Hello world', { voice: 'en_US-lessac-medium' });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'audio/wav');
+    expect(res.send).toHaveBeenCalledWith(audio);
+  });
+
+  it('returns 400 when synthesis is disabled in config', async () => {
+    mockSynthesize.mockResolvedValue({ audio: null, contentType: '', error: 'Audio synthesis is disabled in config.' });
+
+    const { createAudioSpeakHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioSpeakHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    req.body = { text: 'Hello' };
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Audio synthesis is disabled in config.' });
+  });
+
+  it('returns 400 when the text exceeds the maximum length', async () => {
+    mockSynthesize.mockResolvedValue({ audio: null, contentType: '', error: 'Text exceeds maximum length of 5000 characters.' });
+
+    const { createAudioSpeakHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioSpeakHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    req.body = { text: 'way too long' };
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('returns 500 when synthesis fails with a generic error', async () => {
+    mockSynthesize.mockResolvedValue({ audio: null, contentType: '', error: 'sidecar boom' });
+
+    const { createAudioSpeakHandler } = await loadWebModule();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as unknown as ILogger;
+    const handler = createAudioSpeakHandler(logger) as AsyncHandler;
+
+    const req = makeRequest('127.0.0.1');
+    req.body = { text: 'Hello' };
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'sidecar boom' });
   });
 });
