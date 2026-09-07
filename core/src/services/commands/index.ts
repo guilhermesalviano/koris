@@ -38,6 +38,9 @@ export function handleCommand(command: string, context: CommandContext): Command
     case '/compact':
       return handleCompact(context);
 
+    case '/mode':
+      return handleMode(command);
+
     case '/allow':
       return handleAllow(command, context);
 
@@ -245,6 +248,20 @@ function handleCompact(context: CommandContext): CommandResult {
     : 'Compacting session — starting a fresh one with a summary of what we covered.';
 
   return { response, action: 'compact', handled: true };
+}
+
+function handleMode(command: string): CommandResult {
+  const arg = command.trim().split(/\s+/)[1]?.toLowerCase();
+
+  if (!arg) {
+    return { action: 'mode', handled: true };
+  }
+
+  if (arg !== 'text' && arg !== 'voice') {
+    return { response: 'Usage: /mode [text|voice]', action: 'none', handled: true };
+  }
+
+  return { action: 'mode', mode: arg, handled: true };
 }
 
 function handleAllow(command: string, context: CommandContext): CommandResult {

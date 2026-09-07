@@ -6,9 +6,11 @@ Optimized for CPU inference on an Intel 2018 Mac mini.
 import io
 import os
 import sys
+import wave
 import logging
 import asyncio
 import tempfile
+import subprocess
 from pathlib import Path
 from typing import Optional, Dict
 from contextlib import asynccontextmanager
@@ -16,14 +18,25 @@ from contextlib import asynccontextmanager
 import numpy as np
 from pydub import AudioSegment
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, status
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import uvicorn
 
 try:
     import sherpa_onnx
 except ImportError:
     sherpa_onnx = None
+
+try:
+    from piper import PiperVoice
+    try:
+        from piper import SynthesisConfig
+    except ImportError:
+        SynthesisConfig = None
+except ImportError:
+    PiperVoice = None
+    SynthesisConfig = None
 
 # Configure logging
 logging.basicConfig(
@@ -129,6 +142,26 @@ transcription_lock = asyncio.Lock()
 
 # Cache of initialized recognizers by language
 _recognizers: Dict[str, "sherpa_onnx.OfflineRecognizer"] = {}
+
+# --- Piper text-to-speech ---------------------------------------------------
+# The TTS endpoint shares this uvicorn process with STT. It has its own lock so
+# the two flows stay independent, but a simultaneous transcription + synthesis
+# still contends for CPU on the host.
+PIPER_VOICE_DIR = os.getenv("PIPER_VOICE_DIR", str(BASE_DIR / "models" / "piper"))
+PIPER_DEFAULT_VOICE = os.getenv("PIPER_DEFAULT_VOICE", "en_US-lessac-medium")
+
+def get_piper_max_chars() -> int:
+    try:
+        return max(1, int(os.getenv("PIPER_MAX_CHARS", "6000")))
+    except ValueError:
+        return 6000
+
+PIPER_MAX_CHARS = get_piper_max_chars()
+
+synthesis_lock = asyncio.Lock()
+
+# Cache of loaded Piper voices by voice name
+_piper_voices: Dict[str, "PiperVoice"] = {}
 
 # Standard Whisper language codes for validation
 WHISPER_LANGUAGES = {
@@ -245,6 +278,80 @@ def run_transcription(samples: np.ndarray, language: Optional[str] = None) -> st
     return stream.result.text.strip()
 
 
+def resolve_piper_voice(name: str):
+    """Locates the Piper voice .onnx + .onnx.json pair for the given voice name."""
+    safe = os.path.basename((name or "").strip()) or PIPER_DEFAULT_VOICE
+    onnx = Path(PIPER_VOICE_DIR) / f"{safe}.onnx"
+    config_json = Path(PIPER_VOICE_DIR) / f"{safe}.onnx.json"
+    if onnx.is_file() and onnx.stat().st_size > 0 and config_json.is_file():
+        return str(onnx), str(config_json)
+    raise FileNotFoundError(
+        f"Piper voice '{safe}' not found in '{PIPER_VOICE_DIR}'. Run 'pnpm audio:setup:tts' first."
+    )
+
+
+def get_piper_voice(name: Optional[str] = None) -> "PiperVoice":
+    """Retrieves or loads a PiperVoice for the given voice name."""
+    if PiperVoice is None:
+        raise RuntimeError("piper-tts package is not available in Python environment")
+
+    voice_name = (name or "").strip() or PIPER_DEFAULT_VOICE
+    if voice_name in _piper_voices:
+        return _piper_voices[voice_name]
+
+    onnx, config_json = resolve_piper_voice(voice_name)
+    logger.info("Loading Piper voice '%s'", voice_name)
+    voice = PiperVoice.load(onnx, config_path=config_json)
+    _piper_voices[voice_name] = voice
+    return voice
+
+
+def run_synthesis(text: str, voice_name: Optional[str] = None, speed: float = 1.0) -> bytes:
+    """Synchronous CPU synthesis run inside a worker thread. Returns WAV bytes."""
+    voice = get_piper_voice(voice_name)
+    length_scale = 1.0 / speed if speed and speed > 0 else 1.0
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav_file:
+        if hasattr(voice, "synthesize_wav"):
+            kwargs = {}
+            if SynthesisConfig is not None:
+                kwargs["syn_config"] = SynthesisConfig(length_scale=length_scale)
+            voice.synthesize_wav(text, wav_file, **kwargs)
+        else:
+            voice.synthesize(text, wav_file, length_scale=length_scale)
+    return buf.getvalue()
+
+
+def wav_duration_seconds(wav_bytes: bytes) -> float:
+    """Reads the duration of a WAV blob from its header."""
+    try:
+        with wave.open(io.BytesIO(wav_bytes), "rb") as w:
+            frames = w.getnframes()
+            rate = w.getframerate()
+            return round(frames / rate, 3) if rate else 0.0
+    except Exception:
+        return 0.0
+
+
+def transcode_wav_to_ogg(wav_bytes: bytes) -> bytes:
+    """Transcodes WAV bytes to OGG/Opus via ffmpeg (bundled in the container).
+    OGG/Opus is what WhatsApp expects for a push-to-talk voice note."""
+    proc = subprocess.run(
+        [
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-i", "pipe:0",
+            "-c:a", "libopus", "-b:a", "24k", "-application", "voip",
+            "-f", "ogg", "pipe:1",
+        ],
+        input=wav_bytes,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+    return proc.stdout
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -261,9 +368,28 @@ async def lifespan(app: FastAPI):
             "Model files not found in '%s'. Run setup.sh to download whisper-tiny int8 model.",
             MODEL_DIR,
         )
+
+    if PiperVoice is not None:
+        try:
+            resolve_piper_voice(PIPER_DEFAULT_VOICE)
+            logger.info("Pre-warming default Piper voice '%s'...", PIPER_DEFAULT_VOICE)
+            get_piper_voice(PIPER_DEFAULT_VOICE)
+            logger.info("Default Piper voice loaded successfully.")
+        except FileNotFoundError:
+            logger.warning(
+                "Piper voice '%s' not found in '%s'. Run 'pnpm audio:setup:tts' to enable TTS.",
+                PIPER_DEFAULT_VOICE,
+                PIPER_VOICE_DIR,
+            )
+        except Exception as e:
+            logger.warning("Failed to pre-warm Piper voice on startup: %s", e)
+    else:
+        logger.warning("piper-tts not installed; the /v1/audio/speech endpoint is disabled.")
+
     yield
     # Shutdown
     _recognizers.clear()
+    _piper_voices.clear()
 
 
 # FastAPI App
@@ -291,6 +417,13 @@ async def health_check():
 
     status_str = "ok" if (files_present and is_loaded) else ("ready" if files_present else "missing_model")
 
+    piper_available = PiperVoice is not None
+    try:
+        resolve_piper_voice(PIPER_DEFAULT_VOICE)
+        piper_voice_present = True
+    except FileNotFoundError:
+        piper_voice_present = False
+
     return {
         "status": status_str,
         "model": {
@@ -303,8 +436,18 @@ async def health_check():
             "loaded": is_loaded,
             "cached_languages": list(_recognizers.keys()),
         },
+        "tts": {
+            "engine": "piper",
+            "available": piper_available,
+            "voice_dir": PIPER_VOICE_DIR,
+            "default_voice": PIPER_DEFAULT_VOICE,
+            "voice_present": piper_voice_present,
+            "loaded_voices": list(_piper_voices.keys()),
+            "max_chars": PIPER_MAX_CHARS,
+        },
         "device": "cpu",
         "lock_acquired": transcription_lock.locked(),
+        "synthesis_lock_acquired": synthesis_lock.locked(),
     }
 
 
@@ -392,6 +535,85 @@ async def post_transcribe(
     response_format: Optional[str] = Form(None),
 ):
     return await transcribe_handler(file, audio, model, language, temperature, response_format)
+
+
+class SpeechRequest(BaseModel):
+    input: str
+    model: Optional[str] = None
+    voice: Optional[str] = None
+    response_format: Optional[str] = None
+    speed: Optional[float] = None
+
+
+async def speech_handler(req: SpeechRequest) -> Response:
+    if PiperVoice is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="piper-tts is not installed in the sidecar Python environment.",
+        )
+
+    text = (req.input or "").strip()
+    if not text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing required 'input' text field",
+        )
+
+    if len(text) > PIPER_MAX_CHARS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Input text exceeds maximum length of {PIPER_MAX_CHARS} characters.",
+        )
+
+    speed = req.speed if (req.speed and req.speed > 0) else 1.0
+    fmt = (req.response_format or "wav").lower()
+
+    # Serialize synthesis calls to prevent CPU overload
+    async with synthesis_lock:
+        try:
+            wav_bytes = await asyncio.to_thread(run_synthesis, text, req.voice, speed)
+        except FileNotFoundError as e:
+            logger.error("Piper voice missing: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(e),
+            )
+        except Exception as e:
+            logger.error("Synthesis error: %s", e, exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Synthesis failed: {e}",
+            )
+
+    headers = {"X-Audio-Duration-Seconds": str(wav_duration_seconds(wav_bytes))}
+
+    if fmt in ("ogg", "opus"):
+        try:
+            ogg_bytes = await asyncio.to_thread(transcode_wav_to_ogg, wav_bytes)
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="ffmpeg is not available for OGG transcoding.",
+            )
+        except subprocess.CalledProcessError as e:
+            logger.error("ffmpeg transcode failed: %s", e.stderr.decode(errors="replace"))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="OGG transcoding failed.",
+            )
+        return Response(content=ogg_bytes, media_type="audio/ogg", headers=headers)
+
+    return Response(content=wav_bytes, media_type="audio/wav", headers=headers)
+
+
+@app.post("/v1/audio/speech", summary="OpenAI-compatible text-to-speech")
+async def post_speech(req: SpeechRequest) -> Response:
+    return await speech_handler(req)
+
+
+@app.post("/synthesize", summary="Synthesis alias")
+async def post_synthesize(req: SpeechRequest) -> Response:
+    return await speech_handler(req)
 
 
 if __name__ == "__main__":

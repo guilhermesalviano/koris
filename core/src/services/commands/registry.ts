@@ -69,6 +69,14 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
     summary: 'Summarise this session into memory, then start a fresh one seeded with the summary',
   },
   {
+    name: '/mode',
+    summary: 'Reply to this conversation as text or as voice notes',
+    usage: '/mode [text|voice]',
+    details:
+      'In voice mode I answer with audio instead of text, for this conversation only ' +
+      '(needs text-to-speech configured). `/mode` on its own reports the current setting.',
+  },
+  {
     name: '/allow',
     summary: 'Add a domain to allowed_domains so I can reach it',
     usage: '/allow <domain>',

@@ -9,7 +9,7 @@ import { startTUI } from '../../apps/tui';
 import { LoggerFactory, ILogger } from './infrastructure/logger';
 import { MessageGatewayFactory, IMessageGateway } from './services/agents/message-gateway';
 import { IHeartbeatRunner, HeartbeatSingleton } from './services/agents/sub-agents/heartbeat/runner';
-import { ChannelsSingleton, ADAPTERS, ChannelHandlerFactory, applyChannelOverrides, type IChannelsManager } from './channels';
+import { ChannelsSingleton, ADAPTERS, ChannelHandlerFactory, configureChannelHandler, applyChannelOverrides, type IChannelsManager } from './channels';
 import { loadChannelOverrides } from './config/channel-overrides';
 import { SHUTDOWN_SIGNALS } from './constants/tui';
 import { hasFlag, logError } from './utils/runtime';
@@ -179,6 +179,7 @@ class Application implements IApplication {
     const db = DatabaseServiceFactory.create();
     seedDefaultBeats(db, this.logger);
     const sessionManager = new SessionManager(db);
+    configureChannelHandler({ sessionManager, logger: this.logger });
     const gateway = MessageGatewayFactory.create(this.logger, this.source, db, sessionManager);
     const channelPlugins = createPlugins({ context: createPluginContext(this.logger, gateway, db) });
     const toolPlugins = createToolPlugins({ context: createToolPluginContext(this.logger, db) });

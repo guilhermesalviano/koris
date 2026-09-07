@@ -9,6 +9,7 @@ interface ISessionService {
   getSession(): Session;
   ensureActiveSession(): Session;
   updateCount(): void;
+  updateMetadata(patch: Record<string, unknown>): void;
   forceRotate(newMetadata?: Record<string, unknown>): Session;
 }
 
@@ -62,6 +63,18 @@ class SessionService implements ISessionService {
       metadata: {
         ...this.session.metadata,
         lastActivityAt: now,
+      },
+    });
+    this.sessionRepository.update(this.session.id, updatedSession);
+    this.session = updatedSession;
+  }
+
+  updateMetadata(patch: Record<string, unknown>): void {
+    const updatedSession = new Session({
+      ...this.session,
+      metadata: {
+        ...this.session.metadata,
+        ...patch,
       },
     });
     this.sessionRepository.update(this.session.id, updatedSession);

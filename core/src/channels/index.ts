@@ -14,7 +14,7 @@ import type {
   StickerReference,
 } from '../../../plugins/channels/contracts';
 import { ADAPTERS, assertNeverOutboundEvent } from '../../../plugins/channels/contracts';
-import { ChannelHandler, ChannelHandlerFactory } from './handler';
+import { ChannelHandler, ChannelHandlerFactory, configureChannelHandler } from './handler';
 import { resolveResponse, splitForCapabilities, splitMessage } from './utils';
 import type { ChannelOverride } from '../config/channel-overrides';
 
@@ -35,6 +35,7 @@ export {
   assertNeverOutboundEvent,
   ChannelHandler,
   ChannelHandlerFactory,
+  configureChannelHandler,
   resolveResponse,
   splitForCapabilities,
   splitMessage,

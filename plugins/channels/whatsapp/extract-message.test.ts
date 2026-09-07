@@ -3,6 +3,7 @@ import type { WAMessage } from '@whiskeysockets/baileys';
 import {
   extractAudio,
   extractImage,
+  extractQuotedAudio,
   extractQuotedImage,
   extractQuotedSticker,
   extractQuotedText,
@@ -212,6 +213,49 @@ describe('extract-message', () => {
         stanzaId: 's-2',
         participant: 'u-2',
       });
+    });
+
+    it('extracts a quoted voice note', () => {
+      const audioMsg = makeMsg({
+        message: {
+          extendedTextMessage: {
+            text: 'what did they say?',
+            contextInfo: {
+              stanzaId: 'a-1',
+              participant: 'u-1@s.whatsapp.net',
+              quotedMessage: {
+                audioMessage: { mimetype: 'audio/ogg; codecs=opus', seconds: 7, ptt: true },
+              },
+            },
+          },
+        },
+      });
+      expect(extractQuotedAudio(audioMsg)).toEqual({
+        mimetype: 'audio/ogg; codecs=opus',
+        seconds: 7,
+        ptt: true,
+        quotedMessage: { audioMessage: { mimetype: 'audio/ogg; codecs=opus', seconds: 7, ptt: true } },
+        stanzaId: 'a-1',
+        participant: 'u-1@s.whatsapp.net',
+      });
+    });
+
+    it('defaults the mimetype for a quoted voice note that omits it', () => {
+      const audioMsg = makeMsg({
+        message: {
+          extendedTextMessage: {
+            contextInfo: { quotedMessage: { audioMessage: {} } },
+          },
+        },
+      });
+      expect(extractQuotedAudio(audioMsg)?.mimetype).toBe('audio/ogg; codecs=opus');
+    });
+
+    it('extractQuotedAudio returns null for a non-audio or absent quote', () => {
+      expect(extractQuotedAudio(makeMsg({ message: { conversation: 'hi' } }))).toBeNull();
+      expect(extractQuotedAudio(makeMsg({
+        message: { extendedTextMessage: { contextInfo: { quotedMessage: { conversation: 'hi' } } } },
+      }))).toBeNull();
     });
   });
 });

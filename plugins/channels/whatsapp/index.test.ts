@@ -37,6 +37,7 @@ vi.mock('@whiskeysockets/baileys', () => ({
 vi.mock('qrcode-terminal', () => ({ generate: vi.fn() }));
 
 import { WhatsAppChannelFactory, configureWhatsAppRuntime, _resetWhatsAppDedupeForTesting, create } from './index';
+import { WhatsAppChannel } from './channel';
 import { _resetContactNamesForTesting } from './contact-names';
 import { whatsappState } from './state';
 import type { ChannelDefinition } from '../contracts';
@@ -147,6 +148,23 @@ describe('whatsapp plugin', () => {
       '11999999999', '511999999999', '5511999999999', '55111999999999',
     );
     expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'oi' });
+  });
+
+  it('sends audio as a push-to-talk voice note, forcing the opus codec mimetype', async () => {
+    await start('n/a');
+
+    await new WhatsAppChannel().sendAudio(
+      '5511999999999@s.whatsapp.net',
+      Buffer.from('ogg-opus-bytes'),
+      { mimeType: 'audio/ogg', seconds: 3.4 },
+    );
+
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', {
+      audio: expect.any(Buffer),
+      ptt: true,
+      mimetype: 'audio/ogg; codecs=opus',
+      seconds: 3,
+    });
   });
 
   it('splits a reply longer than the WhatsApp chunk limit into multiple sends', async () => {
@@ -484,6 +502,69 @@ describe('whatsapp plugin', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].message.text).toBe('[Voice message]: transcribed voice note');
     expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'pong' });
+  });
+
+  it('transcribes a quoted voice note into the quotedText context', async () => {
+    const audioTranscriber: AudioTranscriber = {
+      transcribe: vi.fn().mockResolvedValue({ text: 'the quoted note' }),
+    };
+    const { calls } = await start('pong', { audioTranscriber });
+
+    await emitUpsert([
+      waMessage({
+        message: {
+          extendedTextMessage: {
+            text: 'what did they say?',
+            contextInfo: {
+              stanzaId: 'Q1',
+              participant: '5511999999999@s.whatsapp.net',
+              quotedMessage: { audioMessage: { mimetype: 'audio/ogg; codecs=opus', seconds: 4 } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    expect(downloadMediaMessage).toHaveBeenCalled();
+    expect(audioTranscriber.transcribe).toHaveBeenCalledWith(
+      Buffer.from('fake-bytes'),
+      { mimeType: 'audio/ogg; codecs=opus', filename: 'voice.ogg' },
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message.text).toBe('what did they say?');
+    expect(calls[0].message.quotedText).toBe('[Voice message]: the quoted note');
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'pong' });
+  });
+
+  it('still answers the reply when a quoted voice note cannot be downloaded', async () => {
+    downloadMediaMessage.mockRejectedValueOnce(new Error('media expired'));
+    const audioTranscriber: AudioTranscriber = { transcribe: vi.fn() };
+    const { calls } = await start('pong', { audioTranscriber });
+
+    await emitUpsert([
+      waMessage({
+        message: {
+          extendedTextMessage: {
+            text: 'and this one?',
+            contextInfo: {
+              stanzaId: 'Q2',
+              participant: '5511999999999@s.whatsapp.net',
+              quotedMessage: { audioMessage: { seconds: 2 } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    expect(audioTranscriber.transcribe).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message.text).toBe('and this one?');
+    expect(calls[0].message.quotedText).toBeUndefined();
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'pong' });
+    expect(fakeSock.sendMessage).not.toHaveBeenCalledWith(
+      '5511999999999@s.whatsapp.net',
+      expect.objectContaining({ text: expect.stringContaining('⚠️') }),
+    );
   });
 
   it('sends direct reply when downloading audio buffer fails', async () => {

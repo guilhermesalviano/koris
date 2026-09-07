@@ -77,6 +77,19 @@ describe('SessionService', () => {
     expect(svc.getSession().metadata.lastActivityAt).toBe('2024-06-01T09:00:00.000-03:00');
   });
 
+  it('updateMetadata merges into existing metadata, persists, and updates the in-memory session', () => {
+    const repo = makeRepo();
+    const session = new Session({ id: 's1', entryChannel: 'tui', metadata: { lastActivityAt: 'x' } });
+    const svc = new SessionService(repo as any, session, { persistOnConstruct: false });
+
+    svc.updateMetadata({ responseMode: 'voice' });
+
+    expect(repo.update).toHaveBeenCalledTimes(1);
+    expect(repo.update.mock.calls[0][0]).toBe('s1');
+    expect(repo.update.mock.calls[0][1].metadata).toEqual({ lastActivityAt: 'x', responseMode: 'voice' });
+    expect(svc.getSession().metadata).toEqual({ lastActivityAt: 'x', responseMode: 'voice' });
+  });
+
   it('updateCount passes original id to repo.update', () => {
     const repo = makeRepo();
     const session = new Session({ entryChannel: 'tui' });
