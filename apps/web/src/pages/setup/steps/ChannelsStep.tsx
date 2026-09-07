@@ -51,7 +51,7 @@ export function ChannelsStep({
     <div className="space-y-8">
       {(!onlyEnabled || isTelegramEnabled) && (
         <div>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
             <span className="text-sm font-medium">Telegram</span>
             {!onlyEnabled && <EnabledIndicator enabled={isTelegramEnabled} />}
           </div>
@@ -76,23 +76,23 @@ export function ChannelsStep({
                 placeholder="123456,789012"
               />
             </div>
-            <div className="sm:col-span-2 flex items-center gap-3">
+            <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
               <button
                 type="button"
                 disabled={api.testingTelegram || !telegram.bot_token}
                 onClick={() => api.testTelegramToken()}
-                className={buttonClass}
+                className={`${buttonClass} w-full sm:w-auto`}
               >
                 {api.testingTelegram ? 'Testing…' : 'Test token'}
               </button>
               {api.telegramTestResult && (
-                <span className={`font-mono text-[11px] ${api.telegramTestResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+                <span className={`font-mono text-[11px] break-words min-w-0 ${api.telegramTestResult.ok ? 'text-green-400' : 'text-red-400'}`}>
                   {api.telegramTestResult.ok ? `valid — @${api.telegramTestResult.username ?? '?'}` : (api.telegramTestResult.error ?? 'invalid token')}
                 </span>
               )}
             </div>
             <div className="sm:col-span-2 flex items-center justify-between gap-3">
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="text-sm">Allow unlisted senders</div>
                 <div className="font-mono text-[11px] text-txt-3">
                   Reply to senders not on the whitelist, as untrusted (no tools or learned skills).
@@ -113,7 +113,7 @@ export function ChannelsStep({
 
       {(!onlyEnabled || isWhatsappEnabled) && (
         <div>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
             <span className="text-sm font-medium">WhatsApp</span>
             {!onlyEnabled && <EnabledIndicator enabled={isWhatsappEnabled} />}
           </div>
@@ -142,21 +142,21 @@ export function ChannelsStep({
                 />
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
               <button
                 type="button"
                 disabled={api.whatsappConnecting}
                 onClick={() => api.connectWhatsApp()}
-                className={buttonClass}
+                className={`${buttonClass} w-full sm:w-auto`}
               >
                 {api.whatsappConnecting ? 'Connecting…' : 'Connect'}
               </button>
               {api.whatsappConnectResult && (
-                <span className="font-mono text-[11px] text-txt-3">{api.whatsappConnectResult}</span>
+                <span className="font-mono text-[11px] break-words min-w-0 text-txt-3">{api.whatsappConnectResult}</span>
               )}
             </div>
             <div className="flex items-center justify-between gap-3">
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="text-sm">Allow unlisted senders</div>
                 <div className="font-mono text-[11px] text-txt-3">
                   Reply to senders not on the whitelist, as untrusted (no tools or learned skills).

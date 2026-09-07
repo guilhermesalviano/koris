@@ -107,7 +107,7 @@ export function Toast({ message, isError }: { message: string | null; isError: b
   if (!message) return null;
   return (
     <div
-      className={`pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border px-4 py-2 font-mono text-xs shadow-lg ${
+      className={`pointer-events-none fixed bottom-6 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 break-words rounded-full border px-4 py-2 text-center font-mono text-xs shadow-lg ${
         isError ? 'border-red-500/40 bg-[#2a1212] text-red-300' : 'border-strong bg-bg-3 text-txt'
       }`}
     >

@@ -1,7 +1,7 @@
 import type { SettingsFormApi } from '../../../lib/use-settings-form';
 import type { UsePluginsApi } from '../../../lib/use-plugins';
 
-const rowClass = 'flex justify-between gap-4 border-b border-subtle py-1.5 text-sm last:border-0';
+const rowClass = 'flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-4 border-b border-subtle py-2 sm:py-1.5 text-sm last:border-0';
 
 export function ReviewStep({ api, pluginsApi }: { api: SettingsFormApi; pluginsApi?: UsePluginsApi }) {
   const { form } = api;
@@ -17,13 +17,31 @@ export function ReviewStep({ api, pluginsApi }: { api: SettingsFormApi; pluginsA
 
   return (
     <div>
-      <div className="rounded-lg border border-subtle bg-bg-3 px-4 py-3">
-        <div className={rowClass}><span className="text-txt-3">Manager provider</span><span className="font-mono">{form.manager.provider} · {form.manager.model || '—'}</span></div>
-        <div className={rowClass}><span className="text-txt-3">Worker provider</span><span className="font-mono">{workers.provider} · {workers.model || '—'}</span></div>
-        <div className={rowClass}><span className="text-txt-3">Telegram</span><span>{isTelegramEnabled ? 'enabled' : 'disabled'}</span></div>
-        <div className={rowClass}><span className="text-txt-3">WhatsApp</span><span>{isWhatsappEnabled ? 'enabled' : 'disabled'}</span></div>
-        <div className={rowClass}><span className="text-txt-3">Allowed domains</span><span>{form.allowed_domains.length || 'none'}</span></div>
-        <div className={rowClass}><span className="text-txt-3">Personal info fields</span><span>{Object.keys(form.personal_information).length || 'none'}</span></div>
+      <div className="rounded-lg border border-subtle bg-bg-3 px-3.5 py-3 sm:px-4">
+        <div className={rowClass}>
+          <span className="text-xs text-txt-3 sm:text-sm">Manager provider</span>
+          <span className="break-all font-mono text-xs text-txt sm:break-normal sm:text-right sm:text-sm">{form.manager.provider} · {form.manager.model || '—'}</span>
+        </div>
+        <div className={rowClass}>
+          <span className="text-xs text-txt-3 sm:text-sm">Worker provider</span>
+          <span className="break-all font-mono text-xs text-txt sm:break-normal sm:text-right sm:text-sm">{workers.provider} · {workers.model || '—'}</span>
+        </div>
+        <div className={rowClass}>
+          <span className="text-xs text-txt-3 sm:text-sm">Telegram</span>
+          <span className="text-xs text-txt sm:text-sm">{isTelegramEnabled ? 'enabled' : 'disabled'}</span>
+        </div>
+        <div className={rowClass}>
+          <span className="text-xs text-txt-3 sm:text-sm">WhatsApp</span>
+          <span className="text-xs text-txt sm:text-sm">{isWhatsappEnabled ? 'enabled' : 'disabled'}</span>
+        </div>
+        <div className={rowClass}>
+          <span className="text-xs text-txt-3 sm:text-sm">Allowed domains</span>
+          <span className="text-xs text-txt sm:text-sm">{form.allowed_domains.length || 'none'}</span>
+        </div>
+        <div className={rowClass}>
+          <span className="text-xs text-txt-3 sm:text-sm">Personal info fields</span>
+          <span className="text-xs text-txt sm:text-sm">{Object.keys(form.personal_information).length || 'none'}</span>
+        </div>
       </div>
 
       {api.saveErrors && (

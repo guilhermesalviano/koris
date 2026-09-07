@@ -38,7 +38,7 @@ export function PluginsStep({
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -46,8 +46,8 @@ export function PluginsStep({
             onClick={() => setTab(t.key)}
             className={
               tab === t.key
-                ? 'rounded-lg border border-accent-muted bg-accent-muted px-3 py-1.5 text-sm font-medium text-accent-2'
-                : secondaryBtn
+                ? 'flex items-center justify-center rounded-lg border border-accent-muted bg-accent-muted px-3 py-2 text-sm font-medium text-accent-2 sm:py-1.5'
+                : `${secondaryBtn} flex items-center justify-center py-2 sm:py-1.5`
             }
           >
             {t.label}

@@ -60,8 +60,8 @@ export default function SetupWizardPage() {
 
   return (
     <div className="min-h-screen bg-bg text-txt">
-      <div className="mx-auto max-w-2xl px-6 py-12">
-        <h1 className="text-xl font-semibold">Set up Koris Assistant</h1>
+      <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-12">
+        <h1 className="text-lg sm:text-xl font-semibold">Set up Koris Assistant</h1>
         <p className="mt-1 font-mono text-[11px] text-txt-3">
           Step {step + 1} of {STEPS.length} · {STEPS[step].title}
         </p>
@@ -72,18 +72,18 @@ export default function SetupWizardPage() {
           ))}
         </div>
 
-        <div className="mt-8 rounded-card border border-subtle bg-bg-2 p-6">
+        <div className="mt-6 sm:mt-8 rounded-card border border-subtle bg-bg-2 p-4 sm:p-6">
           <StepComponent api={api} pluginsApi={pluginsApi} />
         </div>
 
         {api.loadError && <p className="mt-3 text-sm text-red-400">{api.loadError}</p>}
 
-        <div className="mt-6 flex justify-between">
+        <div className="mt-6 flex items-center justify-between gap-3">
           <button
             type="button"
             disabled={step === 0}
             onClick={() => setStep((s) => Math.max(0, s - 1))}
-            className="rounded-lg border border-strong bg-bg-3 px-4 py-2 text-sm font-medium disabled:opacity-40"
+            className="rounded-lg border border-strong bg-bg-3 px-5 py-2.5 sm:py-2 text-sm font-medium min-h-[42px] disabled:opacity-40"
           >
             Back
           </button>
@@ -91,7 +91,7 @@ export default function SetupWizardPage() {
             type="button"
             disabled={api.saving}
             onClick={handleNext}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-60"
+            className="rounded-lg bg-accent px-5 py-2.5 sm:py-2 text-sm font-medium min-h-[42px] hover:opacity-90 disabled:opacity-60"
           >
             {isLast ? (api.saving ? 'Saving…' : 'Save & finish') : 'Next'}
           </button>

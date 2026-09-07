@@ -48,10 +48,10 @@ function PluginRow({ item, onToggle }: { item: PluginItem; onToggle: () => void 
  */
 function SkillRow({ item, onToggle }: { item: PluginItem; onToggle: () => void }) {
   return (
-    <Card className="p-4">
+    <Card className="p-3.5 sm:p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <span className="font-mono text-xs text-accent-2">{item.name}</span>
             {item.learned_at && (
               <span className="font-mono text-[10px] text-txt-3">synced {formatDate(item.learned_at)}</span>
@@ -107,7 +107,7 @@ export default function PluginsList({ api }: { api: UsePluginsApi }) {
                 type="button"
                 onClick={resyncSkills}
                 disabled={resyncing}
-                className="ml-auto rounded-lg border border-subtle bg-bg-3 px-3 py-1 font-mono text-[11px] text-txt-2 hover:border-accent hover:text-accent-2 disabled:opacity-50"
+                className="ml-auto flex-shrink-0 rounded-lg border border-subtle bg-bg-3 px-3 py-1 font-mono text-[11px] text-txt-2 hover:border-accent hover:text-accent-2 disabled:opacity-50"
               >
                 {resyncing ? 'Resyncing…' : 'Resync from disk'}
               </button>
@@ -121,7 +121,7 @@ export default function PluginsList({ api }: { api: UsePluginsApi }) {
               ))}
             </div>
           ) : (
-            <Card className="grid grid-cols-1 gap-x-6 p-4 sm:grid-cols-2">
+            <Card className="grid grid-cols-1 divide-y divide-subtle/40 p-3.5 sm:grid-cols-2 sm:divide-y-0 sm:gap-x-6 sm:p-4">
               {items.map((item) => (
                 <PluginRow key={item.name} item={item} onToggle={() => handleToggle(item)} />
               ))}
