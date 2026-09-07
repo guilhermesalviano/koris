@@ -77,7 +77,7 @@ export async function handleToolsCommand(command: string, context: CommandContex
 
     try {
       await pullEntry(slug, { baseDir: config.BASE_DIR, family: 'tool', force });
-      ToolSyncSingleton.getExistingInstance()?.sync();
+      ToolSyncSingleton.getExistingInstance()?.sync(slug);
       return formatCommandResult(
         `Successfully downloaded tool "${slug}". It is loaded and ready to use.`,
         context.source,

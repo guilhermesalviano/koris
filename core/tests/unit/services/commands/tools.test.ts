@@ -132,7 +132,7 @@ describe('tools command', () => {
         family: 'tool',
         force: false,
       });
-      expect(syncMock).toHaveBeenCalled();
+      expect(syncMock).toHaveBeenCalledWith('issue');
       expect(result.response).toContain('Successfully downloaded tool "issue"');
     });
 
@@ -149,6 +149,7 @@ describe('tools command', () => {
         family: 'tool',
         force: true,
       });
+      expect(syncMock).toHaveBeenCalledWith('issue');
       expect(result.response).toContain('Successfully downloaded tool "issue"');
     });
 

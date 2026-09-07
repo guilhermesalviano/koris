@@ -13,6 +13,7 @@ const {
   learnedSkillsRepo,
   skillsRepo,
   skillSync,
+  toolSync,
   settingsWriter,
   liveChannelRuntime,
   pluginSettingsRepo,
@@ -44,6 +45,7 @@ const {
   learnedSkillsRepo: { count: vi.fn(), getAll: vi.fn(), getByName: vi.fn(), setEnabled: vi.fn() },
   skillsRepo: { get: vi.fn() },
   skillSync: { sync: vi.fn(), getExistingInstance: vi.fn() },
+  toolSync: { sync: vi.fn(), getExistingInstance: vi.fn() },
   settingsWriter: {
     loadCurrentOrExampleSettings: vi.fn(() => ({})),
     mergeSettingsPayload: vi.fn((base: object, patch: object) => ({ ...base, ...patch })),
@@ -104,6 +106,10 @@ vi.mock('../../../src/repositories/skills', () => ({
 
 vi.mock('../../../src/services/skills/skill-sync', () => ({
   SkillSyncSingleton: skillSync,
+}));
+
+vi.mock('../../../src/services/tools/tool-sync', () => ({
+  ToolSyncSingleton: toolSync,
 }));
 
 vi.mock('../../../src/config/settings-writer', async (importActual) => {
@@ -497,9 +503,11 @@ describe('AdminRouterFactory /plugins', () => {
     // test opts into skill rows explicitly.
     skillsRepo.get.mockReturnValue([]);
     learnedSkillsRepo.getAll.mockReturnValue([]);
+    toolSync.getExistingInstance.mockReturnValue({ sync: toolSync.sync });
+    skillSync.getExistingInstance.mockReturnValue({ sync: skillSync.sync });
   });
 
-  it('GET /plugins lists every catalog entry with its resolved enabled state', () => {
+  it('GET /plugins lists every catalog entry with its resolved enabled state and syncs tools/skills', () => {
     pluginSettingsRepo.getEnabled.mockImplementation((family: string, name: string) =>
       family === 'tools' && name === 'curl-request' ? false : null);
 
@@ -507,6 +515,8 @@ describe('AdminRouterFactory /plugins', () => {
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/plugins'), res);
 
+    expect(toolSync.sync).toHaveBeenCalled();
+    expect(skillSync.sync).toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({
       items: [
         { family: 'tools', name: 'curl-request', enabled: false },
@@ -695,8 +705,9 @@ describe('AdminRouterFactory /marketplace', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Request to https://api.github.com/... failed: 500 Internal Server Error' });
   });
 
-  it('POST /marketplace/:slug/pull pulls the entry, pinning baseDir to config.BASE_DIR', async () => {
+  it('POST /marketplace/:slug/pull pulls the entry, pinning baseDir to config.BASE_DIR and syncs tools', async () => {
     hubSync.pullEntry.mockResolvedValue({ family: 'tool', slug: 'issue', createdFiles: ['plugins/tools/issue/index.ts'] });
+    toolSync.getExistingInstance.mockReturnValue({ sync: toolSync.sync });
 
     const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
@@ -704,11 +715,26 @@ describe('AdminRouterFactory /marketplace', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(hubSync.pullEntry).toHaveBeenCalledWith('issue', { baseDir: config.BASE_DIR });
+    expect(toolSync.sync).toHaveBeenCalledWith('issue');
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       item: { family: 'tool', slug: 'issue', createdFiles: ['plugins/tools/issue/index.ts'] },
     });
+  });
+
+  it('POST /marketplace/:slug/pull syncs skills when pulling a skill', async () => {
+    hubSync.pullEntry.mockResolvedValue({ family: 'skill', slug: 'git', createdFiles: ['plugins/skills/git/SKILL.md'] });
+    skillSync.getExistingInstance.mockReturnValue({ sync: skillSync.sync });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/marketplace/git/pull'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(hubSync.pullEntry).toHaveBeenCalledWith('git', { baseDir: config.BASE_DIR });
+    expect(skillSync.sync).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(201);
   });
 
   it('POST /marketplace/:slug/pull returns 400 when the plugin already exists locally', async () => {

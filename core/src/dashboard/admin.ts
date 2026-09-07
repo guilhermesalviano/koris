@@ -35,6 +35,7 @@ import { CHANNEL_TYPES, ChannelType } from '../entities/channel';
 import { LearnedSkillsRepositoryFactory } from '../repositories/learned-skills';
 import { SkillsRepositoryFactory } from '../repositories/skills';
 import { SkillSyncSingleton } from '../services/skills/skill-sync';
+import { ToolSyncSingleton } from '../services/tools/tool-sync';
 import { AuditLogRepositoryFactory, AuditLogRow } from '../repositories/audit-log';
 import { buildUsageReport, usageFrom } from '../services/usage/usage';
 import { Heartbeat } from '../entities/heartbeat';
@@ -825,6 +826,9 @@ class AdminRouterFactory {
     });
 
     router.get('/plugins', (_req: Request, res: Response) => {
+      ToolSyncSingleton.getExistingInstance()?.sync();
+      SkillSyncSingleton.getExistingInstance()?.sync();
+
       const items = PluginCatalogSingleton.getExistingInstance().map(({ family, name }) => ({
         family,
         name,
@@ -898,6 +902,11 @@ class AdminRouterFactory {
     router.post('/marketplace/:slug/pull', async (req: Request, res: Response) => {
       try {
         const item = await pullEntry(String(req.params.slug), { baseDir: config.BASE_DIR });
+        if (item.family === 'tool') {
+          ToolSyncSingleton.getExistingInstance()?.sync(item.slug);
+        } else if (item.family === 'skill') {
+          SkillSyncSingleton.getExistingInstance()?.sync();
+        }
         res.status(201).json({ success: true, item });
       } catch (err) {
         res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to pull from koris-hub.' });

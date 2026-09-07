@@ -28,7 +28,10 @@ class PluginCatalogSingleton {
    * and enablement resolution see it immediately.
    */
   static append(identities: PluginIdentity[]): void {
-    PluginCatalogSingleton.instance = [...(PluginCatalogSingleton.instance ?? []), ...identities];
+    const current = PluginCatalogSingleton.instance ?? [];
+    const exists = (id: PluginIdentity) => current.some((c) => c.family === id.family && c.name === id.name);
+    const newItems = identities.filter((id) => !exists(id));
+    PluginCatalogSingleton.instance = [...current, ...newItems];
   }
 }
 

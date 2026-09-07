@@ -228,6 +228,53 @@ describe('ToolSyncService', () => {
     expect(PluginCatalogSingleton.append).toHaveBeenCalledWith([{ family: 'tools', name: 'weather' }]);
   });
 
+  it('does not mark a candidate as known if index.ts is missing (in-progress download), allowing retry', () => {
+    // First sync pass: only auxiliary file written so far
+    (readdirSync as ReturnType<typeof vi.fn>).mockImplementation((dir: string) => {
+      if (dir === SOURCE_DIR) return [makeEntry('downloading', true)];
+      if (dir === `${SOURCE_DIR}/downloading`) return [makeEntry('aux.ts', false)];
+      throw new Error(`unexpected readdirSync(${dir})`);
+    });
+
+    const { service, requireModule } = makeService();
+    service.sync();
+    expect(requireModule).not.toHaveBeenCalled();
+
+    // Second sync pass: index.ts is now written and ready
+    vi.clearAllMocks();
+    (readdirSync as ReturnType<typeof vi.fn>).mockImplementation((dir: string) => {
+      if (dir === SOURCE_DIR) return [makeEntry('downloading', true)];
+      if (dir === `${SOURCE_DIR}/downloading`) return [makeEntry('aux.ts', false), makeEntry('index.ts', false)];
+      throw new Error(`unexpected readdirSync(${dir})`);
+    });
+    (readFileSync as ReturnType<typeof vi.fn>).mockReturnValue('source');
+    requireModule.mockReturnValue({ create: () => ({ name: 'downloading', setup: vi.fn() }) });
+
+    service.sync();
+    expect(requireModule).toHaveBeenCalledWith(`${DIST_DIR}/downloading`);
+    expect(ToolPluginsSingleton.replace).toHaveBeenCalled();
+  });
+
+  it('allows forced re-sync of an already known slug', () => {
+    (readdirSync as ReturnType<typeof vi.fn>).mockImplementation((dir: string) => {
+      if (dir === SOURCE_DIR) return [makeEntry('existing', true)];
+      if (dir === `${SOURCE_DIR}/existing`) return [makeEntry('index.ts', false)];
+      throw new Error(`unexpected readdirSync(${dir})`);
+    });
+    (readFileSync as ReturnType<typeof vi.fn>).mockReturnValue('source');
+
+    const { service, requireModule } = makeService({}, ['existing']);
+    requireModule.mockReturnValue({ create: () => ({ name: 'existing', setup: vi.fn() }) });
+
+    // Normal sync skips it
+    service.sync();
+    expect(requireModule).not.toHaveBeenCalled();
+
+    // Forced sync reloads it
+    service.sync('existing');
+    expect(requireModule).toHaveBeenCalledWith(`${DIST_DIR}/existing`);
+  });
+
   it('stop closes the watcher', () => {
     (readdirSync as ReturnType<typeof vi.fn>).mockReturnValue([]);
     const { service } = makeService();
