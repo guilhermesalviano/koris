@@ -5,6 +5,7 @@ import { isDuplicateMessage } from './dedupe';
 import {
   extractAudio,
   extractImage,
+  extractQuotedAudio,
   extractQuotedImage,
   extractQuotedSticker,
   extractQuotedText,
@@ -12,11 +13,11 @@ import {
 } from './extract-message';
 import { applyMentionNames, rememberContactName } from './contact-names';
 import { resolveGroupName } from './group-name';
-import { downloadAudioBuffer, downloadImageBase64, downloadQuotedImageBase64, toStickerReference } from './media';
+import { downloadAudioBuffer, downloadImageBase64, downloadQuotedAudioBuffer, downloadQuotedImageBase64, toStickerReference } from './media';
 import { extractMentionedJids, isBotMentioned, jidToNumber } from './mention';
 import { isWhitelistedSender } from './sender';
 import { whatsappState } from './state';
-import type { ExtractedAudio, ExtractedImage, ExtractedQuotedImage, ExtractedSticker, SocketLike, WhatsAppChannelStartOptions } from './types';
+import type { ExtractedAudio, ExtractedImage, ExtractedQuotedAudio, ExtractedQuotedImage, ExtractedSticker, SocketLike, WhatsAppChannelStartOptions } from './types';
 
 function firstJidMatching(suffix: string, ...jids: (string | null | undefined)[]): string {
   for (const jid of jids) {
@@ -147,6 +148,7 @@ export async function startBaileysSocket(options: WhatsAppChannelStartOptions): 
       const sticker = extractQuotedSticker(msg);
       const quotedText = extractQuotedText(msg);
       const quotedImage = extractQuotedImage(msg);
+      const quotedAudio = extractQuotedAudio(msg);
       const audio = extractAudio(msg);
 
       if (!rawText && !image && !sticker && !audio) continue;
@@ -158,7 +160,7 @@ export async function startBaileysSocket(options: WhatsAppChannelStartOptions): 
       const mentionsBot = isGroup && isBotMentioned(text, mentionedJids, botIds);
       if (isGroup && !mentionsBot) continue;
 
-      void handleInboundMessage(options, sock, jid, senderName, text, mentionedJids, image, sticker, quotedText, quotedImage, isWhitelisted, mentionsBot, externalId ?? undefined, audio).catch((err: Error) => {
+      void handleInboundMessage(options, sock, jid, senderName, text, mentionedJids, image, sticker, quotedText, quotedImage, isWhitelisted, mentionsBot, externalId ?? undefined, audio, quotedAudio).catch((err: Error) => {
         options.logger.warn(`WhatsApp message handling error: ${err.message}`);
       });
     }
@@ -182,6 +184,7 @@ async function handleInboundMessage(
   mentionsBot: boolean,
   externalId?: string,
   audio?: ExtractedAudio | null,
+  quotedAudio?: ExtractedQuotedAudio | null,
 ): Promise<void> {
   const channel = new WhatsAppChannel(sock);
 
@@ -212,6 +215,27 @@ async function handleInboundMessage(
     currentText = `[Voice message]: ${result.text.trim()}`;
   }
 
+  // A text reply that quotes a voice note: transcribe the quoted audio and feed
+  // it into `quotedText` so the turn reads "Quoting: \"[Voice message]: …\"".
+  // Unlike a direct voice note this is only context, so any failure is skipped
+  // silently and the reply text still gets answered.
+  let resolvedQuotedText = quotedText;
+  if (quotedAudio && !resolvedQuotedText) {
+    const buffer = await downloadQuotedAudioBuffer(jid, quotedAudio, options.logger);
+    const transcriber = options.audioTranscriber ?? whatsappState.audioTranscriber;
+    if (buffer && transcriber) {
+      const result = await transcriber.transcribe(buffer, {
+        mimeType: quotedAudio.mimetype,
+        filename: 'voice.ogg',
+      });
+      if (!result.error && result.text.trim()) {
+        resolvedQuotedText = `[Voice message]: ${result.text.trim()}`;
+      } else if (result.error) {
+        options.logger.debug(`WhatsApp quoted voice note not transcribed: ${result.error}`);
+      }
+    }
+  }
+
   const images: ImageAttachment[] = [];
   if (image) {
     const attachment = await downloadImageBase64(image, options.logger);
@@ -237,7 +261,7 @@ async function handleInboundMessage(
     mentionsBot,
     groupName,
     stickers,
-    quotedText: quotedText ?? undefined,
+    quotedText: resolvedQuotedText ?? undefined,
     externalId,
   });
 }

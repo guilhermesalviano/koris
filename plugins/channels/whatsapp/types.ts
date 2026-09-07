@@ -100,3 +100,12 @@ export interface ExtractedAudio {
   ptt?: boolean;
   message: WAMessage;
 }
+
+export interface ExtractedQuotedAudio {
+  mimetype?: string;
+  seconds?: number;
+  ptt?: boolean;
+  quotedMessage: Record<string, unknown>;
+  stanzaId?: string;
+  participant?: string;
+}

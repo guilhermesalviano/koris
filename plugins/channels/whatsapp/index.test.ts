@@ -504,6 +504,69 @@ describe('whatsapp plugin', () => {
     expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'pong' });
   });
 
+  it('transcribes a quoted voice note into the quotedText context', async () => {
+    const audioTranscriber: AudioTranscriber = {
+      transcribe: vi.fn().mockResolvedValue({ text: 'the quoted note' }),
+    };
+    const { calls } = await start('pong', { audioTranscriber });
+
+    await emitUpsert([
+      waMessage({
+        message: {
+          extendedTextMessage: {
+            text: 'what did they say?',
+            contextInfo: {
+              stanzaId: 'Q1',
+              participant: '5511999999999@s.whatsapp.net',
+              quotedMessage: { audioMessage: { mimetype: 'audio/ogg; codecs=opus', seconds: 4 } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    expect(downloadMediaMessage).toHaveBeenCalled();
+    expect(audioTranscriber.transcribe).toHaveBeenCalledWith(
+      Buffer.from('fake-bytes'),
+      { mimeType: 'audio/ogg; codecs=opus', filename: 'voice.ogg' },
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message.text).toBe('what did they say?');
+    expect(calls[0].message.quotedText).toBe('[Voice message]: the quoted note');
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'pong' });
+  });
+
+  it('still answers the reply when a quoted voice note cannot be downloaded', async () => {
+    downloadMediaMessage.mockRejectedValueOnce(new Error('media expired'));
+    const audioTranscriber: AudioTranscriber = { transcribe: vi.fn() };
+    const { calls } = await start('pong', { audioTranscriber });
+
+    await emitUpsert([
+      waMessage({
+        message: {
+          extendedTextMessage: {
+            text: 'and this one?',
+            contextInfo: {
+              stanzaId: 'Q2',
+              participant: '5511999999999@s.whatsapp.net',
+              quotedMessage: { audioMessage: { seconds: 2 } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    expect(audioTranscriber.transcribe).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].message.text).toBe('and this one?');
+    expect(calls[0].message.quotedText).toBeUndefined();
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', { text: 'pong' });
+    expect(fakeSock.sendMessage).not.toHaveBeenCalledWith(
+      '5511999999999@s.whatsapp.net',
+      expect.objectContaining({ text: expect.stringContaining('⚠️') }),
+    );
+  });
+
   it('sends direct reply when downloading audio buffer fails', async () => {
     downloadMediaMessage.mockRejectedValueOnce(new Error('Network failure'));
     const audioTranscriber: AudioTranscriber = {
