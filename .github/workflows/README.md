@@ -22,10 +22,10 @@ This directory contains the CI/CD workflows for quality checks, automated testin
      - Uploads coverage artifact and Codecov report.
   2. **`security` (Security Validations)**:
      - Lightweight, zero-install security runner executing in parallel (~10-15s).
-     - Scans git history for exposed credentials/API keys with **Gitleaks** (`gitleaks/gitleaks-action@v2`).
-     - Audits newly introduced dependencies on PRs for known vulnerabilities and licensing with **GitHub Dependency Review** (`actions/dependency-review-action@v4`).
+     - Scans git history for exposed credentials/API keys with **Gitleaks** (`gitleaks/gitleaks-action@v3`).
+     - Audits newly introduced dependencies on PRs for known vulnerabilities and licensing with **GitHub Dependency Review** (`actions/dependency-review-action@v5`).
 - **Local Offloading**:
-  - All TypeScript typechecking (`pnpm lint`, `pnpm lint:client`, `pnpm lint:desktop`) and system configuration validation (`pnpm validate`) are delegated to Husky (`.husky/pre-push`), eliminating dedicated linting runners and drastically reducing billable GitHub Actions minutes.
+  - All TypeScript typechecking (`pnpm lint`, `pnpm lint:client`, `pnpm lint:desktop`, `pnpm lint:tauri`) and system configuration validation (`pnpm validate`) are delegated to Husky (`.husky/pre-push`), eliminating dedicated linting runners and drastically reducing billable GitHub Actions minutes.
 
 ### `codeql.yml` — CodeQL Static Analysis
 
