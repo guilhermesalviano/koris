@@ -52,14 +52,7 @@ plugins/tools/*
 !plugins/tools/index.ts
 !plugins/tools/runtime.ts
 !plugins/tools/runtime.test.ts
-!plugins/tools/create-tool/
-!plugins/tools/curl-request/
-!plugins/tools/delete-beat/
-!plugins/tools/list-beats/
-!plugins/tools/search-engine/
-!plugins/tools/search-engine-restart/
-!plugins/tools/set-beat/
-!plugins/tools/update-beat/
 
 plugins/skills/*
-!plugins/skills/cat-fact/
+!plugins/skills/.gitkeep
+

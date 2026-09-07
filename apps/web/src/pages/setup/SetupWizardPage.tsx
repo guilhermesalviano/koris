@@ -1,19 +1,27 @@
-import { useState, type ComponentType } from 'react';
+import { useState, useEffect, useRef, type ComponentType } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSettingsForm, type SettingsFormApi } from '../../lib/use-settings-form';
+import { usePlugins, type UsePluginsApi } from '../../lib/use-plugins';
 import { ProviderStep } from './steps/ProviderStep';
-import { ChannelsStep } from './steps/ChannelsStep';
 import { PluginsStep } from './steps/PluginsStep';
-import { SearchStep } from './steps/SearchStep';
+import { ChannelsStep } from './steps/ChannelsStep';
 import { DomainsStep } from './steps/DomainsStep';
 import { PersonalInfoStep } from './steps/PersonalInfoStep';
 import { ReviewStep } from './steps/ReviewStep';
 
-const STEPS: { title: string; render: ComponentType<{ api: SettingsFormApi }> }[] = [
+interface StepProps {
+  api: SettingsFormApi;
+  pluginsApi: UsePluginsApi;
+}
+
+function SetupChannelsStep({ api, pluginsApi }: StepProps) {
+  return <ChannelsStep api={api} pluginsApi={pluginsApi} onlyEnabled />;
+}
+
+const STEPS: { title: string; render: ComponentType<StepProps> }[] = [
   { title: 'AI provider', render: ProviderStep },
-  { title: 'Channels', render: ChannelsStep },
   { title: 'Plugins', render: PluginsStep },
-  { title: 'Web search', render: SearchStep },
+  { title: 'Channels', render: SetupChannelsStep },
   { title: 'Allowed domains', render: DomainsStep },
   { title: 'Personal info', render: PersonalInfoStep },
   { title: 'Review & save', render: ReviewStep },
@@ -21,10 +29,19 @@ const STEPS: { title: string; render: ComponentType<{ api: SettingsFormApi }> }[
 
 export default function SetupWizardPage() {
   const api = useSettingsForm();
+  const pluginsApi = usePlugins();
   const [step, setStep] = useState(0);
   const navigate = useNavigate();
   const isLast = step === STEPS.length - 1;
   const StepComponent = STEPS[step].render;
+
+  const initializedRef = useRef(false);
+  useEffect(() => {
+    if (!api.loading && !initializedRef.current) {
+      initializedRef.current = true;
+      api.update((prev) => ({ ...prev, sameForBoth: true }));
+    }
+  }, [api.loading, api.update]);
 
   async function handleNext() {
     if (!isLast) {
@@ -37,7 +54,7 @@ export default function SetupWizardPage() {
     }
   }
 
-  if (api.loading) {
+  if (api.loading || pluginsApi.loading) {
     return <div className="flex min-h-screen items-center justify-center bg-bg font-mono text-sm text-txt-3">Loading…</div>;
   }
 
@@ -56,7 +73,7 @@ export default function SetupWizardPage() {
         </div>
 
         <div className="mt-8 rounded-card border border-subtle bg-bg-2 p-6">
-          <StepComponent api={api} />
+          <StepComponent api={api} pluginsApi={pluginsApi} />
         </div>
 
         {api.loadError && <p className="mt-3 text-sm text-red-400">{api.loadError}</p>}

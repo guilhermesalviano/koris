@@ -20,8 +20,7 @@
     "core/src/repositories/session.ts",
     "core/src/repositories/skills.ts",
     "core/src/services/chat/chat-service.ts",
-    "core/src/services/agents/main-agent.ts",
-    "plugins/tools/curl-request/index.ts"
+    "core/src/services/agents/main-agent.ts"
   ],
   "thresholds": {
     "high": 80,

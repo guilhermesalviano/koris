@@ -8,8 +8,7 @@
   },
   "files": [
     "dist",
-    "dist-web",
-    "plugins/skills"
+    "dist-web"
   ],
   "packageManager": "pnpm@10.18.3",
   "engines": {

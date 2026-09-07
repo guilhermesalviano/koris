@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest, ApiRequestError } from './api';
 import type { SkillsMode } from './types';
 
@@ -265,8 +265,12 @@ export function useSettingsForm() {
   const [whatsappConnecting, setWhatsappConnecting] = useState(false);
   const [whatsappConnectResult, setWhatsappConnectResult] = useState<string | null>(null);
 
+  const hasLoadedRef = useRef(false);
+
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!hasLoadedRef.current) {
+      setLoading(true);
+    }
     setLoadError(null);
     try {
       const [settings, capabilities] = await Promise.all([
@@ -277,6 +281,7 @@ export function useSettingsForm() {
       setForm(mapRuntimeToForm(settings));
       if (capabilities?.providers?.length) setProviders(capabilities.providers);
       if (capabilities?.channels?.length) setChannels(capabilities.channels);
+      hasLoadedRef.current = true;
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load settings');
     } finally {
