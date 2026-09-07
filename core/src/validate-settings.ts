@@ -255,12 +255,6 @@ async function main() {
     'Required for web search tool',
   );
 
-  advisory(
-    config.AI.SEARCH_API_KEY.trim().length > 0,
-    'ai.search_api_key is set',
-    'Only used if the SerpAPI fallback is enabled in code (currently inactivated)',
-  );
-
   // ── Structural check: ai.providers[] + ai.roles ────────────────────────
   const rawAi = ((): Record<string, unknown> => {
     const parsed = loadConfigFile({ cwd: process.cwd(), dirname: __dirname });

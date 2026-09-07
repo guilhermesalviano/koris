@@ -57,7 +57,7 @@ import { resolvePluginEnabled } from '../services/plugins/plugin-enablement';
 import { PluginCatalogSingleton } from '../services/plugins/plugin-catalog-singleton';
 import { listMissing, pullEntry } from '../../../scripts/hub-sync';
 
-const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN', 'SERPAPI_KEY', 'SEARCH_API_KEY']);
+const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN']);
 
 function maskDeep(value: unknown): unknown {
   if (Array.isArray(value)) {

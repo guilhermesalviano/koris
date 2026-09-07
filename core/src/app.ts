@@ -114,7 +114,6 @@ function createToolPluginContext(logger: ILogger, db: IDatabaseService): ToolPlu
     },
     config: {
       searxngUrl: config.AI.SEARXNG_URL,
-      searchApiKey: config.AI.SEARCH_API_KEY,
       allowedDomains: config.ALLOWED_DOMAINS,
       githubOwner: config.GITHUB.OWNER,
       githubToken: config.GITHUB.TOKEN,
