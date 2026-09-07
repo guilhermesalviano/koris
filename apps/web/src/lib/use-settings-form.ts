@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest, ApiRequestError } from './api';
 import type { SkillsMode } from './types';
 
@@ -15,7 +15,6 @@ export interface RuntimeSettings {
   AI?: {
     MANAGER?: RuntimeAiProfile;
     WORKERS?: RuntimeAiProfile;
-    SEARCH_API_KEY?: string;
   };
   CHANNELS?: {
     TELEGRAM?: { ENABLED?: boolean; BOT_TOKEN?: string; WHITELIST?: string; ALLOW_UNLISTED_SENDERS?: boolean };
@@ -38,7 +37,6 @@ export interface SettingsFormState {
   sameForBoth: boolean;
   manager: AiProfileForm;
   workers: AiProfileForm;
-  search_api_key: string;
   telegram: { bot_token: string; whitelist: string; allow_unlisted_senders: boolean };
   whatsapp: { bot_number: string; whitelist: string; allow_unlisted_senders: boolean };
   allowed_domains: string[];
@@ -53,7 +51,6 @@ export const DEFAULT_FORM: SettingsFormState = {
   sameForBoth: true,
   manager: { ...EMPTY_PROFILE },
   workers: { ...EMPTY_PROFILE },
-  search_api_key: '',
   telegram: { bot_token: '', whitelist: '', allow_unlisted_senders: false },
   whatsapp: { bot_number: '', whitelist: '', allow_unlisted_senders: false },
   allowed_domains: [],
@@ -93,7 +90,6 @@ export function mapRuntimeToForm(data: RuntimeSettings): SettingsFormState {
     sameForBoth,
     manager,
     workers,
-    search_api_key: secretFieldDefault(data.AI?.SEARCH_API_KEY),
     telegram: {
       bot_token: secretFieldDefault(data.CHANNELS?.TELEGRAM?.BOT_TOKEN),
       whitelist: data.CHANNELS?.TELEGRAM?.WHITELIST ?? '',
@@ -145,13 +141,10 @@ export function buildChannelsPatch(form: SettingsFormState): Record<string, unkn
   };
 }
 
-/** "General" slice: web search key, allowed domains, personal info — no provider/channel config. */
+/** "General" slice: allowed domains, personal info — no provider/channel config. */
 export function buildGeneralPatch(form: SettingsFormState): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
 
-  if (form.search_api_key) {
-    patch.ai = { search_api_key: form.search_api_key };
-  }
   if (form.allowed_domains.length > 0) {
     patch.allowed_domains = form.allowed_domains;
   }
@@ -201,10 +194,6 @@ export function buildSettingsPatch(form: SettingsFormState): Record<string, unkn
       ...(patch.channels as Record<string, Record<string, unknown>>).telegram,
       bot_token: form.telegram.bot_token,
     };
-  }
-
-  if (form.search_api_key) {
-    (patch.ai as Record<string, unknown>).search_api_key = form.search_api_key;
   }
 
   if (form.allowed_domains.length > 0) {
@@ -265,8 +254,12 @@ export function useSettingsForm() {
   const [whatsappConnecting, setWhatsappConnecting] = useState(false);
   const [whatsappConnectResult, setWhatsappConnectResult] = useState<string | null>(null);
 
+  const hasLoadedRef = useRef(false);
+
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!hasLoadedRef.current) {
+      setLoading(true);
+    }
     setLoadError(null);
     try {
       const [settings, capabilities] = await Promise.all([
@@ -277,6 +270,7 @@ export function useSettingsForm() {
       setForm(mapRuntimeToForm(settings));
       if (capabilities?.providers?.length) setProviders(capabilities.providers);
       if (capabilities?.channels?.length) setChannels(capabilities.channels);
+      hasLoadedRef.current = true;
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load settings');
     } finally {

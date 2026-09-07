@@ -155,7 +155,6 @@ export interface IStickerRulesGateway {
 
 export interface ToolPluginConfigValues {
   searxngUrl: string;
-  searchApiKey: string;
   allowedDomains: string[];
   githubOwner: string;
   githubToken: string;

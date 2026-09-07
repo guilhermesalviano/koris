@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { SettingsFormApi } from '../../../lib/use-settings-form';
 
-const textareaClass = 'w-full max-w-md rounded-lg border border-strong bg-bg-3 px-3 py-2 font-mono text-sm outline-none focus:border-accent';
+const textareaClass = 'w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 font-mono text-sm outline-none focus:border-accent';
 const labelClass = 'mb-1 block font-mono text-[10px] uppercase tracking-wide text-txt-3';
 
 function parseDomains(text: string): string[] {

@@ -51,7 +51,7 @@ describe('config/helpers', () => {
   });
 
   it('maps dotted config paths to uppercase environment keys', () => {
-    expect(toEnvKey('ai.search_api_key')).toBe('AI_SEARCH_API_KEY');
+    expect(toEnvKey('ai.searxng_url')).toBe('AI_SEARXNG_URL');
   });
 
   it('checks the monorepo apps/client settings path as a candidate', () => {

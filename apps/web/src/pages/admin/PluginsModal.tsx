@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Modal from '../../components/Modal';
 import PluginsList from '../../components/PluginsList';
 import MarketplaceList from '../../components/MarketplaceList';
 import { usePlugins } from '../../lib/use-plugins';
 import { useMarketplace } from '../../lib/use-marketplace';
+import type { MarketplaceItem } from '../../lib/types';
 
 const secondaryBtn = 'rounded-lg border border-strong bg-bg-3 px-3 py-1.5 text-sm font-medium hover:border-accent disabled:opacity-60';
 
@@ -17,6 +18,17 @@ export default function PluginsModal({ open, onClose }: { open: boolean; onClose
   const [tab, setTab] = useState<TabKey>('installed');
   const pluginsApi = usePlugins();
   const marketplaceApi = useMarketplace();
+
+  const wrappedMarketplaceApi = useMemo(
+    () => ({
+      ...marketplaceApi,
+      pull: async (item: MarketplaceItem) => {
+        await marketplaceApi.pull(item);
+        await pluginsApi.reload();
+      },
+    }),
+    [marketplaceApi, pluginsApi],
+  );
 
   return (
     <Modal open={open} onClose={onClose} title="Plugins" maxWidthClassName="max-w-2xl">
@@ -37,7 +49,7 @@ export default function PluginsModal({ open, onClose }: { open: boolean; onClose
         ))}
       </div>
 
-      {tab === 'installed' ? <PluginsList api={pluginsApi} /> : <MarketplaceList api={marketplaceApi} />}
+      {tab === 'installed' ? <PluginsList api={pluginsApi} /> : <MarketplaceList api={wrappedMarketplaceApi} />}
     </Modal>
   );
 }

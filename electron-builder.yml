@@ -34,8 +34,6 @@ extraResources:
     filter: ['**/*', '!**/*.map']
   - from: ../../dist-web
     to: server/dist-web
-  - from: ../../plugins/skills
-    to: server/plugins/skills
   - from: ../../core/load
     to: server/core/load
   - from: ../../heartbeats.default.json

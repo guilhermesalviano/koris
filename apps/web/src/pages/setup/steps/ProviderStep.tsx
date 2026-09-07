@@ -85,17 +85,17 @@ function ProfileFields({
           )}
         />
       </div>
-      <div className="sm:col-span-2 flex items-center gap-3">
+      <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
         <button
           type="button"
           disabled={disabled || testing}
           onClick={() => api.testProviderConnection(role)}
-          className={buttonClass}
+          className={`${buttonClass} w-full sm:w-auto`}
         >
           {testing ? 'Testing…' : 'Test connection'}
         </button>
         {result && (
-          <span className={`font-mono text-[11px] ${result.ok ? 'text-green-400' : 'text-red-400'}`}>
+          <span className={`font-mono text-[11px] break-words min-w-0 ${result.ok ? 'text-green-400' : 'text-red-400'}`}>
             {formatConnectionTestResult(result)}
           </span>
         )}
@@ -113,13 +113,14 @@ export function ProviderStep({ api }: { api: SettingsFormApi }) {
       </div>
       <ProfileFields api={api} role="manager" disabled={false} />
 
-      <label className="flex items-center gap-2 pt-2 text-sm">
+      <label className="flex items-start gap-2.5 pt-2 text-sm cursor-pointer">
         <input
           type="checkbox"
           checked={api.form.sameForBoth}
           onChange={(e) => api.update((prev) => ({ ...prev, sameForBoth: e.target.checked }))}
+          className="mt-0.5"
         />
-        Use the same provider for worker/background tasks
+        <span>Use the same provider for worker/background tasks</span>
       </label>
 
       {!api.form.sameForBoth && (

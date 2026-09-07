@@ -1,6 +1,8 @@
 import { config } from '../../config';
 import { handleUsageCommand } from './usage';
-import { isSkillCommand, listSkillCommands, listSkills, resolveSkillCommand } from './skills';
+import { handleSkillsCommand, isSkillCommand, listSkillCommands, resolveSkillCommand } from './skills';
+import { handleToolsCommand } from './tools';
+import { formatCommandResult, formatMessage } from './format';
 import { addAllowedDomain } from '../security/allowed-domains';
 import {
   commandToken,
@@ -12,9 +14,11 @@ import type { CommandContext, CommandResult } from '../../types/commands';
 
 export { SLASH_COMMANDS, findCommand, isKnownCommand } from './registry';
 export type { CommandSpec, CommandChannel } from './registry';
-export { isSkillCommand, listSkillCommands, listSkills, resolveSkillCommand } from './skills';
+export { handleSkillsCommand, isSkillCommand, listSkillCommands, listSkills, resolveSkillCommand } from './skills';
+export { handleToolsCommand, listTools } from './tools';
+export { formatCommandResult, formatMessage } from './format';
 
-export function handleCommand(command: string, context: CommandContext): CommandResult {
+export async function handleCommand(command: string, context: CommandContext): Promise<CommandResult> {
   switch (commandToken(command)) {
     case '/help':
       return handleHelp(command, context);
@@ -45,7 +49,10 @@ export function handleCommand(command: string, context: CommandContext): Command
       return handleAllow(command, context);
 
     case '/skills':
-      return handleSkills(context);
+      return handleSkillsCommand(command, context);
+
+    case '/tools':
+      return handleToolsCommand(command, context);
 
     case '/skill':
       return handleSkill(command, context);
@@ -69,38 +76,6 @@ export function handleCommand(command: string, context: CommandContext): Command
       };
     }
   }
-}
-
-function handleSkills(context: CommandContext): CommandResult {
-  if (context.learnedSkillsEnabled === false) {
-    return formatCommandResult('Skills are only available to trusted senders.', context.source);
-  }
-
-  const skills = listSkills();
-  if (skills.length === 0) {
-    return formatCommandResult(
-      'No skills are enabled. Add a plugins/skills/<name>/SKILL.md folder to teach me one.',
-      context.source,
-    );
-  }
-
-  const manualMode = config.SKILLS.MODE === 'manual';
-  const rows = skills.map((skill) => {
-    const invocation = manualMode ? `/${skill.name}` : skill.name;
-    return `  ${invocation.padEnd(24)} ${skill.description}`;
-  });
-
-  const footer = manualMode
-    ? 'Run one with `/<name> <request>` (or `/skill <name> <request>`) to load its instructions for that message.'
-    : 'These are already part of my context on every message — just ask.';
-
-  const message = `*Skills* (${skills.length})
-
-${rows.join('\n')}
-
-${footer}`;
-
-  return formatCommandResult(message, context.source);
 }
 
 function handleSkill(command: string, context: CommandContext): CommandResult {
@@ -297,21 +272,7 @@ function handleExit(context: CommandContext): CommandResult {
   return { response: formatMessage(response, context.source), action: 'none', handled: true };
 }
 
-function formatMessage(message: string, channel: string): string {
-  // Telegram uses Markdown, TUI uses plain text
-  if (channel === 'telegram') {
-    return message;
-  }
-  return message.replace(/\*/g, '');
-}
 
-function formatCommandResult(message: string, channel: string): CommandResult {
-  return {
-    response: formatMessage(message, channel),
-    action: 'none',
-    handled: true,
-  };
-}
 
 /**
  * Whether a message names a command koris handles. Matches the known command

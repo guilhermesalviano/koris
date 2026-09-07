@@ -718,3 +718,60 @@ describe('createAudioSpeakHandler', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'sidecar boom' });
   });
 });
+
+describe('DashboardServer lifecycle', () => {
+  const logger = {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  } as unknown as ILogger;
+
+  const gateway = { handle: vi.fn() } as unknown as IMessageGateway;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHealthCheck.mockResolvedValue({ status: 'ok', providers: [] });
+  });
+
+  it('startWebServer binds an ephemeral port and serves /health, then stops cleanly', async () => {
+    const { startWebServer } = await loadWebModule();
+
+    const handle = await startWebServer(logger, gateway, {} as never, {
+      port: 0,
+      host: '127.0.0.1',
+    });
+
+    try {
+      expect(handle.port).toBeGreaterThan(0);
+
+      const response = await fetch(`http://127.0.0.1:${handle.port}/health`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ status: 'ok' });
+      expect(mockHealthCheck).toHaveBeenCalled();
+    } finally {
+      await handle.stop();
+    }
+
+    // A second stop is a no-op once the server is already closed.
+    await expect(handle.stop()).resolves.toBeUndefined();
+  });
+
+  it('DashboardServerFactory.create builds a handle whose createApp wires the SPA fallback', async () => {
+    const { DashboardServerFactory } = await loadWebModule();
+
+    const handle = await DashboardServerFactory.create(logger, gateway, {} as never, {
+      port: 0,
+      host: '127.0.0.1',
+    }).start();
+
+    try {
+      // Unknown GET paths fall through to the SPA index handler (404 here because
+      // the bundled dist-web/index.html isn't present in the test environment).
+      const response = await fetch(`http://127.0.0.1:${handle.port}/some/client/route`);
+      expect([200, 404]).toContain(response.status);
+    } finally {
+      await handle.stop();
+    }
+  });
+});

@@ -32,7 +32,7 @@ function familyLabel(family: MarketplaceItem['family']): string {
 function MarketplaceRow({ item, pulling, onPull }: { item: MarketplaceItem; pulling: boolean; onPull: () => void }) {
   return (
     <div className="flex items-start justify-between gap-3 py-2.5">
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="text-sm">{humanize(item.slug)}</div>
         {item.summary && <div className="mt-0.5 text-xs text-txt-3">{item.summary}</div>}
       </div>
@@ -40,7 +40,7 @@ function MarketplaceRow({ item, pulling, onPull }: { item: MarketplaceItem; pull
         type="button"
         onClick={onPull}
         disabled={pulling}
-        className="flex-shrink-0 rounded-lg border border-subtle bg-bg-3 px-3 py-1.5 font-mono text-[11px] text-txt-2 hover:border-accent hover:text-accent-2 disabled:opacity-50"
+        className="flex min-h-[32px] flex-shrink-0 items-center justify-center rounded-lg border border-subtle bg-bg-3 px-3 py-1.5 font-mono text-[11px] text-txt-2 hover:border-accent hover:text-accent-2 disabled:opacity-50"
       >
         {pulling ? 'Pulling…' : 'Pull'}
       </button>
@@ -73,7 +73,7 @@ export default function MarketplaceList({ api }: { api: UseMarketplaceApi }) {
       {!api.error && !api.loading && api.items.length > 0 && groups.map(([family, items]) => (
         <div key={family}>
           <div className="mb-2 font-mono text-[11px] uppercase tracking-wide text-txt-3">{familyLabel(family)}</div>
-          <Card className="divide-y divide-subtle p-4">
+          <Card className="divide-y divide-subtle p-3.5 sm:p-4">
             {items.map((item) => (
               <MarketplaceRow
                 key={item.slug}

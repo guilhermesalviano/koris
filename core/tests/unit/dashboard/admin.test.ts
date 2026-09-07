@@ -13,6 +13,7 @@ const {
   learnedSkillsRepo,
   skillsRepo,
   skillSync,
+  toolSync,
   settingsWriter,
   liveChannelRuntime,
   pluginSettingsRepo,
@@ -28,11 +29,16 @@ const {
     deleteAll: vi.fn(),
     usage: vi.fn(),
   },
-  sessionRepo: { count: vi.fn(), countOpen: vi.fn() },
-  messageRepo: { count: vi.fn() },
+  sessionRepo: {
+    count: vi.fn(),
+    countOpen: vi.fn(),
+    findById: vi.fn(),
+    findLatestOpenByEntryChannel: vi.fn(),
+  },
+  messageRepo: { count: vi.fn(), getBySessionId: vi.fn(() => []) },
   memoryRepo: { count: vi.fn() },
-  heartbeatRepo: { getAll: vi.fn() },
-  channelRepo: { getAll: vi.fn() },
+  heartbeatRepo: { getAll: vi.fn(() => []) },
+  channelRepo: { getAll: vi.fn(() => []), setPrincipal: vi.fn() },
   outboundRepo: {
     count: vi.fn(),
     save: vi.fn(),
@@ -44,6 +50,7 @@ const {
   learnedSkillsRepo: { count: vi.fn(), getAll: vi.fn(), getByName: vi.fn(), setEnabled: vi.fn() },
   skillsRepo: { get: vi.fn() },
   skillSync: { sync: vi.fn(), getExistingInstance: vi.fn() },
+  toolSync: { sync: vi.fn(), getExistingInstance: vi.fn() },
   settingsWriter: {
     loadCurrentOrExampleSettings: vi.fn(() => ({})),
     mergeSettingsPayload: vi.fn((base: object, patch: object) => ({ ...base, ...patch })),
@@ -104,6 +111,10 @@ vi.mock('../../../src/repositories/skills', () => ({
 
 vi.mock('../../../src/services/skills/skill-sync', () => ({
   SkillSyncSingleton: skillSync,
+}));
+
+vi.mock('../../../src/services/tools/tool-sync', () => ({
+  ToolSyncSingleton: toolSync,
 }));
 
 vi.mock('../../../src/config/settings-writer', async (importActual) => {
@@ -497,9 +508,11 @@ describe('AdminRouterFactory /plugins', () => {
     // test opts into skill rows explicitly.
     skillsRepo.get.mockReturnValue([]);
     learnedSkillsRepo.getAll.mockReturnValue([]);
+    toolSync.getExistingInstance.mockReturnValue({ sync: toolSync.sync });
+    skillSync.getExistingInstance.mockReturnValue({ sync: skillSync.sync });
   });
 
-  it('GET /plugins lists every catalog entry with its resolved enabled state', () => {
+  it('GET /plugins lists every catalog entry with its resolved enabled state and syncs tools/skills', () => {
     pluginSettingsRepo.getEnabled.mockImplementation((family: string, name: string) =>
       family === 'tools' && name === 'curl-request' ? false : null);
 
@@ -507,6 +520,8 @@ describe('AdminRouterFactory /plugins', () => {
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/plugins'), res);
 
+    expect(toolSync.sync).toHaveBeenCalled();
+    expect(skillSync.sync).toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({
       items: [
         { family: 'tools', name: 'curl-request', enabled: false },
@@ -695,8 +710,9 @@ describe('AdminRouterFactory /marketplace', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Request to https://api.github.com/... failed: 500 Internal Server Error' });
   });
 
-  it('POST /marketplace/:slug/pull pulls the entry, pinning baseDir to config.BASE_DIR', async () => {
+  it('POST /marketplace/:slug/pull pulls the entry, pinning baseDir to config.BASE_DIR and syncs tools', async () => {
     hubSync.pullEntry.mockResolvedValue({ family: 'tool', slug: 'issue', createdFiles: ['plugins/tools/issue/index.ts'] });
+    toolSync.getExistingInstance.mockReturnValue({ sync: toolSync.sync });
 
     const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
@@ -704,11 +720,26 @@ describe('AdminRouterFactory /marketplace', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(hubSync.pullEntry).toHaveBeenCalledWith('issue', { baseDir: config.BASE_DIR });
+    expect(toolSync.sync).toHaveBeenCalledWith('issue');
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       item: { family: 'tool', slug: 'issue', createdFiles: ['plugins/tools/issue/index.ts'] },
     });
+  });
+
+  it('POST /marketplace/:slug/pull syncs skills when pulling a skill', async () => {
+    hubSync.pullEntry.mockResolvedValue({ family: 'skill', slug: 'git', createdFiles: ['plugins/skills/git/SKILL.md'] });
+    skillSync.getExistingInstance.mockReturnValue({ sync: skillSync.sync });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/marketplace/git/pull'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(hubSync.pullEntry).toHaveBeenCalledWith('git', { baseDir: config.BASE_DIR });
+    expect(skillSync.sync).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(201);
   });
 
   it('POST /marketplace/:slug/pull returns 400 when the plugin already exists locally', async () => {
@@ -1170,5 +1201,156 @@ describe('AdminRouterFactory /settings', () => {
 
     expect(liveChannelRuntime.startChannelLive).toHaveBeenCalledWith('whatsapp', expect.anything(), expect.anything());
     expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+});
+
+describe('AdminRouterFactory chat/history & chat/context', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('GET /chat/history returns an empty payload when there is no open web session', () => {
+    sessionRepo.findLatestOpenByEntryChannel.mockReturnValue(undefined);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/chat/history'), res);
+
+    expect(sessionRepo.findLatestOpenByEntryChannel).toHaveBeenCalledWith('web');
+    expect(res.json).toHaveBeenCalledWith({ sessionId: null, messages: [] });
+  });
+
+  it('GET /chat/history projects the latest open web session messages', () => {
+    sessionRepo.findLatestOpenByEntryChannel.mockReturnValue({ id: 'sess-1' });
+    messageRepo.getBySessionId.mockReturnValue([
+      {
+        id: 'm1',
+        role: 'user',
+        content: 'hi',
+        images: [],
+        missingImages: false,
+        errorCode: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        extra: 'dropped',
+      },
+    ]);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/chat/history'), res);
+
+    expect(messageRepo.getBySessionId).toHaveBeenCalledWith('sess-1', 200);
+    expect(res.json).toHaveBeenCalledWith({
+      sessionId: 'sess-1',
+      messages: [
+        {
+          id: 'm1',
+          role: 'user',
+          content: 'hi',
+          images: [],
+          missingImages: false,
+          errorCode: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+  });
+
+  it('GET /chat/context reports zero usage when the session is missing', () => {
+    sessionRepo.findLatestOpenByEntryChannel.mockReturnValue(undefined);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/chat/context'), res);
+
+    const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(payload.used).toBe(0);
+    expect(typeof payload.limit).toBe('number');
+    expect(typeof payload.threshold).toBe('number');
+  });
+
+  it('GET /chat/context targets an explicit sessionId and estimates its token use', () => {
+    sessionRepo.findById.mockReturnValue({ id: 'sess-9', metadata: {} });
+    messageRepo.getBySessionId.mockReturnValue([
+      { id: 'm1', role: 'user', content: 'a longer message that carries some tokens' },
+    ]);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/chat/context', { sessionId: 'sess-9' }), res);
+
+    expect(sessionRepo.findById).toHaveBeenCalledWith('sess-9');
+    expect(sessionRepo.findLatestOpenByEntryChannel).not.toHaveBeenCalled();
+    const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(payload.used).toBeGreaterThan(0);
+  });
+});
+
+describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('GET /heartbeats serialises each beat with its next scheduled fire', () => {
+    heartbeatRepo.getAll.mockReturnValue([
+      {
+        id: 'b1',
+        beat: 'daily digest',
+        type: 'prompt',
+        cronExpression: '0 9 * * *',
+        channel: 'telegram',
+        target: '123',
+        lastRun: new Date('2026-01-01T09:00:00.000Z'),
+        createdAt: new Date('2025-12-01T00:00:00.000Z'),
+      },
+    ]);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/heartbeats'), res);
+
+    const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items[0]).toMatchObject({
+      id: 'b1',
+      beat: 'daily digest',
+      cron_expression: '0 9 * * *',
+      channel: 'telegram',
+      target: '123',
+    });
+    expect(typeof payload.items[0].next_run).toBe('string');
+  });
+
+  it('GET /channels returns the stored channel rows', () => {
+    channelRepo.getAll.mockReturnValue([{ id: 'c1', type: 'telegram', principal: true }]);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/channels'), res);
+
+    expect(res.json).toHaveBeenCalledWith({ items: [{ id: 'c1', type: 'telegram', principal: true }] });
+  });
+
+  it('PATCH /channels/:id/principal promotes an existing channel', () => {
+    channelRepo.setPrincipal.mockReturnValue({ id: 'c1', principal: true });
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('PATCH', '/channels/c1/principal'), res);
+
+    expect(channelRepo.setPrincipal).toHaveBeenCalledWith('c1');
+    expect(res.json).toHaveBeenCalledWith({ id: 'c1', principal: true });
+  });
+
+  it('PATCH /channels/:id/principal is a 404 when the channel is unknown', () => {
+    channelRepo.setPrincipal.mockReturnValue(undefined);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('PATCH', '/channels/missing/principal'), res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Channel not found' });
+  });
+
+  it('GET /outbound lists queued outbound messages', () => {
+    outboundRepo.getAll.mockReturnValue([{ id: 'o1', status: 'pending' }]);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/outbound'), res);
+
+    expect(res.json).toHaveBeenCalledWith({ items: [{ id: 'o1', status: 'pending' }] });
   });
 });

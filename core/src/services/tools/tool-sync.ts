@@ -29,21 +29,9 @@ export interface ToolSyncOptions {
  * Watches `plugins/tools/` for tool folders that appear after boot (e.g. from
  * `pnpm hub:pull`, or a UI marketplace pull hitting the exact same directory)
  * and loads them into the *live* process without a rebuild or restart.
- *
- * This only handles brand-new folders, never edits to an already-loaded tool
- * — `pullEntry` (`scripts/hub-sync.ts`) itself refuses to overwrite an
- * existing folder without `--force`, so a pull is additive by construction,
- * and Node's own `require()` cache means an already-loaded module path is
- * never reloaded here (nor should it be: an in-flight chat turn could be
- * mid-call into the old version). Mirrors `SkillSyncService`
- * (`../skills/skill-sync.ts`) in shape, but skills are pure data (no compile
- * step); a tool is a TypeScript module that must become `require()`-able
- * `.js` first, so each new folder's `.ts` files (excluding `*.test.ts`) are
- * transpiled with esbuild and written into `distDir` before being required —
- * matching exactly where `tsc` would eventually place them.
  */
 class ToolSyncService {
-  private watcher: FSWatcher | null = null;
+  private watchers: FSWatcher[] = [];
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly knownSlugs: Set<string>;
   private readonly requireModule: (modulePath: string) => ToolModule;
@@ -66,7 +54,7 @@ class ToolSyncService {
     // would just sit there until some unrelated fs event on sourceDir happens
     // to trigger the watcher below.
     this.sync();
-    this.watcher = watch(this.options.sourceDir, { persistent: true }, () => this.scheduleSync());
+    this.registerWatchers();
     this.logger.info('[tool-sync] Watching tools directory for newly pulled plugins');
   }
 
@@ -75,11 +63,14 @@ class ToolSyncService {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
-    this.watcher?.close();
-    this.watcher = null;
+    this.closeWatchers();
   }
 
-  sync(): void {
+  sync(forcedSlug?: string): void {
+    if (forcedSlug) {
+      this.knownSlugs.delete(forcedSlug);
+    }
+
     let entries;
     try {
       entries = readdirSync(this.options.sourceDir, { withFileTypes: true });
@@ -94,17 +85,21 @@ class ToolSyncService {
 
     const loaded: string[] = [];
     for (const slug of candidates) {
-      // Marked as seen regardless of outcome — a folder that fails to load
-      // (bad syntax, no create()) is never retried automatically; fixing it
-      // still requires the normal pnpm build + restart path.
-      this.knownSlugs.add(slug);
       try {
-        if (this.loadTool(slug)) loaded.push(slug);
+        if (this.loadTool(slug)) {
+          this.knownSlugs.add(slug);
+          loaded.push(slug);
+        }
       } catch (error) {
+        this.knownSlugs.add(slug);
         this.logger.warn(`[tool-sync] Failed to hot-load tool "${slug}"`, {
           error: error instanceof Error ? error.message : String(error),
         });
       }
+    }
+
+    if (this.watchers.length > 0) {
+      this.registerWatchers();
     }
 
     if (loaded.length === 0) return;
@@ -118,9 +113,19 @@ class ToolSyncService {
     const sourceTool = path.join(this.options.sourceDir, slug);
     const distTool = path.join(this.options.distDir, slug);
 
-    const sourceFiles = readdirSync(sourceTool, { withFileTypes: true })
+    let entries;
+    try {
+      entries = readdirSync(sourceTool, { withFileTypes: true });
+    } catch {
+      return false;
+    }
+
+    const sourceFiles = entries
       .filter((entry) => entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts'));
     if (sourceFiles.length === 0) return false;
+
+    // A tool module must have an index.ts to be require-able
+    if (!sourceFiles.some((entry) => entry.name === 'index.ts')) return false;
 
     mkdirSync(distTool, { recursive: true });
     for (const file of sourceFiles) {
@@ -128,6 +133,19 @@ class ToolSyncService {
       const source = readFileSync(sourcePath, 'utf-8');
       const code = this.transpile(source, sourcePath);
       writeFileSync(path.join(distTool, file.name.replace(/\.ts$/, '.js')), code, 'utf-8');
+    }
+
+    // Invalidate require cache for distTool and all its transpiled outputs
+    try {
+      const resolved = require.resolve(distTool);
+      delete require.cache[resolved];
+    } catch {}
+    for (const file of sourceFiles) {
+      const jsPath = path.join(distTool, file.name.replace(/\.ts$/, '.js'));
+      try {
+        const resolved = require.resolve(jsPath);
+        delete require.cache[resolved];
+      } catch {}
     }
 
     const mod = this.requireModule(distTool);
@@ -138,6 +156,48 @@ class ToolSyncService {
 
     plugin.setup(this.options.registry);
     return true;
+  }
+
+  private registerWatchers(): void {
+    this.closeWatchers();
+
+    try {
+      this.watchers.push(
+        watch(this.options.sourceDir, { persistent: true }, () => this.scheduleSync()),
+      );
+
+      let entries;
+      try {
+        entries = readdirSync(this.options.sourceDir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          try {
+            this.watchers.push(
+              watch(path.join(this.options.sourceDir, entry.name), { persistent: true }, () => this.scheduleSync()),
+            );
+          } catch {
+            // best-effort per subfolder
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.warn('[tool-sync] Failed to watch tools directory', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private closeWatchers(): void {
+    for (const watcher of this.watchers) {
+      try {
+        watcher.close();
+      } catch {}
+    }
+    this.watchers = [];
   }
 
   private scheduleSync(): void {

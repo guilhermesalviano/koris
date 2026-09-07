@@ -183,7 +183,10 @@ export interface PullResult {
   createdFiles: string[];
 }
 
-export async function pullEntry(slug: string, options: HubSyncOptions & { force?: boolean } = {}): Promise<PullResult> {
+export async function pullEntry(
+  slug: string,
+  options: HubSyncOptions & { force?: boolean; family?: HubFamily } = {},
+): Promise<PullResult> {
   if (!NAME_PATTERN.test(slug)) {
     throw new Error(`Invalid slug "${slug}": must be lowercase kebab-case (e.g. "weather"), no path separators or dots.`);
   }
@@ -193,6 +196,7 @@ export async function pullEntry(slug: string, options: HubSyncOptions & { force?
 
   let match: { family: HubFamily; files: string[] } | undefined;
   for (const [family, config] of Object.entries(FAMILIES) as [HubFamily, FamilyConfig][]) {
+    if (options.family && family !== options.family) continue;
     const files = slugFilesUnder(tree, config.hubDir).get(slug);
     if (files) {
       match = { family, files };
@@ -200,6 +204,9 @@ export async function pullEntry(slug: string, options: HubSyncOptions & { force?
     }
   }
   if (!match) {
+    if (options.family) {
+      throw new Error(`"${slug}" was not found under ${FAMILIES[options.family].hubDir} in ${resolved.owner}/${resolved.repo}@${resolved.branch}.`);
+    }
     throw new Error(`"${slug}" was not found under koris-plugins/tools or koris-skills in ${resolved.owner}/${resolved.repo}@${resolved.branch}.`);
   }
 

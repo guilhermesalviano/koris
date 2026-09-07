@@ -103,7 +103,6 @@ export interface AppConfig {
       API_TOKEN: string;
       MODEL: string;
     };
-    SEARCH_API_KEY: string;
     SEARXNG_URL: string;
     TIMEOUTS: {
       IDLE_MS: number;
@@ -198,7 +197,6 @@ function buildConfig(): AppConfig {
       API_TOKEN: envOr('ai.embed.api_token', roles.EMBED.API_TOKEN),
       MODEL: envOr('ai.embed.model', roles.EMBED.MODEL),
     },
-    SEARCH_API_KEY: get('ai.search_api_key', ''),
     SEARXNG_URL: get('ai.searxng_url', ''),
     TIMEOUTS: {
       IDLE_MS:   Number(get('ai.timeouts.idle_ms', String(6 * 60_000))),

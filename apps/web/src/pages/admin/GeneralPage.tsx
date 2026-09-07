@@ -1,6 +1,5 @@
 import { PageShell, Card, EmptyState, useToast, Toast } from '../../components/AdminUI';
 import { useSettingsForm, buildGeneralPatch } from '../../lib/use-settings-form';
-import { SearchStep } from '../setup/steps/SearchStep';
 import { DomainsStep } from '../setup/steps/DomainsStep';
 import { PersonalInfoStep } from '../setup/steps/PersonalInfoStep';
 
@@ -14,15 +13,11 @@ export default function GeneralPage() {
   }
 
   return (
-    <PageShell title="General" description="Web search, allowed domains, and personal context" onRefresh={api.reload}>
+    <PageShell title="General" description="Allowed domains and personal context" onRefresh={api.reload}>
       {api.loadError && <EmptyState text={api.loadError} />}
       {api.loading && !api.loadError && <EmptyState text="Loading…" />}
       {!api.loading && !api.loadError && (
         <div className="space-y-4">
-          <Card>
-            <h2 className="mb-3 text-sm font-medium">Web search</h2>
-            <SearchStep api={api} />
-          </Card>
           <Card>
             <h2 className="mb-3 text-sm font-medium">Allowed domains</h2>
             <DomainsStep api={api} />
