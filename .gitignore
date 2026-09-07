@@ -4,6 +4,9 @@ dist-web
 dist-desktop-out
 build-resources
 apps/desktop/out
+apps/tauri/sidecar/out
+apps/tauri/src-tauri/target
+apps/tauri/src-tauri/gen
 next-env.d.ts
 *.tsbuildinfo
 
