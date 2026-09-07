@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, normalize } from 'path';
 import { parse } from 'yaml';
@@ -39,7 +40,15 @@ describe('mergePluginConfigPatch', () => {
 });
 
 describe('writePluginConfigPatch', () => {
-  const pluginDir = join(tmpdir(), 'koris-writer-test');
+  let pluginDir: string;
+
+  beforeEach(() => {
+    pluginDir = mkdtempSync(join(tmpdir(), 'koris-writer-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(pluginDir, { recursive: true, force: true });
+  });
 
   it('writes the patch as YAML when no config file exists yet', () => {
     const writeFile = vi.fn();
