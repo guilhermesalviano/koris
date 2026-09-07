@@ -20,6 +20,9 @@ if [ "${1:-}" = "tts" ]; then
     en_US-lessac-medium) HF_SUBPATH="en/en_US/lessac/medium" ;;
     en_US-amy-medium)    HF_SUBPATH="en/en_US/amy/medium" ;;
     en_GB-alba-medium)   HF_SUBPATH="en/en_GB/alba/medium" ;;
+    pt_BR-cadu-medium)   HF_SUBPATH="pt/pt_BR/cadu/medium" ;;
+    pt_BR-faber-medium)  HF_SUBPATH="pt/pt_BR/faber/medium" ;;
+    pt_BR-edresson-low)  HF_SUBPATH="pt/pt_BR/edresson/low" ;;
     *)
       echo "Unknown Piper voice '${VOICE_NAME}'." >&2
       echo "Add its Hugging Face subpath to scripts/audio/setup.sh, or place" >&2

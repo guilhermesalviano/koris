@@ -71,7 +71,14 @@ pnpm audio:setup:tts     # Default voice en_US-lessac-medium (~63MB)
 # other known voices:
 bash scripts/audio/setup.sh tts en_US-amy-medium
 bash scripts/audio/setup.sh tts en_GB-alba-medium
+bash scripts/audio/setup.sh tts pt_BR-cadu-medium     # Brazilian Portuguese
+bash scripts/audio/setup.sh tts pt_BR-faber-medium
+bash scripts/audio/setup.sh tts pt_BR-edresson-low
 ```
+
+Then set `audio.tts.voice` in `koris.json` to the voice name (e.g. `pt_BR-cadu-medium`)
+and restart koris. The sidecar reads `./models/piper/` as a bind mount, so a newly
+downloaded voice is picked up without rebuilding the container.
 
 Voice files land in `./models/piper/<voice>.onnx` (+ `.onnx.json`). To use a voice not in the built-in list, add its Hugging Face subpath to `scripts/audio/setup.sh`, or drop the two files into `./models/piper/` by hand.
 
