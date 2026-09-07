@@ -84,11 +84,22 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: '/skills',
-    summary: 'List the skills I have loaded',
+    summary: 'List loaded or remote skills, or download one from koris-hub',
+    usage: '/skills [remote|download <name>]',
     details:
       'Shows every enabled skill and what it is for. In `skills.mode: "manual"` ' +
       'each one is callable as `/<name>`; in `auto` mode they are already part ' +
-      'of my prompt and need no command.',
+      'of my prompt and need no command. Use `/skills remote` to list skills ' +
+      'available in koris-hub. Use `/skills download <name>` to install a skill.',
+  },
+  {
+    name: '/tools',
+    summary: 'List loaded or remote tools, or download one from koris-hub',
+    usage: '/tools [remote|download <name>]',
+    trusted: true,
+    details:
+      'Without arguments, lists all currently loaded tools. Use `/tools remote` to list ' +
+      'tools available in koris-hub. Use `/tools download <name>` to install a tool.',
   },
   {
     name: '/skill',

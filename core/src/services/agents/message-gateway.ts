@@ -80,7 +80,7 @@ class MessageGateway implements IMessageGateway {
     let skillBlocks: string[] | undefined;
 
     if (isCommand(safeMessage)) {
-      const commandResult = handleCommand(safeMessage, {
+      const commandResult = await handleCommand(safeMessage, {
         source: channel,
         trusted: !!options?.toolsEnabled,
         learnedSkillsEnabled: options?.learnedSkillsEnabled,

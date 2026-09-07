@@ -126,6 +126,20 @@ describe('pullEntry', () => {
     await expect(pullEntry('does-not-exist', { baseDir: BASE_DIR, io, http })).rejects.toThrow(/not found/);
   });
 
+  it('throws when a skill slug is pulled with family: tool', async () => {
+    const io = makeIO();
+    const http = makeHttp({ tree: HUB_TREE });
+
+    await expect(pullEntry('weather', { baseDir: BASE_DIR, io, http, family: 'tool' })).rejects.toThrow(/not found under koris-plugins\/tools/);
+  });
+
+  it('throws when a tool slug is pulled with family: skill', async () => {
+    const io = makeIO();
+    const http = makeHttp({ tree: HUB_TREE });
+
+    await expect(pullEntry('issue', { baseDir: BASE_DIR, io, http, family: 'skill' })).rejects.toThrow(/not found under koris-plugins\/skills/);
+  });
+
   it('refuses to overwrite an existing local folder without --force', async () => {
     const target = path.join(LOCAL_TOOLS_DIR, 'issue');
     const io = makeIO({}, [target]);
