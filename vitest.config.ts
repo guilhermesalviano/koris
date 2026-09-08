@@ -17,6 +17,7 @@ export default defineConfig({
       'build-resources/**',
       'dist-desktop-out/**',
       'plugins/channels/*/**',
+      'plugins/tools/*/**',
     ],
     coverage: {
       provider: 'v8',
