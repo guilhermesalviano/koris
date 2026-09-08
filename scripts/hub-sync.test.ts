@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import path from 'node:path';
-import { listMissing, pullEntry, type HubSyncFileIO, type HubSyncHttp } from './hub-sync';
+import { listMissing, pullEntry, fetchChannelHints, fetchChannelCatalog, type HubSyncFileIO, type HubSyncHttp, type ChannelHints } from './hub-sync';
 
 const BASE_DIR = '/repo';
 
@@ -18,7 +18,7 @@ function makeIO(dirContents: Record<string, string[]> = {}, existingPaths: strin
 
 interface HttpFixture {
   tree?: { tree: { path: string; type: 'blob' | 'tree' }[]; truncated?: boolean };
-  catalog?: Record<string, { summary?: string }>;
+  catalog?: Record<string, { summary?: string; hints?: ChannelHints }>;
   files?: Record<string, string>;
 }
 
@@ -226,3 +226,102 @@ describe('pullEntry', () => {
     expect(io.written.get(path.join(LOCAL_CHANNELS_DIR, 'telegram', 'config.example.yml'))).toBe('bot_token: ""');
   });
 });
+
+describe('fetchChannelHints', () => {
+  it('fetches hints for requested channels from catalog metadata', async () => {
+    const http = makeHttp({
+      catalog: {
+        telegram: {
+          hints: {
+            uninstalled: 'Download Telegram from Hub',
+            inactive: 'Activate Telegram',
+          },
+        },
+        whatsapp: {
+          hints: {
+            uninstalled: 'Download WhatsApp from Hub',
+            pairing: 'Scan QR Code',
+          },
+        },
+      },
+    });
+
+    const hints = await fetchChannelHints(['telegram', 'whatsapp'], { baseDir: BASE_DIR, http });
+
+    expect(hints).toEqual({
+      telegram: {
+        uninstalled: 'Download Telegram from Hub',
+        inactive: 'Activate Telegram',
+      },
+      whatsapp: {
+        uninstalled: 'Download WhatsApp from Hub',
+        pairing: 'Scan QR Code',
+      },
+    });
+  });
+
+  it('tolerates missing or failed channel metadata gracefully', async () => {
+    const http = makeHttp({
+      catalog: {
+        telegram: {
+          hints: { uninstalled: 'Download Telegram' },
+        },
+      },
+    });
+
+    const hints = await fetchChannelHints(['telegram', 'unknown_channel'], { baseDir: BASE_DIR, http });
+
+    expect(hints).toEqual({
+      telegram: { uninstalled: 'Download Telegram' },
+    });
+  });
+});
+
+describe('fetchChannelCatalog', () => {
+  it('discovers channels from tree, catalog metadata, and local directories', async () => {
+    const io = makeIO({
+      [LOCAL_CHANNELS_DIR]: ['custom-channel'],
+    });
+    const http = makeHttp({
+      tree: {
+        tree: [
+          { path: 'content/marketplace/channels/telegram.json', type: 'blob' as const },
+          { path: 'koris-plugins/channels/whatsapp/index.js', type: 'blob' as const },
+        ],
+        truncated: false,
+      },
+      catalog: {
+        telegram: {
+          summary: 'Telegram channel',
+          hints: { uninstalled: 'Download TG' },
+        },
+        whatsapp: {
+          summary: 'WhatsApp channel',
+          hints: { pairing: 'Scan QR' },
+        },
+      },
+    });
+
+    const catalog = await fetchChannelCatalog({ baseDir: BASE_DIR, io, http });
+
+    expect(catalog).toEqual([
+      {
+        slug: 'custom-channel',
+        name: 'Custom Channel',
+      },
+      {
+        slug: 'telegram',
+        name: 'Telegram',
+        summary: 'Telegram channel',
+        hints: { uninstalled: 'Download TG' },
+      },
+      {
+        slug: 'whatsapp',
+        name: 'Whatsapp',
+        summary: 'WhatsApp channel',
+        hints: { pairing: 'Scan QR' },
+      },
+    ]);
+  });
+});
+

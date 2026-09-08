@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path, { basename } from 'node:path';
 import { NAME_PATTERN } from './scaffold-tool';
 
 /**
@@ -79,6 +79,7 @@ export interface HubSyncOptions {
   owner?: string;
   repo?: string;
   branch?: string;
+  hubLocalDir?: string;
 }
 
 interface GitTreeEntry {
@@ -139,14 +140,26 @@ function slugFilesUnder(tree: GitTreeEntry[], hubDir: string): Map<string, strin
   return bySlug;
 }
 
+export interface ChannelHints {
+  uninstalled?: string;
+  inactive?: string;
+  active?: string;
+  pairing?: string;
+  botNumber?: string;
+  allowUnlisted?: string;
+  whitelist?: string;
+}
+
 export interface HubEntry {
   family: HubFamily;
   slug: string;
   summary?: string;
+  hints?: ChannelHints;
 }
 
 interface CatalogMeta {
   summary?: string;
+  hints?: ChannelHints;
 }
 
 export async function listMissing(options: HubSyncOptions = {}): Promise<HubEntry[]> {
@@ -162,19 +175,145 @@ export async function listMissing(options: HubSyncOptions = {}): Promise<HubEntr
       if (localSlugs.has(slug)) continue;
 
       let summary: string | undefined;
+      let hints: ChannelHints | undefined;
       try {
         const meta = await resolved.http.fetchJson<CatalogMeta>(
           `https://raw.githubusercontent.com/${resolved.owner}/${resolved.repo}/${resolved.branch}/${config.catalogDir}/${slug}.json`,
         );
         summary = meta.summary;
+        hints = meta.hints;
       } catch {
         // Metadata is best-effort — still report the slug without a summary.
       }
-      entries.push({ family, slug, summary });
+      entries.push({ family, slug, summary, hints });
     }
   }
 
   return entries.sort((a, b) => a.family.localeCompare(b.family) || a.slug.localeCompare(b.slug));
+}
+
+export function formatSlugName(slug: string): string {
+  return slug
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+export interface ChannelCatalogItem {
+  slug: string;
+  name: string;
+  summary?: string;
+  hints?: ChannelHints;
+}
+
+export async function fetchChannelCatalog(
+  options: HubSyncOptions & { slugs?: string[] } = {},
+): Promise<ChannelCatalogItem[]> {
+  const resolved = resolveOptions(options);
+  const catalogMap = new Map<string, ChannelCatalogItem>();
+
+  const localHubDirs = [
+    options.hubLocalDir,
+    process.env.KORIS_HUB_DIR,
+  ].filter(Boolean) as string[];
+
+  // 1. Check local hub directory if available
+  for (const hubDir of localHubDirs) {
+    const catalogDir = path.join(hubDir, FAMILIES.channel.catalogDir);
+    if (resolved.io.exists(catalogDir)) {
+      try {
+        const files = readdirSync(catalogDir).filter((f) => f.endsWith('.json'));
+        for (const file of files) {
+          const slug = basename(file, '.json');
+          if (options.slugs && !options.slugs.includes(slug)) continue;
+          const content = readFileSync(path.join(catalogDir, file), 'utf-8');
+          const meta = JSON.parse(content) as { name?: string; summary?: string; hints?: ChannelHints };
+          catalogMap.set(slug, {
+            slug,
+            name: meta.name || formatSlugName(slug),
+            summary: meta.summary,
+            hints: meta.hints,
+          });
+        }
+      } catch {
+        // Fall through
+      }
+    }
+  }
+
+  // 2. Discover channels from hub tree
+  if (catalogMap.size === 0) {
+    try {
+      const tree = await fetchHubTree(resolved);
+      const hubSlugs = new Set<string>(options.slugs ?? []);
+      for (const slug of slugFilesUnder(tree, FAMILIES.channel.hubDir).keys()) {
+        hubSlugs.add(slug);
+      }
+      const prefix = `${FAMILIES.channel.catalogDir}/`;
+      for (const entry of tree) {
+        if (entry.type === 'blob' && entry.path.startsWith(prefix) && entry.path.endsWith('.json')) {
+          const slug = entry.path.slice(prefix.length, -'.json'.length);
+          if (slug) hubSlugs.add(slug);
+        }
+      }
+
+      for (const slug of hubSlugs) {
+        if (options.slugs && !options.slugs.includes(slug)) continue;
+        try {
+          const meta = await resolved.http.fetchJson<{ name?: string; summary?: string; hints?: ChannelHints }>(
+            `https://raw.githubusercontent.com/${resolved.owner}/${resolved.repo}/${resolved.branch}/${FAMILIES.channel.catalogDir}/${slug}.json`,
+          );
+          catalogMap.set(slug, {
+            slug,
+            name: meta.name || formatSlugName(slug),
+            summary: meta.summary,
+            hints: meta.hints,
+          });
+        } catch {
+          catalogMap.set(slug, { slug, name: formatSlugName(slug) });
+        }
+      }
+    } catch {
+      // Best-effort
+    }
+  }
+
+  // 3. If explicit slugs were requested, ensure they are in catalogMap even on fetch error
+  if (options.slugs) {
+    for (const slug of options.slugs) {
+      if (!catalogMap.has(slug)) {
+        catalogMap.set(slug, { slug, name: formatSlugName(slug) });
+      }
+    }
+  }
+
+  // 4. Include any channel installed locally on disk
+  const localSlugs = resolved.io.listDirs(path.join(resolved.baseDir, FAMILIES.channel.localDir));
+  for (const slug of localSlugs) {
+    if (!catalogMap.has(slug)) {
+      catalogMap.set(slug, {
+        slug,
+        name: formatSlugName(slug),
+      });
+    }
+  }
+
+  return Array.from(catalogMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function fetchChannelHints(
+  slugs?: string[],
+  options: HubSyncOptions = {},
+): Promise<Record<string, ChannelHints>> {
+  const catalog = await fetchChannelCatalog({ ...options, slugs });
+  const result: Record<string, ChannelHints> = {};
+  for (const item of catalog) {
+    if (slugs && !slugs.includes(item.slug)) continue;
+    if (item.hints) {
+      result[item.slug] = item.hints;
+    }
+  }
+  return result;
 }
 
 export interface PullResult {

@@ -142,14 +142,41 @@ export interface PluginsResponse {
   items: PluginItem[];
 }
 
+export interface ChannelHints {
+  uninstalled?: string;
+  inactive?: string;
+  active?: string;
+  pairing?: string;
+  botNumber?: string;
+  allowUnlisted?: string;
+  whitelist?: string;
+  [key: string]: string | undefined;
+}
+
 export interface MarketplaceItem {
   family: 'tool' | 'skill' | 'channel';
   slug: string;
   summary?: string;
+  hints?: ChannelHints;
 }
 
 export interface MarketplaceResponse {
   items: MarketplaceItem[];
+}
+
+export interface ChannelHintsResponse {
+  hints: Record<string, ChannelHints>;
+}
+
+export interface ChannelCatalogItem {
+  slug: string;
+  name: string;
+  summary?: string;
+  hints?: ChannelHints;
+}
+
+export interface ChannelsCatalogResponse {
+  items: ChannelCatalogItem[];
 }
 
 export interface ProviderCatalogEntry {

@@ -86,6 +86,17 @@ export default function MarketplaceList({ api }: { api: UseMarketplaceApi }) {
           </Card>
         </div>
       ))}
+      <div className="pt-2 text-center font-mono text-[11px] text-txt-3">
+        Explore more tools, channels, and skills on the hub website:{' '}
+        <a
+          href="https://hub.koaris.com/marketplace/"
+          target="_blank"
+          rel="noreferrer"
+          className="text-accent underline hover:opacity-80"
+        >
+          https://hub.koaris.com/marketplace/
+        </a>
+      </div>
       <Toast message={toastMsg} isError={isError} />
     </div>
   );

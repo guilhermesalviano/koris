@@ -71,7 +71,7 @@ const {
   pluginSettingsRepo: { getEnabled: vi.fn(), setEnabled: vi.fn(), getAll: vi.fn() },
   pluginCatalog: { getInstance: vi.fn(), getExistingInstance: vi.fn(() => []), append: vi.fn() },
   channelsManager: { getExistingInstance: vi.fn(() => undefined as { stopChannel: (name: string) => void } | undefined) },
-  hubSync: { listMissing: vi.fn(), pullEntry: vi.fn() },
+  hubSync: { listMissing: vi.fn(), pullEntry: vi.fn(), fetchChannelHints: vi.fn(), fetchChannelCatalog: vi.fn() },
 }));
 
 vi.mock('../../../src/repositories/audit-log', () => ({
@@ -731,6 +731,73 @@ describe('AdminRouterFactory /marketplace', () => {
 
     expect(res.status).toHaveBeenCalledWith(502);
     expect(res.json).toHaveBeenCalledWith({ error: 'Request to https://api.github.com/... failed: 500 Internal Server Error' });
+  });
+
+  it('GET /channels/hints fetches hints dynamically', async () => {
+    hubSync.fetchChannelHints.mockResolvedValue({
+      telegram: { uninstalled: 'Download TG' },
+      whatsapp: { uninstalled: 'Download WA' },
+    });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/channels/hints'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(hubSync.fetchChannelHints).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ baseDir: config.BASE_DIR }),
+    );
+    expect(res.json).toHaveBeenCalledWith({
+      hints: {
+        telegram: { uninstalled: 'Download TG' },
+        whatsapp: { uninstalled: 'Download WA' },
+      },
+    });
+  });
+
+  it('GET /channels/hints falls back to empty hints on error', async () => {
+    hubSync.fetchChannelHints.mockRejectedValue(new Error('Network failure'));
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/channels/hints'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(res.json).toHaveBeenCalledWith({ hints: {} });
+  });
+
+  it('GET /channels/catalog fetches channels dynamically', async () => {
+    hubSync.fetchChannelCatalog.mockResolvedValue([
+      { slug: 'telegram', name: 'Telegram', hints: { uninstalled: 'Download TG' } },
+      { slug: 'whatsapp', name: 'WhatsApp' },
+    ]);
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/channels/catalog'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(hubSync.fetchChannelCatalog).toHaveBeenCalledWith(
+      expect.objectContaining({ baseDir: config.BASE_DIR }),
+    );
+    expect(res.json).toHaveBeenCalledWith({
+      items: [
+        { slug: 'telegram', name: 'Telegram', hints: { uninstalled: 'Download TG' } },
+        { slug: 'whatsapp', name: 'WhatsApp' },
+      ],
+    });
+  });
+
+  it('GET /channels/catalog falls back to empty array on error', async () => {
+    hubSync.fetchChannelCatalog.mockRejectedValue(new Error('Network failure'));
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/channels/catalog'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(res.json).toHaveBeenCalledWith({ items: [] });
   });
 
   it('POST /marketplace/:slug/pull pulls the entry, pinning baseDir to config.BASE_DIR and syncs tools', async () => {
