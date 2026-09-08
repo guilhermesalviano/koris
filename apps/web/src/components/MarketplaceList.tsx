@@ -9,7 +9,7 @@ function humanize(slug: string): string {
     .join(' ');
 }
 
-const FAMILY_ORDER: MarketplaceItem['family'][] = ['tool', 'skill'];
+const FAMILY_ORDER: MarketplaceItem['family'][] = ['channel', 'tool', 'skill'];
 
 function groupByFamily(items: MarketplaceItem[]): [MarketplaceItem['family'], MarketplaceItem[]][] {
   const groups = new Map<MarketplaceItem['family'], MarketplaceItem[]>();
@@ -26,6 +26,7 @@ function groupByFamily(items: MarketplaceItem[]): [MarketplaceItem['family'], Ma
 }
 
 function familyLabel(family: MarketplaceItem['family']): string {
+  if (family === 'channel') return 'Channels';
   return family === 'tool' ? 'Tools' : 'Skills';
 }
 

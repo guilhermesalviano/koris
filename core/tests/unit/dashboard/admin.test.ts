@@ -66,9 +66,10 @@ const {
     ),
     writeChannelConfigPatch: vi.fn(),
     reprimeChannelRuntime: vi.fn(),
+    reprimeLiveChannelDescriptors: vi.fn(),
   },
   pluginSettingsRepo: { getEnabled: vi.fn(), setEnabled: vi.fn(), getAll: vi.fn() },
-  pluginCatalog: { getInstance: vi.fn(), getExistingInstance: vi.fn(() => []) },
+  pluginCatalog: { getInstance: vi.fn(), getExistingInstance: vi.fn(() => []), append: vi.fn() },
   channelsManager: { getExistingInstance: vi.fn(() => undefined as { stopChannel: (name: string) => void } | undefined) },
   hubSync: { listMissing: vi.fn(), pullEntry: vi.fn() },
 }));
@@ -739,6 +740,24 @@ describe('AdminRouterFactory /marketplace', () => {
 
     expect(hubSync.pullEntry).toHaveBeenCalledWith('git', { baseDir: config.BASE_DIR });
     expect(skillSync.sync).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('POST /marketplace/:slug/pull repriming live channels and appending to plugin catalog when pulling a channel', async () => {
+    hubSync.pullEntry.mockResolvedValue({
+      family: 'channel',
+      slug: 'telegram',
+      createdFiles: ['plugins/channels/telegram/index.js', 'plugins/channels/telegram/config.example.yml'],
+    });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/marketplace/telegram/pull'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(hubSync.pullEntry).toHaveBeenCalledWith('telegram', { baseDir: config.BASE_DIR });
+    expect(liveChannelRuntime.reprimeLiveChannelDescriptors).toHaveBeenCalled();
+    expect(pluginCatalog.append).toHaveBeenCalledWith([{ family: 'channels', name: 'telegram' }]);
     expect(res.status).toHaveBeenCalledWith(201);
   });
 

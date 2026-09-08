@@ -41,9 +41,16 @@ memory/*
 
 .whatsapp_auth
 
-# Tools & skills: only track the current allowlist below. Anything new —
+# Channels, tools & skills: only track the current allowlist below. Anything new —
 # scaffolded locally or dropped in later (e.g. by a koris-hub sync) — stays
 # untracked by default.
+plugins/channels/*
+!plugins/channels/channel-config.ts
+!plugins/channels/contracts.test.ts
+!plugins/channels/contracts.ts
+!plugins/channels/index.ts
+!plugins/channels/.gitkeep
+
 plugins/tools/*
 !plugins/tools/contracts.ts
 !plugins/tools/cron.ts

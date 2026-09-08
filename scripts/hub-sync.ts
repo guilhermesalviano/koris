@@ -12,7 +12,7 @@ import { NAME_PATTERN } from './scaffold-tool';
  * Both the dev CLI (`scripts/hub-sync-cli.ts`) call into this module.
  */
 
-export type HubFamily = 'tool' | 'skill';
+export type HubFamily = 'tool' | 'skill' | 'channel';
 
 interface FamilyConfig {
   /** directory under the koris-hub repo root holding one folder per plugin */
@@ -26,6 +26,7 @@ interface FamilyConfig {
 const FAMILIES: Record<HubFamily, FamilyConfig> = {
   tool: { hubDir: 'koris-plugins/tools', localDir: 'plugins/tools', catalogDir: 'content/marketplace/tools' },
   skill: { hubDir: 'koris-plugins/skills', localDir: 'plugins/skills', catalogDir: 'content/marketplace/skills' },
+  channel: { hubDir: 'koris-plugins/channels', localDir: 'plugins/channels', catalogDir: 'content/marketplace/channels' },
 };
 
 const HUB_OWNER = 'guilhermesalviano';
@@ -207,7 +208,7 @@ export async function pullEntry(
     if (options.family) {
       throw new Error(`"${slug}" was not found under ${FAMILIES[options.family].hubDir} in ${resolved.owner}/${resolved.repo}@${resolved.branch}.`);
     }
-    throw new Error(`"${slug}" was not found under koris-plugins/tools or koris-skills in ${resolved.owner}/${resolved.repo}@${resolved.branch}.`);
+    throw new Error(`"${slug}" was not found under koris-plugins/tools, koris-plugins/skills, or koris-plugins/channels in ${resolved.owner}/${resolved.repo}@${resolved.branch}.`);
   }
 
   const { family, files } = match;

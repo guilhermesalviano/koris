@@ -30,7 +30,7 @@ function makeHttp(fixture: HttpFixture = {}): HubSyncHttp {
   return {
     fetchJson: vi.fn(async (url: string) => {
       if (url.includes('/git/trees/')) return tree;
-      const match = url.match(/content\/marketplace\/(tools|skills)\/([^/]+)\.json$/);
+      const match = url.match(/content\/marketplace\/(tools|skills|channels)\/([^/]+)\.json$/);
       if (match) {
         const slug = match[2]!;
         if (catalog[slug]) return catalog[slug];
@@ -54,16 +54,19 @@ const HUB_TREE = {
     { path: 'koris-plugins/tools/list-beats/index.test.ts', type: 'blob' as const },
     { path: 'koris-plugins/skills/weather/SKILL.md', type: 'blob' as const },
     { path: 'koris-plugins/skills/cat-fact/SKILL.md', type: 'blob' as const },
+    { path: 'koris-plugins/channels/telegram/index.js', type: 'blob' as const },
+    { path: 'koris-plugins/channels/telegram/config.example.yml', type: 'blob' as const },
   ],
   truncated: false,
 };
 
 const LOCAL_TOOLS_DIR = path.join(BASE_DIR, 'plugins/tools');
 const LOCAL_SKILLS_DIR = path.join(BASE_DIR, 'plugins/skills');
+const LOCAL_CHANNELS_DIR = path.join(BASE_DIR, 'plugins/channels');
 
 describe('listMissing', () => {
   it('reports hub slugs not present locally, skipping stray files directly under the hub dir', async () => {
-    const io = makeIO({ [LOCAL_TOOLS_DIR]: ['list-beats'], [LOCAL_SKILLS_DIR]: ['cat-fact'] });
+    const io = makeIO({ [LOCAL_TOOLS_DIR]: ['list-beats'], [LOCAL_SKILLS_DIR]: ['cat-fact'], [LOCAL_CHANNELS_DIR]: ['telegram'] });
     const http = makeHttp({
       tree: HUB_TREE,
       catalog: { issue: { summary: 'File a GitHub issue.' } },
@@ -78,7 +81,7 @@ describe('listMissing', () => {
   });
 
   it('excludes slugs already present locally', async () => {
-    const io = makeIO({ [LOCAL_TOOLS_DIR]: ['issue', 'list-beats'], [LOCAL_SKILLS_DIR]: ['weather', 'cat-fact'] });
+    const io = makeIO({ [LOCAL_TOOLS_DIR]: ['issue', 'list-beats'], [LOCAL_SKILLS_DIR]: ['weather', 'cat-fact'], [LOCAL_CHANNELS_DIR]: ['telegram'] });
     const http = makeHttp({ tree: HUB_TREE });
 
     const entries = await listMissing({ baseDir: BASE_DIR, io, http });
@@ -200,5 +203,26 @@ describe('pullEntry', () => {
     expect(result.family).toBe('skill');
     expect(result.createdFiles).toEqual(['plugins/skills/weather/SKILL.md']);
     expect(io.written.get(path.join(LOCAL_SKILLS_DIR, 'weather', 'SKILL.md'))).toBe('# Weather');
+  });
+
+  it('downloads a channel slug into plugins/channels/<slug>', async () => {
+    const io = makeIO();
+    const http = makeHttp({
+      tree: HUB_TREE,
+      files: {
+        'https://raw.githubusercontent.com/guilhermesalviano/koris-hub/main/koris-plugins/channels/telegram/index.js': 'channel bundle',
+        'https://raw.githubusercontent.com/guilhermesalviano/koris-hub/main/koris-plugins/channels/telegram/config.example.yml': 'bot_token: ""',
+      },
+    });
+
+    const result = await pullEntry('telegram', { baseDir: BASE_DIR, io, http });
+
+    expect(result.family).toBe('channel');
+    expect(result.createdFiles).toEqual([
+      'plugins/channels/telegram/index.js',
+      'plugins/channels/telegram/config.example.yml',
+    ]);
+    expect(io.written.get(path.join(LOCAL_CHANNELS_DIR, 'telegram', 'index.js'))).toBe('channel bundle');
+    expect(io.written.get(path.join(LOCAL_CHANNELS_DIR, 'telegram', 'config.example.yml'))).toBe('bot_token: ""');
   });
 });

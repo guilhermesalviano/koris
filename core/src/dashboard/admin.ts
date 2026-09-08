@@ -21,6 +21,7 @@ import {
   loadChannelConfig,
   writeChannelConfigPatch,
   reprimeChannelRuntime,
+  reprimeLiveChannelDescriptors,
   liveChannelNames,
 } from './live-channel-runtime';
 import { ILogger } from '../infrastructure/logger';
@@ -906,6 +907,9 @@ class AdminRouterFactory {
           ToolSyncSingleton.getExistingInstance()?.sync(item.slug);
         } else if (item.family === 'skill') {
           SkillSyncSingleton.getExistingInstance()?.sync();
+        } else if (item.family === 'channel') {
+          reprimeLiveChannelDescriptors();
+          PluginCatalogSingleton.append([{ family: 'channels', name: item.slug }]);
         }
         res.status(201).json({ success: true, item });
       } catch (err) {

@@ -180,7 +180,10 @@ class Application implements IApplication {
     const sessionManager = new SessionManager(db);
     configureChannelHandler({ sessionManager, logger: this.logger });
     const gateway = MessageGatewayFactory.create(this.logger, this.source, db, sessionManager);
-    const channelPlugins = createPlugins({ context: createPluginContext(this.logger, gateway, db) });
+    const channelPlugins = createPlugins({
+      context: createPluginContext(this.logger, gateway, db),
+      directory: path.join(config.BASE_DIR, 'plugins', 'channels'),
+    });
     const toolPlugins = createToolPlugins({ context: createToolPluginContext(this.logger, db) });
     const pluginIdentities: PluginIdentity[] = [
       ...channelPlugins.map((plugin) => ({ family: 'channels' as const, name: plugin.name })),

@@ -143,7 +143,7 @@ export interface PluginsResponse {
 }
 
 export interface MarketplaceItem {
-  family: 'tool' | 'skill';
+  family: 'tool' | 'skill' | 'channel';
   slug: string;
   summary?: string;
 }
