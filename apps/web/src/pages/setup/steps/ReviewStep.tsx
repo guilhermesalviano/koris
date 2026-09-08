@@ -36,10 +36,6 @@ export function ReviewStep({ api, pluginsApi }: { api: SettingsFormApi; pluginsA
           <span className="text-xs text-txt sm:text-sm font-mono">{activeChannels.length > 0 ? activeChannels.join(", ") : "none"}</span>
         </div>
         <div className={rowClass}>
-          <span className="text-xs text-txt-3 sm:text-sm">Allowed domains</span>
-          <span className="text-xs text-txt sm:text-sm">{form.allowed_domains.length || "none"}</span>
-        </div>
-        <div className={rowClass}>
           <span className="text-xs text-txt-3 sm:text-sm">Personal info fields</span>
           <span className="text-xs text-txt sm:text-sm">{Object.keys(form.personal_information).length || "none"}</span>
         </div>
