@@ -3,9 +3,12 @@ import type { SettingsFormApi } from "../../../lib/use-settings-form";
 import { usePlugins, type UsePluginsApi } from "../../../lib/use-plugins";
 import { useChannelsCatalog } from "../../../lib/use-channels-catalog";
 import { apiRequest } from "../../../lib/api";
-import type { ChannelHints } from "../../../lib/types";
+import type { ChannelHints, ChannelConfigField } from "../../../lib/types";
+import { Toggle } from "../../../components/AdminUI";
 
 const buttonClass = "rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm font-medium hover:border-accent disabled:opacity-60";
+const inputClass = "w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 font-mono text-sm outline-none focus:border-accent";
+const labelClass = "mb-1 block font-mono text-[10px] uppercase tracking-wide text-txt-3";
 
 function formatName(slug: string): string {
   return slug
@@ -14,7 +17,137 @@ function formatName(slug: string): string {
     .join(" ");
 }
 
+/** Channels whose config has a matching slice in SettingsFormState and can be saved today. */
+type ConfigurableSlug = "telegram" | "whatsapp";
+const CONFIGURABLE_SLUGS: ConfigurableSlug[] = ["telegram", "whatsapp"];
+
+/** Hint keys that a rendered config field already covers — dropped from the active-hint list. */
+const FIELD_HINT_KEYS = new Set(["uninstalled", "inactive", "allowUnlisted", "botNumber", "whitelist"]);
+
+/**
+ * Setup-wizard form for one channel, rendered from the hub catalog's `configFields`.
+ * Only channels in CONFIGURABLE_SLUGS can be persisted today; a new hub channel
+ * needs a matching SettingsFormState slice + settings patch before its
+ * `configFields` can be wired here.
+ */
+function ChannelConfigForm({
+  slug,
+  name,
+  fields,
+  api,
+}: {
+  slug: ConfigurableSlug;
+  name: string;
+  fields: ChannelConfigField[];
+  api: SettingsFormApi;
+}) {
+  const slice = api.form[slug] as unknown as Record<string, string | boolean>;
+
+  const setValue = (fieldName: string, value: string | boolean) => {
+    api.update((prev) => ({
+      ...prev,
+      [slug]: { ...(prev[slug] as Record<string, unknown>), [fieldName]: value },
+    }) as typeof prev);
+  };
+
+  const storedSecretMasked = (fieldName: string): boolean => {
+    const channels = api.original?.CHANNELS as Record<string, Record<string, unknown>> | undefined;
+    const stored = channels?.[slug.toUpperCase()]?.[fieldName.toUpperCase()];
+    return typeof stored === "string" && stored.includes("••••");
+  };
+
+  const textFields = fields.filter((f) => f.type !== "boolean");
+  const boolFields = fields.filter((f) => f.type === "boolean");
+
+  return (
+    <div className="space-y-3">
+      {textFields.length > 0 && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {textFields.map((field) => (
+            <div key={field.name}>
+              <label className={labelClass}>{field.label}</label>
+              <input
+                type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
+                value={String(slice[field.name] ?? "")}
+                onChange={(e) => setValue(field.name, e.target.value)}
+                className={`${inputClass} font-mono`}
+                placeholder={
+                  field.type === "password" && storedSecretMasked(field.name)
+                    ? "Leave blank to keep current value"
+                    : field.placeholder
+                }
+              />
+              {field.description && (
+                <p className="mt-1 font-mono text-[11px] text-txt-3">{field.description}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {slug === "telegram" && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            disabled={api.testingTelegram || !api.form.telegram.bot_token}
+            onClick={() => api.testTelegramToken()}
+            className={`${buttonClass} w-full sm:w-auto`}
+          >
+            {api.testingTelegram ? "Testing…" : "Test token"}
+          </button>
+          {api.telegramTestResult && (
+            <span
+              className={`font-mono text-[11px] break-words min-w-0 ${
+                api.telegramTestResult.ok ? "text-green-400" : "text-red-400"
+              }`}
+            >
+              {api.telegramTestResult.ok
+                ? `valid — @${api.telegramTestResult.username ?? "?"}`
+                : (api.telegramTestResult.error ?? "invalid token")}
+            </span>
+          )}
+        </div>
+      )}
+
+      {slug === "whatsapp" && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            disabled={api.whatsappConnecting}
+            onClick={() => api.connectWhatsApp()}
+            className={`${buttonClass} w-full sm:w-auto`}
+          >
+            {api.whatsappConnecting ? "Connecting…" : "Connect"}
+          </button>
+          {api.whatsappConnectResult && (
+            <span className="font-mono text-[11px] break-words min-w-0 text-txt-3">
+              {api.whatsappConnectResult}
+            </span>
+          )}
+        </div>
+      )}
+
+      {boolFields.map((field) => (
+        <div key={field.name} className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm">{field.label}</div>
+            {field.description && (
+              <div className="font-mono text-[11px] text-txt-3">{field.description}</div>
+            )}
+          </div>
+          <Toggle
+            checked={Boolean(slice[field.name])}
+            onChange={() => setValue(field.name, !slice[field.name])}
+            label={`${field.label} on ${name}`}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ChannelsStep({
+  api,
   pluginsApi: providedPluginsApi,
 }: {
   api?: SettingsFormApi;
@@ -30,7 +163,10 @@ export function ChannelsStep({
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const channels = useMemo(() => {
-    const map = new Map<string, { slug: string; name: string; summary?: string; hints?: ChannelHints }>();
+    const map = new Map<
+      string,
+      { slug: string; name: string; summary?: string; hints?: ChannelHints; configFields?: ChannelConfigField[] }
+    >();
 
     for (const item of catalogItems) {
       map.set(item.slug, {
@@ -38,6 +174,7 @@ export function ChannelsStep({
         name: item.name,
         summary: item.summary,
         hints: item.hints,
+        configFields: item.configFields,
       });
     }
 
@@ -119,8 +256,16 @@ export function ChannelsStep({
         const isInstalled = !!plugin;
         const isEnabled = plugin?.enabled ?? false;
 
+        const configFields = channel.configFields ?? [];
+        const isConfigurable =
+          CONFIGURABLE_SLUGS.includes(channel.slug as ConfigurableSlug) && configFields.length > 0;
+
+        // Drop hints a rendered config field already covers, but only when the form shows.
         const activeHints = Object.entries(channel.hints ?? {})
-          .filter(([key, val]) => key !== "uninstalled" && key !== "inactive" && Boolean(val));
+          .filter(([key, val]) => Boolean(val)
+            && key !== "uninstalled"
+            && key !== "inactive"
+            && !(isConfigurable && FIELD_HINT_KEYS.has(key)));
 
         return (
           <div key={channel.slug} className="rounded-lg border border-subtle bg-bg-3 p-4">
@@ -192,17 +337,26 @@ export function ChannelsStep({
                   </p>
                 )
               ) : (
-                <div className="space-y-1.5">
+                <div className="space-y-4">
                   {activeHints.length > 0 ? (
-                    activeHints.map(([key, hint]) => (
-                      <p key={key} className="font-mono text-[11px] text-txt-3">
-                        {hint}
-                      </p>
-                    ))
-                  ) : (
-                    <p className="font-mono text-[11px] text-txt-3">
-                      {channel.name} channel is active.{channel.summary ? ` ${channel.summary}` : ""}
-                    </p>
+                    <div className="space-y-1.5">
+                      {activeHints.map(([key, hint]) => (
+                        <p key={key} className="font-mono text-[11px] text-txt-3">
+                          {hint}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {api && isConfigurable && (
+                    <div className="mt-3 pt-3 border-t border-subtle space-y-3">
+                      <ChannelConfigForm
+                        slug={channel.slug as ConfigurableSlug}
+                        name={channel.name}
+                        fields={configFields}
+                        api={api}
+                      />
+                    </div>
                   )}
                 </div>
               )}

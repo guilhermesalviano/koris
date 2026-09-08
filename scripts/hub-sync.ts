@@ -150,6 +150,21 @@ export interface ChannelHints {
   whitelist?: string;
 }
 
+/**
+ * Channels only: one editable config input, mirrored from koris-hub's
+ * `content/marketplace/channels/<slug>.json` so koris's setup wizard can render
+ * a channel's form from the catalog instead of hard-coding it. `name` is the
+ * config key written to the channel's config (e.g. `bot_token`).
+ */
+export interface ChannelConfigField {
+  name: string;
+  label: string;
+  type: 'text' | 'password' | 'boolean' | 'number';
+  placeholder?: string;
+  description?: string;
+  required?: boolean;
+}
+
 export interface HubEntry {
   family: HubFamily;
   slug: string;
@@ -204,7 +219,16 @@ export interface ChannelCatalogItem {
   name: string;
   summary?: string;
   hints?: ChannelHints;
+  /** editable config inputs for koris's setup wizard form */
+  configFields?: ChannelConfigField[];
 }
+
+type ChannelCatalogMeta = {
+  name?: string;
+  summary?: string;
+  hints?: ChannelHints;
+  configFields?: ChannelConfigField[];
+};
 
 export async function fetchChannelCatalog(
   options: HubSyncOptions & { slugs?: string[] } = {},
@@ -227,12 +251,13 @@ export async function fetchChannelCatalog(
           const slug = basename(file, '.json');
           if (options.slugs && !options.slugs.includes(slug)) continue;
           const content = readFileSync(path.join(catalogDir, file), 'utf-8');
-          const meta = JSON.parse(content) as { name?: string; summary?: string; hints?: ChannelHints };
+          const meta = JSON.parse(content) as ChannelCatalogMeta;
           catalogMap.set(slug, {
             slug,
             name: meta.name || formatSlugName(slug),
             summary: meta.summary,
             hints: meta.hints,
+            configFields: meta.configFields,
           });
         }
       } catch {
@@ -260,7 +285,7 @@ export async function fetchChannelCatalog(
       for (const slug of hubSlugs) {
         if (options.slugs && !options.slugs.includes(slug)) continue;
         try {
-          const meta = await resolved.http.fetchJson<{ name?: string; summary?: string; hints?: ChannelHints }>(
+          const meta = await resolved.http.fetchJson<ChannelCatalogMeta>(
             `https://raw.githubusercontent.com/${resolved.owner}/${resolved.repo}/${resolved.branch}/${FAMILIES.channel.catalogDir}/${slug}.json`,
           );
           catalogMap.set(slug, {
@@ -268,6 +293,7 @@ export async function fetchChannelCatalog(
             name: meta.name || formatSlugName(slug),
             summary: meta.summary,
             hints: meta.hints,
+            configFields: meta.configFields,
           });
         } catch {
           catalogMap.set(slug, { slug, name: formatSlugName(slug) });

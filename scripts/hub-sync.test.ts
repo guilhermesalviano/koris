@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import path from 'node:path';
-import { listMissing, pullEntry, fetchChannelHints, fetchChannelCatalog, type HubSyncFileIO, type HubSyncHttp, type ChannelHints } from './hub-sync';
+import { listMissing, pullEntry, fetchChannelHints, fetchChannelCatalog, type HubSyncFileIO, type HubSyncHttp, type ChannelHints, type ChannelConfigField } from './hub-sync';
 
 const BASE_DIR = '/repo';
 
@@ -18,7 +18,7 @@ function makeIO(dirContents: Record<string, string[]> = {}, existingPaths: strin
 
 interface HttpFixture {
   tree?: { tree: { path: string; type: 'blob' | 'tree' }[]; truncated?: boolean };
-  catalog?: Record<string, { summary?: string; hints?: ChannelHints }>;
+  catalog?: Record<string, { name?: string; summary?: string; hints?: ChannelHints; configFields?: ChannelConfigField[] }>;
   files?: Record<string, string>;
 }
 
@@ -320,6 +320,38 @@ describe('fetchChannelCatalog', () => {
         name: 'Whatsapp',
         summary: 'WhatsApp channel',
         hints: { pairing: 'Scan QR' },
+      },
+    ]);
+  });
+
+  it('carries configFields through from catalog metadata', async () => {
+    const http = makeHttp({
+      tree: {
+        tree: [{ path: 'content/marketplace/channels/telegram.json', type: 'blob' as const }],
+        truncated: false,
+      },
+      catalog: {
+        telegram: {
+          summary: 'Telegram channel',
+          configFields: [
+            { name: 'bot_token', label: 'Bot token', type: 'password', required: true, placeholder: '123:AA' },
+            { name: 'allow_unlisted_senders', label: 'Allow unlisted senders', type: 'boolean' },
+          ],
+        },
+      },
+    });
+
+    const catalog = await fetchChannelCatalog({ baseDir: BASE_DIR, io: makeIO(), http });
+
+    expect(catalog).toEqual([
+      {
+        slug: 'telegram',
+        name: 'Telegram',
+        summary: 'Telegram channel',
+        configFields: [
+          { name: 'bot_token', label: 'Bot token', type: 'password', required: true, placeholder: '123:AA' },
+          { name: 'allow_unlisted_senders', label: 'Allow unlisted senders', type: 'boolean' },
+        ],
       },
     ]);
   });
