@@ -1,4 +1,6 @@
+import path from 'node:path';
 import { ChannelHandlerFactory } from '../channels';
+import { config } from '../config';
 import type { ILogger } from '../infrastructure/logger';
 import type { IMessageGateway } from '../services/agents/message-gateway';
 import { listLiveChannels } from '../../../plugins/channels';
@@ -16,12 +18,18 @@ import type { LiveChannelDescriptor } from '../../../plugins/channels/contracts'
  */
 let descriptorCache: Map<string, LiveChannelDescriptor> | null = null;
 
+/** Clears the cached channel descriptors so newly installed/pulled channels are discovered. */
+export function reprimeLiveChannelDescriptors(): void {
+  descriptorCache = null;
+}
+
 /** Discovered lazily so merely importing this module (common across the
  *  dashboard) doesn't walk `plugins/channels/` until a live-channel action
  *  actually needs it. */
 function descriptors(): Map<string, LiveChannelDescriptor> {
   if (!descriptorCache) {
-    descriptorCache = new Map(listLiveChannels().map((descriptor) => [descriptor.name, descriptor]));
+    const channelsDir = path.join(config.BASE_DIR, 'plugins', 'channels');
+    descriptorCache = new Map(listLiveChannels({ directory: channelsDir }).map((descriptor) => [descriptor.name, descriptor]));
   }
   return descriptorCache;
 }

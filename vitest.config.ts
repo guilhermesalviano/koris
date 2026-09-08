@@ -13,8 +13,11 @@ export default defineConfig({
       '.stryker-tmp/**',
       '**/node_modules/**',
       'koris-hub/**',
+      'artifacts/**',
       'build-resources/**',
       'dist-desktop-out/**',
+      'plugins/channels/*/**',
+      'plugins/tools/*/**',
     ],
     coverage: {
       provider: 'v8',

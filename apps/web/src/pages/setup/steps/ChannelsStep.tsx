@@ -1,183 +1,369 @@
-import type { SettingsFormApi } from '../../../lib/use-settings-form';
-import { Toggle } from '../../../components/AdminUI';
-import type { UsePluginsApi } from '../../../lib/use-plugins';
+import { useMemo, useState } from "react";
+import type { SettingsFormApi } from "../../../lib/use-settings-form";
+import { usePlugins, type UsePluginsApi } from "../../../lib/use-plugins";
+import { useChannelsCatalog } from "../../../lib/use-channels-catalog";
+import { apiRequest } from "../../../lib/api";
+import type { ChannelHints, ChannelConfigField } from "../../../lib/types";
+import { Toggle } from "../../../components/AdminUI";
 
-const inputClass = 'w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent';
-const labelClass = 'mb-1 block font-mono text-[10px] uppercase tracking-wide text-txt-3';
-const buttonClass = 'rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm font-medium hover:border-accent disabled:opacity-60';
+const buttonClass = "rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm font-medium hover:border-accent disabled:opacity-60";
+const inputClass = "w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 font-mono text-sm outline-none focus:border-accent";
+const labelClass = "mb-1 block font-mono text-[10px] uppercase tracking-wide text-txt-3";
 
-function EnabledIndicator({ enabled }: { enabled: boolean }) {
+function formatName(slug: string): string {
+  return slug
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+/** Channels whose config has a matching slice in SettingsFormState and can be saved today. */
+type ConfigurableSlug = "telegram" | "whatsapp";
+const CONFIGURABLE_SLUGS: ConfigurableSlug[] = ["telegram", "whatsapp"];
+
+/** Hint keys that a rendered config field already covers — dropped from the active-hint list. */
+const FIELD_HINT_KEYS = new Set(["uninstalled", "inactive", "allowUnlisted", "botNumber", "whitelist"]);
+
+/**
+ * Setup-wizard form for one channel, rendered from the hub catalog's `configFields`.
+ * Only channels in CONFIGURABLE_SLUGS can be persisted today; a new hub channel
+ * needs a matching SettingsFormState slice + settings patch before its
+ * `configFields` can be wired here.
+ */
+function ChannelConfigForm({
+  slug,
+  name,
+  fields,
+  api,
+}: {
+  slug: ConfigurableSlug;
+  name: string;
+  fields: ChannelConfigField[];
+  api: SettingsFormApi;
+}) {
+  const slice = api.form[slug] as unknown as Record<string, string | boolean>;
+
+  const setValue = (fieldName: string, value: string | boolean) => {
+    api.update((prev) => ({
+      ...prev,
+      [slug]: { ...(prev[slug] as Record<string, unknown>), [fieldName]: value },
+    }) as typeof prev);
+  };
+
+  const storedSecretMasked = (fieldName: string): boolean => {
+    const channels = api.original?.CHANNELS as Record<string, Record<string, unknown>> | undefined;
+    const stored = channels?.[slug.toUpperCase()]?.[fieldName.toUpperCase()];
+    return typeof stored === "string" && stored.includes("••••");
+  };
+
+  const textFields = fields.filter((f) => f.type !== "boolean");
+  const boolFields = fields.filter((f) => f.type === "boolean");
+
   return (
-    <span className="font-mono text-[11px] text-txt-3">
-      currently{' '}
-      <span className={enabled ? 'text-green-400' : 'text-amber-400'}>{enabled ? 'enabled' : 'disabled'}</span>
-      {' — '}toggle via Plugins
-    </span>
+    <div className="space-y-3">
+      {textFields.length > 0 && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {textFields.map((field) => (
+            <div key={field.name}>
+              <label className={labelClass}>{field.label}</label>
+              <input
+                type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
+                value={String(slice[field.name] ?? "")}
+                onChange={(e) => setValue(field.name, e.target.value)}
+                className={`${inputClass} font-mono`}
+                placeholder={
+                  field.type === "password" && storedSecretMasked(field.name)
+                    ? "Leave blank to keep current value"
+                    : field.placeholder
+                }
+              />
+              {field.description && (
+                <p className="mt-1 font-mono text-[11px] text-txt-3">{field.description}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {slug === "telegram" && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            disabled={api.testingTelegram || !api.form.telegram.bot_token}
+            onClick={() => api.testTelegramToken()}
+            className={`${buttonClass} w-full sm:w-auto`}
+          >
+            {api.testingTelegram ? "Testing…" : "Test token"}
+          </button>
+          {api.telegramTestResult && (
+            <span
+              className={`font-mono text-[11px] break-words min-w-0 ${
+                api.telegramTestResult.ok ? "text-green-400" : "text-red-400"
+              }`}
+            >
+              {api.telegramTestResult.ok
+                ? `valid — @${api.telegramTestResult.username ?? "?"}`
+                : (api.telegramTestResult.error ?? "invalid token")}
+            </span>
+          )}
+        </div>
+      )}
+
+      {slug === "whatsapp" && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            disabled={api.whatsappConnecting}
+            onClick={() => api.connectWhatsApp()}
+            className={`${buttonClass} w-full sm:w-auto`}
+          >
+            {api.whatsappConnecting ? "Connecting…" : "Connect"}
+          </button>
+          {api.whatsappConnectResult && (
+            <span className="font-mono text-[11px] break-words min-w-0 text-txt-3">
+              {api.whatsappConnectResult}
+            </span>
+          )}
+        </div>
+      )}
+
+      {boolFields.map((field) => (
+        <div key={field.name} className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm">{field.label}</div>
+            {field.description && (
+              <div className="font-mono text-[11px] text-txt-3">{field.description}</div>
+            )}
+          </div>
+          <Toggle
+            checked={Boolean(slice[field.name])}
+            onChange={() => setValue(field.name, !slice[field.name])}
+            label={`${field.label} on ${name}`}
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 
 export function ChannelsStep({
   api,
-  pluginsApi,
-  onlyEnabled = false,
+  pluginsApi: providedPluginsApi,
 }: {
-  api: SettingsFormApi;
+  api?: SettingsFormApi;
   pluginsApi?: UsePluginsApi;
   onlyEnabled?: boolean;
-}) {
-  const { telegram, whatsapp } = api.form;
+} = {}) {
+  const localPluginsApi = usePlugins();
+  const pluginsApi = providedPluginsApi ?? localPluginsApi;
+  const { items: catalogItems, loading: catalogLoading, reload: catalogReload } = useChannelsCatalog();
 
-  const isTelegramEnabled = pluginsApi
-    ? pluginsApi.items.find((i) => i.family === 'channels' && i.name === 'telegram')?.enabled ?? false
-    : !!api.original?.CHANNELS?.TELEGRAM?.ENABLED;
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [activating, setActivating] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  const isWhatsappEnabled = pluginsApi
-    ? pluginsApi.items.find((i) => i.family === 'channels' && i.name === 'whatsapp')?.enabled ?? false
-    : !!api.original?.CHANNELS?.WHATSAPP?.ENABLED;
+  const channels = useMemo(() => {
+    const map = new Map<
+      string,
+      { slug: string; name: string; summary?: string; hints?: ChannelHints; configFields?: ChannelConfigField[] }
+    >();
 
-  if (onlyEnabled && !isTelegramEnabled && !isWhatsappEnabled) {
-    return (
-      <div className="py-6 text-center">
-        <p className="text-sm font-medium">No channels enabled</p>
-        <p className="mt-1 font-mono text-[11px] text-txt-3">
-          Neither Telegram nor WhatsApp is currently enabled. You can go back to the{' '}
-          <span className="text-txt">Plugins</span> step to enable channels, or click Next to proceed without chat channels.
-        </p>
-      </div>
-    );
+    for (const item of catalogItems) {
+      map.set(item.slug, {
+        slug: item.slug,
+        name: item.name,
+        summary: item.summary,
+        hints: item.hints,
+        configFields: item.configFields,
+      });
+    }
+
+    for (const item of pluginsApi.items) {
+      if (item.family === "channels" && !map.has(item.name)) {
+        map.set(item.name, {
+          slug: item.name,
+          name: formatName(item.name),
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [catalogItems, pluginsApi.items]);
+
+  async function handleDownloadChannel(slug: string) {
+    setDownloading(slug);
+    setDownloadError(null);
+    try {
+      await apiRequest(`/marketplace/${slug}/pull`, { method: "POST" });
+      await apiRequest(`/plugins/channels/${slug}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: true }),
+      });
+      await pluginsApi.reload();
+      await catalogReload();
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : `Failed to download ${slug}`);
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  async function handleToggleChannel(slug: string, enabled: boolean) {
+    setActivating(slug);
+    setDownloadError(null);
+    try {
+      await apiRequest(`/plugins/channels/${slug}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled }),
+      });
+      await pluginsApi.reload();
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : `Failed to update ${slug}`);
+    } finally {
+      setActivating(null);
+    }
   }
 
   return (
-    <div className="space-y-8">
-      {(!onlyEnabled || isTelegramEnabled) && (
-        <div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
-            <span className="text-sm font-medium">Telegram</span>
-            {!onlyEnabled && <EnabledIndicator enabled={isTelegramEnabled} />}
-          </div>
+    <div className="space-y-6">
+      <div className="text-center sm:text-left">
+        <p className="text-sm font-medium">Chat channels (optional)</p>
+        <p className="mt-1 font-mono text-[11px] text-txt-3">
+          Download and activate chat channels to communicate with your agent via messaging apps, or click Next to proceed with Web & TUI only.
+        </p>
+      </div>
 
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className={labelClass}>Bot token</label>
-              <input
-                type="password"
-                value={telegram.bot_token}
-                onChange={(e) => api.update((prev) => ({ ...prev, telegram: { ...prev.telegram, bot_token: e.target.value } }))}
-                className={`${inputClass} font-mono`}
-                placeholder={api.original?.CHANNELS?.TELEGRAM?.BOT_TOKEN?.includes('••••') ? 'Leave blank to keep current token' : '123456789:AA...'}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Whitelist (comma-separated chat IDs)</label>
-              <input
-                value={telegram.whitelist}
-                onChange={(e) => api.update((prev) => ({ ...prev, telegram: { ...prev.telegram, whitelist: e.target.value } }))}
-                className={`${inputClass} font-mono`}
-                placeholder="123456,789012"
-              />
-            </div>
-            <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <button
-                type="button"
-                disabled={api.testingTelegram || !telegram.bot_token}
-                onClick={() => api.testTelegramToken()}
-                className={`${buttonClass} w-full sm:w-auto`}
-              >
-                {api.testingTelegram ? 'Testing…' : 'Test token'}
-              </button>
-              {api.telegramTestResult && (
-                <span className={`font-mono text-[11px] break-words min-w-0 ${api.telegramTestResult.ok ? 'text-green-400' : 'text-red-400'}`}>
-                  {api.telegramTestResult.ok ? `valid — @${api.telegramTestResult.username ?? '?'}` : (api.telegramTestResult.error ?? 'invalid token')}
-                </span>
-              )}
-            </div>
-            <div className="sm:col-span-2 flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm">Allow unlisted senders</div>
-                <div className="font-mono text-[11px] text-txt-3">
-                  Reply to senders not on the whitelist, as untrusted (no tools or learned skills).
-                </div>
-              </div>
-              <Toggle
-                checked={telegram.allow_unlisted_senders}
-                onChange={() => api.update((prev) => ({
-                  ...prev,
-                  telegram: { ...prev.telegram, allow_unlisted_senders: !prev.telegram.allow_unlisted_senders },
-                }))}
-                label="Allow unlisted senders on Telegram"
-              />
-            </div>
-          </div>
+      {downloadError && (
+        <div className="rounded-lg border border-red-500/40 bg-[#2a1212] px-4 py-2.5 text-xs text-red-300">
+          {downloadError}
         </div>
       )}
 
-      {(!onlyEnabled || isWhatsappEnabled) && (
-        <div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
-            <span className="text-sm font-medium">WhatsApp</span>
-            {!onlyEnabled && <EnabledIndicator enabled={isWhatsappEnabled} />}
-          </div>
-
-          <div className="mt-3 space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className={labelClass}>Bot number (for group mentions)</label>
-                <input
-                  value={whatsapp.bot_number}
-                  onChange={(e) => api.update((prev) => ({ ...prev, whatsapp: { ...prev.whatsapp, bot_number: e.target.value } }))}
-                  className={`${inputClass} font-mono`}
-                  placeholder="5511999998888"
-                />
-                <p className="mt-1 font-mono text-[11px] text-txt-3">
-                  Digits only. Leave blank to auto-detect it from the linked WhatsApp session.
-                </p>
-              </div>
-              <div>
-                <label className={labelClass}>Whitelist (comma-separated numbers)</label>
-                <input
-                  value={whatsapp.whitelist}
-                  onChange={(e) => api.update((prev) => ({ ...prev, whatsapp: { ...prev.whatsapp, whitelist: e.target.value } }))}
-                  className={`${inputClass} font-mono`}
-                  placeholder="5511999999999"
-                />
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <button
-                type="button"
-                disabled={api.whatsappConnecting}
-                onClick={() => api.connectWhatsApp()}
-                className={`${buttonClass} w-full sm:w-auto`}
-              >
-                {api.whatsappConnecting ? 'Connecting…' : 'Connect'}
-              </button>
-              {api.whatsappConnectResult && (
-                <span className="font-mono text-[11px] break-words min-w-0 text-txt-3">{api.whatsappConnectResult}</span>
-              )}
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm">Allow unlisted senders</div>
-                <div className="font-mono text-[11px] text-txt-3">
-                  Reply to senders not on the whitelist, as untrusted (no tools or learned skills).
-                </div>
-              </div>
-              <Toggle
-                checked={whatsapp.allow_unlisted_senders}
-                onChange={() => api.update((prev) => ({
-                  ...prev,
-                  whatsapp: { ...prev.whatsapp, allow_unlisted_senders: !prev.whatsapp.allow_unlisted_senders },
-                }))}
-                label="Allow unlisted senders on WhatsApp"
-              />
-            </div>
-            <p className="font-mono text-[11px] text-txt-3">
-              WhatsApp pairing uses a QR code. Check the server&apos;s terminal output for a QR code to
-              scan with WhatsApp on your phone.
-            </p>
-          </div>
+      {catalogLoading && channels.length === 0 && (
+        <div className="rounded-lg border border-subtle bg-bg-3 p-6 text-center font-mono text-xs text-txt-3">
+          Loading channels…
         </div>
       )}
+
+      {!catalogLoading && channels.length === 0 && (
+        <div className="rounded-lg border border-subtle bg-bg-3 p-6 text-center font-mono text-xs text-txt-3">
+          No channels found.
+        </div>
+      )}
+
+      {channels.map((channel) => {
+        const plugin = pluginsApi.items.find((i) => i.family === "channels" && i.name === channel.slug);
+        const isInstalled = !!plugin;
+        const isEnabled = plugin?.enabled ?? false;
+
+        const configFields = channel.configFields ?? [];
+        const isConfigurable =
+          CONFIGURABLE_SLUGS.includes(channel.slug as ConfigurableSlug) && configFields.length > 0;
+
+        // Drop hints a rendered config field already covers, but only when the form shows.
+        const activeHints = Object.entries(channel.hints ?? {})
+          .filter(([key, val]) => Boolean(val)
+            && key !== "uninstalled"
+            && key !== "inactive"
+            && !(isConfigurable && FIELD_HINT_KEYS.has(key)));
+
+        return (
+          <div key={channel.slug} className="rounded-lg border border-subtle bg-bg-3 p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-subtle pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{channel.name}</span>
+                {!isInstalled ? (
+                  <span className="font-mono text-[10px] uppercase text-amber-400 border border-amber-400/30 rounded px-1.5 py-0.5">
+                    Not installed
+                  </span>
+                ) : !isEnabled ? (
+                  <span className="font-mono text-[10px] uppercase text-txt-3 border border-subtle rounded px-1.5 py-0.5">
+                    Installed (Inactive)
+                  </span>
+                ) : (
+                  <span className="font-mono text-[10px] uppercase text-emerald-400 border border-emerald-400/30 rounded px-1.5 py-0.5">
+                    Active
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {!isInstalled ? (
+                  <button
+                    type="button"
+                    disabled={downloading === channel.slug}
+                    onClick={() => handleDownloadChannel(channel.slug)}
+                    className={`${buttonClass} whitespace-nowrap`}
+                  >
+                    {downloading === channel.slug ? "Downloading…" : `Download ${channel.name}`}
+                  </button>
+                ) : !isEnabled ? (
+                  <button
+                    type="button"
+                    disabled={activating === channel.slug}
+                    onClick={() => handleToggleChannel(channel.slug, true)}
+                    className={`${buttonClass} whitespace-nowrap`}
+                  >
+                    {activating === channel.slug ? "Activating…" : `Activate ${channel.name}`}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={activating === channel.slug}
+                    onClick={() => handleToggleChannel(channel.slug, false)}
+                    className="rounded-lg border border-subtle bg-bg px-3 py-1.5 font-mono text-[11px] text-txt-3 hover:border-red-500/40 hover:text-red-400 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {activating === channel.slug ? "Deactivating…" : "Deactivate"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-3">
+              {!isInstalled ? (
+                (channel.hints?.uninstalled || channel.summary) ? (
+                  <p className="font-mono text-[11px] text-txt-3">
+                    {channel.hints?.uninstalled || channel.summary}
+                  </p>
+                ) : null
+              ) : !isEnabled ? (
+                channel.hints?.inactive ? (
+                  <p className="font-mono text-[11px] text-txt-3">
+                    {channel.hints.inactive}
+                  </p>
+                ) : (
+                  <p className="font-mono text-[11px] text-txt-3">
+                    {channel.name} channel is installed locally. Click Activate above to enable it.
+                  </p>
+                )
+              ) : (
+                <div className="space-y-4">
+                  {activeHints.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {activeHints.map(([key, hint]) => (
+                        <p key={key} className="font-mono text-[11px] text-txt-3">
+                          {hint}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {api && isConfigurable && (
+                    <div className="mt-3 pt-3 border-t border-subtle space-y-3">
+                      <ChannelConfigForm
+                        slug={channel.slug as ConfigurableSlug}
+                        name={channel.name}
+                        fields={configFields}
+                        api={api}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

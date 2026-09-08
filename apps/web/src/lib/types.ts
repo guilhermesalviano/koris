@@ -142,14 +142,56 @@ export interface PluginsResponse {
   items: PluginItem[];
 }
 
+export interface ChannelHints {
+  uninstalled?: string;
+  inactive?: string;
+  active?: string;
+  pairing?: string;
+  botNumber?: string;
+  allowUnlisted?: string;
+  whitelist?: string;
+  [key: string]: string | undefined;
+}
+
 export interface MarketplaceItem {
-  family: 'tool' | 'skill';
+  family: 'tool' | 'skill' | 'channel';
   slug: string;
   summary?: string;
+  hints?: ChannelHints;
 }
 
 export interface MarketplaceResponse {
   items: MarketplaceItem[];
+}
+
+export interface ChannelHintsResponse {
+  hints: Record<string, ChannelHints>;
+}
+
+/**
+ * Channels only: one editable config input, mirrored from koris-hub's channel
+ * catalog so the setup wizard renders a channel's form from the catalog instead
+ * of hard-coding it. `name` is the config key written to the channel's config.
+ */
+export interface ChannelConfigField {
+  name: string;
+  label: string;
+  type: 'text' | 'password' | 'boolean' | 'number';
+  placeholder?: string;
+  description?: string;
+  required?: boolean;
+}
+
+export interface ChannelCatalogItem {
+  slug: string;
+  name: string;
+  summary?: string;
+  hints?: ChannelHints;
+  configFields?: ChannelConfigField[];
+}
+
+export interface ChannelsCatalogResponse {
+  items: ChannelCatalogItem[];
 }
 
 export interface ProviderCatalogEntry {

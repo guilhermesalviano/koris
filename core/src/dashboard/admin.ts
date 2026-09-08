@@ -1,7 +1,6 @@
-import { existsSync } from 'fs';
 import express, { type Request, type Response, type Router } from 'express';
 import { config, reloadConfig } from '../config';
-import { resolveConfigPaths } from '../config/helpers';
+import { isConfigFilePresent } from '../config/helpers';
 import {
   VALID_LOG_LEVELS,
   isValidUrl,
@@ -21,6 +20,7 @@ import {
   loadChannelConfig,
   writeChannelConfigPatch,
   reprimeChannelRuntime,
+  reprimeLiveChannelDescriptors,
   liveChannelNames,
 } from './live-channel-runtime';
 import { ILogger } from '../infrastructure/logger';
@@ -55,7 +55,15 @@ import { IMessageGateway } from '../services/agents/message-gateway';
 import { PluginSettingsRepositoryFactory, type IPluginSettingsRepository } from '../repositories/plugin-settings';
 import { resolvePluginEnabled } from '../services/plugins/plugin-enablement';
 import { PluginCatalogSingleton } from '../services/plugins/plugin-catalog-singleton';
-import { listMissing, pullEntry } from '../../../scripts/hub-sync';
+import {
+  listMissing,
+  pullEntry,
+  fetchChannelHints,
+  fetchChannelCatalog,
+  type ChannelHints,
+  type ChannelCatalogItem,
+} from '../../../scripts/hub-sync';
+import { listInstalledChannelNames } from '../services/commands/channels';
 
 const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN']);
 
@@ -829,6 +837,11 @@ class AdminRouterFactory {
       ToolSyncSingleton.getExistingInstance()?.sync();
       SkillSyncSingleton.getExistingInstance()?.sync();
 
+      const diskChannels = listInstalledChannelNames(config.BASE_DIR);
+      if (diskChannels.length > 0) {
+        PluginCatalogSingleton.append(diskChannels.map((name) => ({ family: 'channels', name })));
+      }
+
       const items = PluginCatalogSingleton.getExistingInstance().map(({ family, name }) => ({
         family,
         name,
@@ -866,6 +879,13 @@ class AdminRouterFactory {
         return;
       }
 
+      if (family === 'channels') {
+        const diskChannels = listInstalledChannelNames(config.BASE_DIR);
+        if (diskChannels.includes(name)) {
+          PluginCatalogSingleton.append([{ family: 'channels', name }]);
+        }
+      }
+
       const catalog = PluginCatalogSingleton.getExistingInstance();
       if (!catalog.some((p) => p.family === family && p.name === name)) {
         res.status(404).json({ error: 'Plugin not found' });
@@ -899,6 +919,46 @@ class AdminRouterFactory {
       }
     });
 
+    let channelHintsCache: { timestamp: number; data: Record<string, ChannelHints> } | null = null;
+    const CHANNEL_HINTS_TTL_MS = 10 * 60 * 1000;
+
+    router.get('/channels/hints', async (_req: Request, res: Response) => {
+      const now = Date.now();
+      if (channelHintsCache && now - channelHintsCache.timestamp < CHANNEL_HINTS_TTL_MS) {
+        res.json({ hints: channelHintsCache.data });
+        return;
+      }
+      try {
+        const hints = await fetchChannelHints(undefined, {
+          baseDir: config.BASE_DIR,
+        });
+        channelHintsCache = { timestamp: now, data: hints };
+        res.json({ hints });
+      } catch {
+        res.json({ hints: channelHintsCache?.data ?? {} });
+      }
+    });
+
+    let channelCatalogCache: { timestamp: number; data: ChannelCatalogItem[] } | null = null;
+    const CHANNEL_CATALOG_TTL_MS = 10 * 60 * 1000;
+
+    router.get('/channels/catalog', async (_req: Request, res: Response) => {
+      const now = Date.now();
+      if (channelCatalogCache && now - channelCatalogCache.timestamp < CHANNEL_CATALOG_TTL_MS) {
+        res.json({ items: channelCatalogCache.data });
+        return;
+      }
+      try {
+        const items = await fetchChannelCatalog({
+          baseDir: config.BASE_DIR,
+        });
+        channelCatalogCache = { timestamp: now, data: items };
+        res.json({ items });
+      } catch {
+        res.json({ items: channelCatalogCache?.data ?? [] });
+      }
+    });
+
     router.post('/marketplace/:slug/pull', async (req: Request, res: Response) => {
       try {
         const item = await pullEntry(String(req.params.slug), { baseDir: config.BASE_DIR });
@@ -906,6 +966,9 @@ class AdminRouterFactory {
           ToolSyncSingleton.getExistingInstance()?.sync(item.slug);
         } else if (item.family === 'skill') {
           SkillSyncSingleton.getExistingInstance()?.sync();
+        } else if (item.family === 'channel') {
+          reprimeLiveChannelDescriptors();
+          PluginCatalogSingleton.append([{ family: 'channels', name: item.slug }]);
         }
         res.status(201).json({ success: true, item });
       } catch (err) {
@@ -918,7 +981,7 @@ class AdminRouterFactory {
     });
 
     router.get('/settings/status', (_req: Request, res: Response) => {
-      const configured = resolveConfigPaths().some(existsSync);
+      const configured = isConfigFilePresent();
       res.json({ configured });
     });
 

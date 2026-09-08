@@ -5,7 +5,6 @@ import { usePlugins, type UsePluginsApi } from '../../lib/use-plugins';
 import { ProviderStep } from './steps/ProviderStep';
 import { PluginsStep } from './steps/PluginsStep';
 import { ChannelsStep } from './steps/ChannelsStep';
-import { DomainsStep } from './steps/DomainsStep';
 import { PersonalInfoStep } from './steps/PersonalInfoStep';
 import { ReviewStep } from './steps/ReviewStep';
 
@@ -15,14 +14,13 @@ interface StepProps {
 }
 
 function SetupChannelsStep({ api, pluginsApi }: StepProps) {
-  return <ChannelsStep api={api} pluginsApi={pluginsApi} onlyEnabled />;
+  return <ChannelsStep api={api} pluginsApi={pluginsApi} />;
 }
 
 const STEPS: { title: string; render: ComponentType<StepProps> }[] = [
   { title: 'AI provider', render: ProviderStep },
   { title: 'Plugins', render: PluginsStep },
   { title: 'Channels', render: SetupChannelsStep },
-  { title: 'Allowed domains', render: DomainsStep },
   { title: 'Personal info', render: PersonalInfoStep },
   { title: 'Review & save', render: ReviewStep },
 ];

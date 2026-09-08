@@ -20,6 +20,7 @@ const {
   pluginCatalog,
   channelsManager,
   hubSync,
+  channelsCommands,
 } = vi.hoisted(() => ({
   auditRepo: {
     count: vi.fn(),
@@ -66,11 +67,13 @@ const {
     ),
     writeChannelConfigPatch: vi.fn(),
     reprimeChannelRuntime: vi.fn(),
+    reprimeLiveChannelDescriptors: vi.fn(),
   },
   pluginSettingsRepo: { getEnabled: vi.fn(), setEnabled: vi.fn(), getAll: vi.fn() },
-  pluginCatalog: { getInstance: vi.fn(), getExistingInstance: vi.fn(() => []) },
+  pluginCatalog: { getInstance: vi.fn(), getExistingInstance: vi.fn(() => []), append: vi.fn() },
   channelsManager: { getExistingInstance: vi.fn(() => undefined as { stopChannel: (name: string) => void } | undefined) },
-  hubSync: { listMissing: vi.fn(), pullEntry: vi.fn() },
+  hubSync: { listMissing: vi.fn(), pullEntry: vi.fn(), fetchChannelHints: vi.fn(), fetchChannelCatalog: vi.fn() },
+  channelsCommands: { listInstalledChannelNames: vi.fn(() => [] as string[]) },
 }));
 
 vi.mock('../../../src/repositories/audit-log', () => ({
@@ -138,6 +141,8 @@ vi.mock('../../../src/channels', () => ({
 }));
 
 vi.mock('../../../../scripts/hub-sync', () => hubSync);
+
+vi.mock('../../../src/services/commands/channels', () => channelsCommands);
 
 import { AdminRouterFactory } from '../../../src/dashboard/admin';
 import { config } from '../../../src/config';
@@ -510,6 +515,7 @@ describe('AdminRouterFactory /plugins', () => {
     learnedSkillsRepo.getAll.mockReturnValue([]);
     toolSync.getExistingInstance.mockReturnValue({ sync: toolSync.sync });
     skillSync.getExistingInstance.mockReturnValue({ sync: skillSync.sync });
+    channelsCommands.listInstalledChannelNames.mockReturnValue([]);
   });
 
   it('GET /plugins lists every catalog entry with its resolved enabled state and syncs tools/skills', () => {
@@ -679,6 +685,30 @@ describe('AdminRouterFactory /plugins', () => {
     expect(pluginSettingsRepo.setEnabled).toHaveBeenCalledWith('channels', 'telegram', false);
     expect(stopChannel).toHaveBeenCalledWith('telegram');
   });
+
+  it('GET /plugins discovers and appends channels installed on disk to the catalog', () => {
+    channelsCommands.listInstalledChannelNames.mockReturnValue(['whatsapp']);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/plugins'), res);
+
+    expect(pluginCatalog.append).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ family: 'channels', name: 'whatsapp' })]),
+    );
+  });
+
+  it('PATCH /plugins/channels/:name appends channel from disk if not yet in catalog', () => {
+    channelsCommands.listInstalledChannelNames.mockReturnValue(['whatsapp']);
+    pluginCatalog.getExistingInstance.mockReturnValue([{ family: 'channels', name: 'whatsapp' }]);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/plugins/channels/whatsapp');
+    req.body = { enabled: true };
+    callRoute(router, req, res);
+
+    expect(pluginCatalog.append).toHaveBeenCalledWith([{ family: 'channels', name: 'whatsapp' }]);
+    expect(pluginSettingsRepo.setEnabled).toHaveBeenCalledWith('channels', 'whatsapp', true);
+  });
 });
 
 describe('AdminRouterFactory /marketplace', () => {
@@ -710,6 +740,73 @@ describe('AdminRouterFactory /marketplace', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Request to https://api.github.com/... failed: 500 Internal Server Error' });
   });
 
+  it('GET /channels/hints fetches hints dynamically', async () => {
+    hubSync.fetchChannelHints.mockResolvedValue({
+      telegram: { uninstalled: 'Download TG' },
+      whatsapp: { uninstalled: 'Download WA' },
+    });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/channels/hints'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(hubSync.fetchChannelHints).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ baseDir: config.BASE_DIR }),
+    );
+    expect(res.json).toHaveBeenCalledWith({
+      hints: {
+        telegram: { uninstalled: 'Download TG' },
+        whatsapp: { uninstalled: 'Download WA' },
+      },
+    });
+  });
+
+  it('GET /channels/hints falls back to empty hints on error', async () => {
+    hubSync.fetchChannelHints.mockRejectedValue(new Error('Network failure'));
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/channels/hints'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(res.json).toHaveBeenCalledWith({ hints: {} });
+  });
+
+  it('GET /channels/catalog fetches channels dynamically', async () => {
+    hubSync.fetchChannelCatalog.mockResolvedValue([
+      { slug: 'telegram', name: 'Telegram', hints: { uninstalled: 'Download TG' } },
+      { slug: 'whatsapp', name: 'WhatsApp' },
+    ]);
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/channels/catalog'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(hubSync.fetchChannelCatalog).toHaveBeenCalledWith(
+      expect.objectContaining({ baseDir: config.BASE_DIR }),
+    );
+    expect(res.json).toHaveBeenCalledWith({
+      items: [
+        { slug: 'telegram', name: 'Telegram', hints: { uninstalled: 'Download TG' } },
+        { slug: 'whatsapp', name: 'WhatsApp' },
+      ],
+    });
+  });
+
+  it('GET /channels/catalog falls back to empty array on error', async () => {
+    hubSync.fetchChannelCatalog.mockRejectedValue(new Error('Network failure'));
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/channels/catalog'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(res.json).toHaveBeenCalledWith({ items: [] });
+  });
+
   it('POST /marketplace/:slug/pull pulls the entry, pinning baseDir to config.BASE_DIR and syncs tools', async () => {
     hubSync.pullEntry.mockResolvedValue({ family: 'tool', slug: 'issue', createdFiles: ['plugins/tools/issue/index.ts'] });
     toolSync.getExistingInstance.mockReturnValue({ sync: toolSync.sync });
@@ -739,6 +836,24 @@ describe('AdminRouterFactory /marketplace', () => {
 
     expect(hubSync.pullEntry).toHaveBeenCalledWith('git', { baseDir: config.BASE_DIR });
     expect(skillSync.sync).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('POST /marketplace/:slug/pull repriming live channels and appending to plugin catalog when pulling a channel', async () => {
+    hubSync.pullEntry.mockResolvedValue({
+      family: 'channel',
+      slug: 'telegram',
+      createdFiles: ['plugins/channels/telegram/index.js', 'plugins/channels/telegram/config.example.yml'],
+    });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/marketplace/telegram/pull'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(hubSync.pullEntry).toHaveBeenCalledWith('telegram', { baseDir: config.BASE_DIR });
+    expect(liveChannelRuntime.reprimeLiveChannelDescriptors).toHaveBeenCalled();
+    expect(pluginCatalog.append).toHaveBeenCalledWith([{ family: 'channels', name: 'telegram' }]);
     expect(res.status).toHaveBeenCalledWith(201);
   });
 

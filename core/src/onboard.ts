@@ -4,6 +4,9 @@ import { startTui, type TuiCommandResult, type TuiContext, type TuiKeypress } fr
 import { resolveConfigPaths } from './config/helpers';
 import { applyAiRolePatch, type AiRolePatch } from './config/settings-writer';
 import { getSupportedProviders, getProviderDefaultBaseUrl } from './services/providers';
+import { pullEntry } from '../../scripts/hub-sync';
+import { DatabaseServiceFactory } from './infrastructure/db-sqlite';
+import { PluginSettingsRepositoryFactory } from './repositories/plugin-settings';
 
 const ONBOARDING_COMMANDS = [
   { name: '/start', description: 'redraw the onboarding screen' },
@@ -14,7 +17,7 @@ const ONBOARDING_COMMANDS = [
   { name: '/exit', description: 'leave onboarding' },
 ];
 
-const SUPPORTED_CHANNELS = ['telegram', 'discord'] as const;
+export const SUPPORTED_CHANNELS = ['telegram', 'whatsapp'] as const;
 const SUPPORTED_PROVIDERS: readonly string[] = getSupportedProviders().filter((provider) => provider !== 'mock');
 const BOOLEAN_OPTIONS = ['true', 'false'] as const;
 const EXAMPLE_SETTINGS_FILENAME = 'koris.example.json';
@@ -23,7 +26,7 @@ export const SETTINGS_FILENAME = 'koris.json';
 type OnboardingScreenMode = 'plain' | 'tui';
 type TimelineState = 'complete' | 'active' | 'pending';
 
-export type OnboardingChannel = typeof SUPPORTED_CHANNELS[number];
+export type OnboardingChannel = typeof SUPPORTED_CHANNELS[number] | 'discord';
 export type OnboardingProvider = string;
 export type OnboardingStep =
   | 'channels'
@@ -483,18 +486,28 @@ export class Onboard {
 
   private afterStepChange(ctx: TuiContext): void {
     if (isComplete(this.answers, this.skippedSteps)) {
-      const savedPath = saveOnboardingSettings(this.answers);
+      const savedPath = saveOnboardingSettings(this.answers as OnboardingAnswers);
       this.notice = `${this.notice} Saved settings draft to ${savedPath}.`;
       ctx.redraw();
       setTimeout(() => {
-        ctx.println('');
-        ctx.println('✅ Onboarding complete! Your settings have been saved.');
-        ctx.println(`   → ${savedPath}`);
-        ctx.println('');
-        ctx.println('Run the agent with:  pnpm start');
-        ctx.println('');
-        ctx.rl.close();
-        process.exit(0);
+        const finalize = () => {
+          ctx.println('');
+          ctx.println('✅ Onboarding complete! Your settings have been saved.');
+          ctx.println(`   → ${savedPath}`);
+          ctx.println('');
+          ctx.println('Run the agent with:  pnpm start');
+          ctx.println('');
+          ctx.rl.close();
+          process.exit(0);
+        };
+
+        if (!process.env.VITEST && this.answers.channels && this.answers.channels.length > 0) {
+          downloadOnboardingChannels(this.answers.channels)
+            .catch(() => {})
+            .finally(finalize);
+        } else {
+          finalize();
+        }
       }, 80);
       return;
     }
@@ -1274,6 +1287,40 @@ function loadOnboardingExampleSettings(options?: {
   return JSON.parse(readFile(sourcePath)) as Record<string, unknown>;
 }
 
+export async function downloadOnboardingChannels(
+  channels: readonly string[],
+  options?: {
+    baseDir?: string;
+    pullFn?: (slug: string, opts?: unknown) => Promise<unknown>;
+    existsFn?: (path: string) => boolean;
+    logger?: { info: (msg: string) => void; warn: (msg: string) => void };
+  },
+): Promise<string[]> {
+  const baseDir = options?.baseDir ?? process.cwd();
+  const pullFn = options?.pullFn ?? pullEntry;
+  const existsFn = options?.existsFn ?? existsSync;
+  const logger = options?.logger ?? console;
+
+  const downloaded: string[] = [];
+  for (const channel of channels) {
+    if (channel !== 'telegram' && channel !== 'whatsapp') continue;
+    const channelDir = join(baseDir, 'plugins', 'channels', channel);
+    if (!existsFn(channelDir)) {
+      try {
+        logger.info(`📥 Downloading channel "${channel}" from koris-hub...`);
+        await pullFn(channel, { baseDir, family: 'channel' });
+        downloaded.push(channel);
+        logger.info(`✔ Channel "${channel}" downloaded successfully.`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn(`⚠ Failed to download channel "${channel}" from koris-hub: ${msg}`);
+      }
+    }
+  }
+
+  return downloaded;
+}
+
 export function buildOnboardingSettings(
   answers: OnboardingAnswers,
   options?: {
@@ -1288,6 +1335,9 @@ export function buildOnboardingSettings(
   const channels = getOrCreateRecord(payload, 'channels');
   if (Object.prototype.hasOwnProperty.call(channels, 'telegram')) {
     delete channels.telegram;
+  }
+  if (Object.prototype.hasOwnProperty.call(channels, 'whatsapp')) {
+    delete channels.whatsapp;
   }
 
   if (answers.channels.includes('discord')) {
@@ -1356,6 +1406,32 @@ export function saveOnboardingSettings(
     options.writeFile(destination, content);
   } else {
     writeFileSync(destination, content, 'utf-8');
+  }
+
+  // If a Telegram bot token was provided, save it to plugins/channels/telegram/config.yml if the folder exists
+  if (answers.telegramToken) {
+    const appRoot = resolveOnboardingAppRoot(options);
+    const telegramDir = join(appRoot, 'plugins', 'channels', 'telegram');
+    const existsFn = options?.exists ?? existsSync;
+    const writeFn = options?.writeFile ?? writeFileSync;
+    if (existsFn(telegramDir)) {
+      const configYmlPath = join(telegramDir, 'config.yml');
+      const ymlContent = `bot_token: "${answers.telegramToken}"\n`;
+      writeFn(configYmlPath, ymlContent);
+    }
+  }
+
+  // Enable selected channels in SQLite database if available
+  try {
+    const db = DatabaseServiceFactory.create();
+    const repo = PluginSettingsRepositoryFactory.create(db);
+    for (const channel of answers.channels ?? []) {
+      if (channel === 'telegram' || channel === 'whatsapp') {
+        repo.setEnabled('channels', channel, true);
+      }
+    }
+  } catch {
+    // Database may not be ready during onboarding tests or dry runs
   }
 
   return destination;

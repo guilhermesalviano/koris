@@ -19,16 +19,32 @@ interface CreatePluginsOptions {
 
 type ScanOptions = Pick<CreatePluginsOptions, 'directory' | 'readdirSync' | 'loadModule'>;
 
+function resolveDefaultChannelsDir(): string {
+  const localDir = path.join(process.cwd(), 'plugins', 'channels');
+  if (fs.existsSync(localDir)) {
+    return localDir;
+  }
+  return __dirname;
+}
+
 function scanChannelModules(options: ScanOptions = {}): PluginModule[] {
   const {
-    directory = __dirname,
+    directory = resolveDefaultChannelsDir(),
     readdirSync = fs.readdirSync as CreatePluginsOptions['readdirSync'],
     loadModule = (modulePath: string) => require(modulePath) as PluginModule,
   } = options;
 
+  if (!fs.existsSync(directory)) return [];
+
   return readdirSync!(directory, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .map((entry) => loadModule(path.join(directory, entry.name)));
+    .flatMap((entry) => {
+      try {
+        return [loadModule(path.join(directory, entry.name))];
+      } catch {
+        return [];
+      }
+    });
 }
 
 function createPlugins(options: CreatePluginsOptions = {}): Plugin[] {
@@ -50,5 +66,6 @@ function listLiveChannels(options: ScanOptions = {}): LiveChannelDescriptor[] {
   return scanChannelModules(options).flatMap((mod) => (mod.liveChannel ? [mod.liveChannel] : []));
 }
 
+export const CHANNELS_DIR = __dirname;
 export { createPlugins, listLiveChannels, buildRegistry, PluginRegistry };
 export type { Plugin };
