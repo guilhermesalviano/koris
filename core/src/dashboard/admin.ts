@@ -1,8 +1,6 @@
-import { existsSync } from 'fs';
-import path from 'path';
 import express, { type Request, type Response, type Router } from 'express';
 import { config, reloadConfig } from '../config';
-import { resolveConfigPaths } from '../config/helpers';
+import { isConfigFilePresent } from '../config/helpers';
 import {
   VALID_LOG_LEVELS,
   isValidUrl,
@@ -931,14 +929,8 @@ class AdminRouterFactory {
         return;
       }
       try {
-        const localHubCandidate = process.env.KORIS_HUB_DIR ||
-          (process.env.HOME && existsSync(path.resolve(process.env.HOME, 'projects/koris-hub'))
-            ? path.resolve(process.env.HOME, 'projects/koris-hub')
-            : undefined);
-
         const hints = await fetchChannelHints(undefined, {
           baseDir: config.BASE_DIR,
-          hubLocalDir: localHubCandidate,
         });
         channelHintsCache = { timestamp: now, data: hints };
         res.json({ hints });
@@ -957,14 +949,8 @@ class AdminRouterFactory {
         return;
       }
       try {
-        const localHubCandidate = process.env.KORIS_HUB_DIR ||
-          (process.env.HOME && existsSync(path.resolve(process.env.HOME, 'projects/koris-hub'))
-            ? path.resolve(process.env.HOME, 'projects/koris-hub')
-            : undefined);
-
         const items = await fetchChannelCatalog({
           baseDir: config.BASE_DIR,
-          hubLocalDir: localHubCandidate,
         });
         channelCatalogCache = { timestamp: now, data: items };
         res.json({ items });
@@ -995,7 +981,7 @@ class AdminRouterFactory {
     });
 
     router.get('/settings/status', (_req: Request, res: Response) => {
-      const configured = resolveConfigPaths().some(existsSync);
+      const configured = isConfigFilePresent();
       res.json({ configured });
     });
 

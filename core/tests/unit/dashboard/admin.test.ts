@@ -20,6 +20,7 @@ const {
   pluginCatalog,
   channelsManager,
   hubSync,
+  channelsCommands,
 } = vi.hoisted(() => ({
   auditRepo: {
     count: vi.fn(),
@@ -72,6 +73,7 @@ const {
   pluginCatalog: { getInstance: vi.fn(), getExistingInstance: vi.fn(() => []), append: vi.fn() },
   channelsManager: { getExistingInstance: vi.fn(() => undefined as { stopChannel: (name: string) => void } | undefined) },
   hubSync: { listMissing: vi.fn(), pullEntry: vi.fn(), fetchChannelHints: vi.fn(), fetchChannelCatalog: vi.fn() },
+  channelsCommands: { listInstalledChannelNames: vi.fn(() => [] as string[]) },
 }));
 
 vi.mock('../../../src/repositories/audit-log', () => ({
@@ -139,6 +141,8 @@ vi.mock('../../../src/channels', () => ({
 }));
 
 vi.mock('../../../../scripts/hub-sync', () => hubSync);
+
+vi.mock('../../../src/services/commands/channels', () => channelsCommands);
 
 import { AdminRouterFactory } from '../../../src/dashboard/admin';
 import { config } from '../../../src/config';
@@ -511,6 +515,7 @@ describe('AdminRouterFactory /plugins', () => {
     learnedSkillsRepo.getAll.mockReturnValue([]);
     toolSync.getExistingInstance.mockReturnValue({ sync: toolSync.sync });
     skillSync.getExistingInstance.mockReturnValue({ sync: skillSync.sync });
+    channelsCommands.listInstalledChannelNames.mockReturnValue([]);
   });
 
   it('GET /plugins lists every catalog entry with its resolved enabled state and syncs tools/skills', () => {
@@ -682,16 +687,18 @@ describe('AdminRouterFactory /plugins', () => {
   });
 
   it('GET /plugins discovers and appends channels installed on disk to the catalog', () => {
+    channelsCommands.listInstalledChannelNames.mockReturnValue(['whatsapp']);
     const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/plugins'), res);
 
     expect(pluginCatalog.append).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ family: 'channels' })]),
+      expect.arrayContaining([expect.objectContaining({ family: 'channels', name: 'whatsapp' })]),
     );
   });
 
   it('PATCH /plugins/channels/:name appends channel from disk if not yet in catalog', () => {
+    channelsCommands.listInstalledChannelNames.mockReturnValue(['whatsapp']);
     pluginCatalog.getExistingInstance.mockReturnValue([{ family: 'channels', name: 'whatsapp' }]);
     const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();

@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-import { getConfigValue, loadConfigFile, resolveConfigPaths, toEnvKey } from './helpers';
+import { getConfigValue, isConfigFilePresent, loadConfigFile, resolveConfigPaths, toEnvKey } from './helpers';
 
 const tempDirs: string[] = [];
 
@@ -61,5 +61,13 @@ describe('config/helpers', () => {
     const paths = resolveConfigPaths(repoRoot, runtimeDir);
 
     expect(paths).toContain(join(repoRoot, 'apps', 'client', 'koris.json'));
+  });
+
+  it('detects whether config file is present on disk', () => {
+    const repoRoot = createTempDir();
+    expect(isConfigFilePresent(repoRoot)).toBe(false);
+
+    writeFileSync(join(repoRoot, 'koris.json'), '{}');
+    expect(isConfigFilePresent(repoRoot)).toBe(true);
   });
 });
