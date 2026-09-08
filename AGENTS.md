@@ -6,6 +6,17 @@ Guidance for AI coding agents working in this repository.
 
 `koris` is an autonomous AI agent framework written in TypeScript (CommonJS, strict mode). It receives messages through pluggable channels (Telegram, WhatsApp, TUI, web dashboard), runs them through an LLM, and can execute tools (`curl`, search, beats, issue tracking, sticker learning, learned-skills instructions). It has persistent SQLite memory, session tracking, heartbeat (scheduled) agents, and a summarizer sub-agent.
 
+## Key project peculiarity: Plugins live in `koris-hub` (separate repository)
+
+**Anything needed from plugins (channels, tools, skills, marketplace metadata, and plugin-specific dependencies) belongs in the separate project `koris-hub` (`git@github.com:guilhermesalviano/koris-hub.git`).**
+
+- **`koris` is strictly the runtime engine:** It defines plugin contracts (`plugins/channels/contracts.ts`, `plugins/tools/contracts.ts`), executes them, handles database persistence, and serves the UI. It does **not** vendor channel dependencies or hardcode plugin-specific implementations.
+- **`koris-hub` is the plugin source of truth:** Plugin implementations (`koris-plugins/channels/`, `koris-plugins/tools/`, `koris-plugins/skills/`), pre-bundled channel artifacts (`index.js`), third-party libraries (e.g. `@whiskeysockets/baileys`, `@guilhermesalviano/telegram-bot`), and marketplace metadata (`content/marketplace/`) all live in `koris-hub`.
+- **Dynamic discovery & UI agnosticism:** `koris` discovers and loads channels, tools, and skills dynamically on demand (via `hub-sync`, disk discovery, and `/channels` or `/tools` commands). The web UI (e.g. `ChannelsStep`, `PluginsStep`), onboarding, and admin APIs must remain **plugin-agnostic**:
+  - Do **not** hardcode channel names (like Telegram, WhatsApp), channel-specific tokens, or specific form layouts in core components.
+  - If a plugin needs new configuration fields (`configFields`), hints, descriptions, or behavior adjustments, **those changes must be made in `koris-hub`** (or executed via a prompt in `koris-hub`).
+  - Pulled plugins land in `plugins/<family>/<slug>/` and remain gitignored in this repository.
+
 ## Tech stack & package manager
 
 - **Package manager:** `pnpm` (`pnpm@10.18.3`, single-package workspace). Never use `npm`/`yarn`.
@@ -144,12 +155,13 @@ Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/l
 - Admin API: `core/src/dashboard/admin.ts` (`AdminRouterFactory`, mounted at `/api/admin`) — overview, sessions, memories, chat history, `GET /chat/context` (estimated token usage of the live web session vs `num_ctx`, for the chat's `ContextBar`), heartbeats (create/update/delete with cron validation), skills (`POST /skills/sync` only — listing and enable/disable moved onto the shared `/plugins` routes, see "Plugins & skills"), settings, `GET /providers` + `POST /ai/test-connection` (the Providers page — `apps/web/src/pages/admin/ProvidersPage.tsx` + `use-providers.ts`; activating a provider is a partial `POST /settings` `{ai:{<role>:…}}`). Settings are deep-masked for secrets (`BOT_TOKEN`, `API_TOKEN`).
 - Build `pnpm build:client` → `dist-web/` (root/outDir in `vite.config.mts`); dev `pnpm dev:client` on port 5173 proxies `/api` and `/health` to `localhost:3000`; type-check via `pnpm lint:client` (`apps/web/tsconfig.json`).
 
-## Website
+## Website & Ecosystem (koris-hub)
 
 The public marketing website, the plugins marketplace, and the docs site now live in a **separate independent repo**, `koris-hub` (`git@github.com:guilhermesalviano/koris-hub.git`) — a standalone Next.js App-Router app (`output: 'export'`, `basePath: '/koris-hub'`) with its own `package.json`, deployed to GitHub Pages (`https://guilhermesalviano.github.io/koris-hub`) by its own `.github/workflows/deploy.yml`. The marketplace catalog is static JSON under `content/marketplace/` (one `<family>/<slug>.json` per entry, `family` is `tool`/`channel`/`skill`). This repo no longer builds or deploys any website. Plugins retired from active use here move to `koris-hub` as their new canonical source (`koris-plugins/tools/<slug>/`, `koris-plugins/skills/<slug>/`, mirroring this repo's `plugins/tools/<slug>/` and `plugins/skills/<slug>/`) rather than staying vendored/duplicated in both places — `.gitignore` here allowlists only the tools/skills still actively tracked, so anything moved out (or newly pulled) doesn't get re-committed by accident. `pnpm hub:list` (`scripts/hub-sync.ts`) diffs koris-hub's tree against what's tracked locally; `pnpm hub:pull <slug>` (or `--all`) fetches a plugin's files back into `plugins/tools/<slug>/`/`plugins/skills/<slug>/`/`plugins/channels/<slug>/` for local use — it stays gitignored there unless you explicitly allowlist it.
 
 ## Conventions to follow
 
+- **Plugins belong in `koris-hub`**: Never add plugin-specific external dependencies (e.g. Baileys, Telegram bot libraries) or hardcoded plugin implementations/names into `koris`. If a feature or fix requires changes inside a plugin or its schema, that work belongs in `koris-hub`.
 - **Interfaces prefixed `I`** (`IMessageGateway`, `ILogger`, `IChatService`); implementations are classes; creation is via `XxxFactory.create()` and singletons via `XxxSingleton.getInstance()`.
 - **Dependency inversion for plugins**: a plugin imports **only** from its own family's SDK (`plugins/channels/contracts.ts` or `plugins/tools/contracts.ts`) and the shared `plugins/registry.ts` — never from `core/src/`, and never from the other family's `contracts.ts`. Core depends on the SDKs too (via re-export shims like `core/src/infrastructure/logger.ts` and `core/src/channels/`), and injects concrete services through `PluginContext`/`ToolPluginContext` at the composition root (`core/src/app.ts`). The one documented exception is `plugins/tools/create-tool/`, which reaches into `scripts/scaffold-tool.ts` to scaffold new tool plugins — noted in that file's own top comment.
 - **No code comments** in source files unless asked. Code should be self-explanatory.
