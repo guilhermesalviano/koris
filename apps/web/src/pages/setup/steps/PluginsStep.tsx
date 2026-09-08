@@ -57,7 +57,7 @@ export function PluginsStep({
 
       <p className="mb-4 font-mono text-[11px] text-txt-3">
         {tab === 'marketplace'
-          ? 'Browse and download tools and skills from Koris Hub. Downloaded plugins are activated automatically.'
+          ? 'Browse and download tools, channels, and skills from Koris Hub. Downloaded plugins are activated automatically.'
           : 'Turn off any tools, channels, or skills you don’t want enabled. Toggling here takes effect immediately and can be changed later from the admin Plugins panel.'}
       </p>
 

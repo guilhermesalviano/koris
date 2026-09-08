@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildOnboardingScreen,
   buildOnboardingSettings,
+  downloadOnboardingChannels,
   Onboard,
   resolveOnboardingSettingsPath,
   saveOnboardingSettings,
@@ -360,6 +361,55 @@ describe('onboarding settings draft', () => {
       },
       personal_information: {
       },
+    });
+  });
+
+  describe('downloadOnboardingChannels', () => {
+    it('downloads missing channels via pullFn', async () => {
+      const pullMock = vi.fn().mockResolvedValue({});
+      const existsMock = vi.fn().mockReturnValue(false);
+      const loggerMock = { info: vi.fn(), warn: vi.fn() };
+
+      const result = await downloadOnboardingChannels(['telegram', 'whatsapp'], {
+        baseDir: '/test/dir',
+        pullFn: pullMock,
+        existsFn: existsMock,
+        logger: loggerMock,
+      });
+
+      expect(result).toEqual(['telegram', 'whatsapp']);
+      expect(pullMock).toHaveBeenCalledWith('telegram', { baseDir: '/test/dir', family: 'channel' });
+      expect(pullMock).toHaveBeenCalledWith('whatsapp', { baseDir: '/test/dir', family: 'channel' });
+    });
+
+    it('skips channels that already exist locally', async () => {
+      const pullMock = vi.fn();
+      const existsMock = vi.fn().mockReturnValue(true);
+
+      const result = await downloadOnboardingChannels(['telegram'], {
+        baseDir: '/test/dir',
+        pullFn: pullMock,
+        existsFn: existsMock,
+      });
+
+      expect(result).toEqual([]);
+      expect(pullMock).not.toHaveBeenCalled();
+    });
+
+    it('handles download errors gracefully without throwing', async () => {
+      const pullMock = vi.fn().mockRejectedValue(new Error('Network error'));
+      const existsMock = vi.fn().mockReturnValue(false);
+      const loggerMock = { info: vi.fn(), warn: vi.fn() };
+
+      const result = await downloadOnboardingChannels(['telegram'], {
+        baseDir: '/test/dir',
+        pullFn: pullMock,
+        existsFn: existsMock,
+        logger: loggerMock,
+      });
+
+      expect(result).toEqual([]);
+      expect(loggerMock.warn).toHaveBeenCalledWith(expect.stringContaining('Network error'));
     });
   });
 });

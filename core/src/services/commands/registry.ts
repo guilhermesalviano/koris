@@ -102,6 +102,16 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
       'tools available in koris-hub. Use `/tools download <name>` to install a tool.',
   },
   {
+    name: '/channels',
+    summary: 'List loaded or remote channels, or download one from koris-hub',
+    usage: '/channels [remote|download <name>]',
+    trusted: true,
+    details:
+      'Without arguments, lists all installed channels and their status. ' +
+      'Use `/channels remote` to list channels available in koris-hub. ' +
+      'Use `/channels download <name>` to install a channel.',
+  },
+  {
     name: '/skill',
     summary: 'Load one skill\'s instructions for this message',
     usage: '/skill <name> [request]',

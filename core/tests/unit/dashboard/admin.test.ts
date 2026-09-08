@@ -680,6 +680,28 @@ describe('AdminRouterFactory /plugins', () => {
     expect(pluginSettingsRepo.setEnabled).toHaveBeenCalledWith('channels', 'telegram', false);
     expect(stopChannel).toHaveBeenCalledWith('telegram');
   });
+
+  it('GET /plugins discovers and appends channels installed on disk to the catalog', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/plugins'), res);
+
+    expect(pluginCatalog.append).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ family: 'channels' })]),
+    );
+  });
+
+  it('PATCH /plugins/channels/:name appends channel from disk if not yet in catalog', () => {
+    pluginCatalog.getExistingInstance.mockReturnValue([{ family: 'channels', name: 'whatsapp' }]);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('PATCH', '/plugins/channels/whatsapp');
+    req.body = { enabled: true };
+    callRoute(router, req, res);
+
+    expect(pluginCatalog.append).toHaveBeenCalledWith([{ family: 'channels', name: 'whatsapp' }]);
+    expect(pluginSettingsRepo.setEnabled).toHaveBeenCalledWith('channels', 'whatsapp', true);
+  });
 });
 
 describe('AdminRouterFactory /marketplace', () => {

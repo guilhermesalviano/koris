@@ -36,11 +36,15 @@ const CHANNELS: ChannelMetadata[] = [
   },
 ];
 
+const HUB_CHANNELS_DIR = path.resolve(process.env.HOME ?? '', 'projects/koris-hub/koris-plugins/channels');
+
 function resolveChannelSource(slug: string): string {
   const local = path.join(ROOT_DIR, 'plugins', 'channels', slug);
-  if (existsSync(local)) return local;
+  if (existsSync(path.join(local, 'index.ts'))) return local;
   const backup = path.join(SOURCE_BACKUP_OUT, slug);
-  if (existsSync(backup)) return backup;
+  if (existsSync(path.join(backup, 'index.ts'))) return backup;
+  const hubSource = path.join(HUB_CHANNELS_DIR, slug);
+  if (existsSync(path.join(hubSource, 'index.ts'))) return hubSource;
   return local;
 }
 
@@ -82,6 +86,7 @@ async function bundleChannel(config: ChannelMetadata): Promise<void> {
       target: 'node24',
       format: 'cjs',
       external: NODE_BUILTINS,
+      nodePaths: [path.resolve(process.env.HOME ?? '', 'projects/koris-hub/node_modules')],
       plugins: [channelHostResolverPlugin],
       sourcemap: false,
       minify: false,
@@ -91,6 +96,14 @@ async function bundleChannel(config: ChannelMetadata): Promise<void> {
     const stats = statSync(bundleOutFile);
     const sizeMb = (stats.size / (1024 * 1024)).toFixed(2);
     console.log(`[bundle:channels] -> ${path.relative(ROOT_DIR, bundleOutFile)} (${sizeMb} MB)`);
+
+    if (existsSync(HUB_CHANNELS_DIR)) {
+      const hubTargetDir = path.join(HUB_CHANNELS_DIR, config.slug);
+      if (existsSync(hubTargetDir)) {
+        copyFileSync(bundleOutFile, path.join(hubTargetDir, 'index.js'));
+        console.log(`[bundle:channels] -> copied to hub: ${path.join(hubTargetDir, 'index.js')}`);
+      }
+    }
   } catch (err) {
     if (existsSync(bundleOutFile)) {
       const stats = statSync(bundleOutFile);

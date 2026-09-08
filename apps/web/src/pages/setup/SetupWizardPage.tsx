@@ -15,7 +15,7 @@ interface StepProps {
 }
 
 function SetupChannelsStep({ api, pluginsApi }: StepProps) {
-  return <ChannelsStep api={api} pluginsApi={pluginsApi} onlyEnabled />;
+  return <ChannelsStep api={api} pluginsApi={pluginsApi} />;
 }
 
 const STEPS: { title: string; render: ComponentType<StepProps> }[] = [

@@ -57,6 +57,7 @@ import { PluginSettingsRepositoryFactory, type IPluginSettingsRepository } from 
 import { resolvePluginEnabled } from '../services/plugins/plugin-enablement';
 import { PluginCatalogSingleton } from '../services/plugins/plugin-catalog-singleton';
 import { listMissing, pullEntry } from '../../../scripts/hub-sync';
+import { listInstalledChannelNames } from '../services/commands/channels';
 
 const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN']);
 
@@ -830,6 +831,11 @@ class AdminRouterFactory {
       ToolSyncSingleton.getExistingInstance()?.sync();
       SkillSyncSingleton.getExistingInstance()?.sync();
 
+      const diskChannels = listInstalledChannelNames(config.BASE_DIR);
+      if (diskChannels.length > 0) {
+        PluginCatalogSingleton.append(diskChannels.map((name) => ({ family: 'channels', name })));
+      }
+
       const items = PluginCatalogSingleton.getExistingInstance().map(({ family, name }) => ({
         family,
         name,
@@ -865,6 +871,13 @@ class AdminRouterFactory {
 
         res.json({ success: true, item: { family, name, enabled } });
         return;
+      }
+
+      if (family === 'channels') {
+        const diskChannels = listInstalledChannelNames(config.BASE_DIR);
+        if (diskChannels.includes(name)) {
+          PluginCatalogSingleton.append([{ family: 'channels', name }]);
+        }
       }
 
       const catalog = PluginCatalogSingleton.getExistingInstance();

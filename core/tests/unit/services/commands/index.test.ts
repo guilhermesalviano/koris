@@ -39,6 +39,7 @@ describe('Command Handler', () => {
       expect(isCommand('/reset')).toBe(true); // alias of /clear
       expect(isCommand('/USAGE 7')).toBe(true); // case- and arg-insensitive
       expect(isCommand('/tools')).toBe(true);
+      expect(isCommand('/channels')).toBe(true);
       expect(isCommand('/skills')).toBe(true);
     });
 
@@ -427,6 +428,31 @@ describe('Command Handler', () => {
 
     it('rejects untrusted senders', async () => {
       const result = await handleCommand('/tools', { source: 'tui', trusted: false });
+      expect(result.handled).toBe(true);
+      expect(result.response).toContain('trusted senders');
+    });
+  });
+
+  describe('channels command', () => {
+    it('is recognized as a command', () => {
+      expect(isCommand('/channels')).toBe(true);
+    });
+
+    it('is offered for completion and listed in /help', async () => {
+      expect(getAvailableCommands('tui')).toContain('/channels');
+      const help = await handleCommand('/help', { source: 'tui' });
+      expect(help.response).toContain('/channels');
+    });
+
+    it('dispatches to handleChannelsCommand', async () => {
+      const result = await handleCommand('/channels', { source: 'tui', trusted: true });
+      expect(result.handled).toBe(true);
+      expect(result.action).toBe('none');
+      expect(result.response).toBeTruthy();
+    });
+
+    it('rejects untrusted senders', async () => {
+      const result = await handleCommand('/channels', { source: 'tui', trusted: false });
       expect(result.handled).toBe(true);
       expect(result.response).toContain('trusted senders');
     });

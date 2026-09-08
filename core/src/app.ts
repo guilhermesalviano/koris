@@ -40,6 +40,7 @@ import { gateErrorForUrl } from './services/security/gate';
 import { PluginSettingsRepositoryFactory } from './repositories/plugin-settings';
 import { migrateLegacyPluginEnabledFlags, resolvePluginEnabled, type PluginIdentity } from './services/plugins/plugin-enablement';
 import { PluginCatalogSingleton } from './services/plugins/plugin-catalog-singleton';
+import { listInstalledChannelNames } from './services/commands/channels';
 import { getAudioTranscriptionService } from './services/audio/audio-transcription-service';
 
 const logger = LoggerFactory.create();
@@ -185,8 +186,10 @@ class Application implements IApplication {
       directory: path.join(config.BASE_DIR, 'plugins', 'channels'),
     });
     const toolPlugins = createToolPlugins({ context: createToolPluginContext(this.logger, db) });
+    const diskChannels = listInstalledChannelNames(config.BASE_DIR);
+    const channelNames = Array.from(new Set([...channelPlugins.map((plugin) => plugin.name), ...diskChannels]));
     const pluginIdentities: PluginIdentity[] = [
-      ...channelPlugins.map((plugin) => ({ family: 'channels' as const, name: plugin.name })),
+      ...channelNames.map((name) => ({ family: 'channels' as const, name })),
       ...toolPlugins.map((plugin) => ({ family: 'tools' as const, name: plugin.name })),
     ];
     migrateLegacyPluginEnabledFlags(PluginSettingsRepositoryFactory.create(db), pluginIdentities, this.logger);

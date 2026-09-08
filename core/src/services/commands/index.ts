@@ -2,6 +2,7 @@ import { config } from '../../config';
 import { handleUsageCommand } from './usage';
 import { handleSkillsCommand, isSkillCommand, listSkillCommands, resolveSkillCommand } from './skills';
 import { handleToolsCommand } from './tools';
+import { handleChannelsCommand } from './channels';
 import { formatCommandResult, formatMessage } from './format';
 import { addAllowedDomain } from '../security/allowed-domains';
 import {
@@ -16,6 +17,7 @@ export { SLASH_COMMANDS, findCommand, isKnownCommand } from './registry';
 export type { CommandSpec, CommandChannel } from './registry';
 export { handleSkillsCommand, isSkillCommand, listSkillCommands, listSkills, resolveSkillCommand } from './skills';
 export { handleToolsCommand, listTools } from './tools';
+export { handleChannelsCommand, listChannels, listInstalledChannelNames } from './channels';
 export { formatCommandResult, formatMessage } from './format';
 
 export async function handleCommand(command: string, context: CommandContext): Promise<CommandResult> {
@@ -53,6 +55,9 @@ export async function handleCommand(command: string, context: CommandContext): P
 
     case '/tools':
       return handleToolsCommand(command, context);
+
+    case '/channels':
+      return handleChannelsCommand(command, context);
 
     case '/skill':
       return handleSkill(command, context);

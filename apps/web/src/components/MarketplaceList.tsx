@@ -68,7 +68,7 @@ export default function MarketplaceList({ api }: { api: UseMarketplaceApi }) {
       {api.error && <EmptyState text={api.error} />}
       {!api.error && api.loading && <EmptyState text="Loading…" />}
       {!api.error && !api.loading && api.items.length === 0 && (
-        <EmptyState text="Nothing new — every tool/skill in koris-hub is already present locally." />
+        <EmptyState text="Nothing new — every tool, channel, or skill in koris-hub is already present locally." />
       )}
 
       {!api.error && !api.loading && api.items.length > 0 && groups.map(([family, items]) => (
