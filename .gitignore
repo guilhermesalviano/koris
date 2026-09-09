@@ -49,6 +49,7 @@ plugins/channels/*
 !plugins/channels/contracts.test.ts
 !plugins/channels/contracts.ts
 !plugins/channels/index.ts
+!plugins/channels/index.test.ts
 !plugins/channels/.gitkeep
 
 plugins/tools/*
