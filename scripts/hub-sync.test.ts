@@ -20,16 +20,19 @@ interface HttpFixture {
   tree?: { tree: { path: string; type: 'blob' | 'tree' }[]; truncated?: boolean };
   catalog?: Record<string, { name?: string; summary?: string; hints?: ChannelHints; configFields?: ChannelConfigField[] }>;
   files?: Record<string, string>;
+  release?: { assets: { name: string; browser_download_url: string }[] };
 }
 
 function makeHttp(fixture: HttpFixture = {}): HubSyncHttp {
   const tree = fixture.tree ?? { tree: [], truncated: false };
   const catalog = fixture.catalog ?? {};
   const files = fixture.files ?? {};
+  const release = fixture.release ?? { assets: [] };
 
   return {
     fetchJson: vi.fn(async (url: string) => {
       if (url.includes('/git/trees/')) return tree;
+      if (url.includes('/releases/tags/')) return release;
       const match = url.match(/content\/marketplace\/(tools|skills|channels)\/([^/]+)\.json$/);
       if (match) {
         const slug = match[2]!;
@@ -104,6 +107,25 @@ describe('listMissing', () => {
     const http = makeHttp({ tree: { tree: [], truncated: true } });
 
     await expect(listMissing({ baseDir: BASE_DIR, io, http })).rejects.toThrow(/truncated/);
+  });
+
+  it('sources channels from the channels-latest release, not the branch tree', async () => {
+    const io = makeIO({ [LOCAL_CHANNELS_DIR]: ['telegram'] });
+    const http = makeHttp({
+      tree: HUB_TREE,
+      release: {
+        assets: [
+          { name: 'telegram-index.js', browser_download_url: 'https://x/telegram-index.js' },
+          { name: 'whatsapp-index.js', browser_download_url: 'https://x/whatsapp-index.js' },
+        ],
+      },
+    });
+
+    const entries = await listMissing({ baseDir: BASE_DIR, io, http });
+
+    expect(entries.filter((e) => e.family === 'channel')).toEqual([
+      { family: 'channel', slug: 'whatsapp', summary: undefined },
+    ]);
   });
 });
 
@@ -205,25 +227,41 @@ describe('pullEntry', () => {
     expect(io.written.get(path.join(LOCAL_SKILLS_DIR, 'weather', 'SKILL.md'))).toBe('# Weather');
   });
 
-  it('downloads a channel slug into plugins/channels/<slug>', async () => {
+  it('downloads a channel bundle from the channels-latest release into plugins/channels/<slug>', async () => {
+    const assetUrl = 'https://github.com/guilhermesalviano/koris-hub/releases/download/channels-latest/telegram-index.js';
     const io = makeIO();
     const http = makeHttp({
       tree: HUB_TREE,
-      files: {
-        'https://raw.githubusercontent.com/guilhermesalviano/koris-hub/main/koris-plugins/channels/telegram/index.js': 'channel bundle',
-        'https://raw.githubusercontent.com/guilhermesalviano/koris-hub/main/koris-plugins/channels/telegram/config.example.yml': 'bot_token: ""',
-      },
+      release: { assets: [{ name: 'telegram-index.js', browser_download_url: assetUrl }] },
+      files: { [assetUrl]: 'channel bundle' },
     });
 
     const result = await pullEntry('telegram', { baseDir: BASE_DIR, io, http });
 
     expect(result.family).toBe('channel');
-    expect(result.createdFiles).toEqual([
-      'plugins/channels/telegram/index.js',
-      'plugins/channels/telegram/config.example.yml',
-    ]);
+    expect(result.createdFiles).toEqual(['plugins/channels/telegram/index.js']);
     expect(io.written.get(path.join(LOCAL_CHANNELS_DIR, 'telegram', 'index.js'))).toBe('channel bundle');
-    expect(io.written.get(path.join(LOCAL_CHANNELS_DIR, 'telegram', 'config.example.yml'))).toBe('bot_token: ""');
+  });
+
+  it('resolves a channel slug even when family is pinned to "channel"', async () => {
+    const assetUrl = 'https://github.com/guilhermesalviano/koris-hub/releases/download/channels-latest/whatsapp-index.js';
+    const io = makeIO();
+    const http = makeHttp({
+      release: { assets: [{ name: 'whatsapp-index.js', browser_download_url: assetUrl }] },
+      files: { [assetUrl]: 'wa bundle' },
+    });
+
+    const result = await pullEntry('whatsapp', { baseDir: BASE_DIR, io, http, family: 'channel' });
+
+    expect(result.createdFiles).toEqual(['plugins/channels/whatsapp/index.js']);
+    expect(io.written.get(path.join(LOCAL_CHANNELS_DIR, 'whatsapp', 'index.js'))).toBe('wa bundle');
+  });
+
+  it('throws when a channel slug has no matching asset on the release', async () => {
+    const io = makeIO();
+    const http = makeHttp({ release: { assets: [{ name: 'telegram-index.js', browser_download_url: 'https://x/telegram-index.js' }] } });
+
+    await expect(pullEntry('signal', { baseDir: BASE_DIR, io, http, family: 'channel' })).rejects.toThrow(/no "signal-index\.js" asset/);
   });
 });
 

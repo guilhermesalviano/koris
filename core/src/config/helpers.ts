@@ -29,8 +29,9 @@ export function resolveConfigPaths(cwd: string = resolveDataDir(), dirname: stri
   ].map((path) => normalize(path))));
 }
 
-export function isConfigFilePresent(cwd: string = resolveDataDir(), dirname: string = __dirname): boolean {
-  return resolveConfigPaths(cwd, dirname).some(existsSync);
+export function isConfigFilePresent(cwd: string = resolveDataDir(), dirname?: string): boolean {
+  const effectiveDirname = dirname ?? (cwd === resolveDataDir() ? __dirname : cwd);
+  return resolveConfigPaths(cwd, effectiveDirname).some(existsSync);
 }
 
 export function loadConfigFile(options?: {

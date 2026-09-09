@@ -33,6 +33,16 @@ const HUB_OWNER = 'guilhermesalviano';
 const HUB_REPO = 'koris-hub';
 const HUB_BRANCH = 'main';
 
+/**
+ * Channels aren't pulled as source from a branch like tools/skills — they ship
+ * as self-contained, pre-bundled CJS artifacts attached to this rolling GitHub
+ * release (built by `pnpm bundle:channels` in koris-hub). Each asset is named
+ * `<slug>-index.js` and lands as `plugins/channels/<slug>/index.js`.
+ */
+const HUB_CHANNELS_RELEASE_TAG = 'channels-latest';
+const CHANNEL_BUNDLE_ASSET_SUFFIX = '-index.js';
+const CHANNEL_BUNDLE_FILENAME = 'index.js';
+
 export interface HubSyncFileIO {
   exists(targetPath: string): boolean;
   /** immediate subdirectory names of targetPath, or [] if it doesn't exist */
@@ -92,6 +102,15 @@ interface GitTreeResponse {
   truncated: boolean;
 }
 
+interface GitHubReleaseAsset {
+  name: string;
+  browser_download_url: string;
+}
+
+interface GitHubReleaseResponse {
+  assets: GitHubReleaseAsset[];
+}
+
 interface ResolvedOptions {
   baseDir: string;
   io: HubSyncFileIO;
@@ -120,6 +139,23 @@ async function fetchHubTree(resolved: ResolvedOptions): Promise<GitTreeEntry[]> 
     throw new Error(`${owner}/${repo}@${branch}'s file tree was truncated by the GitHub API — too large to sync in one call.`);
   }
   return data.tree;
+}
+
+/**
+ * Channel bundles live on the `channels-latest` release rather than the source
+ * tree. Returns `slug -> browser download URL` for every `<slug>-index.js` asset.
+ */
+async function fetchChannelReleaseAssets(resolved: ResolvedOptions): Promise<Map<string, string>> {
+  const { http, owner, repo } = resolved;
+  const url = `https://api.github.com/repos/${owner}/${repo}/releases/tags/${HUB_CHANNELS_RELEASE_TAG}`;
+  const release = await http.fetchJson<GitHubReleaseResponse>(url);
+  const bySlug = new Map<string, string>();
+  for (const asset of release.assets ?? []) {
+    if (!asset.name.endsWith(CHANNEL_BUNDLE_ASSET_SUFFIX)) continue;
+    const slug = asset.name.slice(0, -CHANNEL_BUNDLE_ASSET_SUFFIX.length);
+    if (slug) bySlug.set(slug, asset.browser_download_url);
+  }
+  return bySlug;
 }
 
 /** Groups blob paths under `<hubDir>/<slug>/...` by slug, keyed to the path relative to the slug folder. */
@@ -180,13 +216,20 @@ interface CatalogMeta {
 export async function listMissing(options: HubSyncOptions = {}): Promise<HubEntry[]> {
   const resolved = resolveOptions(options);
   const tree = await fetchHubTree(resolved);
+  // Best-effort: a missing/unreachable release shouldn't sink `/tools remote` etc.
+  const channelReleaseSlugs = await fetchChannelReleaseAssets(resolved)
+    .then((assets) => [...assets.keys()])
+    .catch(() => [] as string[]);
   const entries: HubEntry[] = [];
 
   for (const [family, config] of Object.entries(FAMILIES) as [HubFamily, FamilyConfig][]) {
-    const bySlug = slugFilesUnder(tree, config.hubDir);
+    // Channels come from the `channels-latest` release; tools/skills from the branch tree.
+    const hubSlugs = family === 'channel'
+      ? channelReleaseSlugs
+      : [...slugFilesUnder(tree, config.hubDir).keys()];
     const localSlugs = new Set(resolved.io.listDirs(path.join(resolved.baseDir, config.localDir)));
 
-    for (const slug of bySlug.keys()) {
+    for (const slug of hubSlugs) {
       if (localSlugs.has(slug)) continue;
 
       let summary: string | undefined;
@@ -274,6 +317,13 @@ export async function fetchChannelCatalog(
       for (const slug of slugFilesUnder(tree, FAMILIES.channel.hubDir).keys()) {
         hubSlugs.add(slug);
       }
+      try {
+        for (const slug of (await fetchChannelReleaseAssets(resolved)).keys()) {
+          hubSlugs.add(slug);
+        }
+      } catch {
+        // Release unreachable — tree + catalog-json discovery below still applies.
+      }
       const prefix = `${FAMILIES.channel.catalogDir}/`;
       for (const entry of tree) {
         if (entry.type === 'blob' && entry.path.startsWith(prefix) && entry.path.endsWith('.json')) {
@@ -358,25 +408,48 @@ export async function pullEntry(
   }
 
   const resolved = resolveOptions(options);
-  const tree = await fetchHubTree(resolved);
 
-  let match: { family: HubFamily; files: string[] } | undefined;
-  for (const [family, config] of Object.entries(FAMILIES) as [HubFamily, FamilyConfig][]) {
-    if (options.family && family !== options.family) continue;
-    const files = slugFilesUnder(tree, config.hubDir).get(slug);
-    if (files) {
-      match = { family, files };
-      break;
+  // Resolve the slug to a family and the list of files to fetch. Tools and skills
+  // are pulled as source from the `main` tree; channels are pulled as a single
+  // pre-bundled index.js from the `channels-latest` release.
+  let family: HubFamily | undefined;
+  let downloads: { relativeFile: string; url: string }[] | undefined;
+
+  if (options.family !== 'channel') {
+    const tree = await fetchHubTree(resolved);
+    for (const [candidate, familyConfig] of Object.entries(FAMILIES) as [HubFamily, FamilyConfig][]) {
+      if (candidate === 'channel') continue; // channels come from the release, below
+      if (options.family && candidate !== options.family) continue;
+      const files = slugFilesUnder(tree, familyConfig.hubDir).get(slug);
+      if (files) {
+        family = candidate;
+        downloads = files.map((relativeFile) => ({
+          relativeFile,
+          url: `https://raw.githubusercontent.com/${resolved.owner}/${resolved.repo}/${resolved.branch}/${familyConfig.hubDir}/${slug}/${relativeFile}`,
+        }));
+        break;
+      }
     }
   }
-  if (!match) {
+
+  if (!downloads && (!options.family || options.family === 'channel')) {
+    const assetUrl = (await fetchChannelReleaseAssets(resolved)).get(slug);
+    if (assetUrl) {
+      family = 'channel';
+      downloads = [{ relativeFile: CHANNEL_BUNDLE_FILENAME, url: assetUrl }];
+    }
+  }
+
+  if (!family || !downloads) {
+    if (options.family === 'channel') {
+      throw new Error(`"${slug}" has no "${slug}${CHANNEL_BUNDLE_ASSET_SUFFIX}" asset on ${resolved.owner}/${resolved.repo}'s "${HUB_CHANNELS_RELEASE_TAG}" release.`);
+    }
     if (options.family) {
       throw new Error(`"${slug}" was not found under ${FAMILIES[options.family].hubDir} in ${resolved.owner}/${resolved.repo}@${resolved.branch}.`);
     }
-    throw new Error(`"${slug}" was not found under koris-plugins/tools, koris-plugins/skills, or koris-plugins/channels in ${resolved.owner}/${resolved.repo}@${resolved.branch}.`);
+    throw new Error(`"${slug}" was not found in ${resolved.owner}/${resolved.repo} (koris-plugins/tools or koris-plugins/skills on ${resolved.branch}, or the "${HUB_CHANNELS_RELEASE_TAG}" release for channels).`);
   }
 
-  const { family, files } = match;
   const config = FAMILIES[family];
   const localRoot = path.join(resolved.baseDir, config.localDir);
   const target = path.join(localRoot, slug);
@@ -391,10 +464,8 @@ export async function pullEntry(
 
   resolved.io.mkdir(target);
   const createdFiles: string[] = [];
-  for (const relativeFile of files) {
-    const content = await resolved.http.fetchText(
-      `https://raw.githubusercontent.com/${resolved.owner}/${resolved.repo}/${resolved.branch}/${config.hubDir}/${slug}/${relativeFile}`,
-    );
+  for (const { relativeFile, url } of downloads) {
+    const content = await resolved.http.fetchText(url);
     const filePath = path.join(target, relativeFile);
     const fileDir = path.dirname(filePath);
     if (fileDir !== target) resolved.io.mkdir(fileDir);

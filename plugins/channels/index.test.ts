@@ -1,0 +1,86 @@
+import { describe, it, expect, vi } from 'vitest';
+import { createPlugins, listLiveChannels } from './index';
+import type { LiveChannelDescriptor } from './contracts';
+
+/** A real directory, so the scanner gets past its `existsSync` guard — the
+ *  actual listing is injected via `readdirSync` below. */
+const DIRECTORY = __dirname;
+
+function dirEntries(...names: string[]) {
+  return names.map((name) => ({ name, isDirectory: () => true }));
+}
+
+const workingModule = {
+  create: () => ({ name: 'telegram', setup: () => {} }),
+  liveChannel: { name: 'telegram' } as unknown as LiveChannelDescriptor,
+};
+
+describe('channel scanner', () => {
+  it('skips a channel whose module throws, keeps the rest, and reports which failed', () => {
+    const onLoadError = vi.fn();
+    const boom = new Error("Cannot find module '../contracts'");
+
+    const plugins = createPlugins({
+      directory: DIRECTORY,
+      readdirSync: () => dirEntries('whatsapp', 'telegram'),
+      loadModule: (modulePath: string) => {
+        if (modulePath.endsWith('whatsapp')) throw boom;
+        return workingModule;
+      },
+      onLoadError,
+    });
+
+    expect(plugins.map((plugin) => plugin.name)).toEqual(['telegram']);
+    expect(onLoadError).toHaveBeenCalledWith('whatsapp', boom);
+  });
+
+  it('reports load failures from listLiveChannels too', () => {
+    const onLoadError = vi.fn();
+
+    const descriptors = listLiveChannels({
+      directory: DIRECTORY,
+      readdirSync: () => dirEntries('whatsapp', 'telegram'),
+      loadModule: (modulePath: string) => {
+        if (modulePath.endsWith('whatsapp')) throw new Error('boom');
+        return workingModule;
+      },
+      onLoadError,
+    });
+
+    expect(descriptors.map((descriptor) => descriptor.name)).toEqual(['telegram']);
+    expect(onLoadError).toHaveBeenCalledWith('whatsapp', expect.any(Error));
+  });
+
+  it('warns on the console by default, so a failing channel never disappears silently', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const descriptors = listLiveChannels({
+      directory: DIRECTORY,
+      readdirSync: () => dirEntries('whatsapp'),
+      loadModule: () => {
+        throw new Error("Cannot find module '../contracts'");
+      },
+    });
+
+    expect(descriptors).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![0]).toContain('whatsapp');
+    expect(warn.mock.calls[0]![0]).toContain("Cannot find module '../contracts'");
+
+    warn.mockRestore();
+  });
+
+  it('loads every channel that resolves', () => {
+    const onLoadError = vi.fn();
+
+    const plugins = createPlugins({
+      directory: DIRECTORY,
+      readdirSync: () => dirEntries('telegram'),
+      loadModule: () => workingModule,
+      onLoadError,
+    });
+
+    expect(plugins.map((plugin) => plugin.name)).toEqual(['telegram']);
+    expect(onLoadError).not.toHaveBeenCalled();
+  });
+});

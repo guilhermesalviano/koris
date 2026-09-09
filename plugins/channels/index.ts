@@ -14,10 +14,23 @@ interface CreatePluginsOptions {
   directory?: string;
   readdirSync?: (directory: string, options: { withFileTypes: true }) => PluginDirectoryEntry[];
   loadModule?: (modulePath: string) => PluginModule;
+  /**
+   * Called when a channel folder is present but its module throws on load.
+   * Defaults to a console warning: one broken channel must not take the host
+   * down, but it must not vanish silently either — a pulled bundle that expects
+   * host modules it can't resolve fails exactly here, and without this the
+   * channel just never appears (no adapter, no `liveChannel`, no log).
+   */
+  onLoadError?: (channel: string, error: unknown) => void;
   context?: PluginContext;
 }
 
-type ScanOptions = Pick<CreatePluginsOptions, 'directory' | 'readdirSync' | 'loadModule'>;
+type ScanOptions = Pick<CreatePluginsOptions, 'directory' | 'readdirSync' | 'loadModule' | 'onLoadError'>;
+
+function warnLoadFailure(channel: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  console.warn(`[channels] "${channel}" was skipped — its plugin failed to load: ${message}`);
+}
 
 function resolveDefaultChannelsDir(): string {
   const localDir = path.join(process.cwd(), 'plugins', 'channels');
@@ -32,6 +45,7 @@ function scanChannelModules(options: ScanOptions = {}): PluginModule[] {
     directory = resolveDefaultChannelsDir(),
     readdirSync = fs.readdirSync as CreatePluginsOptions['readdirSync'],
     loadModule = (modulePath: string) => require(modulePath) as PluginModule,
+    onLoadError = warnLoadFailure,
   } = options;
 
   if (!fs.existsSync(directory)) return [];
@@ -41,7 +55,8 @@ function scanChannelModules(options: ScanOptions = {}): PluginModule[] {
     .flatMap((entry) => {
       try {
         return [loadModule(path.join(directory, entry.name))];
-      } catch {
+      } catch (error) {
+        onLoadError(entry.name, error);
         return [];
       }
     });

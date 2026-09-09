@@ -15,7 +15,7 @@
 - **`koris-hub` (Separate Repository: `git@github.com:guilhermesalviano/koris-hub.git`): Canonical Source**
   - Houses the source implementations (`koris-plugins/channels/`, `koris-plugins/tools/`, `koris-plugins/skills/`).
   - Contains marketplace catalog metadata (`content/marketplace/<family>/<slug>.json`).
-  - Distributes self-contained, pre-bundled channel artifacts (`index.js`) bundling any third-party dependencies.
+  - Distributes self-contained, pre-bundled channel artifacts (`index.js`, bundling any third-party dependencies) as assets on its rolling `channels-latest` GitHub release.
   - Any plugin-specific changes (such as new configuration fields, hints, dependencies, or translations) belong in `koris-hub`.
 
 ---
@@ -99,23 +99,44 @@ curl -s http://localhost:3000/api/admin/channels/catalog | jq .
 
 ### Step 3: Downloading / Pulling Channel Artifacts
 
+Unlike tools and skills (pulled as source from the `main` branch tree), channels are
+pulled as a single self-contained `index.js` from koris-hub's rolling
+[`channels-latest`](https://github.com/guilhermesalviano/koris-hub/releases/tag/channels-latest)
+GitHub release, where `pnpm bundle:channels` publishes one `<slug>-index.js` asset per
+channel. Because the whole channel is that one bundled file, a freshly pulled channel is
+picked up by the next `reprimeLiveChannelDescriptors()` (fired automatically after a pull)
+without a process restart. Channel config schemas (`configFields`, hints) still come from
+the marketplace catalog JSON on the branch — see Steps 1–2.
+
+**The bundle carries everything it needs.** Besides its npm deps (Baileys, the Telegram bot
+lib, …), it inlines koris's own channel-plugin SDK — `../contracts`, `../channel-config`,
+`../../registry` — which koris-hub's `scripts/build-channels.ts` resolves out of a koris
+checkout (`KORIS_DIR`) at build time. Nothing but the downloaded `index.js` has to be on
+disk for the channel to load. If a bundle ever regresses to *external* SDK imports, koris
+throws `MODULE_NOT_FOUND` loading it, `scanChannelModules` silently skips the channel, and
+its settings saved from the web UI land in `koris.json` instead of
+`plugins/channels/<slug>/config.yml`. Quick check:
+
+```bash
+node -e "require('./plugins/channels/telegram/index.js').liveChannel.name"
+```
+
 When you click **Download** in the UI, run `pnpm hub:pull <slug>`, or type `/channels download <slug>` in chat:
 
 ```bash
-# 1. Ensure the destination directory exists
+# 1. Resolve the release asset URL for the channel's bundle
+curl -s "https://api.github.com/repos/guilhermesalviano/koris-hub/releases/tags/channels-latest" \
+  | jq -r '.assets[] | select(.name == "telegram-index.js") | .browser_download_url'
+# -> https://github.com/guilhermesalviano/koris-hub/releases/download/channels-latest/telegram-index.js
+
+# 2. Ensure the destination directory exists and download the self-contained bundle
 mkdir -p plugins/channels/telegram
-
-# 2. Download the self-contained bundle
-curl -s "https://raw.githubusercontent.com/guilhermesalviano/koris-hub/main/koris-plugins/channels/telegram/index.js" \
+curl -sL "https://github.com/guilhermesalviano/koris-hub/releases/download/channels-latest/telegram-index.js" \
   -o plugins/channels/telegram/index.js
-
-# 3. Download the example configuration template
-curl -s "https://raw.githubusercontent.com/guilhermesalviano/koris-hub/main/koris-plugins/channels/telegram/config.example.yml" \
-  -o plugins/channels/telegram/config.example.yml
-
-# 4. Copy to config.yml if not already present
-cp -n plugins/channels/telegram/config.example.yml plugins/channels/telegram/config.yml
 ```
+
+`config.yml` is written separately — by the setup wizard / admin panel (Step 4), by
+`/channels`, or by hand.
 
 ---
 
@@ -170,3 +191,8 @@ pnpm bundle:channels
 ```
 
 If `~/projects/koris-hub` is present locally, the script will automatically copy the updated bundles to `~/projects/koris-hub/koris-plugins/channels/<slug>/index.js`.
+
+koris-hub then publishes those bundles as `<slug>-index.js` assets on its rolling
+[`channels-latest`](https://github.com/guilhermesalviano/koris-hub/releases/tag/channels-latest)
+release, which is what `koris` downloads from (`pnpm hub:pull`, `/channels download`, the
+setup wizard) — see §2 Step 3.
