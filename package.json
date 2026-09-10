@@ -67,6 +67,7 @@
   },
   "homepage": "https://github.com/guilhermesalviano/koris#readme",
   "dependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
     "better-sqlite3": "^13.0.3",
     "dotenv": "^17.4.2",
     "esbuild": "^0.28.2",

@@ -161,6 +161,8 @@ class ChatRouteHandler {
       const result = await this.gateway.handle({ text: message, images }, 'web', {
         sessionId,
         runId,
+        toolsEnabled: true,
+        learnedSkillsEnabled: true,
         signal: abortController.signal,
         onProgress: (summary: string) => {
           if (clientClosed) {

@@ -12,7 +12,7 @@ import { NAME_PATTERN } from './scaffold-tool';
  * Both the dev CLI (`scripts/hub-sync-cli.ts`) call into this module.
  */
 
-export type HubFamily = 'tool' | 'skill' | 'channel';
+export type HubFamily = 'tool' | 'skill' | 'channel' | 'mcp';
 
 interface FamilyConfig {
   /** directory under the koris-hub repo root holding one folder per plugin */
@@ -27,6 +27,7 @@ const FAMILIES: Record<HubFamily, FamilyConfig> = {
   tool: { hubDir: 'koris-plugins/tools', localDir: 'plugins/tools', catalogDir: 'content/marketplace/tools' },
   skill: { hubDir: 'koris-plugins/skills', localDir: 'plugins/skills', catalogDir: 'content/marketplace/skills' },
   channel: { hubDir: 'koris-plugins/channels', localDir: 'plugins/channels', catalogDir: 'content/marketplace/channels' },
+  mcp: { hubDir: 'koris-plugins/mcps', localDir: 'plugins/mcps', catalogDir: 'content/marketplace/mcps' },
 };
 
 const HUB_OWNER = 'guilhermesalviano';
@@ -187,7 +188,7 @@ export interface ChannelHints {
 }
 
 /**
- * Channels only: one editable config input, mirrored from koris-hub's
+ * Plugin marketplace editable configuration input, mirrored from koris-hub's
  * `content/marketplace/channels/<slug>.json` so koris's setup wizard can render
  * a channel's form from the catalog instead of hard-coding it. `name` is the
  * config key written to the channel's config (e.g. `bot_token`).
@@ -206,11 +207,13 @@ export interface HubEntry {
   slug: string;
   summary?: string;
   hints?: ChannelHints;
+  configFields?: ChannelConfigField[];
 }
 
 interface CatalogMeta {
   summary?: string;
   hints?: ChannelHints;
+  configFields?: ChannelConfigField[];
 }
 
 export async function listMissing(options: HubSyncOptions = {}): Promise<HubEntry[]> {
@@ -234,16 +237,18 @@ export async function listMissing(options: HubSyncOptions = {}): Promise<HubEntr
 
       let summary: string | undefined;
       let hints: ChannelHints | undefined;
+      let configFields: ChannelConfigField[] | undefined;
       try {
         const meta = await resolved.http.fetchJson<CatalogMeta>(
           `https://raw.githubusercontent.com/${resolved.owner}/${resolved.repo}/${resolved.branch}/${config.catalogDir}/${slug}.json`,
         );
         summary = meta.summary;
         hints = meta.hints;
+        configFields = meta.configFields;
       } catch {
         // Metadata is best-effort — still report the slug without a summary.
       }
-      entries.push({ family, slug, summary, hints });
+      entries.push({ family, slug, summary, hints, configFields });
     }
   }
 
@@ -447,7 +452,7 @@ export async function pullEntry(
     if (options.family) {
       throw new Error(`"${slug}" was not found under ${FAMILIES[options.family].hubDir} in ${resolved.owner}/${resolved.repo}@${resolved.branch}.`);
     }
-    throw new Error(`"${slug}" was not found in ${resolved.owner}/${resolved.repo} (koris-plugins/tools or koris-plugins/skills on ${resolved.branch}, or the "${HUB_CHANNELS_RELEASE_TAG}" release for channels).`);
+    throw new Error(`"${slug}" was not found in ${resolved.owner}/${resolved.repo} (koris-plugins/tools, koris-plugins/skills, or koris-plugins/mcps on ${resolved.branch}, or the "${HUB_CHANNELS_RELEASE_TAG}" release for channels).`);
   }
 
   const config = FAMILIES[family];

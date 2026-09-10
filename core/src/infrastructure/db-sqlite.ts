@@ -299,13 +299,34 @@ class DatabaseService implements IDatabaseService {
        */
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS plugin_settings (
-          family TEXT NOT NULL CHECK(family IN ('tools', 'channels')),
+          family TEXT NOT NULL CHECK(family IN ('tools', 'channels', 'mcps')),
           name TEXT NOT NULL,
           enabled INTEGER NOT NULL,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (family, name)
         );
       `);
+
+      const pluginSettingsSchema = this.db
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'plugin_settings'")
+        .get() as { sql?: string } | undefined;
+      if (pluginSettingsSchema?.sql && !pluginSettingsSchema.sql.includes("'mcps'")) {
+        // SQLite cannot alter a CHECK constraint in place: rebuild the table,
+        // atomically so a failure never leaves it renamed or half-copied.
+        this.db.transaction(() => this.db.exec(`
+          ALTER TABLE plugin_settings RENAME TO plugin_settings_legacy;
+          CREATE TABLE plugin_settings (
+            family TEXT NOT NULL CHECK(family IN ('tools', 'channels', 'mcps')),
+            name TEXT NOT NULL,
+            enabled INTEGER NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (family, name)
+          );
+          INSERT INTO plugin_settings (family, name, enabled, updated_at)
+            SELECT family, name, enabled, updated_at FROM plugin_settings_legacy;
+          DROP TABLE plugin_settings_legacy;
+        `))();
+      }
 
     } catch (error) {
       logger.error('[database] Failed to initialize database schema', { error });

@@ -1,6 +1,6 @@
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 
-export type PluginFamily = 'tools' | 'channels';
+export type PluginFamily = 'tools' | 'channels' | 'mcps';
 
 export interface PluginSettingRecord {
   family: PluginFamily;

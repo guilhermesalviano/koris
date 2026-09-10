@@ -3,6 +3,7 @@ import { handleUsageCommand } from './usage';
 import { handleSkillsCommand, isSkillCommand, listSkillCommands, resolveSkillCommand } from './skills';
 import { handleToolsCommand } from './tools';
 import { handleChannelsCommand } from './channels';
+import { handleMcpsCommand } from './mcps';
 import { formatCommandResult, formatMessage } from './format';
 import { addAllowedDomain } from '../security/allowed-domains';
 import {
@@ -18,6 +19,7 @@ export type { CommandSpec, CommandChannel } from './registry';
 export { handleSkillsCommand, isSkillCommand, listSkillCommands, listSkills, resolveSkillCommand } from './skills';
 export { handleToolsCommand, listTools } from './tools';
 export { handleChannelsCommand, listChannels, listInstalledChannelNames } from './channels';
+export { handleMcpsCommand, listInstalledMcpNames } from './mcps';
 export { formatCommandResult, formatMessage } from './format';
 
 export async function handleCommand(command: string, context: CommandContext): Promise<CommandResult> {
@@ -58,6 +60,9 @@ export async function handleCommand(command: string, context: CommandContext): P
 
     case '/channels':
       return handleChannelsCommand(command, context);
+
+    case '/mcps':
+      return handleMcpsCommand(command, context);
 
     case '/skill':
       return handleSkill(command, context);

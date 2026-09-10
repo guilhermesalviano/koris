@@ -16,7 +16,7 @@ const TOOLS_DEFAULT_DISABLED = new Set(['create-tool']);
  * in every channel plugin's `config.example.yml`.
  */
 export function defaultPluginEnabled(family: PluginFamily, name: string): boolean {
-  if (family === 'channels') return false;
+  if (family === 'channels' || family === 'mcps') return false;
   return !TOOLS_DEFAULT_DISABLED.has(name);
 }
 

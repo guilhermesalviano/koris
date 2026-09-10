@@ -36,6 +36,8 @@ import { LearnedSkillsRepositoryFactory } from '../repositories/learned-skills';
 import { SkillsRepositoryFactory } from '../repositories/skills';
 import { SkillSyncSingleton } from '../services/skills/skill-sync';
 import { ToolSyncSingleton } from '../services/tools/tool-sync';
+import { McpSyncSingleton } from '../services/mcps/mcp-sync';
+import { McpManagerSingleton } from '../services/mcps/mcp-manager';
 import { AuditLogRepositoryFactory, AuditLogRow } from '../repositories/audit-log';
 import { buildUsageReport, usageFrom } from '../services/usage/usage';
 import { Heartbeat } from '../entities/heartbeat';
@@ -65,7 +67,7 @@ import {
 } from '../../../scripts/hub-sync';
 import { listInstalledChannelNames } from '../services/commands/channels';
 
-const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN']);
+const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN', 'BEARER_TOKEN', 'bearerToken', 'bearer_token']);
 
 function maskDeep(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -835,6 +837,7 @@ class AdminRouterFactory {
 
     router.get('/plugins', (_req: Request, res: Response) => {
       ToolSyncSingleton.getExistingInstance()?.sync();
+      void McpSyncSingleton.getExistingInstance()?.sync();
       SkillSyncSingleton.getExistingInstance()?.sync();
 
       const diskChannels = listInstalledChannelNames(config.BASE_DIR);
@@ -842,19 +845,23 @@ class AdminRouterFactory {
         PluginCatalogSingleton.append(diskChannels.map((name) => ({ family: 'channels', name })));
       }
 
+      const mcpStatuses = new Map(
+        (McpManagerSingleton.getExistingInstance()?.getStatuses() ?? []).map((status) => [status.name, status]),
+      );
       const items = PluginCatalogSingleton.getExistingInstance().map(({ family, name }) => ({
         family,
         name,
         enabled: resolvePluginEnabled(pluginSettingsRepo, family, name),
+        ...(family === 'mcps' ? { mcpStatus: mcpStatuses.get(name) } : {}),
       }));
 
       res.json({ items: [...items, ...listSkillPlugins()] });
     });
 
-    router.patch('/plugins/:family/:name', (req: Request, res: Response) => {
+    router.patch('/plugins/:family/:name', async (req: Request, res: Response) => {
       const family = req.params.family;
-      if (family !== 'tools' && family !== 'channels' && family !== 'skills') {
-        res.status(400).json({ error: "family must be 'tools', 'channels' or 'skills'." });
+      if (family !== 'tools' && family !== 'channels' && family !== 'mcps' && family !== 'skills') {
+        res.status(400).json({ error: "family must be 'tools', 'channels', 'mcps' or 'skills'." });
         return;
       }
 
@@ -900,9 +907,58 @@ class AdminRouterFactory {
         } else {
           ChannelsSingleton.getExistingInstance()?.stopChannel(name);
         }
+      } else if (family === 'mcps') {
+        const manager = McpManagerSingleton.getExistingInstance();
+        if (enabled) {
+          await manager?.enable(name);
+        } else {
+          await manager?.disable(name);
+        }
       }
 
       res.json({ success: true, item: { family, name, enabled } });
+    });
+
+    router.get('/mcps/:name/config', (req: Request, res: Response) => {
+      const definition = McpManagerSingleton.getExistingInstance()?.getDefinition(String(req.params.name));
+      if (!definition) {
+        res.status(404).json({ error: 'MCP plugin not found' });
+        return;
+      }
+      const current = definition.loadConfig();
+      res.json({
+        name: definition.name,
+        url: current.url,
+        bearer_token: current.bearerToken ? maskSecret(current.bearerToken) : '',
+      });
+    });
+
+    router.patch('/mcps/:name/config', async (req: Request, res: Response) => {
+      const name = String(req.params.name);
+      const definition = McpManagerSingleton.getExistingInstance()?.getDefinition(name);
+      if (!definition?.writeConfigPatch) {
+        res.status(404).json({ error: 'Configurable MCP plugin not found' });
+        return;
+      }
+      const patch: Record<string, unknown> = {};
+      if (typeof req.body?.url === 'string') {
+        try {
+          const url = new URL(req.body.url);
+          if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error();
+          patch.url = url.toString();
+        } catch {
+          res.status(400).json({ error: 'url must be an absolute http or https URL' });
+          return;
+        }
+      }
+      if (typeof req.body?.bearer_token === 'string' && !req.body.bearer_token.includes('••••')) {
+        patch.bearer_token = req.body.bearer_token;
+      }
+      definition.writeConfigPatch(patch);
+      if (resolvePluginEnabled(pluginSettingsRepo, 'mcps', name)) {
+        await McpManagerSingleton.getExistingInstance()?.reconnect(name);
+      }
+      res.json({ success: true });
     });
 
     // koris-hub marketplace: tools/skills whose source moved out of this repo
@@ -964,6 +1020,8 @@ class AdminRouterFactory {
         const item = await pullEntry(String(req.params.slug), { baseDir: config.BASE_DIR });
         if (item.family === 'tool') {
           ToolSyncSingleton.getExistingInstance()?.sync(item.slug);
+        } else if (item.family === 'mcp') {
+          await McpSyncSingleton.getExistingInstance()?.sync(item.slug);
         } else if (item.family === 'skill') {
           SkillSyncSingleton.getExistingInstance()?.sync();
         } else if (item.family === 'channel') {
