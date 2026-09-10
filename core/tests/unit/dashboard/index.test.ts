@@ -398,8 +398,14 @@ describe('createChatHandler', () => {
 
     await handler(req, makeResponse());
 
-    const options = mockAgentHandle.mock.calls[0][2] as { signal?: AbortSignal };
+    const options = mockAgentHandle.mock.calls[0][2] as {
+      signal?: AbortSignal;
+      toolsEnabled?: boolean;
+      learnedSkillsEnabled?: boolean;
+    };
     expect(options.signal).toBeInstanceOf(AbortSignal);
+    expect(options.toolsEnabled).toBe(true);
+    expect(options.learnedSkillsEnabled).toBe(true);
   });
 
   it('emits a cancelled event (not an error) when the run is aborted', async () => {

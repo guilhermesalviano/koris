@@ -112,6 +112,13 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
       'Use `/channels download <name>` to install a channel.',
   },
   {
+    name: '/mcps',
+    summary: 'List, download, configure and toggle MCP server plugins',
+    usage: '/mcps [remote|download <name>|enable <name>|disable <name>]',
+    trusted: true,
+    details: 'MCP tools are namespaced by server and become available immediately after a server connects.',
+  },
+  {
     name: '/skill',
     summary: 'Load one skill\'s instructions for this message',
     usage: '/skill <name> [request]',

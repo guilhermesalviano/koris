@@ -64,3 +64,9 @@ plugins/tools/*
 plugins/skills/*
 !plugins/skills/.gitkeep
 
+
+plugins/mcps/*
+!plugins/mcps/contracts.ts
+!plugins/mcps/index.ts
+!plugins/mcps/index.test.ts
+!plugins/mcps/.gitkeep

@@ -9,7 +9,7 @@ function humanize(slug: string): string {
     .join(' ');
 }
 
-const FAMILY_ORDER: MarketplaceItem['family'][] = ['channel', 'tool', 'skill'];
+const FAMILY_ORDER: MarketplaceItem['family'][] = ['channel', 'tool', 'mcp', 'skill'];
 
 function groupByFamily(items: MarketplaceItem[]): [MarketplaceItem['family'], MarketplaceItem[]][] {
   const groups = new Map<MarketplaceItem['family'], MarketplaceItem[]>();
@@ -27,7 +27,8 @@ function groupByFamily(items: MarketplaceItem[]): [MarketplaceItem['family'], Ma
 
 function familyLabel(family: MarketplaceItem['family']): string {
   if (family === 'channel') return 'Channels';
-  return family === 'tool' ? 'Tools' : 'Skills';
+  if (family === 'tool') return 'Tools';
+  return family === 'mcp' ? 'MCP Servers' : 'Skills';
 }
 
 function MarketplaceRow({ item, pulling, onPull }: { item: MarketplaceItem; pulling: boolean; onPull: () => void }) {
@@ -55,7 +56,9 @@ export default function MarketplaceList({ api }: { api: UseMarketplaceApi }) {
   async function handlePull(item: MarketplaceItem) {
     try {
       await api.pull(item);
-      showToast(`Pulled "${humanize(item.slug)}" — active within a few seconds, no restart needed.`);
+      showToast(item.family === 'mcp'
+        ? `Pulled "${humanize(item.slug)}" — configure and enable it when ready.`
+        : `Pulled "${humanize(item.slug)}" — active within a few seconds, no restart needed.`);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to pull from koris-hub', true);
     }
@@ -68,7 +71,7 @@ export default function MarketplaceList({ api }: { api: UseMarketplaceApi }) {
       {api.error && <EmptyState text={api.error} />}
       {!api.error && api.loading && <EmptyState text="Loading…" />}
       {!api.error && !api.loading && api.items.length === 0 && (
-        <EmptyState text="Nothing new — every tool, channel, or skill in koris-hub is already present locally." />
+        <EmptyState text="Nothing new — every tool, channel, MCP server, or skill in koris-hub is already present locally." />
       )}
 
       {!api.error && !api.loading && api.items.length > 0 && groups.map(([family, items]) => (
@@ -87,7 +90,7 @@ export default function MarketplaceList({ api }: { api: UseMarketplaceApi }) {
         </div>
       ))}
       <div className="pt-2 text-center font-mono text-[11px] text-txt-3">
-        Explore more tools, channels, and skills on the hub website:{' '}
+        Explore more tools, channels, MCP servers, and skills on the hub website:{' '}
         <a
           href="https://hub.koaris.com/marketplace/"
           target="_blank"

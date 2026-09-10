@@ -44,7 +44,7 @@ export function loadPluginConfigFile(options: LoadPluginConfigFileOptions): Reco
   }
 }
 
-export type PluginFamily = 'channels' | 'tools';
+export type PluginFamily = 'channels' | 'tools' | 'mcps';
 
 export interface ResolvePluginDirOptions {
   cwd?: string;

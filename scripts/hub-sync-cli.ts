@@ -6,7 +6,7 @@ function printUsage(): void {
     '  pnpm hub:list\n' +
     '  pnpm hub:pull <slug> [<slug2> ...] [--force]\n' +
     '  pnpm hub:pull --all [--force]\n\n' +
-    'Lists/pulls tools and skills from koris-hub ' +
+    'Lists/pulls tools, skills, MCP servers, and channels from koris-hub ' +
     '(https://github.com/guilhermesalviano/koris-hub) that are not already present locally.',
   );
 }
@@ -14,7 +14,7 @@ function printUsage(): void {
 async function runList(): Promise<void> {
   const entries = await listMissing();
   if (entries.length === 0) {
-    console.log('Nothing new — every tool/skill in koris-hub is already present locally.');
+    console.log('Nothing new — every plugin in koris-hub is already present locally.');
     return;
   }
 
@@ -55,9 +55,9 @@ async function runPull(argv: string[]): Promise<void> {
   }
 
   console.log(
-    '\nNote: new plugin folders stay untracked by git by default (see the tools/skills ' +
+    '\nNote: new plugin folders stay untracked by git by default (see the plugins ' +
     'allowlist in .gitignore) — add a `!` rule there if you want to commit one.\n' +
-    'A running koris process picks this up on its own within ~500ms (SkillSyncService / ' +
+    'A running koris process picks this up on its own within ~500ms (SkillSyncService / McpSyncService / ' +
     'ToolSyncService) — no rebuild or restart needed.',
   );
 }

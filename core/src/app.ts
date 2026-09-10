@@ -24,6 +24,8 @@ import { SkillSyncSingleton } from './services/skills/skill-sync';
 import { DashboardServerFactory, WebServerHandle, WebListenOptions } from './dashboard';
 import { createPlugins, buildRegistry } from '../../plugins/channels';
 import { createToolPlugins, TOOLS_DIR } from '../../plugins/tools';
+import { createMcpPlugins, MCPS_DIR } from '../../plugins/mcps';
+import { MCP_SERVERS } from '../../plugins/mcps/contracts';
 import { COMMANDS } from '../../plugins/tools/contracts';
 import { ToolPluginsSingleton } from './services/tools/registry-singleton';
 import { ToolSyncSingleton } from './services/tools/tool-sync';
@@ -31,6 +33,7 @@ import { config } from './config';
 import path from 'node:path';
 import type { PluginContext } from '../../plugins/channels/contracts';
 import type { ToolPluginContext } from '../../plugins/tools/contracts';
+import type { McpPluginContext } from '../../plugins/mcps/contracts';
 import { IDatabaseService } from './infrastructure/db-sqlite';
 import { Heartbeat } from './entities/heartbeat';
 import type { BeatType } from './types/beat';
@@ -42,6 +45,8 @@ import { migrateLegacyPluginEnabledFlags, resolvePluginEnabled, type PluginIdent
 import { PluginCatalogSingleton } from './services/plugins/plugin-catalog-singleton';
 import { listInstalledChannelNames } from './services/commands/channels';
 import { getAudioTranscriptionService } from './services/audio/audio-transcription-service';
+import { McpManagerSingleton } from './services/mcps/mcp-manager';
+import { McpSyncSingleton } from './services/mcps/mcp-sync';
 
 const logger = LoggerFactory.create();
 const MODES = ['tui', 'web'] as const;
@@ -125,6 +130,16 @@ function createToolPluginContext(logger: ILogger, db: IDatabaseService): ToolPlu
   };
 }
 
+function createMcpPluginContext(logger: ILogger, db: IDatabaseService): McpPluginContext {
+  const pluginSettingsRepo = PluginSettingsRepositoryFactory.create(db);
+  return {
+    logger,
+    pluginEnablement: {
+      isEnabled: (name) => resolvePluginEnabled(pluginSettingsRepo, 'mcps', name),
+    },
+  };
+}
+
 type Mode = typeof MODES[number];
 type RuntimeModes = Record<Mode, boolean>;
 
@@ -186,16 +201,23 @@ class Application implements IApplication {
       directory: path.join(config.BASE_DIR, 'plugins', 'channels'),
     });
     const toolPlugins = createToolPlugins({ context: createToolPluginContext(this.logger, db) });
+    const mcpContext = createMcpPluginContext(this.logger, db);
+    const mcpPlugins = createMcpPlugins({ context: mcpContext });
     const diskChannels = listInstalledChannelNames(config.BASE_DIR);
     const channelNames = Array.from(new Set([...channelPlugins.map((plugin) => plugin.name), ...diskChannels]));
     const pluginIdentities: PluginIdentity[] = [
       ...channelNames.map((name) => ({ family: 'channels' as const, name })),
       ...toolPlugins.map((plugin) => ({ family: 'tools' as const, name: plugin.name })),
+      ...mcpPlugins.map((plugin) => ({ family: 'mcps' as const, name: plugin.name })),
     ];
     migrateLegacyPluginEnabledFlags(PluginSettingsRepositoryFactory.create(db), pluginIdentities, this.logger);
     PluginCatalogSingleton.getInstance(pluginIdentities);
-    const registry = buildRegistry([...channelPlugins, ...toolPlugins]);
+    const registry = buildRegistry([...channelPlugins, ...toolPlugins, ...mcpPlugins]);
     ToolPluginsSingleton.getInstance(registry.collect(COMMANDS));
+    const mcpManager = McpManagerSingleton.getInstance(this.logger, registry, registry.collect(MCP_SERVERS));
+    // Not awaited: an unreachable server would otherwise hold boot for the
+    // SDK's request timeout. Tools are published as each server connects.
+    void mcpManager.startAll();
     const registeredChannels = applyChannelOverrides(registry.collect(ADAPTERS), loadChannelOverrides());
     const channels = ChannelsSingleton.getInstance(this.logger, gateway, registeredChannels);
     const heartbeat = HeartbeatSingleton.getInstance(
@@ -208,6 +230,17 @@ class Application implements IApplication {
       this.logger,
       SkillsRepositoryFactory.create(this.logger),
       LearnedSkillsRepositoryFactory.create(db),
+    );
+    const mcpSync = McpSyncSingleton.getInstance(
+      this.logger,
+      {
+        sourceDir: path.join(config.BASE_DIR, 'plugins', 'mcps'),
+        distDir: MCPS_DIR,
+        context: mcpContext,
+        registry,
+        manager: mcpManager,
+      },
+      mcpPlugins.map((plugin) => plugin.name),
     );
     const toolSync = ToolSyncSingleton.getInstance(
       this.logger,
@@ -224,6 +257,7 @@ class Application implements IApplication {
     heartbeat.start();
     skillSync.start();
     toolSync.start();
+    mcpSync.start();
 
     try {
       const webServer = this.modes.web
@@ -234,6 +268,7 @@ class Application implements IApplication {
     } catch (error) {
       channels.stopAll();
       heartbeat.stop();
+      await mcpManager.stopAll();
       throw error;
     }
   }
@@ -249,7 +284,10 @@ class Application implements IApplication {
       title: 'koris',
       showHints: false,
       placeholder: 'Type /help for commands.',
-      onInput: async (input: string) => gateway.handle(input, 'tui'),
+      onInput: async (input: string) => gateway.handle(input, 'tui', {
+        toolsEnabled: true,
+        learnedSkillsEnabled: true,
+      }),
     });
   }
 
@@ -277,6 +315,8 @@ class Application implements IApplication {
     this.runtime.heartbeat.stop();
     SkillSyncSingleton.getExistingInstance()?.stop();
     ToolSyncSingleton.getExistingInstance()?.stop();
+    McpSyncSingleton.getExistingInstance()?.stop();
+    await McpManagerSingleton.getExistingInstance()?.stopAll();
 
     try {
       await this.runtime.webServer?.stop();

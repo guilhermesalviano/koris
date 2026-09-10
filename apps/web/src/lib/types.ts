@@ -128,9 +128,15 @@ export interface OutboundResponse {
 export type SkillsMode = 'auto' | 'manual';
 
 export interface PluginItem {
-  family: 'tools' | 'channels' | 'skills';
+  family: 'tools' | 'channels' | 'skills' | 'mcps';
   name: string;
   enabled: boolean;
+  mcpStatus?: {
+    name: string;
+    state: 'disabled' | 'connecting' | 'connected' | 'error';
+    toolCount: number;
+    error?: string;
+  };
   /** Skills carry documentation with them; tools and channels do not. */
   description?: string;
   read_when?: string[] | null;
@@ -154,10 +160,11 @@ export interface ChannelHints {
 }
 
 export interface MarketplaceItem {
-  family: 'tool' | 'skill' | 'channel';
+  family: 'tool' | 'skill' | 'channel' | 'mcp';
   slug: string;
   summary?: string;
   hints?: ChannelHints;
+  configFields?: ChannelConfigField[];
 }
 
 export interface MarketplaceResponse {

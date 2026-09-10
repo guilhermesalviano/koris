@@ -196,3 +196,9 @@ koris-hub then publishes those bundles as `<slug>-index.js` assets on its rollin
 [`channels-latest`](https://github.com/guilhermesalviano/koris-hub/releases/tag/channels-latest)
 release, which is what `koris` downloads from (`pnpm hub:pull`, `/channels download`, the
 setup wizard) — see §2 Step 3.
+
+## MCP server plugins
+
+MCP integrations live under `plugins/mcps/<slug>/` and register a server descriptor on the `MCP_SERVERS` extension point. Koris owns the Streamable HTTP client, discovers each enabled server's tools, and exposes them through the normal tool pipeline as `<server>__<tool>` names. Server-specific values such as the endpoint URL and optional bearer token stay in the plugin's gitignored `config.yml`.
+
+MCP servers are disabled by default. Use `/mcps`, the admin Plugins panel, or `PATCH /api/admin/plugins/mcps/<name>` to enable or disable one without restarting. A failed connection does not stop Koris and is retried only after an explicit toggle, configuration save, or process restart. Source plugins and marketplace metadata belong in `koris-hub/koris-plugins/mcps` and `koris-hub/content/marketplace/mcps`.

@@ -40,6 +40,7 @@ describe('Command Handler', () => {
       expect(isCommand('/USAGE 7')).toBe(true); // case- and arg-insensitive
       expect(isCommand('/tools')).toBe(true);
       expect(isCommand('/channels')).toBe(true);
+      expect(isCommand('/mcps')).toBe(true);
       expect(isCommand('/skills')).toBe(true);
     });
 
