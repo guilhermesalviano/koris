@@ -18,6 +18,9 @@ import { getAudioTranscriptionService } from '../services/audio/audio-transcript
 import { getSpeechSynthesisService } from '../services/audio/audio-synthesis-service';
 import { AdminRouterFactory } from './admin';
 import { activeRunsRegistry } from './active-runs';
+import { requireAdminSecret } from './auth-middleware';
+import { securityHeaders } from './security-headers';
+import { createRateLimiter } from './rate-limiter';
 
 interface WebServerHandle {
   start(): Promise<WebServerHandle>;
@@ -36,18 +39,10 @@ interface WebListenOptions {
   port?: number;
 }
 
-interface RateLimitEntry {
-  count: number;
-  windowStart: number;
-}
-
 type SseWriter = (payload: unknown) => void;
 
-const INDEX_RATE_LIMIT_WINDOW_MS = 60_000;
-const INDEX_RATE_LIMIT_MAX_REQUESTS = 60;
-
 class IndexRouteHandler {
-  private static readonly rateLimitStore = new Map<string, RateLimitEntry>();
+  private static readonly rateLimiter = createRateLimiter(60_000, 60, 'Too many requests to /. Please try again later.');
 
   constructor(
     private readonly publicDir: string,
@@ -55,35 +50,10 @@ class IndexRouteHandler {
   ) {}
 
   readonly handle = (req: Request, res: Response): void => {
-    const now = Date.now();
-    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
-    const existing = IndexRouteHandler.rateLimitStore.get(clientIp);
-
-    if (!existing || now - existing.windowStart >= INDEX_RATE_LIMIT_WINDOW_MS) {
-      IndexRouteHandler.rateLimitStore.set(clientIp, { count: 1, windowStart: now });
-    } else if (existing.count >= INDEX_RATE_LIMIT_MAX_REQUESTS) {
-      res.status(429).json({ error: 'Too many requests to /. Please try again later.' });
-      return;
-    } else {
-      existing.count += 1;
-      IndexRouteHandler.rateLimitStore.set(clientIp, existing);
-    }
-
-    this.pruneExpiredEntries(now);
-    res.sendFile(path.join(this.publicDir, this.relativeFilePath));
+    IndexRouteHandler.rateLimiter(req, res, () => {
+      res.sendFile(path.join(this.publicDir, this.relativeFilePath));
+    });
   };
-
-  private pruneExpiredEntries(now: number): void {
-    if (IndexRouteHandler.rateLimitStore.size <= 5_000) {
-      return;
-    }
-
-    for (const [ip, entry] of IndexRouteHandler.rateLimitStore.entries()) {
-      if (now - entry.windowStart >= INDEX_RATE_LIMIT_WINDOW_MS) {
-        IndexRouteHandler.rateLimitStore.delete(ip);
-      }
-    }
-  }
 }
 
 class HealthRouteHandler {
@@ -96,6 +66,10 @@ class HealthRouteHandler {
 }
 
 class ChatRouteHandler {
+  // Tracks the number of open SSE connections per client IP to cap abuse.
+  private static readonly activeSseByIp = new Map<string, number>();
+  private static readonly MAX_SSE_PER_IP = 5;
+
   constructor(
     private readonly gateway: IMessageGateway,
     private readonly db?: IDatabaseService,
@@ -124,6 +98,23 @@ class ChatRouteHandler {
       res.status(400).json({ error: 'too many images (max 10)' });
       return;
     }
+
+    // SSE concurrency cap per IP
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    const activeSse = ChatRouteHandler.activeSseByIp.get(clientIp) ?? 0;
+    if (activeSse >= ChatRouteHandler.MAX_SSE_PER_IP) {
+      res.status(429).json({ error: 'Too many concurrent chat streams from this address.' });
+      return;
+    }
+    ChatRouteHandler.activeSseByIp.set(clientIp, activeSse + 1);
+    const releaseSlot = (): void => {
+      const current = ChatRouteHandler.activeSseByIp.get(clientIp) ?? 1;
+      if (current <= 1) {
+        ChatRouteHandler.activeSseByIp.delete(clientIp);
+      } else {
+        ChatRouteHandler.activeSseByIp.set(clientIp, current - 1);
+      }
+    };
 
     const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId : undefined;
     let currentSessionId = sessionId;
@@ -219,6 +210,7 @@ class ChatRouteHandler {
       res.end();
     } finally {
       activeRunsRegistry.finish(runId);
+      releaseSlot();
       req.off('aborted', onClose);
       res.off('close', onClose);
     }
@@ -530,9 +522,28 @@ class DashboardServer implements WebServerHandle {
     const audioSpeakHandler = new SpeechSynthesizeRouteHandler(this.logger);
     const adminRouter = AdminRouterFactory.create(this.logger, this.db, this.gateway);
 
-    app.use(express.json({ limit: '25mb' }));
-    app.use(express.raw({ type: ['audio/*', 'application/octet-stream'], limit: '25mb' }));
+    // Security headers — applied to every response
+    app.use(securityHeaders());
+
+    // Body parsers (sized per endpoint group)
+    app.use('/api/audio', express.raw({ type: ['audio/*', 'application/octet-stream'], limit: '25mb' }));
+    app.use('/api/audio', express.json({ limit: '25mb' }));
+    app.use('/api/chat', express.json({ limit: '5mb' }));
+    app.use('/api/admin', express.json({ limit: '1mb' }));
+    app.use(express.json({ limit: '1mb' }));
     app.use(express.static(publicDir));
+
+    // Auth guards — no-op when admin_secret is not set in koris.json
+    app.use('/api/admin', requireAdminSecret());
+    app.use('/api/chat', requireAdminSecret());
+    app.use('/api/audio', requireAdminSecret());
+
+    // Rate limiters
+    const chatRateLimiter = createRateLimiter(60_000, 30, 'Too many chat requests. Please wait before sending another message.');
+    const adminRateLimiter = createRateLimiter(60_000, 120, 'Too many admin requests. Please slow down.');
+    app.use('/api/chat', chatRateLimiter);
+    app.use('/api/admin', adminRateLimiter);
+
     app.post('/api/chat', chatHandler.handle);
     app.post('/api/chat/cancel', chatHandler.cancel);
     app.post('/api/audio/transcribe', audioTranscribeHandler.handle);
