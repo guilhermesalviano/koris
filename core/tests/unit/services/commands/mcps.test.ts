@@ -176,7 +176,26 @@ describe('mcps command', () => {
       });
       expect(syncMock).toHaveBeenCalledWith('coredash');
       expect(result.response).toContain('Downloaded MCP server "coredash"');
-      expect(result.response).toContain('enable it explicitly');
+    });
+
+    it('reports a downloaded MCP server as enabled and connected', async () => {
+      getStatusesMock.mockReturnValue([{ name: 'coredash', state: 'connected', toolCount: 22 }]);
+      const result = await handleMcpsCommand('/mcps download coredash', { source: 'tui', trusted: true });
+      expect(result.response).toContain('Downloaded and enabled MCP server "coredash" (22 tools)');
+    });
+
+    it('reports a downloaded MCP server that failed to connect', async () => {
+      getStatusesMock.mockReturnValue([{ name: 'coredash', state: 'error', toolCount: 0, error: 'fetch failed' }]);
+      const result = await handleMcpsCommand('/mcps download coredash', { source: 'tui', trusted: true });
+      expect(result.response).toContain('failed to connect: fetch failed');
+      expect(result.response).toContain('Configuration → Plugins');
+    });
+
+    it('keeps a previously disabled MCP server disabled on re-download', async () => {
+      getStatusesMock.mockReturnValue([{ name: 'coredash', state: 'disabled', toolCount: 0 }]);
+      const result = await handleMcpsCommand('/mcps download coredash --force', { source: 'tui', trusted: true });
+      expect(result.response).toContain('stays disabled');
+      expect(result.response).toContain('/mcps enable coredash');
     });
 
     it('reports download failures', async () => {
