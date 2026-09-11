@@ -141,4 +141,83 @@ describe('createAutocomplete', () => {
     expect(originalTtyWrite).toHaveBeenCalledTimes(1);
     expect(originalTtyWrite).toHaveBeenCalledWith('x', { name: 'x' });
   });
+
+  it('supports up and down arrow navigation across suggestions', () => {
+    const { autocomplete, anyRl, writes } = createHarness({
+      line: '/h',
+      commands: [
+        { name: '/help' },
+        { name: '/hello' },
+        { name: '/history' },
+      ],
+    });
+
+    autocomplete.onAcKeypress('', { name: 'tab' });
+    autocomplete.onAcKeypress('', { name: 'down' });
+    autocomplete.onAcKeypress('', { name: 'up' });
+    autocomplete.onAcKeypress('', { name: 'enter' });
+
+    expect(anyRl.line).toBe('/help');
+  });
+
+  it('supports shift+tab reverse navigation', () => {
+    const { autocomplete, anyRl } = createHarness({
+      line: '/h',
+      commands: [
+        { name: '/help' },
+        { name: '/hello' },
+      ],
+    });
+
+    autocomplete.onAcKeypress('', { name: 'tab' });
+    autocomplete.onAcKeypress('', { name: 'tab', shift: true });
+    expect(anyRl.line).toBe('/hello');
+  });
+
+  it('dismisses autocomplete on escape key', () => {
+    const { autocomplete, writes } = createHarness({
+      line: '/he',
+      commands: [{ name: '/help' }],
+    });
+
+    autocomplete.onAcKeypress('', { name: 'tab' });
+    const countBefore = writes.length;
+    autocomplete.onAcKeypress('', { name: 'escape' });
+    expect(writes.length).toBeGreaterThan(countBefore);
+  });
+
+  it('ignores keypress when state.isBusy is true or fixedInput is false', () => {
+    const { autocomplete, state, writes } = createHarness({
+      line: '/he',
+      commands: [{ name: '/help' }],
+    });
+
+    state.isBusy = true;
+    autocomplete.onAcKeypress('', { name: 'tab' });
+    expect(writes).toHaveLength(0);
+  });
+
+  it('erases placeholder on printable keystroke when line is empty', () => {
+    const { autocomplete, writes } = createHarness({
+      line: '',
+      placeholder: 'Type something...',
+    });
+
+    autocomplete.onAcKeypress('a', { name: 'a' });
+    expect(writes).toContain('\x1b[0K');
+  });
+
+  it('schedules autocomplete update when typing in autocomplete context', () => {
+    vi.useFakeTimers();
+    const { autocomplete, anyRl } = createHarness({
+      line: '/he',
+      commands: [{ name: '/help' }],
+    });
+
+    autocomplete.onAcKeypress('l', { name: 'l' });
+    expect(anyRl._refreshLine).not.toHaveBeenCalled();
+    vi.runAllTimers();
+    expect(anyRl._refreshLine).toHaveBeenCalled();
+  });
 });
+

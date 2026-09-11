@@ -83,4 +83,42 @@ describe('channel scanner', () => {
     expect(plugins.map((plugin) => plugin.name)).toEqual(['telegram']);
     expect(onLoadError).not.toHaveBeenCalled();
   });
+
+  it('returns empty array when directory does not exist', () => {
+    const plugins = createPlugins({
+      directory: '/non/existent/path/for/channels',
+    });
+    expect(plugins).toEqual([]);
+
+    const live = listLiveChannels({
+      directory: '/non/existent/path/for/channels',
+    });
+    expect(live).toEqual([]);
+  });
+
+  it('filters out non-directory entries and modules without create or with null plugin', () => {
+    const plugins = createPlugins({
+      directory: DIRECTORY,
+      readdirSync: () => [
+        { name: 'some-file.txt', isDirectory: () => false },
+        { name: 'no-create', isDirectory: () => true },
+        { name: 'null-plugin', isDirectory: () => true },
+      ],
+      loadModule: (p: string) => {
+        if (p.endsWith('no-create')) return {};
+        if (p.endsWith('null-plugin')) return { create: () => null };
+        return workingModule;
+      },
+    });
+
+    expect(plugins).toEqual([]);
+  });
+
+  it('runs with default options when none are passed', () => {
+    const plugins = createPlugins();
+    expect(Array.isArray(plugins)).toBe(true);
+
+    const live = listLiveChannels();
+    expect(Array.isArray(live)).toBe(true);
+  });
 });

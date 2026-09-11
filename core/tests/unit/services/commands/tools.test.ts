@@ -61,6 +61,14 @@ describe('tools command', () => {
       expect(result.response).toContain('/tools remote');
     });
 
+    it('reports when no tools are loaded', async () => {
+      const { ToolPluginsSingleton } = await import('../../../../src/services/tools/registry-singleton');
+      vi.mocked(ToolPluginsSingleton.getExistingInstance).mockReturnValueOnce([]);
+      const result = await handleToolsCommand('/tools', { source: 'tui', trusted: true });
+      expect(result.handled).toBe(true);
+      expect(result.response).toContain('No tools are loaded.');
+    });
+
     it('lists loaded tools with /tools list or /tools local', async () => {
       const listRes = await handleToolsCommand('/tools list', { source: 'tui', trusted: true });
       expect(listRes.response).toContain('Tools (2)');

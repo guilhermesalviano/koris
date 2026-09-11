@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { watch, mkdirSync } from 'fs';
-import { SkillSyncService } from '../../../../src/services/skills/skill-sync';
+import { SkillSyncService, SkillSyncSingleton } from '../../../../src/services/skills/skill-sync';
 import { config } from '../../../../src/config';
 import type { Skill } from '../../../../src/types/skills';
 
@@ -103,5 +103,64 @@ describe('SkillSyncService', () => {
     const skillWatcher = watch.mock.results[1].value;
     expect(baseWatcher.close).toHaveBeenCalled();
     expect(skillWatcher.close).toHaveBeenCalled();
+  });
+
+  it('logs a warning when registering watchers fails', () => {
+    const { service, logger } = makeService();
+    vi.mocked(watch).mockImplementationOnce(() => {
+      throw new Error('EMFILE: too many open files');
+    });
+
+    service.start();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[skill-sync] Failed to watch skills directory',
+      expect.objectContaining({ error: 'EMFILE: too many open files' }),
+    );
+  });
+
+  it('debounces multiple watch events into a single sync', async () => {
+    vi.useFakeTimers();
+    let changeHandler: (() => void) | undefined;
+    vi.mocked(watch).mockImplementation((_path, _opts, listener) => {
+      if (typeof listener === 'function') changeHandler = listener as () => void;
+      return { close: vi.fn() } as never;
+    });
+
+    const { service, learnedRepo } = makeService();
+    service.start();
+    expect(learnedRepo.save).toHaveBeenCalledTimes(1); // initial sync
+
+    // Fire watcher callback multiple times
+    changeHandler?.();
+    changeHandler?.();
+    changeHandler?.();
+
+    // Before debounce timer expires, no extra sync
+    expect(learnedRepo.save).toHaveBeenCalledTimes(1);
+
+    // Advance past debounce timer
+    vi.advanceTimersByTime(500);
+    expect(learnedRepo.save).toHaveBeenCalledTimes(2);
+
+    service.stop();
+    vi.useRealTimers();
+  });
+
+  it('provides singleton access via SkillSyncSingleton', () => {
+    const repos = makeRepos();
+    const instance1 = SkillSyncSingleton.getInstance(
+      repos.logger as never,
+      repos.skillsRepo as never,
+      repos.learnedRepo as never,
+    );
+    const instance2 = SkillSyncSingleton.getInstance(
+      repos.logger as never,
+      repos.skillsRepo as never,
+      repos.learnedRepo as never,
+    );
+
+    expect(instance1).toBe(instance2);
+    expect(SkillSyncSingleton.getExistingInstance()).toBe(instance1);
   });
 });

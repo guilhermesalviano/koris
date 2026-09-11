@@ -11,6 +11,17 @@ vi.mock('./SkillsSettingsPage', () => ({ default: () => null }));
 vi.mock('./MemoriesPage', () => ({ default: () => null }));
 vi.mock('./HeartbeatsPage', () => ({ default: () => null }));
 vi.mock('../../components/Modal', () => ({ default: () => null }));
+vi.mock('../../components/Icons', () => ({
+  ChannelsIcon: () => null,
+  CloseIcon: () => null,
+  HeartbeatsIcon: () => null,
+  MemoriesIcon: () => null,
+  PluginsIcon: () => null,
+  ProvidersIcon: () => null,
+  SessionsIcon: () => null,
+  SettingsIcon: () => null,
+  SkillsIcon: () => null,
+}));
 vi.mock('../../lib/config-save-context', () => ({ useSaveCoordinator: vi.fn(), useSaveStates: vi.fn() }));
 
 import { SECTIONS } from './ConfigModal';
