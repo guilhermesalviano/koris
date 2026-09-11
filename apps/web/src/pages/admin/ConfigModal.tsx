@@ -20,20 +20,20 @@ export interface Section {
 }
 
 export const SECTIONS: Section[] = [
+  { id: 'general', label: 'General', description: 'Personal context & access', Icon: SettingsIcon, Component: GeneralPage },
+  { id: 'sessions', label: 'Sessions', description: 'Conversation history', Icon: SessionsIcon, Component: SessionsPage },
+  { id: 'plugins', label: 'Plugins', description: 'Extensions & marketplace', Icon: PluginsIcon, Component: PluginsPage },
   { id: 'providers', label: 'Providers', description: 'Models & intelligence', Icon: ProvidersIcon, Component: ProvidersPage },
   { id: 'channels', label: 'Channels', description: 'Messaging & connections', Icon: ChannelsIcon, Component: ChannelsPage },
-  { id: 'plugins', label: 'Plugins', description: 'Extensions & marketplace', Icon: PluginsIcon, Component: PluginsPage },
   { id: 'skills', label: 'Skills', description: 'Knowledge & instructions', Icon: SkillsIcon, Component: SkillsSettingsPage },
   { id: 'memories', label: 'Memories', description: 'Long-term memory', Icon: MemoriesIcon, Component: MemoriesPage },
   { id: 'beats', label: 'Beats', description: 'Scheduled agents & reminders', Icon: HeartbeatsIcon, Component: HeartbeatsPage },
-  { id: 'sessions', label: 'Sessions', description: 'Conversation history', Icon: SessionsIcon, Component: SessionsPage },
-  { id: 'general', label: 'General', description: 'Personal context & access', Icon: SettingsIcon, Component: GeneralPage },
 ];
 
 export default function ConfigModal({
   open,
   onClose,
-  initialSectionId = 'providers',
+  initialSectionId = 'general',
 }: {
   open: boolean;
   onClose: () => void;
