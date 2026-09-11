@@ -16,6 +16,7 @@ import {
   SunIcon,
 } from '../../components/Icons';
 import ConfigModal from './ConfigModal';
+import ContextBar from '../../components/ContextBar';
 import { useSaveStates } from '../../lib/config-save-context';
 import ChatPage from './ChatPage';
 import OverviewPage from './OverviewPage';
@@ -55,11 +56,13 @@ function NavItems({
   vertical = false,
   collapsed = false,
   onNavigate,
+  role,
 }: {
   items: typeof MAIN_ITEMS;
   vertical?: boolean;
   collapsed?: boolean;
   onNavigate?: () => void;
+  role?: string;
 }) {
   return (
     <>
@@ -69,6 +72,7 @@ function NavItems({
           <NavLink
             key={item.to}
             to={item.to}
+            role={role}
             onClick={onNavigate}
             title={collapsed ? item.label : undefined}
             className={(state) => navItemClass(state, vertical, collapsed)}
@@ -151,18 +155,21 @@ function Header({
   onOpenNav,
   onToggleCollapse,
   onToggleTheme,
+  onOpenConfig,
 }: {
   navOpen: boolean;
   isDark: boolean;
   onOpenNav: () => void;
   onToggleCollapse: () => void;
   onToggleTheme: () => void;
+  onOpenConfig: (sectionId?: string) => void;
 }) {
   const { serverHealthy, streaming, backgroundRun, activeSessionId } = useChat();
   const backgroundActive = !!backgroundRun && backgroundRun.sessionId === activeSessionId;
   const processing = streaming || backgroundActive;
   const statusOnline = serverHealthy && !processing;
   const statusLabel = !serverHealthy ? 'Offline' : processing ? 'Thinking…' : 'Online';
+  const hasConfigError = useSaveStates().some((state) => state.state === 'error' || state.state === 'invalid');
 
   function handleMenu() {
     if (window.matchMedia('(min-width: 768px)').matches) {
@@ -173,7 +180,7 @@ function Header({
   }
 
   return (
-    <header className="flex h-14 flex-shrink-0 items-center justify-between gap-2 border-b border-subtle bg-bg/80 px-3 backdrop-blur-md sm:px-4">
+    <header className="relative z-20 flex h-14 flex-shrink-0 items-center justify-between gap-2 border-b border-subtle bg-bg/80 px-3 backdrop-blur-md sm:px-4">
       <div className="flex min-w-0 items-center gap-1">
         <button
           onClick={handleMenu}
@@ -207,10 +214,26 @@ function Header({
             <MoonIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
           )}
         </button>
+        <button
+          type="button"
+          onClick={() => onOpenConfig()}
+          aria-label="Configuration"
+          title={hasConfigError ? 'Configuration · changes need attention' : 'Configuration'}
+          className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
+        >
+          <SettingsIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
+          {hasConfigError && (
+            <span
+              aria-label="Configuration needs attention"
+              className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-400 ring-2 ring-bg"
+            />
+          )}
+        </button>
         <div className="flex items-center gap-1.5 rounded-full border border-subtle bg-bg-3 px-2.5 py-1 font-mono text-[11px] text-txt-3">
           <div className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${statusOnline ? 'bg-green-500' : 'bg-red-500'}`} />
           <span className="hidden sm:inline">{statusLabel}</span>
         </div>
+        <HeaderAppMenu onOpenConfig={onOpenConfig} />
       </div>
     </header>
   );
@@ -333,10 +356,10 @@ function ConfigButton({ onOpen, collapsed = false }: { onOpen: () => void; colla
   );
 }
 
-function SidebarMoreMenu({ onOpenConfig }: { onOpenConfig: () => void }) {
+function HeaderAppMenu({ onOpenConfig }: { onOpenConfig: (sectionId?: string) => void }) {
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
-  const hasError = useSaveStates().some((state) => state.state === 'error' || state.state === 'invalid');
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -344,7 +367,10 @@ function SidebarMoreMenu({ onOpenConfig }: { onOpenConfig: () => void }) {
       if (!container.current?.contains(event.target as Node)) setOpen(false);
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') {
+        setOpen(false);
+        container.current?.querySelector('button')?.focus();
+      }
     };
     document.addEventListener('pointerdown', dismiss);
     document.addEventListener('keydown', escape);
@@ -354,17 +380,63 @@ function SidebarMoreMenu({ onOpenConfig }: { onOpenConfig: () => void }) {
     };
   }, [open]);
 
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('a[href], button') ?? []);
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % items.length;
+      items[nextIndex]?.focus();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      const prevIndex = currentIndex === -1 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length;
+      items[prevIndex]?.focus();
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      items[0]?.focus();
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      items[items.length - 1]?.focus();
+    } else if (event.key === 'Tab') {
+      setOpen(false);
+    }
+  }
+
   return (
-    <div ref={container} className="relative">
-      <button type="button" aria-label="More options" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="relative flex h-8 w-8 items-center justify-center rounded-lg text-txt-2 hover:bg-bg-3 hover:text-txt">
+    <div ref={container} className="relative hidden md:block z-20">
+      <button
+        id="app-menu-button"
+        type="button"
+        aria-label="Admin navigation"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
+      >
         <MoreIcon className="h-4 w-4 fill-none stroke-current" />
-        {hasError && <span aria-label="Configuration needs attention" className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-400" />}
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-40 mt-1 w-52 rounded-xl border border-strong bg-bg-2 p-2 shadow-xl">
-          <NavItems items={MAIN_ITEMS} vertical onNavigate={() => setOpen(false)} />
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-labelledby="app-menu-button"
+          onKeyDown={handleKeyDown}
+          className="absolute right-0 top-full z-20 mt-1.5 w-52 rounded-xl border border-strong bg-bg-2 p-1.5 shadow-2xl animate-[modalIn_0.15s_ease-out_both]"
+        >
+          <div className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-txt-3">Admin views</div>
+          <NavItems items={MAIN_ITEMS} vertical onNavigate={() => setOpen(false)} role="menuitem" />
           <div className="my-1 border-t border-subtle" />
-          <ConfigButton onOpen={() => { container.current?.querySelector('button')?.focus(); setOpen(false); onOpenConfig(); }} />
+          <ConfigButton
+            onOpen={() => {
+              container.current?.querySelector('button')?.focus();
+              setOpen(false);
+              onOpenConfig();
+            }}
+          />
+          <div className="my-1.5 border-t border-subtle" />
+          <div className="px-2 py-1.5">
+            <ContextBar />
+          </div>
         </div>
       )}
     </div>
@@ -375,31 +447,23 @@ function SidebarContent({
   collapsed = false,
   onOpenConfig,
   onNavigate,
-  showMenuOptions = true,
 }: {
   collapsed?: boolean;
-  onOpenConfig: () => void;
+  onOpenConfig: (sectionId?: string) => void;
   onNavigate?: () => void;
-  showMenuOptions?: boolean;
 }) {
   return (
     <>
-      {showMenuOptions && (
-        <>
-          <div className="flex-shrink-0 space-y-0.5 p-2 pb-1.5">
-            <NavItems items={MAIN_ITEMS} vertical collapsed={collapsed} onNavigate={onNavigate} />
-          </div>
-          <div className="flex-shrink-0 border-t border-subtle" />
-        </>
-      )}
+      <div className="flex-shrink-0 space-y-0.5 p-2 pb-1.5">
+        <NavItems items={MAIN_ITEMS} vertical collapsed={collapsed} onNavigate={onNavigate} />
+      </div>
+      <div className="flex-shrink-0 border-t border-subtle" />
       <div className="min-h-0 flex-1">
         <ChatsPanel collapsed={collapsed} onNavigate={onNavigate} />
       </div>
-      {showMenuOptions && (
-        <div className="flex-shrink-0 space-y-0.5 border-t border-subtle p-2">
-          <ConfigButton collapsed={collapsed} onOpen={onOpenConfig} />
-        </div>
-      )}
+      <div className="flex-shrink-0 space-y-0.5 border-t border-subtle p-2">
+        <ConfigButton collapsed={collapsed} onOpen={() => onOpenConfig()} />
+      </div>
     </>
   );
 }
@@ -409,7 +473,7 @@ function Sidebar({
   onOpenConfig,
 }: {
   collapsed: boolean;
-  onOpenConfig: () => void;
+  onOpenConfig: (sectionId?: string) => void;
 }) {
   return (
     <aside
@@ -417,14 +481,12 @@ function Sidebar({
         collapsed ? 'w-16' : 'w-60'
       }`}
     >
-      <div className="flex flex-shrink-0 items-center justify-end border-b border-subtle px-2 py-1">
-        <SidebarMoreMenu onOpenConfig={onOpenConfig} />
+      <div className="min-h-0 flex-1">
+        <ChatsPanel collapsed={collapsed} />
       </div>
-      <SidebarContent
-        collapsed={collapsed}
-        showMenuOptions={false}
-        onOpenConfig={onOpenConfig}
-      />
+      <div className="flex-shrink-0 space-y-0.5 border-t border-subtle p-2">
+        <ConfigButton collapsed={collapsed} onOpen={() => onOpenConfig()} />
+      </div>
     </aside>
   );
 }
@@ -447,8 +509,14 @@ function DrawerHeader({ title, onClose }: { title: string; onClose: () => void }
 export default function AdminLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const [configSection, setConfigSection] = useState<string | undefined>(undefined);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const [isDark, setIsDark] = useState(getInitialDark);
+
+  function handleOpenConfig(sectionId?: string) {
+    if (sectionId) setConfigSection(sectionId);
+    setConfigOpen(true);
+  }
 
   useEffect(() => {
     document.documentElement.classList.toggle('light', !isDark);
@@ -470,50 +538,55 @@ export default function AdminLayout() {
   return (
     <ProvidersProvider>
       <ChatProvider>
-      <UiProvider value={{ openConfig: () => setConfigOpen(true) }}>
-      <div className="relative z-10 flex h-screen w-full flex-col supports-[height:100dvh]:h-dvh">
-        <Header
-          navOpen={navOpen}
-          isDark={isDark}
-          onOpenNav={() => setNavOpen(true)}
-          onToggleCollapse={() => setCollapsed((c) => !c)}
-          onToggleTheme={() => setIsDark((d) => !d)}
-        />
-        <div className="flex min-h-0 flex-1">
-          <Sidebar collapsed={collapsed} onOpenConfig={() => setConfigOpen(true)} />
-          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <Routes>
-              <Route index element={<Navigate to="/admin/chat" replace />} />
-              <Route path="chat" element={<ChatPage />} />
-              <Route path="chat/:sessionId" element={<ChatPage />} />
-              <Route path="overview" element={<OverviewPage />} />
-              <Route path="memories" element={<MemoriesPage />} />
-              <Route path="heartbeats" element={<HeartbeatsPage />} />
-              <Route path="queue" element={<QueuePage />} />
-              <Route path="audit" element={<AuditPage />} />
-              <Route path="*" element={<Navigate to="/admin/chat" replace />} />
-            </Routes>
-          </main>
-        </div>
-
-        <Drawer open={navOpen} onClose={() => setNavOpen(false)} label="Menu">
-          <DrawerHeader title="Menu" onClose={() => setNavOpen(false)} />
-          <div className="flex min-h-0 flex-1 flex-col">
-            <SidebarContent
-              onNavigate={() => setNavOpen(false)}
-              onOpenConfig={() => {
-                document.querySelector<HTMLButtonElement>('button[aria-label="Toggle sidebar"]')?.focus();
-                setNavOpen(false);
-                setConfigOpen(true);
-              }}
+        <UiProvider value={{ openConfig: handleOpenConfig }}>
+          <div className="relative z-10 flex h-screen w-full flex-col supports-[height:100dvh]:h-dvh">
+            <Header
+              navOpen={navOpen}
+              isDark={isDark}
+              onOpenNav={() => setNavOpen(true)}
+              onToggleCollapse={() => setCollapsed((c) => !c)}
+              onToggleTheme={() => setIsDark((d) => !d)}
+              onOpenConfig={handleOpenConfig}
             />
+            <div className="flex min-h-0 flex-1">
+              <Sidebar collapsed={collapsed} onOpenConfig={handleOpenConfig} />
+              <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                <Routes>
+                  <Route index element={<Navigate to="/admin/chat" replace />} />
+                  <Route path="chat" element={<ChatPage />} />
+                  <Route path="chat/:sessionId" element={<ChatPage />} />
+                  <Route path="overview" element={<OverviewPage />} />
+                  <Route path="memories" element={<MemoriesPage />} />
+                  <Route path="heartbeats" element={<HeartbeatsPage />} />
+                  <Route path="queue" element={<QueuePage />} />
+                  <Route path="audit" element={<AuditPage />} />
+                  <Route path="*" element={<Navigate to="/admin/chat" replace />} />
+                </Routes>
+              </main>
+            </div>
+
+            <Drawer open={navOpen} onClose={() => setNavOpen(false)} label="Menu">
+              <DrawerHeader title="Menu" onClose={() => setNavOpen(false)} />
+              <div className="flex min-h-0 flex-1 flex-col">
+                <SidebarContent
+                  onNavigate={() => setNavOpen(false)}
+                  onOpenConfig={(sectionId) => {
+                    document.querySelector<HTMLButtonElement>('button[aria-label="Toggle sidebar"]')?.focus();
+                    setNavOpen(false);
+                    handleOpenConfig(sectionId);
+                  }}
+                />
+              </div>
+            </Drawer>
+
+            <ConfigModal
+              open={configOpen}
+              initialSectionId={configSection}
+              onClose={() => setConfigOpen(false)}
+            />
+
           </div>
-        </Drawer>
-
-        <ConfigModal open={configOpen} onClose={() => setConfigOpen(false)} />
-
-      </div>
-      </UiProvider>
+        </UiProvider>
       </ChatProvider>
     </ProvidersProvider>
   );

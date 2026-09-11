@@ -1,7 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 
 interface UiContextValue {
-  openConfig: () => void;
+  openConfig: (sectionId?: string) => void;
 }
 
 const UiContext = createContext<UiContextValue | null>(null);
