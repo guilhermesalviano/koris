@@ -5,6 +5,8 @@ import { useChannelsCatalog } from "../../../lib/use-channels-catalog";
 import { apiRequest } from "../../../lib/api";
 import type { ChannelHints, ChannelConfigField } from "../../../lib/types";
 import { Toggle } from "../../../components/AdminUI";
+import { SaveStatus } from "../../../components/SettingsUI";
+import { postSettings, useAutoSave, useSaveCoordinator } from "../../../lib/config-save-context";
 
 const buttonClass = "rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm font-medium hover:border-accent disabled:opacity-60";
 const inputClass = "w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 font-mono text-sm outline-none focus:border-accent";
@@ -35,15 +37,29 @@ function ChannelConfigForm({
   name,
   fields,
   api,
+  autoSave,
 }: {
+  autoSave?: boolean;
   slug: ConfigurableSlug;
   name: string;
   fields: ChannelConfigField[];
   api: SettingsFormApi;
 }) {
-  const slice = api.form[slug] as unknown as Record<string, string | boolean>;
+  const saves = useSaveCoordinator();
+  const initial = api.form[slug] as unknown as Record<string, string | boolean>;
+  const draft = useAutoSave(`channels.${slug}`, initial, async (values) => {
+    const patch = Object.fromEntries(fields.filter((field) => field.type !== 'password' || values[field.name]).map((field) => [field.name, values[field.name]]));
+    await postSettings({ channels: { [slug]: patch } });
+  }, (values) => {
+    const invalid = fields.find((field) => field.required && field.type !== 'password' && field.type !== 'boolean' && !String(values[field.name] ?? '').trim());
+    return invalid ? `${invalid.label} is required.` : null;
+  });
+  const slice = autoSave ? draft.value : initial;
 
   const setValue = (fieldName: string, value: string | boolean) => {
+    if (autoSave) {
+      draft.update((previous) => ({ ...previous, [fieldName]: value }), typeof value === 'boolean');
+    }
     api.update((prev) => ({
       ...prev,
       [slug]: { ...(prev[slug] as Record<string, unknown>), [fieldName]: value },
@@ -65,8 +81,9 @@ function ChannelConfigForm({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {textFields.map((field) => (
             <div key={field.name}>
-              <label className={labelClass}>{field.label}</label>
+              <label htmlFor={`${slug}-${field.name}`} className={labelClass}>{field.label}</label>
               <input
+                id={`${slug}-${field.name}`}
                 type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
                 value={String(slice[field.name] ?? "")}
                 onChange={(e) => setValue(field.name, e.target.value)}
@@ -114,7 +131,7 @@ function ChannelConfigForm({
           <button
             type="button"
             disabled={api.whatsappConnecting}
-            onClick={() => api.connectWhatsApp()}
+            onClick={async () => { if (autoSave) await saves.flush(`channels.${slug}`); await api.connectWhatsApp(); }}
             className={`${buttonClass} w-full sm:w-auto`}
           >
             {api.whatsappConnecting ? "Connecting…" : "Connect"}
@@ -126,6 +143,8 @@ function ChannelConfigForm({
           )}
         </div>
       )}
+
+      {autoSave && <SaveStatus {...draft} />}
 
       {boolFields.map((field) => (
         <div key={field.name} className="flex items-center justify-between gap-3">
@@ -149,11 +168,14 @@ function ChannelConfigForm({
 export function ChannelsStep({
   api,
   pluginsApi: providedPluginsApi,
+  autoSave = false,
 }: {
   api?: SettingsFormApi;
   pluginsApi?: UsePluginsApi;
   onlyEnabled?: boolean;
+  autoSave?: boolean;
 } = {}) {
+  const saves = useSaveCoordinator();
   const localPluginsApi = usePlugins();
   const pluginsApi = providedPluginsApi ?? localPluginsApi;
   const { items: catalogItems, loading: catalogLoading, reload: catalogReload } = useChannelsCatalog();
@@ -212,6 +234,7 @@ export function ChannelsStep({
     setActivating(slug);
     setDownloadError(null);
     try {
+      if (autoSave) await saves.flush(`channels.${slug}`);
       await apiRequest(`/plugins/channels/${slug}`, {
         method: "PATCH",
         body: JSON.stringify({ enabled }),
@@ -227,9 +250,9 @@ export function ChannelsStep({
   return (
     <div className="space-y-6">
       <div className="text-center sm:text-left">
-        <p className="text-sm font-medium">Chat channels (optional)</p>
+        <p className="text-sm font-medium">{autoSave ? "Messaging channels" : "Chat channels (optional)"}</p>
         <p className="mt-1 font-mono text-[11px] text-txt-3">
-          Download and activate chat channels to communicate with your agent via messaging apps, or click Next to proceed with Web & TUI only.
+          {autoSave ? "Connect your messaging apps and manage who can reach your assistant." : "Download and activate chat channels to communicate with your agent via messaging apps, or click Next to proceed with Web & TUI only."}
         </p>
       </div>
 
@@ -355,6 +378,7 @@ export function ChannelsStep({
                         name={channel.name}
                         fields={configFields}
                         api={api}
+                        autoSave={autoSave}
                       />
                     </div>
                   )}

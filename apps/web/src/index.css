@@ -179,3 +179,27 @@ body::before {
 .bubble p {
   margin: 0.3em 0;
 }
+
+.configuration :is(button, a, input, textarea, select):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.configuration .rounded-card {
+  border-radius: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .configuration *, .configuration *::before, .configuration *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+html.light .configuration {
+  --color-accent-2: #b6402c;
+}
+
+html.light .configuration .text-red-400 {
+  color: #b91c1c;
+}

@@ -1,111 +1,43 @@
-import { PageShell, Card, EmptyState, useToast, Toast } from '../../components/AdminUI';
-import { useSettingsForm, buildSkillsPatch } from '../../lib/use-settings-form';
+import { EmptyState } from '../../components/AdminUI';
+import { SaveStatus, SettingsGroup, SettingsSection, settingsInput } from '../../components/SettingsUI';
+import { postSettings, useAutoSave, useConfigSnapshot } from '../../lib/config-save-context';
+import type { RuntimeSettings } from '../../lib/use-settings-form';
 import type { SkillsMode } from '../../lib/types';
 
-export default function SkillsSettingsPage() {
-  const api = useSettingsForm();
-  const [toastMsg, showToast, isError] = useToast();
-
-  async function handleSave() {
-    const ok = await api.submit(buildSkillsPatch(api.form));
-    showToast(ok ? 'Settings saved' : (api.saveErrors?.[0] ?? 'Failed to save settings'), !ok);
-  }
-
-  function setMode(mode: SkillsMode) {
-    api.update((prev) => ({ ...prev, skills_mode: mode }));
-  }
-
+function SkillsForm({ settings }: { settings: RuntimeSettings }) {
+  const mode = useAutoSave<SkillsMode>('skills.mode', settings.SKILLS?.MODE ?? 'auto', async (value) => { await postSettings({ skills: { mode: value } }); });
+  const limit = useAutoSave('skills.limit', String(settings.SKILLS?.LIMIT ?? 10), async (value) => { await postSettings({ skills: { limit: Number(value) } }); }, (value) => Number.isInteger(Number(value)) && Number(value) > 0 ? null : 'Enter a whole number greater than zero.');
   return (
-    <PageShell title="Skills" description="How skill documentation reaches the model" onRefresh={api.reload}>
-      {api.loadError && <EmptyState text={api.loadError} />}
-      {api.loading && !api.loadError && <EmptyState text="Loading…" />}
-      {!api.loading && !api.loadError && (
-        <div className="space-y-4">
-          <Card>
-            <h2 className="mb-3 text-sm font-medium">Ingestion mode</h2>
-            <div className="flex flex-wrap gap-2">
-              <ModeOption
-                label="Auto"
-                hint="Every enabled skill's full instructions ride along in each message."
-                active={api.form.skills_mode === 'auto'}
-                onSelect={() => setMode('auto')}
-              />
-              <ModeOption
-                label="Manual"
-                hint="Only names and descriptions. Load one for a turn with /<skill-name>."
-                active={api.form.skills_mode === 'manual'}
-                onSelect={() => setMode('manual')}
-              />
-            </div>
-          </Card>
-
-          <Card>
-            <h2 className="mb-1 text-sm font-medium">Limit</h2>
-            <p className="mb-3 text-xs text-txt-3">
-              Most skills surfaced to the model at once. In auto mode this caps how many full
-              bodies are injected; in manual mode, how many are listed and callable.
-            </p>
-            <input
-              type="number"
-              min={1}
-              value={api.form.skills_limit}
-              onChange={(e) => api.update((prev) => ({ ...prev, skills_limit: e.target.value }))}
-              className="w-28 rounded-lg border border-subtle bg-bg-3 px-3 py-1.5 text-sm"
-            />
-          </Card>
-
-          <p className="text-xs text-txt-3">
-            Enable or disable individual skills in the Plugins panel.
-          </p>
-
-          {api.saveErrors && (
-            <div className="rounded-lg border border-red-500/40 bg-[#2a1212] px-4 py-3 text-sm text-red-300">
-              {api.saveErrors.map((e, i) => <div key={i}>{e}</div>)}
-            </div>
-          )}
-
-          <button
-            type="button"
-            disabled={api.saving}
-            onClick={handleSave}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-60"
-          >
-            {api.saving ? 'Saving…' : 'Save settings'}
-          </button>
+    <div className="space-y-4">
+      <SettingsGroup title="How skills are loaded" description="Choose when your assistant receives skill instructions.">
+        <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Skill ingestion mode">
+          {([
+            ['auto', 'Automatic', 'Include enabled skills with every message.'],
+            ['manual', 'On demand', 'Load a skill for one turn with /<skill-name>.'],
+          ] as const).map(([value, label, description]) => (
+            <button key={value} type="button" aria-pressed={mode.value === value} onClick={() => mode.update(value, true)} className={`rounded-xl border p-4 text-left transition-colors ${mode.value === value ? 'border-accent bg-accent-muted' : 'border-subtle bg-bg-3/40 hover:border-strong'}`}>
+              <span className="flex items-center justify-between text-sm font-medium">{label}<span aria-hidden="true" className={mode.value === value ? 'text-accent-2' : 'text-txt-3'}>{mode.value === value ? '●' : '○'}</span></span>
+              <span className="mt-2 block text-xs leading-relaxed text-txt-2">{description}</span>
+            </button>
+          ))}
         </div>
-      )}
-      <Toast message={toastMsg} isError={isError} />
-    </PageShell>
+        <SaveStatus {...mode} />
+      </SettingsGroup>
+      <SettingsGroup title="Skill limit" description="The maximum number of skills included or available to call in each turn.">
+        <label htmlFor="skills-limit" className="mb-2 block text-xs text-txt-2">Skills per turn</label>
+        <input id="skills-limit" type="number" min={1} step={1} value={limit.value} onChange={(event) => limit.update(event.target.value)} className={`${settingsInput} max-w-32`} aria-invalid={limit.state === 'invalid'} />
+        <SaveStatus {...limit} />
+      </SettingsGroup>
+      <p className="text-xs text-txt-2">Manage individual skills in Configuration → Plugins.</p>
+    </div>
   );
 }
 
-function ModeOption({
-  label,
-  hint,
-  active,
-  onSelect,
-}: {
-  label: string;
-  hint: string;
-  active: boolean;
-  onSelect: () => void;
-}) {
+export default function SkillsSettingsPage() {
+  const { settings, error } = useConfigSnapshot();
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={active}
-      className={`flex-1 basis-64 rounded-lg border px-3 py-2 text-left ${
-        active
-          ? 'border-accent bg-accent/10'
-          : 'border-subtle bg-bg-3 hover:border-accent hover:bg-bg-3'
-      }`}
-    >
-      <div className={`font-mono text-[11px] uppercase tracking-wide ${active ? 'text-accent-2' : 'text-txt-2'}`}>
-        {label}
-        {active && ' · selected'}
-      </div>
-      <div className="mt-1 text-xs text-txt-3">{hint}</div>
-    </button>
+    <SettingsSection title="Skills" description="Give your assistant the right knowledge at the right time.">
+      {error ? <EmptyState text={error} /> : settings ? <SkillsForm settings={settings} /> : <EmptyState text="Loading settings…" />}
+    </SettingsSection>
   );
 }

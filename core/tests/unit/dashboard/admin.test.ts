@@ -983,6 +983,18 @@ describe('AdminRouterFactory /settings', () => {
     expect(openrouter.storedNumCtx).toBe(32768);
   });
 
+  it.each([{}, { location: 'New place' }])('POST /settings replaces personal information with %j', async (personalInformation) => {
+    const actual = await vi.importActual<typeof import('../../../src/config/settings-writer')>('../../../src/config/settings-writer');
+    settingsWriter.loadCurrentOrExampleSettings.mockReturnValueOnce({ personal_information: { name: 'Old name', location: 'Old place' }, allowed_domains: ['example.com'] });
+    settingsWriter.mergeSettingsPayload.mockImplementationOnce(actual.mergeSettingsPayload);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    const req = makeRequest('POST', '/settings');
+    req.body = { personal_information: personalInformation };
+    callRoute(router, req, res);
+    expect(settingsWriter.writeSettingsFile).toHaveBeenCalledWith({ personal_information: personalInformation, allowed_domains: ['example.com'] });
+  });
+
   it('POST /settings rejects a non-object body', () => {
     const router = AdminRouterFactory.create(logger, {} as never, {} as never);
     const res = makeResponse();

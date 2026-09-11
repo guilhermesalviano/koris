@@ -205,6 +205,8 @@ Tables: `heartbeat`, `sessions`, `memories` (long-term; `type` in summary/fact/l
 
 ## Web frontend
 
+- Configuration is a single modal (`apps/web/src/pages/admin/ConfigModal.tsx`), including Plugins → Installed / Marketplace (`PluginsPage.tsx`). `ConfigSaveProvider` in `App` owns in-memory drafts and the serial `SaveCoordinator`; text edits debounce for 600 ms, discrete edits save immediately, and navigation/close flush pending work. Use partial patches for provider edits because roles share provider entries. The setup wizard retains its explicit submit flow. A supplied `personal_information` map in `POST /settings` replaces the previous map, including `{}` to clear it.
+
 - The browser UI is a React 19 SPA (Vite, React Router, Tailwind v4) in `apps/web/`; the server side is the Express dashboard in `core/src/dashboard/`. `core/src/dashboard/index.ts` serves the built bundle from `dist-web/` and ends with an SPA fallback that returns `index.html` for any unmatched GET so React Router owns routing.
 - Trace path: `apps/web/index.html` (`#root`) → `apps/web/src/main.tsx` (BrowserRouter) → `apps/web/src/App.tsx` (`/` redirects to `/admin`) → `apps/web/src/pages/admin/AdminLayout.tsx` (sidebar + nested routes) → per-page components in `apps/web/src/pages/admin/`. Shared UI lives in `apps/web/src/components/AdminUI.tsx`.
 - `apps/web/src/lib/api.ts` — `streamChat()` consumes the `/api/chat` SSE stream (`progress` status, `content_block_delta` text, `session` rotation id, `error`); `apiRequest()` calls `/api/admin/*`; `checkHealth()` polls `/health`. `apps/web/src/lib/markdown.ts` + `types.ts` handle rendering and response types.

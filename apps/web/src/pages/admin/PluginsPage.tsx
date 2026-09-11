@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import Modal from '../../components/Modal';
+import { SettingsSection } from '../../components/SettingsUI';
+import { useSaveCoordinator } from '../../lib/config-save-context';
 import PluginsList from '../../components/PluginsList';
 import MarketplaceList from '../../components/MarketplaceList';
 import { usePlugins } from '../../lib/use-plugins';
@@ -14,7 +15,8 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'marketplace', label: 'Marketplace' },
 ];
 
-export default function PluginsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function PluginsPage() {
+  const saves = useSaveCoordinator();
   const [tab, setTab] = useState<TabKey>('installed');
   const pluginsApi = usePlugins();
   const marketplaceApi = useMarketplace();
@@ -31,13 +33,14 @@ export default function PluginsModal({ open, onClose }: { open: boolean; onClose
   );
 
   return (
-    <Modal open={open} onClose={onClose} title="Plugins" maxWidthClassName="max-w-2xl">
+    <SettingsSection title="Plugins" description="Extend your assistant with tools, channels, skills, and MCP servers.">
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            onClick={() => { void saves.flush(); setTab(t.key); }}
+            aria-pressed={tab === t.key}
             className={
               tab === t.key
                 ? 'rounded-lg border border-accent-muted bg-accent-muted px-3 py-1.5 text-sm font-medium text-accent-2'
@@ -50,6 +53,6 @@ export default function PluginsModal({ open, onClose }: { open: boolean; onClose
       </div>
 
       {tab === 'installed' ? <PluginsList api={pluginsApi} /> : <MarketplaceList api={wrappedMarketplaceApi} />}
-    </Modal>
+    </SettingsSection>
   );
 }

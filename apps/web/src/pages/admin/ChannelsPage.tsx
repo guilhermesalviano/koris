@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { PageShell, Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
+import { Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
 import { apiRequest } from '../../lib/api';
-import { useSettingsForm, buildChannelsPatch } from '../../lib/use-settings-form';
+import { useSettingsForm } from '../../lib/use-settings-form';
 import { ChannelsStep } from '../setup/steps/ChannelsStep';
+import { SettingsSection } from '../../components/SettingsUI';
+import { useSaveCoordinator } from '../../lib/config-save-context';
 import type { ChannelsResponse, OutboundResponse } from '../../lib/types';
 
 function SectionTitle({ children }: { children: string }) {
@@ -11,6 +13,7 @@ function SectionTitle({ children }: { children: string }) {
 
 export default function ChannelsPage() {
   const settings = useSettingsForm();
+  const saves = useSaveCoordinator();
   const [data, setData] = useState<ChannelsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [outbound, setOutbound] = useState<OutboundResponse | null>(null);
@@ -20,11 +23,6 @@ export default function ChannelsPage() {
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
   const [toastMsg, showToast, isError] = useToast();
-
-  async function saveChannelSettings() {
-    const ok = await settings.submit(buildChannelsPatch(settings.form));
-    showToast(ok ? 'Channel settings saved' : (settings.saveErrors?.[0] ?? 'Failed to save'), !ok);
-  }
 
   const load = useCallback(async () => {
     setError(null);
@@ -86,13 +84,11 @@ export default function ChannelsPage() {
   const principal = data?.items.find((c) => c.isPrincipal);
 
   return (
-    <PageShell
+    <SettingsSection
       title="Channels"
       description="Connected messaging channels and outbound messages"
       onRefresh={() => {
-        load();
-        loadOutbound();
-        settings.reload();
+        void saves.flush().then(() => { load(); loadOutbound(); settings.reload(); });
       }}
     >
       <SectionTitle>Channel configuration</SectionTitle>
@@ -100,20 +96,8 @@ export default function ChannelsPage() {
       {settings.loading && !settings.loadError && <EmptyState text="Loading…" />}
       {!settings.loading && !settings.loadError && (
         <Card>
-          <ChannelsStep api={settings} />
-          {settings.saveErrors && (
-            <div className="mt-4 rounded-lg border border-red-500/40 bg-[#2a1212] px-4 py-3 text-sm text-red-300">
-              {settings.saveErrors.map((e, i) => <div key={i}>{e}</div>)}
-            </div>
-          )}
-          <button
-            type="button"
-            disabled={settings.saving}
-            onClick={saveChannelSettings}
-            className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-60"
-          >
-            {settings.saving ? 'Saving…' : 'Save channel settings'}
-          </button>
+          <ChannelsStep api={settings} autoSave />
+
         </Card>
       )}
 
@@ -124,7 +108,7 @@ export default function ChannelsPage() {
         <>
           {data.items.length === 0 && (
             <Card>
-              <EmptyState text="No channels recorded yet. The first message sent via Telegram or WhatsApp sets the principal channel." />
+              <EmptyState text="No channels recorded yet. The first message received through a connected channel sets the principal channel." />
             </Card>
           )}
           {data.items.length > 0 && (
@@ -221,7 +205,7 @@ export default function ChannelsPage() {
           </button>
         </form>
         <p className="mt-2 font-mono text-[10px] text-txt-3">
-          Provide a channel and the recipient target (Telegram chat id or WhatsApp JID).
+          Provide a channel and the recipient identifier used by that channel.
         </p>
       </Card>
 
@@ -260,6 +244,6 @@ export default function ChannelsPage() {
         )}
       </div>
       <Toast message={toastMsg} isError={isError} />
-    </PageShell>
+    </SettingsSection>
   );
 }

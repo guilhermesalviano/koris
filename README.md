@@ -75,6 +75,8 @@ pnpm app
 ```
 Once running, the dashboard is available at: `http://localhost:3000`
 
+Open **Configuration** to manage providers, channels, plugins, skills, sessions, and personal context. **Plugins → Installed / Marketplace** contains plugin toggles, MCP settings, and downloads. Text edits save after a short pause; toggles and provider selections apply immediately. Save errors remain visible with a retry action, and pending edits continue saving when the modal closes. The initial setup wizard still finishes with an explicit submission.
+
 ### Terminal User Interface (TUI)
 ```bash
 pnpm app --tui

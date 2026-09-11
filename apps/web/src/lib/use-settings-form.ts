@@ -143,16 +143,10 @@ export function buildChannelsPatch(form: SettingsFormState): Record<string, unkn
 
 /** "General" slice: allowed domains, personal info — no provider/channel config. */
 export function buildGeneralPatch(form: SettingsFormState): Record<string, unknown> {
-  const patch: Record<string, unknown> = {};
-
-  if (form.allowed_domains.length > 0) {
-    patch.allowed_domains = form.allowed_domains;
-  }
-  if (Object.keys(form.personal_information).length > 0) {
-    patch.personal_information = form.personal_information;
-  }
-
-  return patch;
+  return {
+    allowed_domains: form.allowed_domains,
+    personal_information: form.personal_information,
+  };
 }
 
 /** Patch for the Configuration modal's Skills section. */

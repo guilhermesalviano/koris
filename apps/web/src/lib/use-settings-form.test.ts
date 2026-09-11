@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildChannelsPatch, buildSettingsPatch, buildSkillsPatch, mapRuntimeToForm, DEFAULT_FORM } from './use-settings-form';
+import { buildChannelsPatch, buildGeneralPatch, buildSettingsPatch, buildSkillsPatch, mapRuntimeToForm, DEFAULT_FORM } from './use-settings-form';
 
 describe('use-settings-form: allow_unlisted_senders', () => {
   it('maps ALLOW_UNLISTED_SENDERS from the runtime snapshot into the form', () => {
@@ -77,5 +77,13 @@ describe('use-settings-form: skills', () => {
     expect(buildSkillsPatch({ ...DEFAULT_FORM, skills_limit: '' })).toEqual({ skills: { mode: 'auto' } });
     expect(buildSkillsPatch({ ...DEFAULT_FORM, skills_limit: '0' })).toEqual({ skills: { mode: 'auto' } });
     expect(buildSkillsPatch({ ...DEFAULT_FORM, skills_limit: 'abc' })).toEqual({ skills: { mode: 'auto' } });
+  });
+});
+
+
+describe('general settings removals', () => {
+  it('includes empty lists and maps so clearing the final entry is persisted', () => {
+    expect(buildGeneralPatch({ ...DEFAULT_FORM, allowed_domains: [], personal_information: {} }))
+      .toEqual({ allowed_domains: [], personal_information: {} });
   });
 });

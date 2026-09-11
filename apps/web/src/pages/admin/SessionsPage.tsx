@@ -1,5 +1,6 @@
+import { SettingsSection } from '../../components/SettingsUI';
 import { useCallback, useEffect, useState } from 'react';
-import { PageShell, Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
+import { Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
 import { apiRequest } from '../../lib/api';
 import type { SessionsResponse, SessionDetailResponse } from '../../lib/types';
 
@@ -54,7 +55,7 @@ export default function SessionsPage() {
   }
 
   return (
-    <PageShell title="Sessions" description="All conversations and their details" onRefresh={() => { load(); if (selectedId) loadDetail(selectedId); }}>
+    <SettingsSection title="Sessions" description="All conversations and their details" onRefresh={() => { load(); if (selectedId) loadDetail(selectedId); }}>
       {error && <EmptyState text={error} />}
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data && data.items.length === 0 && <EmptyState text="No sessions yet." />}
@@ -134,6 +135,6 @@ export default function SessionsPage() {
       )}
 
       <Toast message={toastMsg} isError={isError} />
-    </PageShell>
+    </SettingsSection>
   );
 }

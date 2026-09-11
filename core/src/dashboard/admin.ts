@@ -261,7 +261,7 @@ function collectSettingsPayloadErrors(
   if (telegram && 'bot_token' in telegram && resolvePluginEnabled(pluginSettingsRepo, 'channels', 'telegram')) {
     const token = typeof telegram.bot_token === 'string' ? telegram.bot_token.trim() : '';
     if (!token) {
-      errors.push('channels.telegram.bot_token cannot be blanked out while Telegram is enabled. Disable it first from the Plugins panel.');
+      errors.push('channels.telegram.bot_token cannot be blanked out while Telegram is enabled. Disable it first in Configuration → Plugins.');
     }
   }
 
@@ -1181,6 +1181,8 @@ class AdminRouterFactory {
         current = applyAiEmbedPatch(current, embedPatch);
       }
       const merged = mergeSettingsPayload(current, corePatch);
+      const personalInformation = asRecord(corePatch.personal_information);
+      if (personalInformation) merged.personal_information = personalInformation;
       const writtenPath = writeSettingsFile(merged);
 
       // `enabled` is DB-backed now (see PATCH /plugins/:family/:name) — strip it

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import type { SessionSummary } from '../../lib/types';
 import {
@@ -8,15 +8,15 @@ import {
   MemoriesIcon,
   MenuIcon,
   MoonIcon,
+  MoreIcon,
   OverviewIcon,
-  PluginsIcon,
   PlusIcon,
   QueueIcon,
   SettingsIcon,
   SunIcon,
 } from '../../components/Icons';
-import PluginsModal from './PluginsModal';
 import ConfigModal from './ConfigModal';
+import { useSaveStates } from '../../lib/config-save-context';
 import ChatPage from './ChatPage';
 import OverviewPage from './OverviewPage';
 import MemoriesPage from './MemoriesPage';
@@ -316,59 +316,90 @@ function ChatsPanel({ onNavigate, collapsed = false }: { onNavigate?: () => void
 }
 
 function ConfigButton({ onOpen, collapsed = false }: { onOpen: () => void; collapsed?: boolean }) {
+  const hasError = useSaveStates().some((state) => state.state === 'error' || state.state === 'invalid');
   return (
     <button
       onClick={onOpen}
-      title={collapsed ? 'Config' : undefined}
+      aria-label="Configuration"
+      title={hasError ? 'Configuration · changes need attention' : collapsed ? 'Configuration' : undefined}
       className={`flex w-full items-center rounded-lg border border-transparent py-2.5 text-[13px] text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt ${
         collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'
       }`}
     >
       <SettingsIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
       {!collapsed && <span>Configuration</span>}
+      {hasError && <span aria-label="Changes need attention" className="h-1.5 w-1.5 rounded-full bg-red-400" />}
     </button>
   );
 }
 
-function PluginsButton({ onOpen, collapsed = false }: { onOpen: () => void; collapsed?: boolean }) {
+function SidebarMoreMenu({ onOpenConfig }: { onOpenConfig: () => void }) {
+  const [open, setOpen] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
+  const hasError = useSaveStates().some((state) => state.state === 'error' || state.state === 'invalid');
+
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!container.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', dismiss);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', dismiss);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [open]);
+
   return (
-    <button
-      onClick={onOpen}
-      title={collapsed ? 'Plugins' : undefined}
-      className={`flex w-full items-center rounded-lg border border-transparent py-2.5 text-[13px] text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt ${
-        collapsed ? 'justify-center px-0' : 'gap-2.5 px-3'
-      }`}
-    >
-      <PluginsIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-      {!collapsed && <span>Plugins</span>}
-    </button>
+    <div ref={container} className="relative">
+      <button type="button" aria-label="More options" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="relative flex h-8 w-8 items-center justify-center rounded-lg text-txt-2 hover:bg-bg-3 hover:text-txt">
+        <MoreIcon className="h-4 w-4 fill-none stroke-current" />
+        {hasError && <span aria-label="Configuration needs attention" className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-400" />}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-40 mt-1 w-52 rounded-xl border border-strong bg-bg-2 p-2 shadow-xl">
+          <NavItems items={MAIN_ITEMS} vertical onNavigate={() => setOpen(false)} />
+          <div className="my-1 border-t border-subtle" />
+          <ConfigButton onOpen={() => { container.current?.querySelector('button')?.focus(); setOpen(false); onOpenConfig(); }} />
+        </div>
+      )}
+    </div>
   );
 }
 
 function SidebarContent({
   collapsed = false,
   onOpenConfig,
-  onOpenPlugins,
   onNavigate,
+  showMenuOptions = true,
 }: {
   collapsed?: boolean;
   onOpenConfig: () => void;
-  onOpenPlugins: () => void;
   onNavigate?: () => void;
+  showMenuOptions?: boolean;
 }) {
   return (
     <>
-      <div className="flex-shrink-0 space-y-0.5 p-2 pb-1.5">
-        <NavItems items={MAIN_ITEMS} vertical collapsed={collapsed} onNavigate={onNavigate} />
-      </div>
-      <div className="flex-shrink-0 border-t border-subtle" />
+      {showMenuOptions && (
+        <>
+          <div className="flex-shrink-0 space-y-0.5 p-2 pb-1.5">
+            <NavItems items={MAIN_ITEMS} vertical collapsed={collapsed} onNavigate={onNavigate} />
+          </div>
+          <div className="flex-shrink-0 border-t border-subtle" />
+        </>
+      )}
       <div className="min-h-0 flex-1">
         <ChatsPanel collapsed={collapsed} onNavigate={onNavigate} />
       </div>
-      <div className="flex-shrink-0 space-y-0.5 border-t border-subtle p-2">
-        <PluginsButton collapsed={collapsed} onOpen={onOpenPlugins} />
-        <ConfigButton collapsed={collapsed} onOpen={onOpenConfig} />
-      </div>
+      {showMenuOptions && (
+        <div className="flex-shrink-0 space-y-0.5 border-t border-subtle p-2">
+          <ConfigButton collapsed={collapsed} onOpen={onOpenConfig} />
+        </div>
+      )}
     </>
   );
 }
@@ -376,11 +407,9 @@ function SidebarContent({
 function Sidebar({
   collapsed,
   onOpenConfig,
-  onOpenPlugins,
 }: {
   collapsed: boolean;
   onOpenConfig: () => void;
-  onOpenPlugins: () => void;
 }) {
   return (
     <aside
@@ -388,7 +417,14 @@ function Sidebar({
         collapsed ? 'w-16' : 'w-60'
       }`}
     >
-      <SidebarContent collapsed={collapsed} onOpenConfig={onOpenConfig} onOpenPlugins={onOpenPlugins} />
+      <div className="flex flex-shrink-0 items-center justify-end border-b border-subtle px-2 py-1">
+        <SidebarMoreMenu onOpenConfig={onOpenConfig} />
+      </div>
+      <SidebarContent
+        collapsed={collapsed}
+        showMenuOptions={false}
+        onOpenConfig={onOpenConfig}
+      />
     </aside>
   );
 }
@@ -411,7 +447,6 @@ function DrawerHeader({ title, onClose }: { title: string; onClose: () => void }
 export default function AdminLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
-  const [pluginsOpen, setPluginsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const [isDark, setIsDark] = useState(getInitialDark);
 
@@ -445,7 +480,7 @@ export default function AdminLayout() {
           onToggleTheme={() => setIsDark((d) => !d)}
         />
         <div className="flex min-h-0 flex-1">
-          <Sidebar collapsed={collapsed} onOpenConfig={() => setConfigOpen(true)} onOpenPlugins={() => setPluginsOpen(true)} />
+          <Sidebar collapsed={collapsed} onOpenConfig={() => setConfigOpen(true)} />
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <Routes>
               <Route index element={<Navigate to="/admin/chat" replace />} />
@@ -467,12 +502,9 @@ export default function AdminLayout() {
             <SidebarContent
               onNavigate={() => setNavOpen(false)}
               onOpenConfig={() => {
+                document.querySelector<HTMLButtonElement>('button[aria-label="Toggle sidebar"]')?.focus();
                 setNavOpen(false);
                 setConfigOpen(true);
-              }}
-              onOpenPlugins={() => {
-                setNavOpen(false);
-                setPluginsOpen(true);
               }}
             />
           </div>
@@ -480,7 +512,6 @@ export default function AdminLayout() {
 
         <ConfigModal open={configOpen} onClose={() => setConfigOpen(false)} />
 
-        <PluginsModal open={pluginsOpen} onClose={() => setPluginsOpen(false)} />
       </div>
       </UiProvider>
       </ChatProvider>

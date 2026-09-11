@@ -1,49 +1,61 @@
-import { PageShell, Card, EmptyState, useToast, Toast } from '../../components/AdminUI';
-import { useSettingsForm, buildGeneralPatch } from '../../lib/use-settings-form';
-import { DomainsStep } from '../setup/steps/DomainsStep';
-import { PersonalInfoStep } from '../setup/steps/PersonalInfoStep';
+import { EmptyState } from '../../components/AdminUI';
+import { SaveStatus, SettingsGroup, SettingsSection, settingsButton, settingsInput } from '../../components/SettingsUI';
+import { postSettings, useAutoSave, useConfigSnapshot } from '../../lib/config-save-context';
+import type { RuntimeSettings } from '../../lib/use-settings-form';
 
-export default function GeneralPage() {
-  const api = useSettingsForm();
-  const [toastMsg, showToast, isError] = useToast();
+type PersonalEntry = {
+  id: string;
+  key: string;
+  value: string;
+};
 
-  async function handleSave() {
-    const ok = await api.submit(buildGeneralPatch(api.form));
-    showToast(ok ? 'Settings saved' : (api.saveErrors?.[0] ?? 'Failed to save settings'), !ok);
-  }
+function GeneralForm({ settings }: { settings: RuntimeSettings }) {
+  const domains = useAutoSave('general.domains', (settings.ALLOWED_DOMAINS ?? []).join('\n'), async (text) => {
+    await postSettings({ allowed_domains: text.split(/[\n,]/).map((value) => value.trim().toLowerCase()).filter(Boolean) });
+  });
+  const personal = useAutoSave<PersonalEntry[]>(
+    'general.personal',
+    Object.entries(settings.PERSONAL_INFORMATION ?? {}).map(([key, value]) => ({ id: key, key, value })),
+    async (entries) => {
+      await postSettings({ personal_information: Object.fromEntries(entries.filter((entry) => entry.key.trim()).map((entry) => [entry.key.trim(), entry.value])) });
+    },
+    (entries) => {
+      const keys = entries.map((entry) => entry.key.trim());
+      if (entries.some((entry) => !entry.key.trim() && entry.value.trim())) return 'Give each field a name.';
+      if (new Set(keys.filter(Boolean)).size !== keys.filter(Boolean).length) return 'Use a different name for each field.';
+      return null;
+    },
+  );
 
   return (
-    <PageShell title="General" description="Allowed domains and personal context" onRefresh={api.reload}>
-      {api.loadError && <EmptyState text={api.loadError} />}
-      {api.loading && !api.loadError && <EmptyState text="Loading…" />}
-      {!api.loading && !api.loadError && (
-        <div className="space-y-4">
-          <Card>
-            <h2 className="mb-3 text-sm font-medium">Allowed domains</h2>
-            <DomainsStep api={api} />
-          </Card>
-          <Card>
-            <h2 className="mb-3 text-sm font-medium">Personal info</h2>
-            <PersonalInfoStep api={api} />
-          </Card>
-
-          {api.saveErrors && (
-            <div className="rounded-lg border border-red-500/40 bg-[#2a1212] px-4 py-3 text-sm text-red-300">
-              {api.saveErrors.map((e, i) => <div key={i}>{e}</div>)}
+    <div className="space-y-4">
+      <SettingsGroup title="Allowed domains" description="Choose which websites your assistant can reach. Leave empty to deny outbound requests.">
+        <label htmlFor="allowed-domains" className="mb-2 block text-xs text-txt-2">One domain per line</label>
+        <textarea id="allowed-domains" rows={5} value={domains.value} onChange={(event) => domains.update(event.target.value)} placeholder={'example.com\napi.example.com'} className={`${settingsInput} resize-y font-mono`} />
+        <SaveStatus {...domains} />
+      </SettingsGroup>
+      <SettingsGroup title="Personal context" description="A few details to help your assistant give more relevant answers.">
+        <div className="space-y-3">
+          {personal.value.map((entry) => (
+            <div key={entry.id} className="flex flex-wrap items-center gap-2">
+              <input aria-label="Field name" value={entry.key} placeholder="Name, location, preferences…" className={`${settingsInput} min-w-0 flex-1 basis-36`} onChange={(event) => personal.update((entries) => entries.map((row) => row.id === entry.id ? { ...row, key: event.target.value } : row))} />
+              <input aria-label={`Value for ${entry.key || 'new field'}`} value={entry.value} placeholder="Your details" className={`${settingsInput} min-w-0 flex-1 basis-44`} onChange={(event) => personal.update((entries) => entries.map((row) => row.id === entry.id ? { ...row, value: event.target.value } : row))} />
+              <button type="button" aria-label={`Remove ${entry.key || 'field'}`} className={`${settingsButton} hover:!text-red-400`} onClick={() => personal.update((entries) => entries.filter((row) => row.id !== entry.id), true)}>Remove</button>
             </div>
-          )}
-
-          <button
-            type="button"
-            disabled={api.saving}
-            onClick={handleSave}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-60"
-          >
-            {api.saving ? 'Saving…' : 'Save settings'}
-          </button>
+          ))}
+          <button type="button" className={settingsButton} onClick={() => personal.update((entries) => [...entries, { id: crypto.randomUUID(), key: '', value: '' }])}>+ Add field</button>
         </div>
-      )}
-      <Toast message={toastMsg} isError={isError} />
-    </PageShell>
+        <SaveStatus {...personal} />
+      </SettingsGroup>
+    </div>
+  );
+}
+
+export default function GeneralPage() {
+  const { settings, error } = useConfigSnapshot();
+  return (
+    <SettingsSection title="General" description="Make your assistant feel more like yours.">
+      {error ? <EmptyState text={error} /> : settings ? <GeneralForm settings={settings} /> : <EmptyState text="Loading settings…" />}
+    </SettingsSection>
   );
 }

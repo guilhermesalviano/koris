@@ -1,66 +1,60 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { CloseIcon } from './Icons';
 
 interface ModalProps {
   open: boolean;
   onClose: () => void;
   title?: string;
+  description?: string;
   children: ReactNode;
   maxWidthClassName?: string;
-  /** Padding/layout of the scrollable body wrapper. Pass `p-0` for panes that manage their own layout. */
   bodyClassName?: string;
+  fullHeightOnMobile?: boolean;
 }
 
-export default function Modal({
-  open,
-  onClose,
-  title,
-  children,
-  maxWidthClassName = 'max-w-lg',
-  bodyClassName = 'px-4 py-2',
-}: ModalProps) {
+export default function Modal({ open, onClose, title, description, children, maxWidthClassName = 'max-w-lg', bodyClassName = 'px-4 py-2', fullHeightOnMobile = false }: ModalProps) {
+  const panel = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+
   useEffect(() => {
     if (!open) return;
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-
+    const focusable = () => Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]') ?? []).filter((element) => element.getClientRects().length > 0);
+    (focusable()[0] ?? panel.current)?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); close.current(); }
+      if (event.key !== 'Tab') return;
+      const elements = focusable();
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (!first) { event.preventDefault(); panel.current?.focus(); return; }
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.current)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
-
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={onClose}
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className={`flex max-h-[85vh] w-full ${maxWidthClassName} flex-col overflow-hidden rounded-card border border-subtle bg-bg-2 shadow-2xl`}
-      >
-        <div className="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-3">
-          {title && <h2 className="text-sm font-medium">{title}</h2>}
-          <button
-            type="button"
-            onClick={onClose}
-            title="Close (Esc)"
-            className="ml-auto flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-subtle text-txt-2 hover:border-accent hover:text-accent-2"
-          >
+    <div onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }} className={`fixed inset-0 z-[90] flex items-center justify-center bg-black/65 backdrop-blur-sm ${fullHeightOnMobile ? 'p-2 sm:p-6' : 'p-4'}`}>
+      <div ref={panel} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} className={`flex w-full ${maxWidthClassName} flex-col overflow-hidden rounded-2xl border border-strong bg-bg-2 shadow-2xl outline-none ${fullHeightOnMobile ? 'h-[95dvh] sm:h-auto sm:max-h-[90dvh]' : 'max-h-[85vh]'}`}>
+        <header className={`flex flex-shrink-0 items-center justify-between gap-3 ${description ? 'border-b border-subtle px-5 py-4 sm:px-6' : 'px-4 py-3'}`}>
+          <div className="min-w-0">
+            {title && <h2 className={description ? 'text-base font-semibold tracking-tight' : 'text-sm font-medium'}>{title}</h2>}
+            {description && <p className="mt-1 text-xs text-txt-2">{description}</p>}
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close dialog" title="Close (Esc)" className="ml-auto flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-subtle text-txt-2 transition-colors hover:border-accent hover:text-accent-2">
             <CloseIcon className="h-4 w-4 fill-none stroke-current" />
           </button>
-        </div>
+        </header>
         <div className={`min-h-0 flex-1 overflow-y-auto ${bodyClassName}`}>{children}</div>
       </div>
     </div>
