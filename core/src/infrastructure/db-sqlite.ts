@@ -87,9 +87,16 @@ class DatabaseService implements IDatabaseService {
           channel TEXT,
           target TEXT,
           managed INTEGER NOT NULL DEFAULT 0,
+          run_once INTEGER NOT NULL DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
+
+      const heartbeatColumns = this.db.prepare('PRAGMA table_info(heartbeat)').all() as { name: string }[];
+      if (!heartbeatColumns.some((column) => column.name === 'run_once')) {
+        // Pre-existing beats keep firing on every cron match, as they always did.
+        this.db.exec('ALTER TABLE heartbeat ADD COLUMN run_once INTEGER NOT NULL DEFAULT 0;');
+      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS heartbeat_runs (

@@ -37,6 +37,7 @@ describe('HeartbeatRepository', () => {
       null,
       null,
       0,
+      0,
       formatISO(heartbeat.createdAt),
     ]);
   });
@@ -55,6 +56,24 @@ describe('HeartbeatRepository', () => {
     repository.save(heartbeat);
 
     expect(db.run.mock.calls[0][1][7]).toBe(1);
+  });
+
+  it('save stores the run_once flag when set', () => {
+    const db = makeDb();
+    const repository = new HeartbeatRepository(db as never);
+    const heartbeat = new Heartbeat({
+      id: 'h1',
+      beat: 'call mom',
+      type: 'reminder',
+      cronExpression: '30 9 15 6 *',
+      runOnce: true,
+    });
+
+    repository.save(heartbeat);
+
+    const [sql, params] = db.run.mock.calls[0];
+    expect(sql).toContain('run_once');
+    expect(params[8]).toBe(1);
   });
 
   it('save stores the beat channel and target', () => {
@@ -265,6 +284,17 @@ describe('HeartbeatRepository', () => {
     expect(params).toEqual([1, 'h1']);
   });
 
+  it('update maps the run_once flag', () => {
+    const db = makeDb();
+    const repository = new HeartbeatRepository(db as never);
+
+    repository.update('h1', { runOnce: false });
+
+    const [sql, params] = db.run.mock.calls[0];
+    expect(sql).toBe('UPDATE heartbeat SET run_once = ? WHERE id = ?');
+    expect(params).toEqual([0, 'h1']);
+  });
+
   it('getAll maps rows including channel and target into Heartbeat entities', () => {
     const db = makeDb([
       {
@@ -302,6 +332,19 @@ describe('HeartbeatRepository', () => {
     const [item] = repository.getAll();
 
     expect(item.managed).toBe(true);
+  });
+
+  it('getAll maps the run_once flag', () => {
+    const db = makeDb([
+      { id: 'h1', beat: 'a', type: 'reminder', cron_expression: '30 9 15 6 *', run_once: 1, created_at: '2025-12-01T00:00:00.000Z' },
+      { id: 'h2', beat: 'b', type: 'reminder', cron_expression: '0 9 * * *', run_once: 0, created_at: '2025-12-01T00:00:00.000Z' },
+    ]);
+    const repository = new HeartbeatRepository(db as never);
+
+    const [once, recurring] = repository.getAll();
+
+    expect(once.runOnce).toBe(true);
+    expect(recurring.runOnce).toBe(false);
   });
 
   it('factory getInstance throws before create is called', () => {

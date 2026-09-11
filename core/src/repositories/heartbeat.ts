@@ -9,6 +9,7 @@ interface UpdateHeartbeatInput {
   channel?: string | null;
   target?: string | null;
   managed?: boolean;
+  runOnce?: boolean;
 }
 
 interface IHeartbeatRepository {
@@ -26,7 +27,7 @@ class HeartbeatRepository implements IHeartbeatRepository {
 
   save(heartbeat: Heartbeat): void {
     this.db.run(
-      `INSERT INTO heartbeat (id, beat, type, cron_expression, last_run, channel, target, managed, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO heartbeat (id, beat, type, cron_expression, last_run, channel, target, managed, run_once, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         heartbeat.id,
         heartbeat.beat,
@@ -36,6 +37,7 @@ class HeartbeatRepository implements IHeartbeatRepository {
         heartbeat.channel ?? null,
         heartbeat.target ?? null,
         heartbeat.managed ? 1 : 0,
+        heartbeat.runOnce ? 1 : 0,
         formatISO(heartbeat.createdAt),
       ],
     );
@@ -85,6 +87,11 @@ class HeartbeatRepository implements IHeartbeatRepository {
       params.push(input.managed ? 1 : 0);
     }
 
+    if (input.runOnce !== undefined) {
+      fields.push('run_once = ?');
+      params.push(input.runOnce ? 1 : 0);
+    }
+
     if (fields.length === 0) return this.getById(id);
 
     params.push(id);
@@ -117,6 +124,7 @@ class HeartbeatRepository implements IHeartbeatRepository {
       target: row.target ?? undefined,
       lastRun: row.last_run ? new Date(row.last_run) : undefined,
       managed: row.managed === 1,
+      runOnce: row.run_once === 1,
       createdAt: new Date(row.created_at),
     });
   }

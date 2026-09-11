@@ -90,6 +90,7 @@ export interface HeartbeatRecord {
   target?: string;
   lastRun?: Date;
   managed?: boolean;
+  runOnce?: boolean;
   createdAt: Date;
 }
 
@@ -99,6 +100,8 @@ export interface CreateHeartbeatInput {
   cronExpression: string;
   channel?: string;
   target?: string;
+  /** Delete the beat after it fires once instead of repeating on every cron match. */
+  runOnce?: boolean;
 }
 
 export interface UpdateHeartbeatInput {
@@ -107,6 +110,7 @@ export interface UpdateHeartbeatInput {
   cronExpression?: string;
   channel?: string | null;
   target?: string | null;
+  runOnce?: boolean;
 }
 
 export interface IHeartbeatGateway {

@@ -88,6 +88,7 @@ export interface HeartbeatItem {
   cron_expression: string;
   channel?: string | null;
   target?: string | null;
+  run_once?: boolean;
   last_run?: string | null;
   next_run?: string | null;
   created_at: string;

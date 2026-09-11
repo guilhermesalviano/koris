@@ -64,10 +64,22 @@ class Heartbeat implements ISubAgent<Date> {
     }
 
     const promises = dueBeats.map((beat) =>
-      this.queue.add(() => this.executeBeat(beat, date), `heartbeat: ${beat.id}`),
+      this.queue.add(() => this.runBeat(beat, date), `heartbeat: ${beat.id}`),
     );
 
     await Promise.all(promises);
+  }
+
+  private async runBeat(beat: HeartbeatEntity, date: Date): Promise<void> {
+    try {
+      await this.executeBeat(beat, date);
+    } finally {
+      // A one-time beat pins a date without a year, so it would match again next year.
+      if (beat.runOnce) {
+        this.heartbeatRepository.deleteById(beat.id);
+        this.logger.info(`Heartbeat: One-time beat "${beat.id}" fired and was removed.`);
+      }
+    }
   }
 
   private async executeBeat(beat: HeartbeatEntity, date: Date): Promise<void> {
