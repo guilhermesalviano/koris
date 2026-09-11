@@ -10,7 +10,7 @@ import {
   resolveOnboardingSettingsPath,
   saveOnboardingSettings,
   SETTINGS_FILENAME,
-} from './onboard';
+} from '../../src/onboard';
 
 const tempDirs: string[] = [];
 

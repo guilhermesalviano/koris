@@ -429,4 +429,316 @@ describe('OpenAICompatibleAIProvider', () => {
     expect(calledUrl).toBe('https://integrate.api.nvidia.com/v1/chat/completions');
     expect(body.model).toBe(config.AI.MANAGER.MODEL);
   });
+
+  describe('complete()', () => {
+    it('returns message response when no tool calls exist', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: 'Plain response' }, finish_reason: 'stop' }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      const res = await provider.complete({ messages: [{ role: 'user', content: 'hi' }] });
+      expect(res).toEqual({
+        kind: 'message',
+        text: 'Plain response',
+        finishReason: 'stop',
+      });
+    });
+
+    it('returns tool_calls response when response contains tool calls', async () => {
+      const toolCallJson = JSON.stringify({
+        tool_calls: [
+          {
+            type: 'function',
+            function: { name: 'calculator', arguments: '{"expr":"2+2"}' },
+          },
+        ],
+      });
+
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: toolCallJson }, finish_reason: 'stop' }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      const res = await provider.complete({ messages: [{ role: 'user', content: 'hi' }] });
+      expect(res.kind).toBe('tool_calls');
+      if (res.kind === 'tool_calls') {
+        expect(res.calls[0].name).toBe('calculator');
+        expect(res.finishReason).toBe('tool_calls');
+      }
+    });
+  });
+
+  describe('embed()', () => {
+    it('throws if embeddings are disabled in options', async () => {
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, {
+        model: 'test-model',
+        embeddingEnabled: false,
+      });
+
+      await expect(provider.embed('test')).rejects.toThrow('Embeddings are disabled in configuration');
+    });
+
+    it('returns embedding array on success', async () => {
+      const embedding = [0.1, 0.2, 0.3];
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ data: [{ embedding }] }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, {
+        model: 'test-model',
+        embeddingEnabled: true,
+        embeddingModel: 'text-embedding-3',
+      });
+
+      const result = await provider.embed('hello');
+      expect(result).toEqual(embedding);
+    });
+
+    it('throws when /embeddings returns non-ok status', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response('Failed', { status: 500 }),
+      ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, {
+        model: 'test-model',
+        embeddingEnabled: true,
+      });
+
+      await expect(provider.embed('hello')).rejects.toThrow('nvidia /embeddings failed (500)');
+    });
+  });
+
+  describe('chat() additional error cases', () => {
+    it('throws API error when response contains error property', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ error: { message: 'Invalid API key' } }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      await expect(
+        provider.chat({ messages: [{ role: 'user', content: 'hi' }] }),
+      ).rejects.toThrow('nvidia API error: Invalid API key');
+    });
+
+    it('throws when response is missing choices', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ choices: [] }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      await expect(
+        provider.chat({ messages: [{ role: 'user', content: 'hi' }] }),
+      ).rejects.toThrow('nvidia response missing choices');
+    });
+
+    it('returns tool_calls when choice finish_reason is tool_calls', async () => {
+      const toolCalls = [{ id: 'call_1', type: 'function', function: { name: 'calc', arguments: '{}' } }];
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [{
+              message: { role: 'assistant', content: null, tool_calls: toolCalls },
+              finish_reason: 'tool_calls',
+            }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      const out = await provider.chat({ messages: [{ role: 'user', content: 'hi' }] });
+      expect(out).toBe(JSON.stringify({ tool_calls: toolCalls }));
+    });
+
+    it('throws when response message is missing content', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { role: 'assistant' }, finish_reason: 'stop' }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      await expect(
+        provider.chat({ messages: [{ role: 'user', content: 'hi' }] }),
+      ).rejects.toThrow('nvidia response missing content');
+    });
+
+    it('reports request timed out when internal abort happens', async () => {
+      globalThis.fetch = vi.fn().mockRejectedValue(new DOMException('Aborted', 'AbortError'));
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      await expect(
+        provider.chat({ messages: [{ role: 'user', content: 'hi' }] }),
+      ).rejects.toThrow('nvidia request timed out');
+    });
+  });
+
+  describe('chatStream() edge cases', () => {
+    it('accumulates and yields streamed tool calls', async () => {
+      const stream = makeSSE([
+        {
+          choices: [{
+            delta: {
+              tool_calls: [{
+                index: 0,
+                id: 'call_1',
+                function: { name: 'get_', arguments: '{"q":' },
+              }],
+            },
+            finish_reason: null,
+          }],
+        },
+        {
+          choices: [{
+            delta: {
+              tool_calls: [{
+                index: 0,
+                function: { name: 'weather', arguments: '"Paris"}' },
+              }],
+            },
+            finish_reason: null,
+          }],
+        },
+        {
+          choices: [{
+            delta: {},
+            finish_reason: 'tool_calls',
+          }],
+        },
+      ]);
+
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+      ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      const chunks: string[] = [];
+      for await (const chunk of provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] })) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toHaveLength(1);
+      const parsed = JSON.parse(chunks[0]);
+      expect(parsed.tool_calls[0].function.name).toBe('get_weather');
+      expect(parsed.tool_calls[0].function.arguments).toBe('{"q":"Paris"}');
+    });
+
+    it('flushes text on length and content_filter finish reasons', async () => {
+      const stream = makeSSE([
+        { choices: [{ delta: { content: 'Truncated part' }, finish_reason: null }] },
+        { choices: [{ delta: {}, finish_reason: 'length' }] },
+      ]);
+
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+      ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      const chunks: string[] = [];
+      for await (const chunk of provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] })) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toEqual(['Truncated part']);
+    });
+
+    it('falls back to non-stream when stream body is null', async () => {
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(new Response(null, { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { role: 'assistant', content: 'Fallback answer' }, finish_reason: 'stop' }],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      const chunks: string[] = [];
+      for await (const chunk of provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] })) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toEqual(['Fallback answer']);
+    });
+
+    it('falls back to non-stream when stream produces no answer', async () => {
+      const stream = makeSSE([
+        { choices: [{ delta: {}, finish_reason: null }] },
+      ]);
+
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(new Response(stream, { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { role: 'assistant', content: 'Retried answer' }, finish_reason: 'stop' }],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      const chunks: string[] = [];
+      for await (const chunk of provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] })) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toEqual(['Retried answer']);
+    });
+
+    it('reports stream timeout error when internal abort happens during stream', async () => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.error(new DOMException('Aborted', 'AbortError'));
+        },
+      });
+
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+      ) as unknown as typeof fetch;
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      await expect(async () => {
+        for await (const _ of provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] })) {
+          // iterate
+        }
+      }).rejects.toThrow('nvidia request timed out while streaming');
+    });
+
+    it('healthCheck returns ok: false when fetch rejects with error', async () => {
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error('Connection failure'));
+
+      const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+      const result = await provider.healthCheck();
+      expect(result).toEqual({ ok: false, detail: 'Connection failure' });
+    });
+  });
 });
+

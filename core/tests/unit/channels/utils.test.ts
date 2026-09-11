@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { resolveResponse, splitForCapabilities, splitMessage } from './utils';
-import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../constants/thinking';
+import { resolveResponse, splitForCapabilities, splitMessage } from '../../../src/channels/utils';
+import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../src/constants/thinking';
 
 async function* createResponseStream(): AsyncGenerator<string> {
   yield THINK_START;

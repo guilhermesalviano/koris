@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { applyChannelOverrides, ChannelsManager, ChannelsSingleton, type ChannelDefinition } from '.';
-import { ADAPTERS } from '../../../plugins/channels/contracts';
-import { PluginRegistry } from '../../../plugins/registry';
+import { applyChannelOverrides, ChannelsManager, ChannelsSingleton, type ChannelDefinition } from '../../../src/channels';
+import { ADAPTERS } from '../../../../plugins/channels/contracts';
+import { PluginRegistry } from '../../../../plugins/registry';
 
 function createLogger() {
   return {

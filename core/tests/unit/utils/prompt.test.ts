@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { replacePlaceholders } from './prompt';
+import { replacePlaceholders } from '../../../src/utils/prompt';
 
 describe('replacePlaceholders', () => {
   it('replaces a single placeholder', () => {

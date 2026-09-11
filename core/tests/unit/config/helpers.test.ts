@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-import { getConfigValue, isConfigFilePresent, loadConfigFile, resolveConfigPaths, toEnvKey } from './helpers';
+import { getConfigValue, isConfigFilePresent, loadConfigFile, resolveConfigPaths, toEnvKey } from '../../../src/config/helpers';
 
 const tempDirs: string[] = [];
 

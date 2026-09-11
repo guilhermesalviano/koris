@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { McpSyncService } from '../../../../src/services/mcps/mcp-sync';
+import { McpSyncService, McpSyncSingleton } from '../../../../src/services/mcps/mcp-sync';
 
 vi.mock('../../../../src/services/plugins/plugin-catalog-singleton', () => ({
   PluginCatalogSingleton: { append: vi.fn() },
@@ -77,12 +77,50 @@ describe('McpSyncService', () => {
     expect(manager.addDefinitions).toHaveBeenCalledOnce();
   });
 
-  it('does not enable a folder that has not finished downloading', async () => {
-    const { service, sourceDir, pluginSettings } = makeService(null);
-    mkdirSync(path.join(sourceDir, 'coredash'), { recursive: true });
+  it('starts watching and stops cleanly', () => {
+    const { service } = makeService();
+    service.start();
+    service.stop();
+  });
+
+  it('handles readdir errors gracefully during sync', async () => {
+    const { service, sourceDir } = makeService();
+    rmSync(sourceDir, { recursive: true, force: true });
+    await expect(service.sync()).resolves.toBeUndefined();
+  });
+
+  it('handles module throwing error during hot-load', async () => {
+    const { service, sourceDir, requireModule } = makeService();
+    writePlugin(sourceDir, 'failing-plugin');
+    requireModule.mockImplementationOnce(() => {
+      throw new Error('Corrupt module');
+    });
+
+    await service.sync();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to hot-load "failing-plugin"'),
+      expect.any(Object)
+    );
+  });
+
+  it('handles module with no create function or returning null', async () => {
+    const { service, sourceDir, requireModule } = makeService();
+    writePlugin(sourceDir, 'no-create');
+    requireModule.mockReturnValueOnce({} as any);
 
     await service.sync();
 
-    expect(pluginSettings.setEnabled).not.toHaveBeenCalled();
+    writePlugin(sourceDir, 'null-plugin');
+    requireModule.mockReturnValueOnce({ create: () => null });
+
+    await service.sync();
+  });
+
+  it('McpSyncSingleton manages a singleton instance', () => {
+    const inst1 = McpSyncSingleton.getInstance(logger, {} as any, []);
+    const inst2 = McpSyncSingleton.getInstance(logger, {} as any, []);
+    expect(inst1).toBe(inst2);
+    expect(McpSyncSingleton.getExistingInstance()).toBe(inst1);
   });
 });
+

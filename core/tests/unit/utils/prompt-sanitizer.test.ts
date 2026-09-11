@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizePrompt } from './prompt-sanitizer';
+import { sanitizePrompt } from '../../../src/utils/prompt-sanitizer';
 
 describe('sanitizePrompt', () => {
   it('drops duplicate lines keeping the first occurrence', () => {

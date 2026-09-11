@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { extractToolCalls, extractJson, looksLikeToolCallJson, normalizeResponse } from './tool-calls';
-import { Message } from '../entities/message';
-import { ILogger } from '../infrastructure/logger';
+import { extractToolCalls, extractJson, looksLikeToolCallJson, normalizeResponse } from '../../../src/utils/tool-calls';
+import { Message } from '../../../src/entities/message';
+import { ILogger } from '../../../src/infrastructure/logger';
 
 const mockLogger: ILogger = {
   info: vi.fn(),

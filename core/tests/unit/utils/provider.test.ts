@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateBaseUrl } from './provider';
+import { validateBaseUrl } from '../../../src/utils/provider';
 
 describe('validateBaseUrl', () => {
   it('throws for invalid URL', () => {

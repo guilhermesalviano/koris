@@ -120,6 +120,88 @@ describe('McpManager', () => {
     expect(factory).toHaveBeenCalledOnce();
     expect(manager.getStatuses()).toEqual([{ name: 'coredash', state: 'error', toolCount: 0, error: 'offline' }]);
   });
+
+  it('reconnect tears down and re-establishes the server', async () => {
+    const registry = new PluginRegistry();
+    const close = vi.fn(async () => undefined);
+    const factory = vi.fn(async () => ({
+      listTools: async () => ({ tools: [remoteTool] }),
+      callTool: vi.fn(),
+      close,
+    }));
+    const manager = new McpManager(logger, registry, [definition(() => true)], factory);
+    await manager.enable('coredash');
+    expect(factory).toHaveBeenCalledOnce();
+
+    await manager.reconnect('coredash');
+    expect(close).toHaveBeenCalledOnce();
+    expect(factory).toHaveBeenCalledTimes(2);
+    expect(registry.collect(COMMANDS)).toHaveLength(1);
+    expect(manager.getStatuses()[0]?.state).toBe('connected');
+  });
+
+  it('stopAll drains a pending connect before shutting down', async () => {
+    const registry = new PluginRegistry();
+    let resolveClient!: (handle: McpClientHandle) => void;
+    const close = vi.fn(async () => undefined);
+    const manager = new McpManager(
+      logger,
+      registry,
+      [definition(() => true)],
+      () => new Promise((resolve) => { resolveClient = resolve; }),
+    );
+
+    const enabling = manager.enable('coredash');
+    const stopping = manager.stopAll();
+    resolveClient({ listTools: async () => ({ tools: [remoteTool] }), callTool: vi.fn(), close });
+    await Promise.all([enabling, stopping]);
+
+    expect(close).toHaveBeenCalledOnce();
+    expect(registry.collect(COMMANDS)).toHaveLength(0);
+    expect(manager.getStatuses()[0]?.state).toBe('disabled');
+  });
+
+  it('refreshes the tool list when the server pushes a listChanged notification', async () => {
+    const registry = new PluginRegistry();
+    let onChanged!: (error: Error | null, tools?: Tool[] | null) => void;
+    const manager = new McpManager(logger, registry, [definition(() => true)], async (_def, cb) => {
+      onChanged = cb;
+      return {
+        listTools: async () => ({ tools: [remoteTool] }),
+        callTool: vi.fn(),
+        close: vi.fn(async () => undefined),
+      };
+    });
+    await manager.enable('coredash');
+    expect(registry.collect(COMMANDS)).toHaveLength(1);
+
+    const newTool: Tool = { name: 'humidity.lookup', description: 'Humidity', inputSchema: { type: 'object' } };
+    onChanged(null, [newTool]);
+    const commands = registry.collect(COMMANDS);
+    expect(commands).toHaveLength(1);
+    expect(commands[0]?.name).toBe('coredash__humidity_lookup');
+  });
+
+  it('skips a tool whose exposed name collides with an existing COMMANDS entry', async () => {
+    const registry = new PluginRegistry();
+    registry.extend(COMMANDS, {
+      name: 'coredash__weather_lookup',
+      schema: { description: 'native', parameters: {} },
+      enabled: () => true,
+      handler: vi.fn(),
+    });
+    const manager = new McpManager(logger, registry, [definition(() => true)], async () => ({
+      listTools: async () => ({ tools: [remoteTool] }),
+      callTool: vi.fn(),
+      close: vi.fn(async () => undefined),
+    }));
+    await manager.enable('coredash');
+
+    expect(registry.collect(COMMANDS)).toHaveLength(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('[mcp] Skipping duplicate tool'),
+    );
+  });
 });
 
 describe('MCP adapters', () => {

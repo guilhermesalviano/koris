@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSessionExpired, getLastActivityAt } from './session';
+import { isSessionExpired, getLastActivityAt } from '../../../src/utils/session';
 
 describe('isSessionExpired', () => {
   const ttlMs = 30 * 60 * 1000;

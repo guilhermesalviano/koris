@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { HeartbeatSingleton } from './runner';
-import { HeartbeatFactory } from './sub-agent';
-import { nextCronFire } from '../../../../utils/heartbeat';
-import type { ILogger } from '../../../../infrastructure/logger';
+import { HeartbeatSingleton } from '../../../../../../src/services/agents/sub-agents/heartbeat/runner';
+import { HeartbeatFactory } from '../../../../../../src/services/agents/sub-agents/heartbeat/sub-agent';
+import { nextCronFire } from '../../../../../../src/utils/heartbeat';
+import type { ILogger } from '../../../../../../src/infrastructure/logger';
 
 // Mock everything
-vi.mock('../../../../utils/heartbeat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../../utils/heartbeat')>();
+vi.mock('../../../../../../src/utils/heartbeat', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../../../src/utils/heartbeat')>();
   return {
     ...actual,
     matchesCron: vi.fn(),
@@ -16,7 +16,7 @@ vi.mock('../../../../utils/heartbeat', async (importOriginal) => {
 });
 
 const handlerMock = vi.fn().mockResolvedValue(undefined);
-vi.mock('./sub-agent', () => ({
+vi.mock('../../../../../../src/services/agents/sub-agents/heartbeat/sub-agent', () => ({
   HeartbeatFactory: {
     create: vi.fn(() => ({ handler: handlerMock })),
   },

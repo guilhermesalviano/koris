@@ -6,7 +6,7 @@ import {
   matchesCron,
   isCronDue,
   nextCronFire,
-} from './heartbeat';
+} from '../../../src/utils/heartbeat';
 
 describe('isValidCronExpression', () => {
   it('accepts standard 5-field cron', () => {
@@ -154,6 +154,25 @@ describe('matchesCron', () => {
   it('matches comma-separated list', () => {
     const date = new Date(2024, 0, 15, 17, 0, 0);
     expect(matchesCron('0 9,17 * * *', date)).toBe(true);
+  });
+
+  it('matches range with step, start with step, and skips invalid steps', () => {
+    const at15 = new Date(2024, 0, 15, 9, 15, 0);
+    const at12 = new Date(2024, 0, 15, 9, 12, 0);
+    const at35 = new Date(2024, 0, 15, 9, 35, 0);
+
+    // Range with step: 10-30/5 matches 15, but not 12 or 35
+    expect(matchesCron('10-30/5 9 * * *', at15)).toBe(true);
+    expect(matchesCron('10-30/5 9 * * *', at12)).toBe(false);
+    expect(matchesCron('10-30/5 9 * * *', at35)).toBe(false);
+
+    // Start with step: 10/5 matches 15, but not 12
+    expect(matchesCron('10/5 9 * * *', at15)).toBe(true);
+    expect(matchesCron('10/5 9 * * *', at12)).toBe(false);
+
+    // Invalid step: */0 or */abc continues and does not match
+    expect(matchesCron('*/0 9 * * *', at15)).toBe(false);
+    expect(matchesCron('*/abc 9 * * *', at15)).toBe(false);
   });
 });
 

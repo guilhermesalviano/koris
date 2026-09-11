@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { camelToSnakeCase } from './fields';
+import { camelToSnakeCase } from '../../../src/utils/fields';
 
 describe('camelToSnakeCase', () => {
   it('converts camelCase to snake_case', () => {

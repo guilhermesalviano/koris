@@ -38,7 +38,13 @@ const {
   },
   messageRepo: { count: vi.fn(), getBySessionId: vi.fn(() => []) },
   memoryRepo: { count: vi.fn() },
-  heartbeatRepo: { getAll: vi.fn(() => []) },
+  heartbeatRepo: {
+    getAll: vi.fn(() => []),
+    getById: vi.fn(),
+    save: vi.fn(),
+    update: vi.fn(),
+    deleteById: vi.fn(),
+  },
   channelRepo: { getAll: vi.fn(() => []), setPrincipal: vi.fn() },
   outboundRepo: {
     count: vi.fn(),
@@ -1480,4 +1486,194 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
 
     expect(res.json).toHaveBeenCalledWith({ items: [{ id: 'o1', status: 'pending' }] });
   });
+
+  it('POST /outbound validates inputs and reports 503 if no channel manager is running', async () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+
+    // Missing content
+    let req = makeRequest('POST', '/outbound');
+    req.body = { content: '' };
+    let res = makeResponse();
+    await callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'content is required' });
+
+    // Missing channel or target
+    req = makeRequest('POST', '/outbound');
+    req.body = { content: 'hello' };
+    res = makeResponse();
+    await callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'channel and target are required.' });
+
+    // Invalid channel
+    req = makeRequest('POST', '/outbound');
+    req.body = { content: 'hello', channel: 'invalid', target: '123' };
+    res = makeResponse();
+    await callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining('Invalid channel') }));
+
+    // Channel manager not running
+    channelsManager.getExistingInstance.mockReturnValue(undefined);
+    req = makeRequest('POST', '/outbound');
+    req.body = { content: 'hello', channel: 'telegram', target: '123' };
+    res = makeResponse();
+    await callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(503);
+  });
+
+  it('POST /heartbeats validates fields, intervals, and saves valid beats', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+
+    // Missing beat
+    let req = makeRequest('POST', '/heartbeats');
+    req.body = { beat: '' };
+    let res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    // Invalid cron
+    req = makeRequest('POST', '/heartbeats');
+    req.body = { beat: 'check', cronExpression: 'invalid cron' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    // Invalid type
+    req = makeRequest('POST', '/heartbeats');
+    req.body = { beat: 'check', cronExpression: '0 9 * * *', type: 'unknown' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    // Invalid channel
+    req = makeRequest('POST', '/heartbeats');
+    req.body = { beat: 'check', cronExpression: '0 9 * * *', channel: 'bad' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    // Channel without target
+    req = makeRequest('POST', '/heartbeats');
+    req.body = { beat: 'check', cronExpression: '0 9 * * *', channel: 'telegram' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    // Every minute disallowed
+    req = makeRequest('POST', '/heartbeats');
+    req.body = { beat: 'check', cronExpression: '* * * * *' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Beats that run every minute are not allowed.' });
+
+    // Specific hour required
+    req = makeRequest('POST', '/heartbeats');
+    req.body = { beat: 'check', cronExpression: '*/1 * * * *' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    // Valid heartbeat
+    req = makeRequest('POST', '/heartbeats');
+    req.body = { beat: 'Daily check', cronExpression: '0 9 * * *', type: 'reminder' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(heartbeatRepo.save).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('PATCH and DELETE /heartbeats/:id handle not-found and valid updates', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+
+    // PATCH not found
+    heartbeatRepo.getById.mockReturnValueOnce(null);
+    let req = makeRequest('PATCH', '/heartbeats/missing');
+    req.params = { id: 'missing' };
+    let res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
+
+    // PATCH invalid cron
+    heartbeatRepo.getById.mockReturnValueOnce({ id: 'b1' });
+    req = makeRequest('PATCH', '/heartbeats/b1');
+    req.params = { id: 'b1' };
+    req.body = { cronExpression: 'bad' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    // PATCH invalid type
+    heartbeatRepo.getById.mockReturnValueOnce({ id: 'b1' });
+    req = makeRequest('PATCH', '/heartbeats/b1');
+    req.params = { id: 'b1' };
+    req.body = { type: 'bad_type' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    // PATCH invalid channel
+    heartbeatRepo.getById.mockReturnValueOnce({ id: 'b1' });
+    req = makeRequest('PATCH', '/heartbeats/b1');
+    req.params = { id: 'b1' };
+    req.body = { channel: 'unknown_chan' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    // PATCH channel without target
+    heartbeatRepo.getById.mockReturnValueOnce({ id: 'b1' });
+    req = makeRequest('PATCH', '/heartbeats/b1');
+    req.params = { id: 'b1' };
+    req.body = { channel: 'telegram' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    // PATCH valid
+    heartbeatRepo.getById.mockReturnValueOnce({ id: 'b1' });
+    heartbeatRepo.update.mockReturnValueOnce({ id: 'b1', beat: 'Updated' });
+    req = makeRequest('PATCH', '/heartbeats/b1');
+    req.params = { id: 'b1' };
+    req.body = { beat: 'Updated', cronExpression: '0 10 * * *' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(heartbeatRepo.update).toHaveBeenCalledWith('b1', expect.objectContaining({ beat: 'Updated' }));
+    expect(res.json).toHaveBeenCalledWith({ id: 'b1', beat: 'Updated' });
+
+    // DELETE not found
+    heartbeatRepo.deleteById.mockReturnValueOnce(false);
+    req = makeRequest('DELETE', '/heartbeats/missing');
+    req.params = { id: 'missing' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
+
+    // DELETE success
+    heartbeatRepo.deleteById.mockReturnValueOnce(true);
+    req = makeRequest('DELETE', '/heartbeats/b1');
+    req.params = { id: 'b1' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('POST /skills/sync triggers sync or returns 503 when not initialized', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+
+    skillSync.getExistingInstance.mockReturnValueOnce(null);
+    let res = makeResponse();
+    callRoute(router, makeRequest('POST', '/skills/sync'), res);
+    expect(res.status).toHaveBeenCalledWith(503);
+
+    const mockSync = { sync: vi.fn() };
+    skillSync.getExistingInstance.mockReturnValueOnce(mockSync);
+    res = makeResponse();
+    callRoute(router, makeRequest('POST', '/skills/sync'), res);
+    expect(mockSync.sync).toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
 });
+

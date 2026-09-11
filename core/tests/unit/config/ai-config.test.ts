@@ -7,7 +7,7 @@ import {
   resolveAiRoles,
   resolveEmbed,
   upsertAiProvider,
-} from './ai-config';
+} from '../../../src/config/ai-config';
 
 describe('config/ai-config', () => {
   describe('resolveAiRoles', () => {

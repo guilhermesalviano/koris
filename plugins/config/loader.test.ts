@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { join, normalize } from 'path';
-import { resolvePluginDir } from './loader';
+import { getPluginConfigValue, loadPluginConfigFile, resolvePluginDir } from './loader';
 
 describe('resolvePluginDir', () => {
   const cwd = '/repo';
@@ -56,3 +56,77 @@ describe('resolvePluginDir', () => {
     expect(dir).toBe(normalize(fallbackDir));
   });
 });
+
+describe('loadPluginConfigFile', () => {
+  it('returns empty object when config file does not exist', () => {
+    const result = loadPluginConfigFile({
+      pluginDir: '/test/dir',
+      fileIO: { exists: () => false, read: () => '' },
+    });
+    expect(result).toEqual({});
+  });
+
+  it('parses and returns valid YAML configuration object', () => {
+    const result = loadPluginConfigFile({
+      pluginDir: '/test/dir',
+      fileIO: {
+        exists: () => true,
+        read: () => 'token: secret123\nport: 8080\n',
+      },
+    });
+    expect(result).toEqual({ token: 'secret123', port: 8080 });
+  });
+
+  it('returns empty object when YAML parses into a non-object or array', () => {
+    const result = loadPluginConfigFile({
+      pluginDir: '/test/dir',
+      fileIO: {
+        exists: () => true,
+        read: () => '- item1\n- item2\n',
+      },
+    });
+    expect(result).toEqual({});
+  });
+
+  it('invokes onParseError and returns empty object on invalid YAML', () => {
+    const onParseError = vi.fn();
+    const result = loadPluginConfigFile({
+      pluginDir: '/test/dir',
+      filename: 'custom.yml',
+      fileIO: {
+        exists: () => true,
+        read: () => ':\n invalid: [yaml',
+      },
+      onParseError,
+    });
+    expect(result).toEqual({});
+    expect(onParseError).toHaveBeenCalledWith('Warning: Failed to parse custom.yml, ignoring file.');
+  });
+});
+
+describe('getPluginConfigValue', () => {
+  it('prefers environment variable over yaml config and fallback', () => {
+    const env = { TEST_KEY: 'from-env' };
+    const yamlConfig = { key: 'from-yaml' };
+    expect(getPluginConfigValue('key', 'fallback', yamlConfig, 'TEST_KEY', env)).toBe('from-env');
+  });
+
+  it('reads from yamlConfig when environment variable is not set', () => {
+    const env = {};
+    const yamlConfig = { key: 'from-yaml' };
+    expect(getPluginConfigValue('key', 'fallback', yamlConfig, 'TEST_KEY', env)).toBe('from-yaml');
+  });
+
+  it('falls back when neither environment variable nor yaml value exists', () => {
+    const env = {};
+    const yamlConfig = {};
+    expect(getPluginConfigValue('key', 'default-val', yamlConfig, 'TEST_KEY', env)).toBe('default-val');
+  });
+
+  it('returns empty string if environment variable is set to empty string', () => {
+    const env = { TEST_KEY: '' };
+    const yamlConfig = { key: 'from-yaml' };
+    expect(getPluginConfigValue('key', 'fallback', yamlConfig, 'TEST_KEY', env)).toBe('');
+  });
+});
+

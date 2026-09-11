@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSummarizerResponse } from './summarizer-response';
+import { parseSummarizerResponse } from '../../../src/utils/summarizer-response';
 
 describe('parseSummarizerResponse', () => {
   it('parses valid JSON with type and content', () => {

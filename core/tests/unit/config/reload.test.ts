@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-import { config, reloadConfig } from '.';
+import { config, reloadConfig } from '../../../src/config';
 
 const tempDirs: string[] = [];
 
