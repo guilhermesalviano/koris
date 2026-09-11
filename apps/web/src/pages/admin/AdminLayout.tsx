@@ -164,11 +164,6 @@ function Header({
   onToggleTheme: () => void;
   onOpenConfig: (sectionId?: string) => void;
 }) {
-  const { serverHealthy, streaming, backgroundRun, activeSessionId } = useChat();
-  const backgroundActive = !!backgroundRun && backgroundRun.sessionId === activeSessionId;
-  const processing = streaming || backgroundActive;
-  const statusOnline = serverHealthy && !processing;
-  const statusLabel = !serverHealthy ? 'Offline' : processing ? 'Thinking…' : 'Online';
   const hasConfigError = useSaveStates().some((state) => state.state === 'error' || state.state === 'invalid');
 
   function handleMenu() {
@@ -229,10 +224,6 @@ function Header({
             />
           )}
         </button>
-        <div className="flex items-center gap-1.5 rounded-full border border-subtle bg-bg-3 px-2.5 py-1 font-mono text-[11px] text-txt-3">
-          <div className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${statusOnline ? 'bg-green-500' : 'bg-red-500'}`} />
-          <span className="hidden sm:inline">{statusLabel}</span>
-        </div>
         <HeaderAppMenu onOpenConfig={onOpenConfig} />
       </div>
     </header>
