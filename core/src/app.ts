@@ -77,6 +77,7 @@ function createToolPluginContext(logger: ILogger, db: IDatabaseService): ToolPlu
           cronExpression: input.cronExpression,
           channel: input.channel,
           target: input.target,
+          runOnce: input.runOnce,
         });
         repo.save(heartbeat);
         return heartbeat;
@@ -89,6 +90,7 @@ function createToolPluginContext(logger: ILogger, db: IDatabaseService): ToolPlu
         cronExpression: input.cronExpression,
         channel: input.channel,
         target: input.target,
+        runOnce: input.runOnce,
       }),
       deleteById: (id) => HeartbeatRepositoryFactory.create(db).deleteById(id),
       reschedule: () => { HeartbeatSingleton.getExistingInstance()?.reschedule(); },

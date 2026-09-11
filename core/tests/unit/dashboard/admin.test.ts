@@ -1445,6 +1445,7 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
       cron_expression: '0 9 * * *',
       channel: 'telegram',
       target: '123',
+      run_once: false,
     });
     expect(typeof payload.items[0].next_run).toBe('string');
   });
@@ -1585,6 +1586,32 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
+  it('POST /heartbeats accepts one-time beats only with a pinned date', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+
+    let req = makeRequest('POST', '/heartbeats');
+    req.body = { beat: 'check', cronExpression: '0 9 * * *', runOnce: 'yes' };
+    let res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'runOnce must be a boolean.' });
+
+    req = makeRequest('POST', '/heartbeats');
+    req.body = { beat: 'check', cronExpression: '0 9 * * *', runOnce: true };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: expect.stringContaining('one-time beat needs a pinned date') });
+    expect(heartbeatRepo.save).not.toHaveBeenCalled();
+
+    req = makeRequest('POST', '/heartbeats');
+    req.body = { beat: 'call mom', cronExpression: '30 9 15 6 *', runOnce: true };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(heartbeatRepo.save).toHaveBeenCalledWith(expect.objectContaining({ runOnce: true }));
+  });
+
   it('PATCH and DELETE /heartbeats/:id handle not-found and valid updates', () => {
     const router = AdminRouterFactory.create(logger, {} as never, {} as never);
 
@@ -1642,6 +1669,26 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
     callRoute(router, req, res);
     expect(heartbeatRepo.update).toHaveBeenCalledWith('b1', expect.objectContaining({ beat: 'Updated' }));
     expect(res.json).toHaveBeenCalledWith({ id: 'b1', beat: 'Updated' });
+
+    // PATCH a one-time beat to a repeating cron
+    heartbeatRepo.getById.mockReturnValueOnce({ id: 'b1', cronExpression: '30 9 15 6 *', runOnce: true });
+    req = makeRequest('PATCH', '/heartbeats/b1');
+    req.params = { id: 'b1' };
+    req.body = { cronExpression: '0 10 * * *' };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: expect.stringContaining('one-time beat needs a pinned date') });
+
+    // PATCH a one-time beat into a recurring one
+    heartbeatRepo.getById.mockReturnValueOnce({ id: 'b1', cronExpression: '30 9 15 6 *', runOnce: true });
+    heartbeatRepo.update.mockReturnValueOnce({ id: 'b1', runOnce: false });
+    req = makeRequest('PATCH', '/heartbeats/b1');
+    req.params = { id: 'b1' };
+    req.body = { cronExpression: '0 10 * * *', runOnce: false };
+    res = makeResponse();
+    callRoute(router, req, res);
+    expect(heartbeatRepo.update).toHaveBeenLastCalledWith('b1', expect.objectContaining({ cronExpression: '0 10 * * *', runOnce: false }));
 
     // DELETE not found
     heartbeatRepo.deleteById.mockReturnValueOnce(false);

@@ -270,6 +270,11 @@ export default function HeartbeatsPage() {
                         <span className="text-[11px] text-txt-2">
                           🕐 {cronToLabel(h.cron_expression)}
                         </span>
+                        {h.run_once && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-bg-3 px-2 py-0.5 text-[11px] font-medium text-txt-2">
+                            One-time
+                          </span>
+                        )}
                         {h.channel && (
                           <span className="text-[11px] text-txt-2">
                             📡 {h.channel}{h.target ? `: ${h.target}` : ''}

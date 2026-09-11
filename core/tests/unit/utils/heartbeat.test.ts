@@ -6,6 +6,8 @@ import {
   matchesCron,
   isCronDue,
   nextCronFire,
+  isOneTimeCron,
+  isOneTimeBeatExpired,
 } from '../../../src/utils/heartbeat';
 
 describe('isValidCronExpression', () => {
@@ -290,5 +292,56 @@ describe('nextCronFire', () => {
     const from = new Date(2024, 0, 1, 0, 0, 0);
     const result = nextCronFire('0 9 30 2 *', from);
     expect(result).toBeNull();
+  });
+});
+
+describe('isOneTimeCron', () => {
+  it.each(['30 9 15 6 *', '0 0 1 1 *', '59 23 31 12 *', '0 12 29 2 *', ' 5 7 3 10 * '])('accepts a pinned date "%s"', (expr) => {
+    expect(isOneTimeCron(expr)).toBe(true);
+  });
+
+  it.each([
+    '0 9 * * *',     // every day
+    '0 9 * * 1',     // every Monday
+    '0 8 1 * *',     // every month
+    '0 9 15 6 1',    // pinned day-of-week
+    '0 9 1,15 6 *',  // list
+    '0 9 1-5 6 *',   // range
+    '*/30 9 15 6 *', // step
+    '60 9 15 6 *',   // minute out of range
+    '0 24 15 6 *',   // hour out of range
+    '0 9 15 13 *',   // month out of range
+    '0 9 0 6 *',     // day out of range
+    '0 9 31 4 *',    // April has 30 days
+    '0 9 30 2 *',    // February never has 30 days
+    '0 9 15 6',      // too few fields
+  ])('rejects "%s"', (expr) => {
+    expect(isOneTimeCron(expr)).toBe(false);
+  });
+});
+
+describe('isOneTimeBeatExpired', () => {
+  const createdAt = new Date(2026, 8, 11, 8, 0);
+  const cron = '30 9 11 9 *'; // Sep 11th, 9:30
+
+  it('is not expired before its scheduled minute', () => {
+    expect(isOneTimeBeatExpired(cron, createdAt, undefined, new Date(2026, 8, 11, 9, 0))).toBe(false);
+  });
+
+  it('is not expired within the grace window after its scheduled minute', () => {
+    expect(isOneTimeBeatExpired(cron, createdAt, undefined, new Date(2026, 8, 11, 9, 31))).toBe(false);
+  });
+
+  it('is expired once its scheduled minute passed beyond the grace window', () => {
+    expect(isOneTimeBeatExpired(cron, createdAt, undefined, new Date(2026, 8, 11, 9, 40))).toBe(true);
+  });
+
+  it('is expired once it has run', () => {
+    expect(isOneTimeBeatExpired(cron, createdAt, new Date(2026, 8, 11, 9, 30), new Date(2026, 8, 11, 9, 30))).toBe(true);
+  });
+
+  it('treats a date already past this year as next year', () => {
+    const lastYearDate = '0 9 5 1 *'; // Jan 5th, created in September
+    expect(isOneTimeBeatExpired(lastYearDate, createdAt, undefined, new Date(2026, 11, 31))).toBe(false);
   });
 });

@@ -296,7 +296,9 @@ export class McpManager {
         const adapted: ToolDefinition = {
           name: exposedName,
           schema: {
-            description: tool.description ?? `MCP tool ${tool.name} from ${definition.name}`,
+            // Origin label so the model can tell an external app's action
+            // (e.g. adding a row to its todo list) from the agent's own tools.
+            description: `[${definition.name} MCP server] ${tool.description ?? `Tool ${tool.name}`}`,
             parameters: tool.inputSchema as Record<string, unknown>,
           },
           enabled: (opts) => opts.trusted && definition.enabled(),

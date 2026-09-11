@@ -15,6 +15,7 @@ type OpenAIMessage = {
   role: string;
   content?: string | null | OpenAIContentBlock[];
   tool_calls?: OpenAIToolCall[];
+  tool_call_id?: string;
 };
 
 type OpenAIToolCall = {
@@ -474,21 +475,41 @@ class OpenAICompatibleAIProvider implements AIProvider {
   }
 
   private toOpenAIMessage(message: Message): OpenAIMessage {
-    if (!message.images?.length) {
-      return message as OpenAIMessage;
+    const openAIMessage: OpenAIMessage = message.images?.length
+      ? { role: message.role, content: this.toContentBlocks(message) }
+      : { ...message } as OpenAIMessage;
+
+    if (message.tool_call_id) openAIMessage.tool_call_id = message.tool_call_id;
+
+    // The shared Message keeps tool-call arguments as a parsed object (Ollama's
+    // native shape); the OpenAI spec requires a JSON string plus `type`, and
+    // strict endpoints (Gemini) reject objects with a 400 "Value is not a string".
+    if (message.tool_calls?.length) {
+      openAIMessage.tool_calls = message.tool_calls.map((tc) => ({
+        ...(tc.id ? { id: tc.id } : {}),
+        type: 'function' as const,
+        function: {
+          name: tc.function.name,
+          arguments: typeof tc.function.arguments === 'string'
+            ? tc.function.arguments
+            : JSON.stringify(tc.function.arguments ?? {}),
+        },
+      }));
     }
 
-    const content: OpenAIContentBlock[] = [
+    return openAIMessage;
+  }
+
+  private toContentBlocks(message: Message): OpenAIContentBlock[] {
+    return [
       { type: 'text', text: message.content },
-      ...message.images.map((image) => ({
+      ...(message.images ?? []).map((image) => ({
         type: 'image_url' as const,
         image_url: {
           url: `data:${image.mimeType ?? 'image/png'};base64,${image.data}`,
         },
       })),
     ];
-
-    return { role: message.role, content };
   }
 }
 

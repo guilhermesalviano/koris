@@ -10,7 +10,7 @@ function makeLogger(): ILogger {
 }
 
 function makeHeartbeat(overrides: Partial<{
-  beats: Array<{ id: string; beat: string; cronExpression: string; type: string; channel?: string; target?: string; lastRun?: Date }>;
+  beats: Array<{ id: string; beat: string; cronExpression: string; type: string; channel?: string; target?: string; lastRun?: Date; runOnce?: boolean }>;
   completionResponse: unknown;
   pipelineResult: string;
   deliveryTarget: { channel: string; target: string } | null;
@@ -19,6 +19,7 @@ function makeHeartbeat(overrides: Partial<{
   const heartbeatRepository = {
     getAll: vi.fn().mockReturnValue(overrides.beats ?? []),
     updateLastRun: vi.fn(),
+    deleteById: vi.fn().mockReturnValue(true),
   };
   const promptRepository = {
     build: vi.fn().mockReturnValue({ messages: [{ role: 'user', content: 'prompt' }] }),
@@ -129,6 +130,56 @@ describe('Heartbeat', () => {
       expect(channelsManager.sendMessage).toHaveBeenCalledWith('telegram', '987654321', 'status ok');
       expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('morning', now);
       expect(logger.info).toHaveBeenCalledWith('Heartbeat: Beat "morning" completed successfully.');
+    });
+
+    it('removes a one-time beat after it fires', async () => {
+      const now = localDate(9, 30);
+      const { heartbeat, channelsManager, heartbeatRepository, logger } = makeHeartbeat({
+        beats: [{
+          id: 'once',
+          beat: 'call mom',
+          cronExpression: `30 9 ${now.getDate()} ${now.getMonth() + 1} *`,
+          type: 'reminder',
+          runOnce: true,
+        }],
+        completionResponse: { kind: 'message', text: 'call mom' },
+      });
+
+      await heartbeat.handler(now);
+
+      expect(channelsManager.sendMessage).toHaveBeenCalledWith('telegram', '987654321', 'call mom');
+      expect(heartbeatRepository.deleteById).toHaveBeenCalledWith('once');
+      expect(logger.info).toHaveBeenCalledWith('Heartbeat: One-time beat "once" fired and was removed.');
+    });
+
+    it('removes a one-time beat even when its execution fails', async () => {
+      const now = localDate(9, 30);
+      const { heartbeat, heartbeatRepository, completionService } = makeHeartbeat({
+        beats: [{
+          id: 'once',
+          beat: 'call mom',
+          cronExpression: `30 9 ${now.getDate()} ${now.getMonth() + 1} *`,
+          type: 'reminder',
+          runOnce: true,
+        }],
+      });
+      completionService.complete.mockRejectedValueOnce(new Error('provider down'));
+
+      await heartbeat.handler(now);
+
+      expect(heartbeatRepository.deleteById).toHaveBeenCalledWith('once');
+    });
+
+    it('keeps recurring beats after they fire', async () => {
+      const now = localDate(9, 0);
+      const { heartbeat, heartbeatRepository } = makeHeartbeat({
+        beats: [{ id: 'daily', beat: 'send status', cronExpression: '0 9 * * *', type: 'reminder' }],
+      });
+
+      await heartbeat.handler(now);
+
+      expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('daily', now);
+      expect(heartbeatRepository.deleteById).not.toHaveBeenCalled();
     });
 
     it('routes tool-call responses through the tool-call pipeline', async () => {

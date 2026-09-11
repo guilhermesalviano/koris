@@ -236,6 +236,55 @@ describe('OpenAICompatibleAIProvider', () => {
     expect(body.messages[0]).toEqual({ role: 'user', content: 'hi' });
   });
 
+  it('serializes assistant tool_call arguments as JSON strings in the payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { role: 'assistant', content: 'done' }, finish_reason: 'stop' }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    ) as unknown as typeof fetch;
+
+    globalThis.fetch = fetchMock;
+
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+
+    await provider.chat({
+      messages: [
+        { role: 'user', content: 'create a todo' },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            { id: 'call_1', function: { name: 'coredash__create_todo', arguments: { title: 'alimentar os cachorros' } } },
+            { id: 'call_2', function: { name: 'coredash__coredash_health', arguments: {} } },
+          ],
+        },
+        { role: 'tool', content: 'Tool: coredash__create_todo, Result: ok', tool_call_id: 'call_1' },
+        { role: 'tool', content: 'Tool: coredash__coredash_health, Result: ok', tool_call_id: 'call_2' },
+      ],
+    });
+
+    const fetchArgs = (fetchMock as any).mock.calls[0]?.[1];
+    const body = JSON.parse(fetchArgs.body);
+
+    expect(body.messages[1].tool_calls).toEqual([
+      {
+        id: 'call_1',
+        type: 'function',
+        function: { name: 'coredash__create_todo', arguments: '{"title":"alimentar os cachorros"}' },
+      },
+      {
+        id: 'call_2',
+        type: 'function',
+        function: { name: 'coredash__coredash_health', arguments: '{}' },
+      },
+    ]);
+    expect(body.messages[2].tool_call_id).toBe('call_1');
+    expect(body.messages[3].tool_call_id).toBe('call_2');
+  });
+
   it('returns serialized tool_calls JSON when chat response contains tool calls', async () => {
     const toolCalls = [
       { id: 'call_1', type: 'function', function: { name: 'get_skill', arguments: '{"skill_name":"git"}' } },

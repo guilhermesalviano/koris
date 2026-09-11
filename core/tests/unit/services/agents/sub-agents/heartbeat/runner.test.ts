@@ -6,6 +6,7 @@ const heartbeatHandler = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('../../../../../../src/utils/heartbeat', () => ({
   nextCronFire: vi.fn(),
+  isOneTimeBeatExpired: vi.fn(),
 }));
 
 vi.mock('../../../../../../src/services/agents/sub-agents/heartbeat/sub-agent', () => ({
@@ -16,14 +17,14 @@ vi.mock('../../../../../../src/services/agents/sub-agents/heartbeat/sub-agent', 
 
 import { HeartbeatSingleton } from '../../../../../../src/services/agents/sub-agents/heartbeat/runner';
 import { HeartbeatFactory } from '../../../../../../src/services/agents/sub-agents/heartbeat/sub-agent';
-import { nextCronFire } from '../../../../../../src/utils/heartbeat';
+import { isOneTimeBeatExpired, nextCronFire } from '../../../../../../src/utils/heartbeat';
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
 }
 
 function makeRepo(tasks: unknown[] = []) {
-  return { getAll: vi.fn().mockReturnValue(tasks) };
+  return { getAll: vi.fn().mockReturnValue(tasks), deleteById: vi.fn() };
 }
 
 function makeRunRepo() {
@@ -215,6 +216,27 @@ describe('HeartbeatSingleton', () => {
       'Heartbeat: No scheduled beats, waiting for new beats to be added.',
     );
     expect(nextCronFire).not.toHaveBeenCalled();
+  });
+
+  it('removes expired one-time beats instead of scheduling them for next year', () => {
+    const logger = makeLogger();
+    const createdAt = new Date();
+    const repo = makeRepo([
+      { id: 'missed', cronExpression: '30 9 15 6 *', runOnce: true, lastRun: undefined, createdAt },
+      { id: 'pending', cronExpression: '30 9 20 6 *', runOnce: true, lastRun: undefined, createdAt },
+      { id: 'daily', cronExpression: '0 9 * * *', lastRun: undefined, createdAt },
+    ]);
+    vi.mocked(isOneTimeBeatExpired).mockImplementation((expr) => expr === '30 9 15 6 *');
+    const runner = HeartbeatSingleton.getInstance(logger, repo as never, { sendMessage: vi.fn() } as never, makeRunRepo() as never);
+
+    runner.start();
+
+    expect(isOneTimeBeatExpired).toHaveBeenCalledTimes(2);
+    expect(repo.deleteById).toHaveBeenCalledTimes(1);
+    expect(repo.deleteById).toHaveBeenCalledWith('missed');
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('"missed" is past its scheduled time'));
+    expect(nextCronFire).toHaveBeenCalledTimes(2);
+    expect(nextCronFire).not.toHaveBeenCalledWith('30 9 15 6 *', expect.anything());
   });
 
   it('reschedule method cancels existing timer and schedules again', () => {

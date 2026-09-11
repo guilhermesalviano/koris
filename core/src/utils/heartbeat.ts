@@ -56,6 +56,23 @@ export function hasSpecificHour(expr: string): boolean {
 }
 
 
+const MAX_DAY_OF_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/**
+ * Returns true when the expression pins one exact moment of the year — plain
+ * numbers for minute, hour, day-of-month and month, and "*" for day-of-week
+ * (e.g. "30 9 15 6 *"). That is the only shape a one-time beat may use: any
+ * wildcard, list, range or step would make it fire more than once.
+ */
+export function isOneTimeCron(expr: string): boolean {
+  const fields = expr.trim().split(/\s+/);
+  if (fields.length !== 5 || fields[4] !== '*') return false;
+  if (!fields.slice(0, 4).every((field) => /^\d+$/.test(field))) return false;
+
+  const [minute, hour, day, month] = fields.slice(0, 4).map(Number);
+  return minute <= 59 && hour <= 23 && month >= 1 && month <= 12 && day >= 1 && day <= MAX_DAY_OF_MONTH[month - 1];
+}
+
 /**
  * Returns true when "date" falls within the 5-field cron schedule.
  * Field order: minute hour day-of-month month day-of-week (0=Sun ... 6=Sat)
@@ -107,4 +124,16 @@ export function nextCronFire(expr: string, from: Date): Date | null {
     if (matchesCron(expr, new Date(t))) return new Date(t);
   }
   return null;
+}
+
+/**
+ * Returns true when a one-time beat can no longer fire: it already ran, or its
+ * only occurrence (the first cron match after creation) passed more than the
+ * grace window ago — e.g. the process was down at that minute. `isCronDue`
+ * never catches up, so keeping it around would make it fire a year late.
+ */
+export function isOneTimeBeatExpired(expr: string, createdAt: Date, lastRun: Date | undefined, now: Date): boolean {
+  if (lastRun) return true;
+  const firstFire = nextCronFire(expr, createdAt);
+  return !firstFire || firstFire.getTime() < now.getTime() - GRACE_MS;
 }

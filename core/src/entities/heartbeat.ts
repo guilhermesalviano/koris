@@ -10,6 +10,8 @@ export class Heartbeat {
   public target?: string;
   public lastRun?: Date;
   public managed?: boolean;
+  /** One-time beat: deleted after it fires instead of repeating on the next cron match (a pinned date would otherwise recur every year). */
+  public runOnce?: boolean;
   public readonly createdAt: Date;
 
   constructor(data: {
@@ -21,6 +23,7 @@ export class Heartbeat {
     target?: string;
     lastRun?: Date;
     managed?: boolean;
+    runOnce?: boolean;
     createdAt?: Date;
   }) {
     this.id = data.id || generateId();
@@ -31,6 +34,7 @@ export class Heartbeat {
     this.target = data.target;
     this.lastRun = data.lastRun;
     this.managed = data.managed;
+    this.runOnce = data.runOnce;
     this.createdAt = data.createdAt || new Date();
   }
 }

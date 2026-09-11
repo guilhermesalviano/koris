@@ -45,7 +45,7 @@ import { AuditStatus, AuditType } from '../entities/audit-log';
 import { Session } from '../entities/session';
 import { BEAT_TYPES, BeatType } from '../types/beat';
 import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
-import { hasSpecificHour, isEveryMinute, isValidCronExpression, nextCronFire } from '../utils/heartbeat';
+import { hasSpecificHour, isEveryMinute, isOneTimeCron, isValidCronExpression, nextCronFire } from '../utils/heartbeat';
 import { formatISO } from '../utils/date';
 import { activeRunsRegistry } from './active-runs';
 import { sharedSerialQueue } from '../services/providers/serial-queue';
@@ -66,6 +66,8 @@ import {
   type ChannelCatalogItem,
 } from '../../../scripts/hub-sync';
 import { listInstalledChannelNames } from '../services/commands/channels';
+
+const ONE_TIME_CRON_ERROR = 'A one-time beat needs a pinned date: exact minute, hour, day-of-month and month, with "*" as day-of-week (e.g. "30 9 15 6 *").';
 
 const MASKED_KEYS = new Set(['BOT_TOKEN', 'API_TOKEN', 'BEARER_TOKEN', 'bearerToken', 'bearer_token']);
 
@@ -657,6 +659,7 @@ class AdminRouterFactory {
             cron_expression: beat.cronExpression,
             channel: beat.channel ?? null,
             target: beat.target ?? null,
+            run_once: beat.runOnce ?? false,
             last_run: beat.lastRun ? formatISO(beat.lastRun) : null,
             created_at: formatISO(beat.createdAt),
             next_run: next ? formatISO(next) : null,
@@ -723,7 +726,7 @@ class AdminRouterFactory {
     });
 
     router.post('/heartbeats', (req: Request, res: Response) => {
-      const { beat, type = 'reminder', cronExpression, channel, target } = req.body ?? {};
+      const { beat, type = 'reminder', cronExpression, channel, target, runOnce = false } = req.body ?? {};
 
       if (typeof beat !== 'string' || !beat.trim()) {
         res.status(400).json({ error: 'beat is required' });
@@ -760,12 +763,23 @@ class AdminRouterFactory {
         return;
       }
 
+      if (typeof runOnce !== 'boolean') {
+        res.status(400).json({ error: 'runOnce must be a boolean.' });
+        return;
+      }
+
+      if (runOnce && !isOneTimeCron(cronExpression)) {
+        res.status(400).json({ error: ONE_TIME_CRON_ERROR });
+        return;
+      }
+
       const heartbeat = new Heartbeat({
         beat: beat.trim(),
         type: type as BeatType,
         cronExpression: cronExpression.trim(),
         channel: channel as ChannelType | undefined,
         target: target as string | undefined,
+        runOnce,
       });
       heartbeatRepo.save(heartbeat);
       HeartbeatSingleton.getExistingInstance()?.reschedule();
@@ -774,15 +788,26 @@ class AdminRouterFactory {
     });
 
     router.patch('/heartbeats/:id', (req: Request, res: Response) => {
-      if (!heartbeatRepo.getById(String(req.params.id))) {
+      const existing = heartbeatRepo.getById(String(req.params.id));
+      if (!existing) {
         res.status(404).json({ error: 'Heartbeat not found' });
         return;
       }
 
-      const { beat, type, cronExpression, channel, target } = req.body ?? {};
+      const { beat, type, cronExpression, channel, target, runOnce } = req.body ?? {};
 
       if (cronExpression !== undefined && !isValidCronExpression(cronExpression)) {
         res.status(400).json({ error: 'Invalid cron_expression.' });
+        return;
+      }
+
+      if (runOnce !== undefined && typeof runOnce !== 'boolean') {
+        res.status(400).json({ error: 'runOnce must be a boolean.' });
+        return;
+      }
+
+      if ((runOnce ?? existing.runOnce) && !isOneTimeCron(cronExpression ?? existing.cronExpression)) {
+        res.status(400).json({ error: ONE_TIME_CRON_ERROR });
         return;
       }
 
@@ -807,6 +832,7 @@ class AdminRouterFactory {
         cronExpression: typeof cronExpression === 'string' ? cronExpression.trim() : cronExpression,
         channel: channel === undefined ? undefined : channel,
         target: target === undefined ? undefined : target,
+        runOnce,
       });
       HeartbeatSingleton.getExistingInstance()?.reschedule();
 

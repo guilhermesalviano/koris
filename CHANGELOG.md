@@ -9,9 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Beats: `heartbeat.run_once` column (auto-migrated; existing beats stay recurring) and `isOneTimeCron` in the tool SDK (`plugins/tools/cron.ts`). The admin API exposes `run_once` and accepts `runOnce` on create/update; the Beats page marks one-time beats.
+
 ### Changed
 
+- `set_beat` (koris-hub) defaults to a one-time beat: without `recurring: true` the cron must pin minute, hour, day-of-month and month (day-of-week `*`), derived from the current date. `recurring: true` (daily/weekly/monthly/yearly) keeps firing every year until deleted. `update_beat` accepts `recurring` too.
+
 ### Fixed
+
+- One-time beats no longer re-fire a year later: they are deleted after they fire, and a one-time beat whose time passed while the process was down is removed instead of waiting a year.
 
 ### Removed
 

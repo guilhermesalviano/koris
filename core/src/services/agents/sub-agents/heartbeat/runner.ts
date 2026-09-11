@@ -3,7 +3,7 @@ import { IChannelsManager } from '../../../../channels';
 import type { ILogger } from '../../../../infrastructure/logger';
 import { HeartbeatFactory } from './sub-agent';
 import { beginFooterActivity } from '../../../../utils/footer-activity';
-import { nextCronFire } from '../../../../utils/heartbeat';
+import { isOneTimeBeatExpired, nextCronFire } from '../../../../utils/heartbeat';
 import { formatISO } from '../../../../utils/date';
 import { IHeartbeatRepository } from '../../../../repositories/heartbeat';
 import { IHeartbeatRunRepository } from '../../../../repositories/heartbeat-run';
@@ -56,14 +56,19 @@ class HeartbeatRunner implements IHeartbeatRunner {
   }
 
   private scheduleNext(): void {
-    const beats = this.heartbeatRepository.getAll();
+    const now = new Date();
+    const beats = this.heartbeatRepository.getAll().filter((beat) => {
+      if (!beat.runOnce || !isOneTimeBeatExpired(beat.cronExpression, beat.createdAt, beat.lastRun, now)) return true;
+      this.heartbeatRepository.deleteById(beat.id);
+      this.logger.warn(`Heartbeat: One-time beat "${beat.id}" is past its scheduled time (cron: ${beat.cronExpression}) and was removed.`);
+      return false;
+    });
 
     if (beats.length === 0) {
       this.logger.info('Heartbeat: No scheduled beats, waiting for new beats to be added.');
       return;
     }
 
-    const now = new Date();
     let earliest: Date | null = null;
     let earliestBeatId: string | null = null;
 
