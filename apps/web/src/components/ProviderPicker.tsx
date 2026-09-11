@@ -38,7 +38,7 @@ export default function ProviderPicker() {
 
   function handleConfig() {
     setOpen(false);
-    openConfig();
+    openConfig('providers');
   }
 
   function modelFor(entry: ProviderCatalogEntry, isCurrent: boolean): string {

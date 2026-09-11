@@ -29,6 +29,18 @@
   --animate-blink3: blink 1.3s ease-in-out 0.4s infinite;
   --animate-toast-in: toastIn 0.2s ease;
   --animate-toast-out: toastOut 0.3s ease 3s forwards;
+  --animate-modal-in: modalIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-backdrop-in: backdropIn 0.15s ease-out both;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.97) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @keyframes msgIn {
@@ -178,4 +190,28 @@ body::before {
 
 .bubble p {
   margin: 0.3em 0;
+}
+
+.configuration :is(button, a, input, textarea, select):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.configuration .rounded-card {
+  border-radius: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .configuration *, .configuration *::before, .configuration *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+html.light .configuration {
+  --color-accent-2: #b6402c;
+}
+
+html.light .configuration .text-red-400 {
+  color: #b91c1c;
 }

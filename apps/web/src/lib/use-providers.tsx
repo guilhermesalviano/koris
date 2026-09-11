@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { apiRequest, ApiRequestError } from './api';
 import type { ProviderCatalogEntry, ProviderRole, ProvidersResponse, ActiveProvider } from './types';
 import type { ConnectionTestResult } from './use-settings-form';
@@ -20,6 +20,7 @@ export interface ActivateInput {
 }
 
 export interface EmbedInput {
+  baseUrl?: string;
   enabled: boolean;
   provider: string;
   model: string;
@@ -37,6 +38,7 @@ interface ProvidersContextValue {
   saveProvider: (input: ActivateInput) => Promise<{ ok: boolean; errors?: string[] }>;
   activate: (role: ProviderRole, input: ActivateInput) => Promise<{ ok: boolean; errors?: string[] }>;
   setEmbed: (input: EmbedInput) => Promise<{ ok: boolean; errors?: string[] }>;
+  patchSettings: (body: Record<string, unknown>) => Promise<{ ok: boolean; errors?: string[] }>;
 }
 
 const ProvidersContext = createContext<ProvidersContextValue | null>(null);
@@ -52,18 +54,24 @@ export function ProvidersProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loaded = useRef(false);
+  const loadVersion = useRef(0);
+
   const load = useCallback(async () => {
-    setLoading(true);
+    const version = ++loadVersion.current;
+    if (!loaded.current) setLoading(true);
     setError(null);
     try {
       const res = await apiRequest<ProvidersResponse>('/providers');
+      if (version !== loadVersion.current) return;
+      loaded.current = true;
       setCatalog(res.providers);
       setActive(res.active);
       setDefaultNumCtx(res.defaultNumCtx ?? DEFAULT_NUM_CTX);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load providers');
+      if (version === loadVersion.current) setError(err instanceof Error ? err.message : 'Failed to load providers');
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   }, []);
 
@@ -133,12 +141,14 @@ export function ProvidersProvider({ children }: { children: ReactNode }) {
         model: input.model,
       };
       if (input.apiToken) embed.api_token = input.apiToken;
+      if (input.baseUrl !== undefined) embed.base_url = input.baseUrl;
       return postSettings({ ai: { embed } }, 'Failed to update embeddings');
     },
     [postSettings],
   );
 
-  const value: ProvidersContextValue = { catalog, active, defaultNumCtx, loading, error, reload: load, test, saveProvider, activate, setEmbed };
+  const patchSettings = useCallback((body: Record<string, unknown>) => postSettings(body, 'Failed to update provider'), [postSettings]);
+  const value: ProvidersContextValue = { catalog, active, defaultNumCtx, loading, error, reload: load, test, saveProvider, activate, setEmbed, patchSettings };
 
   return <ProvidersContext.Provider value={value}>{children}</ProvidersContext.Provider>;
 }

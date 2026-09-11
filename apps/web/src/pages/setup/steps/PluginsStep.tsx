@@ -5,6 +5,7 @@ import { usePlugins, type UsePluginsApi } from '../../../lib/use-plugins';
 import { useMarketplace } from '../../../lib/use-marketplace';
 import type { MarketplaceItem } from '../../../lib/types';
 import type { SettingsFormApi } from '../../../lib/use-settings-form';
+import { useSaveCoordinator } from '../../../lib/config-save-context';
 
 const secondaryBtn = 'rounded-lg border border-strong bg-bg-3 px-3 py-1.5 text-sm font-medium hover:border-accent disabled:opacity-60';
 
@@ -21,6 +22,7 @@ export function PluginsStep({
   pluginsApi?: UsePluginsApi;
 } = {}) {
   const [tab, setTab] = useState<TabKey>('installed');
+  const saves = useSaveCoordinator();
   const localPluginsApi = usePlugins();
   const pluginsApi = providedPluginsApi ?? localPluginsApi;
   const marketplaceApi = useMarketplace();
@@ -43,7 +45,7 @@ export function PluginsStep({
           <button
             key={t.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            onClick={() => { void saves.flush('plugins.'); setTab(t.key); }}
             className={
               tab === t.key
                 ? 'flex items-center justify-center rounded-lg border border-accent-muted bg-accent-muted px-3 py-2 text-sm font-medium text-accent-2 sm:py-1.5'
@@ -57,7 +59,7 @@ export function PluginsStep({
 
       <p className="mb-4 font-mono text-[11px] text-txt-3">
         {tab === 'installed' ? (
-          'Turn off any tools, channels, MCP servers, or skills you don’t want enabled. Toggling here takes effect immediately and can be changed later from the admin Plugins panel.'
+          'Turn off any tools, channels, MCP servers, or skills you don’t want enabled. Toggling here takes effect immediately and can be changed later from Configuration → Plugins.'
         ) : (
           <>
             Browse and download tools, channels, MCP servers, and skills from Koris Hub. Downloaded tools and skills activate automatically; MCP servers must be enabled explicitly. You can also explore available plugins on the hub website at{' '}

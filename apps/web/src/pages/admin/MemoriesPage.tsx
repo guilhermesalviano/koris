@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { PageShell, Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
+import { Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
+import { SettingsSection } from '../../components/SettingsUI';
 import { apiRequest } from '../../lib/api';
 import type { MemoriesResponse } from '../../lib/types';
 
@@ -33,7 +34,7 @@ export default function MemoriesPage() {
   }
 
   return (
-    <PageShell title="Memories" description="Long-term memory: summaries, facts, lessons and reminders" onRefresh={load}>
+    <SettingsSection title="Memories" description="Long-term memory: summaries, facts, lessons and reminders" onRefresh={load}>
       {error && <EmptyState text={error} />}
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data && data.items.length === 0 && <EmptyState text="No memories yet." />}
@@ -58,6 +59,6 @@ export default function MemoriesPage() {
         </Card>
       )}
       <Toast message={toastMsg} isError={isError} />
-    </PageShell>
+    </SettingsSection>
   );
 }

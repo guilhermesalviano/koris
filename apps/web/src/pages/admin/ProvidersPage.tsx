@@ -1,431 +1,140 @@
 import { useState } from 'react';
-import { PageShell, Card, EmptyState, useToast, Toast } from '../../components/AdminUI';
+import { EmptyState, Toggle } from '../../components/AdminUI';
+import { SaveStatus, SettingsGroup, SettingsSection, settingsButton, settingsInput } from '../../components/SettingsUI';
+import { useAutoSave, useSaveCoordinator, useSaveStates } from '../../lib/config-save-context';
 import { useProviders } from '../../lib/use-providers';
-import type { ProviderCatalogEntry, ProviderRole } from '../../lib/types';
 import { formatConnectionTestResult, type ConnectionTestResult } from '../../lib/use-settings-form';
+import { buildProviderEditPatch, validateProviderDraft, type ProviderDraft, type ProviderEditRole as Role } from '../../lib/provider-draft';
+import type { ProviderCatalogEntry } from '../../lib/types';
 
-const inputClass = 'w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent';
-const labelClass = 'mb-1 block font-mono text-[10px] uppercase tracking-wide text-txt-3';
-const secondaryBtn = 'rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm font-medium hover:border-accent disabled:opacity-60';
-const primaryBtn = 'rounded-lg bg-accent px-3 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-60';
-
-// The Providers modal has its own tab-key union — `embed` is NOT an `ai.roles`
-// entry, it drives the separate `ai.embed` pointer.
-type TabKey = ProviderRole | 'embed';
-
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'manager', label: 'Manager' },
-  { key: 'workers', label: 'Workers' },
-  { key: 'embed', label: 'Embeddings' },
+const ROLES: { key: Role; label: string; description: string }[] = [
+  { key: 'manager', label: 'Manager', description: 'The model that leads your conversations and coordinates tools.' },
+  { key: 'workers', label: 'Workers', description: 'The model used for background work, summaries, and scheduled tasks.' },
+  { key: 'embed', label: 'Embeddings', description: 'Turn memories into vectors so your assistant can find relevant context.' },
 ];
 
-const DEFAULT_PROVIDERS = ['ollama'];
-const DEFAULT_EMBED_MODEL = 'nomic-embed-text';
+function ProviderEditor({ role }: { role: Role }) {
+  const api = useProviders();
+  const embed = role === 'embed';
+  const active = api.active[role];
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
+  const initial: ProviderDraft = {
+    provider: active.provider,
+    model: active.model,
+    apiToken: '',
+    baseUrl: api.catalog.find((item) => item.name === active.provider)?.storedBaseUrl ?? active.baseUrl,
+    numCtx: String(active.numCtx ?? api.defaultNumCtx),
+    enabled: api.active.embed.enabled,
+  };
+  const draft = useAutoSave(`providers.${role}`, initial, async (value, baseline) => {
+    const result = await api.patchSettings(buildProviderEditPatch(role, value, baseline));
+    if (!result.ok) throw new Error(result.errors?.join(' ') ?? 'Could not update this provider.');
+  }, (value) => validateProviderDraft(value, embed));
+  const selected = api.catalog.find((item) => item.name === draft.value.provider);
+  const choices = api.catalog.filter((item) => !embed || item.embeddings);
 
-interface FormState {
-  model: string;
-  apiToken: string;
-  baseUrl: string;
-  numCtx: string;
-  showAdvanced: boolean;
+  function selectProvider(entry: ProviderCatalogEntry) {
+    setTestResult(null);
+    draft.update({
+      provider: entry.name,
+      model: embed ? (entry.name === api.active.embed.provider ? api.active.embed.model : '') : entry.model || entry.recommendedModel || '',
+      baseUrl: entry.storedBaseUrl,
+      apiToken: '',
+      numCtx: String(entry.storedNumCtx ?? api.defaultNumCtx),
+      enabled: true,
+    }, true);
+  }
+
+  function edit(field: 'model' | 'apiToken' | 'baseUrl' | 'numCtx', value: string) {
+    setTestResult(null);
+    draft.update((previous) => ({ ...previous, [field]: value }));
+  }
+
+  async function test() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      setTestResult(await api.test({ provider: draft.value.provider, baseUrl: draft.value.baseUrl || selected?.defaultBaseUrl || '', apiToken: draft.value.apiToken }));
+    } finally { setTesting(false); }
+  }
+
+  return (
+    <div className="space-y-4">
+      <SettingsGroup title={ROLES.find((item) => item.key === role)!.label} description={ROLES.find((item) => item.key === role)!.description}>
+        {embed && (
+          <div className="mb-4 flex items-center justify-between gap-3 border-b border-subtle pb-4">
+            <span className="text-sm">Semantic memory</span>
+            <Toggle checked={draft.value.enabled} disabled={!draft.value.provider} onChange={() => draft.update((value) => ({ ...value, enabled: !value.enabled }), true)} label="Enable semantic memory" />
+          </div>
+        )}
+        <label htmlFor={`provider-${role}`} className="mb-2 block text-xs font-medium text-txt-2">Provider</label>
+        <select id={`provider-${role}`} value={draft.value.provider} className={settingsInput} onChange={(event) => { const entry = choices.find((item) => item.name === event.target.value); if (entry) selectProvider(entry); }}>
+          {!draft.value.provider && <option value="" disabled>Choose a provider</option>}
+          {choices.map((item) => <option key={item.name} value={item.name}>{item.label}</option>)}
+        </select>
+        <p className="mt-2 text-xs text-txt-2">Selecting a provider makes it active for this role.</p>
+        {selected && (
+          <div className="mt-5 space-y-4 border-t border-subtle pt-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor={`model-${role}`} className="mb-2 block text-xs font-medium text-txt-2">{embed ? 'Embedding model' : 'Model'}</label>
+                <input id={`model-${role}`} value={draft.value.model} onChange={(event) => edit('model', event.target.value)} className={`${settingsInput} font-mono`} placeholder={embed ? 'Embedding model name' : selected.recommendedModel || 'Model name'} autoComplete="off" />
+              </div>
+              <div>
+                <label htmlFor={`token-${role}`} className="mb-2 block text-xs font-medium text-txt-2">API token</label>
+                <input id={`token-${role}`} type="password" value={draft.value.apiToken} onChange={(event) => edit('apiToken', event.target.value)} className={settingsInput} placeholder={selected.hasToken ? 'Stored securely · leave blank to keep' : 'Enter an API token if required'} autoComplete="off" />
+              </div>
+              {!embed && (
+                <div>
+                  <label htmlFor={`context-${role}`} className="mb-2 block text-xs font-medium text-txt-2">Context size</label>
+                  <input id={`context-${role}`} type="number" min={512} max={131072} step={1} value={draft.value.numCtx} onChange={(event) => edit('numCtx', event.target.value)} className={settingsInput} placeholder={String(api.defaultNumCtx)} />
+                  <p className="mt-2 text-xs text-txt-2">Maximum tokens per request. Blank keeps the saved value.</p>
+                </div>
+              )}
+              <div className={embed ? 'sm:col-span-2' : ''}>
+                <label htmlFor={`url-${role}`} className="mb-2 block text-xs font-medium text-txt-2">Base URL <span className="font-normal text-txt-3">· optional override</span></label>
+                <input id={`url-${role}`} value={draft.value.baseUrl} onChange={(event) => edit('baseUrl', event.target.value)} className={`${settingsInput} font-mono`} placeholder={selected.defaultBaseUrl || 'http://localhost:11434'} autoComplete="off" />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" disabled={testing || draft.state === 'invalid'} onClick={test} className={settingsButton}>{testing ? 'Testing…' : 'Test connection'}</button>
+              {selected.apiKeyUrl && <a href={selected.apiKeyUrl} target="_blank" rel="noreferrer" className="text-xs text-accent-2 hover:underline">Get API key ↗</a>}
+              {selected.docsUrl && <a href={selected.docsUrl} target="_blank" rel="noreferrer" className="text-xs text-accent-2 hover:underline">Browse models ↗</a>}
+            </div>
+            {testResult && <p aria-live="polite" className={`text-xs ${testResult.ok ? 'text-emerald-500' : 'text-red-400'}`}>{formatConnectionTestResult(testResult)}</p>}
+          </div>
+        )}
+        <SaveStatus {...draft} />
+      </SettingsGroup>
+      {!embed && api.active.manager.provider === api.active.workers.provider && draft.value.provider === api.active.manager.provider && (
+        <p className="text-xs leading-relaxed text-txt-2">Manager and Workers share this provider. Model, credentials, and context size apply to both roles.</p>
+      )}
+    </div>
+  );
 }
 
 export default function ProvidersPage() {
   const api = useProviders();
-  const [toastMsg, showToast, isError] = useToast();
-  const [tab, setTab] = useState<TabKey>('manager');
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>({ model: '', apiToken: '', baseUrl: '', numCtx: '', showAdvanced: false });
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [activating, setActivating] = useState(false);
-  const [added, setAdded] = useState<string[]>([]);
-
-  const isEmbedTab = tab === 'embed';
-  const active = isEmbedTab ? api.active.embed : api.active[tab];
-  const tabLabel = TABS.find((t) => t.key === tab)?.label ?? tab;
-
-  const visible = api.catalog.filter(
-    (e) => DEFAULT_PROVIDERS.includes(e.name) || e.configured || added.includes(e.name),
-  );
-  const addable = api.catalog.filter((e) => !visible.some((v) => v.name === e.name));
-
-  function isCurrent(entry: ProviderCatalogEntry): boolean {
-    return active.provider === entry.name;
-  }
-
-  function embedModelFor(entry: ProviderCatalogEntry): string {
-    if (api.active.embed.provider === entry.name && api.active.embed.model) return api.active.embed.model;
-    return entry.model || DEFAULT_EMBED_MODEL;
-  }
-
-  function seedModel(entry: ProviderCatalogEntry): string {
-    if (isCurrent(entry)) return active.model;
-    if (isEmbedTab) return entry.model || DEFAULT_EMBED_MODEL;
-    return entry.model || entry.recommendedModel || '';
-  }
-
-  function seedNumCtx(entry: ProviderCatalogEntry): string {
-    if (isCurrent(entry) && active.numCtx) return String(active.numCtx);
-    if (entry.storedNumCtx) return String(entry.storedNumCtx);
-    return '';
-  }
-
-  function openProvider(entry: ProviderCatalogEntry) {
-    setExpanded(entry.name);
-    setTestResult(null);
-    setForm({
-      model: seedModel(entry),
-      apiToken: '',
-      baseUrl: isCurrent(entry) && active.baseUrl ? active.baseUrl : '',
-      numCtx: seedNumCtx(entry),
-      showAdvanced: false,
-    });
-  }
-
-  function switchTab(next: TabKey) {
-    setTab(next);
-    setExpanded(null);
-    setTestResult(null);
-  }
-
-  async function runTest(entry: ProviderCatalogEntry) {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const result = await api.test({
-        provider: entry.name,
-        baseUrl: form.baseUrl || entry.defaultBaseUrl || '',
-        apiToken: form.apiToken,
-      });
-      setTestResult(result);
-    } finally {
-      setTesting(false);
-    }
-  }
-
-  function parsedNumCtx(): number | undefined {
-    const n = Math.floor(Number(form.numCtx.trim()));
-    return form.numCtx.trim() && Number.isFinite(n) && n > 0 ? n : undefined;
-  }
-
-  function formInput(entry: ProviderCatalogEntry) {
-    return {
-      provider: entry.name,
-      model: form.model.trim(),
-      apiToken: form.apiToken,
-      baseUrl: form.baseUrl.trim(),
-      numCtx: parsedNumCtx(),
-    };
-  }
-
-  async function save(entry: ProviderCatalogEntry) {
-    setSaving(true);
-    try {
-      const res = isEmbedTab
-        ? await api.setEmbed({
-            enabled: api.active.embed.enabled,
-            provider: entry.name,
-            model: form.model.trim() || DEFAULT_EMBED_MODEL,
-            apiToken: form.apiToken,
-          })
-        : await api.saveProvider(formInput(entry));
-      if (res.ok) {
-        showToast(`${entry.label} saved`);
-      } else {
-        showToast(res.errors?.[0] ?? 'Failed to save provider', true);
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function activate(entry: ProviderCatalogEntry, model?: string) {
-    setActivating(true);
-    try {
-      const res = isEmbedTab
-        ? await api.setEmbed({
-            enabled: true,
-            provider: entry.name,
-            model: model ?? embedModelFor(entry),
-            apiToken: '',
-          })
-        : await api.activate(tab, {
-            provider: entry.name,
-            model: model ?? (isCurrent(entry) ? active.model : entry.model || entry.recommendedModel || ''),
-            apiToken: '',
-            baseUrl: isCurrent(entry) ? active.baseUrl : entry.storedBaseUrl || '',
-            numCtx: expanded === entry.name ? parsedNumCtx() : undefined,
-          });
-      if (res.ok) {
-        showToast(isEmbedTab ? `${entry.label} used for embeddings` : `${entry.label} set as ${tabLabel}`);
-        setExpanded(null);
-      } else {
-        showToast(res.errors?.[0] ?? 'Failed to activate provider', true);
-      }
-    } finally {
-      setActivating(false);
-    }
-  }
-
-  async function toggleEmbedEnabled() {
-    if (!api.active.embed.provider) return;
-    setActivating(true);
-    try {
-      const res = await api.setEmbed({
-        enabled: !api.active.embed.enabled,
-        provider: api.active.embed.provider,
-        model: api.active.embed.model || DEFAULT_EMBED_MODEL,
-        apiToken: '',
-      });
-      if (!res.ok) showToast(res.errors?.[0] ?? 'Failed to update embeddings', true);
-    } finally {
-      setActivating(false);
-    }
-  }
-
-  const headerActionLabel = isEmbedTab ? 'Use for embeddings' : `Set as ${tabLabel}`;
-  const headerActiveLabel = 'In use';
-
+  const saves = useSaveCoordinator();
+  const states = useSaveStates();
+  const [role, setRole] = useState<Role>('manager');
   return (
-    <PageShell title="Providers" description="Choose an LLM provider" onRefresh={api.reload}>
+    <SettingsSection title="Providers" description="Choose the intelligence behind your assistant.">
       {api.error && <EmptyState text={api.error} />}
-      {api.loading && !api.error && <EmptyState text="Loading…" />}
-
-      {!api.loading && !api.error && (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            {TABS.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => switchTab(t.key)}
-                className={
-                  tab === t.key
-                    ? 'rounded-lg border border-accent-muted bg-accent-muted px-3 py-1.5 text-sm font-medium text-accent-2'
-                    : `${secondaryBtn} py-1.5`
-                }
-              >
-                {t.label}
+      {api.loading ? <EmptyState text="Loading providers…" /> : (
+        <div className="space-y-5">
+          <div className="inline-flex max-w-full gap-1 rounded-xl border border-subtle bg-bg-3/50 p-1" role="group" aria-label="Provider role">
+            {ROLES.map((item) => (
+              <button key={item.key} type="button" aria-label={item.label} aria-pressed={role === item.key} onClick={() => { void saves.flush('providers.'); setRole(item.key); }} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:px-4 ${role === item.key ? 'bg-bg-2 text-txt shadow-sm ring-1 ring-inset ring-white/5' : 'text-txt-2 hover:text-txt'}`}>
+                {item.label}
+                {states.some((state) => state.key === `providers.${item.key}` && (state.state === 'invalid' || state.state === 'error')) && <span aria-label="Changes need attention" className="h-1.5 w-1.5 rounded-full bg-red-400" />}
               </button>
             ))}
-            <span className="ml-1 font-mono text-[11px] text-txt-3">
-              active: {active.provider || '—'}{active.model ? ` · ${active.model}` : ''}
-            </span>
           </div>
-
-          {isEmbedTab && (
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="font-mono text-[11px] text-txt-3">
-                Embeddings power semantic memory — point them at an embeddings-capable provider.
-              </p>
-              <button
-                type="button"
-                disabled={activating || !api.active.embed.provider}
-                onClick={toggleEmbedEnabled}
-                className={`${secondaryBtn} py-1`}
-              >
-                {api.active.embed.enabled ? 'Disable embeddings' : 'Enable embeddings'}
-              </button>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {visible.map((entry) => {
-              const current = isCurrent(entry);
-              const isOpen = expanded === entry.name;
-              return (
-                <Card key={entry.name}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{entry.label}</span>
-                        {current && (
-                          <span className="rounded bg-accent-muted px-1.5 py-0.5 font-mono text-[10px] text-accent-2">
-                            {isEmbedTab ? 'embeddings' : 'active'}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-1 truncate font-mono text-[11px] text-txt-3">
-                        {entry.defaultBaseUrl ?? 'custom base URL required'}
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5 font-mono text-[10px] text-txt-3">
-                        <span className="rounded border border-subtle px-1.5 py-0.5">
-                          {entry.isOpenAICompatible ? 'OpenAI-compatible' : 'native'}
-                        </span>
-                        {!entry.defaultBaseUrl && (
-                          <span className="rounded border border-subtle px-1.5 py-0.5">local</span>
-                        )}
-                        {!entry.embeddings && (
-                          <span className="rounded border border-subtle px-1.5 py-0.5">no embeddings</span>
-                        )}
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap gap-3 font-mono text-[11px]">
-                        {entry.apiKeyUrl && (
-                          <a href={entry.apiKeyUrl} target="_blank" rel="noreferrer" className="text-accent-2 hover:underline">
-                            API key ↗
-                          </a>
-                        )}
-                        {entry.docsUrl && (
-                          <a href={entry.docsUrl} target="_blank" rel="noreferrer" className="text-accent-2 hover:underline">
-                            Models ↗
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-shrink-0 items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={activating || saving || current}
-                        onClick={() => activate(entry)}
-                        className={current ? `${secondaryBtn} py-1.5` : primaryBtn}
-                      >
-                        {activating ? 'Setting…' : current ? headerActiveLabel : headerActionLabel}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => (isOpen ? setExpanded(null) : openProvider(entry))}
-                        className={`${secondaryBtn} py-1.5`}
-                      >
-                        {isOpen ? 'Close' : entry.configured ? 'Reconfigure' : 'Configure'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {isOpen && (
-                    <div className="mt-4 grid grid-cols-1 gap-3 border-t border-subtle pt-4 sm:grid-cols-2">
-                      <div>
-                        <label className={labelClass}>{isEmbedTab ? 'Embedding model' : 'Model'}</label>
-                        <input
-                          value={form.model}
-                          onChange={(e) => setForm((p) => ({ ...p, model: e.target.value }))}
-                          className={`${inputClass} font-mono`}
-                          name="model"
-                          autoComplete="off"
-                          placeholder={isEmbedTab ? DEFAULT_EMBED_MODEL : entry.recommendedModel ?? ''}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>API token</label>
-                        <input
-                          type="password"
-                          value={form.apiToken}
-                          onChange={(e) => setForm((p) => ({ ...p, apiToken: e.target.value }))}
-                          className={`${inputClass} font-mono`}
-                          name="api-token"
-                          autoComplete="off"
-                          placeholder={
-                            current && active.hasToken
-                              ? 'Leave blank to keep current token'
-                              : entry.defaultBaseUrl
-                                ? 'Required'
-                                : 'Only required by some providers'
-                          }
-                        />
-                      </div>
-
-                      {!isEmbedTab && (
-                        <div>
-                          <label className={labelClass}>Context size</label>
-                          <input
-                            value={form.numCtx}
-                            onChange={(e) =>
-                              setForm((p) => ({ ...p, numCtx: e.target.value.replace(/[^\d]/g, '') }))
-                            }
-                            className={`${inputClass} font-mono`}
-                            name="num-ctx"
-                            inputMode="numeric"
-                            autoComplete="off"
-                            placeholder={String(
-                              (current && active.numCtx) || entry.storedNumCtx || api.defaultNumCtx,
-                            )}
-                          />
-                          <p className="mt-1 font-mono text-[10px] text-txt-3">
-                            Caps tokens per request. Blank keeps the current value (default {api.defaultNumCtx}).
-                          </p>
-                        </div>
-                      )}
-
-                      {!isEmbedTab && (
-                        <div className="sm:col-span-2">
-                          {form.showAdvanced ? (
-                            <div>
-                              <label className={labelClass}>Base URL override</label>
-                              <input
-                                value={form.baseUrl}
-                                onChange={(e) => setForm((p) => ({ ...p, baseUrl: e.target.value }))}
-                                className={`${inputClass} font-mono`}
-                                name="provider-url"
-                                placeholder={entry.defaultBaseUrl ?? 'http://localhost:11434'}
-                              />
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setForm((p) => ({ ...p, showAdvanced: true }))}
-                              className="font-mono text-[11px] text-txt-3 hover:text-accent-2"
-                            >
-                              Advanced: override base URL
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
-                        <button
-                          type="button"
-                          disabled={testing}
-                          onClick={() => runTest(entry)}
-                          className={`${secondaryBtn} py-1.5`}
-                        >
-                          {testing ? 'Testing…' : 'Test'}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={saving || activating || !form.model.trim()}
-                          onClick={() => save(entry)}
-                          className={`${secondaryBtn} py-1.5`}
-                        >
-                          {saving ? 'Saving…' : 'Save'}
-                        </button>
-                        {testResult && (
-                          <span className={`font-mono text-[11px] ${testResult.ok ? 'text-green-400' : 'text-red-400'}`}>
-                            {formatConnectionTestResult(testResult)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-
-          {addable.length > 0 && (
-            <Card>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Add provider</span>
-                <span className="font-mono text-[11px] text-txt-3">not shown by default</span>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {addable.map((entry) => (
-                  <button
-                    key={entry.name}
-                    type="button"
-                    onClick={() => setAdded((p) => [...p, entry.name])}
-                    className={`${secondaryBtn} py-1.5`}
-                  >
-                    {entry.label}
-                  </button>
-                ))}
-              </div>
-            </Card>
-          )}
+          <ProviderEditor key={role} role={role} />
         </div>
       )}
-
-      <Toast message={toastMsg} isError={isError} />
-    </PageShell>
+    </SettingsSection>
   );
 }

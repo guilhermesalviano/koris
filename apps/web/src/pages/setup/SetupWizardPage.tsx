@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type ComponentType } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSettingsForm, type SettingsFormApi } from '../../lib/use-settings-form';
 import { usePlugins, type UsePluginsApi } from '../../lib/use-plugins';
+import { useSaveCoordinator } from '../../lib/config-save-context';
 import { ProviderStep } from './steps/ProviderStep';
 import { PluginsStep } from './steps/PluginsStep';
 import { ChannelsStep } from './steps/ChannelsStep';
@@ -27,6 +28,7 @@ const STEPS: { title: string; render: ComponentType<StepProps> }[] = [
 
 export default function SetupWizardPage() {
   const api = useSettingsForm();
+  const saves = useSaveCoordinator();
   const pluginsApi = usePlugins();
   const [step, setStep] = useState(0);
   const navigate = useNavigate();
@@ -42,6 +44,7 @@ export default function SetupWizardPage() {
   }, [api.loading, api.update]);
 
   async function handleNext() {
+    await saves.flush('plugins.');
     if (!isLast) {
       setStep((s) => s + 1);
       return;
@@ -80,7 +83,7 @@ export default function SetupWizardPage() {
           <button
             type="button"
             disabled={step === 0}
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            onClick={() => { void saves.flush('plugins.'); setStep((s) => Math.max(0, s - 1)); }}
             className="rounded-lg border border-strong bg-bg-3 px-5 py-2.5 sm:py-2 text-sm font-medium min-h-[42px] disabled:opacity-40"
           >
             Back

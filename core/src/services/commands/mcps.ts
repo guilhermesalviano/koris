@@ -6,6 +6,7 @@ import { PluginSettingsRepositoryFactory } from '../../repositories/plugin-setti
 import { McpManagerSingleton } from '../mcps/mcp-manager';
 import { McpSyncSingleton } from '../mcps/mcp-sync';
 import { PluginCatalogSingleton } from '../plugins/plugin-catalog-singleton';
+import { resolvePluginEnabled } from '../plugins/plugin-enablement';
 import { listMissing, pullEntry } from '../../../../scripts/hub-sync';
 import type { CommandContext, CommandResult } from '../../types/commands';
 import { formatCommandResult } from './format';
@@ -34,7 +35,7 @@ export async function handleMcpsCommand(command: string, context: CommandContext
     const statuses = new Map((McpManagerSingleton.getExistingInstance()?.getStatuses() ?? []).map((status) => [status.name, status]));
     const repo = PluginSettingsRepositoryFactory.create(DatabaseServiceFactory.create());
     const rows = names.map((name) => {
-      const enabled = repo.getEnabled('mcps', name) ?? false;
+      const enabled = resolvePluginEnabled(repo, 'mcps', name);
       const status = statuses.get(name);
       const detail = status?.state === 'connected' ? `${status.state}, ${status.toolCount} tools` : status?.state ?? 'not loaded';
       return `  ${name.padEnd(24)} [${enabled ? 'enabled' : 'disabled'}, ${detail}]`;
@@ -59,7 +60,20 @@ export async function handleMcpsCommand(command: string, context: CommandContext
     try {
       await pullEntry(slug, { baseDir: config.BASE_DIR, family: 'mcp', force });
       await McpSyncSingleton.getExistingInstance()?.sync(slug);
-      return formatCommandResult(`Downloaded MCP server "${slug}". Configure it, then enable it explicitly.`, context.source);
+      const status = McpManagerSingleton.getExistingInstance()?.getStatuses().find((item) => item.name === slug);
+      if (status?.state === 'connected') {
+        return formatCommandResult(`Downloaded and enabled MCP server "${slug}" (${status.toolCount} tools).`, context.source);
+      }
+      if (status?.state === 'error') {
+        return formatCommandResult(
+          `Downloaded and enabled MCP server "${slug}", but it failed to connect: ${status.error ?? 'unknown error'}. Set its URL/token in Configuration → Plugins.`,
+          context.source,
+        );
+      }
+      if (status?.state === 'disabled') {
+        return formatCommandResult(`Downloaded MCP server "${slug}". It stays disabled as you set it — use \`/mcps enable ${slug}\` to turn it on.`, context.source);
+      }
+      return formatCommandResult(`Downloaded MCP server "${slug}".`, context.source);
     } catch (error) {
       return formatCommandResult(`Failed to download MCP server "${slug}": ${error instanceof Error ? error.message : String(error)}`, context.source);
     }

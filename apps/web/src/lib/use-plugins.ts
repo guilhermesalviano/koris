@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest } from './api';
 import type { PluginItem, PluginsResponse } from './types';
 
@@ -7,16 +7,22 @@ export function usePlugins() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loaded = useRef(false);
+  const version = useRef(0);
+
   const load = useCallback(async () => {
-    setLoading(true);
+    const request = ++version.current;
+    if (!loaded.current) setLoading(true);
     setError(null);
     try {
       const res = await apiRequest<PluginsResponse>('/plugins');
+      if (request !== version.current) return;
+      loaded.current = true;
       setItems(res.items);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load plugins');
+      if (request === version.current) setError(err instanceof Error ? err.message : 'Failed to load plugins');
     } finally {
-      setLoading(false);
+      if (request === version.current) setLoading(false);
     }
   }, []);
 

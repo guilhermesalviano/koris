@@ -6,6 +6,7 @@ import type { McpPluginContext } from '../../../../plugins/mcps/contracts';
 import { MCP_SERVERS } from '../../../../plugins/mcps/contracts';
 import type { McpPluginModule } from '../../../../plugins/mcps';
 import type { PluginRegistry } from '../../../../plugins/registry';
+import type { IPluginSettingsRepository } from '../../repositories/plugin-settings';
 import { PluginCatalogSingleton } from '../plugins/plugin-catalog-singleton';
 import type { McpManager } from './mcp-manager';
 
@@ -17,6 +18,7 @@ export interface McpSyncOptions {
   context: McpPluginContext;
   registry: PluginRegistry;
   manager: McpManager;
+  pluginSettings: Pick<IPluginSettingsRepository, 'getEnabled' | 'setEnabled'>;
   requireModule?: (modulePath: string) => McpPluginModule;
   transpile?: (source: string, filename: string) => string;
 }
@@ -83,6 +85,13 @@ export class McpSyncService {
     }
     if (this.watchers.length > 0) this.registerWatcher();
     if (loaded.length === 0) return;
+    // A freshly downloaded server starts enabled; an existing row (the user's
+    // explicit choice) wins. Seeded before `addDefinitions` so it connects now.
+    for (const slug of loaded) {
+      if (this.options.pluginSettings.getEnabled('mcps', slug) !== null) continue;
+      this.options.pluginSettings.setEnabled('mcps', slug, true);
+      this.logger.info(`[mcp-sync] Enabled newly downloaded MCP plugin "${slug}"`);
+    }
     const definitions = this.options.registry.collect(MCP_SERVERS);
     await this.options.manager.addDefinitions(definitions);
     PluginCatalogSingleton.append(loaded.map((name) => ({ family: 'mcps' as const, name })));

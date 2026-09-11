@@ -3,6 +3,8 @@ import { Card, EmptyState, Toggle, Toast, useToast, formatDate } from './AdminUI
 import { apiRequest } from '../lib/api';
 import type { UsePluginsApi } from '../lib/use-plugins';
 import type { PluginItem } from '../lib/types';
+import { useAutoSave, useSaveCoordinator, useSaveStates } from '../lib/config-save-context';
+import { SaveStatus, settingsInput } from './SettingsUI';
 
 function humanize(name: string): string {
   return name
@@ -42,76 +44,71 @@ function PluginRow({ item, onToggle }: { item: PluginItem; onToggle: () => void 
   );
 }
 
+function McpConfig({ item, initial, onSaved }: { item: PluginItem; initial: { url: string; bearer_token: string }; onSaved: () => void }) {
+  const config = useAutoSave(`plugins.mcps.${item.name}.config`, initial, async (value) => {
+    const patch: Record<string, unknown> = { url: value.url };
+    if (!value.bearer_token.includes('••••')) patch.bearer_token = value.bearer_token;
+    await apiRequest(`/mcps/${encodeURIComponent(item.name)}/config`, { method: 'PATCH', body: JSON.stringify(patch) });
+    onSaved();
+  }, (value) => {
+    try { if (['http:', 'https:'].includes(new URL(value.url).protocol)) return null; } catch {}
+    return 'Enter an absolute HTTP or HTTPS URL.';
+  });
+  const masked = config.value.bearer_token.includes('••••');
+  return (
+    <div className="mt-4 space-y-3 border-t border-subtle pt-4">
+      <div>
+        <label htmlFor={`mcp-url-${item.name}`} className="mb-2 block text-xs text-txt-2">Server URL</label>
+        <input id={`mcp-url-${item.name}`} value={config.value.url} onChange={(event) => config.update((value) => ({ ...value, url: event.target.value }))} placeholder="https://server.example/mcp" className={`${settingsInput} font-mono`} />
+      </div>
+      <div>
+        <label htmlFor={`mcp-token-${item.name}`} className="mb-2 block text-xs text-txt-2">Bearer token</label>
+        <input id={`mcp-token-${item.name}`} value={masked ? '' : config.value.bearer_token} onChange={(event) => config.update((value) => ({ ...value, bearer_token: event.target.value }))} type="password" autoComplete="off" placeholder={masked ? 'Stored securely · leave blank to keep' : 'Optional bearer token'} className={settingsInput} />
+      </div>
+      <SaveStatus {...config} />
+    </div>
+  );
+}
+
 function McpRow({ item, onToggle, onSaved }: { item: PluginItem; onToggle: () => void; onSaved: () => void }) {
   const [editing, setEditing] = useState(false);
-  const [url, setUrl] = useState('');
-  const [token, setToken] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [config, setConfig] = useState<{ url: string; bearer_token: string } | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const saves = useSaveCoordinator();
 
   async function openConfig() {
     if (editing) {
+      void saves.flush(`plugins.mcps.${item.name}`);
       setEditing(false);
       return;
     }
+    setLoading(true);
+    setError(null);
     try {
-      const config = await apiRequest<{ url: string; bearer_token: string }>(`/mcps/${encodeURIComponent(item.name)}/config`);
-      setUrl(config.url);
-      setToken(config.bearer_token);
+      setConfig(await apiRequest<{ url: string; bearer_token: string }>(`/mcps/${encodeURIComponent(item.name)}/config`));
       setEditing(true);
-      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load MCP configuration');
-    }
-  }
-
-  async function saveConfig() {
-    setSaving(true);
-    try {
-      await apiRequest(`/mcps/${encodeURIComponent(item.name)}/config`, {
-        method: 'PATCH',
-        body: JSON.stringify({ url, bearer_token: token }),
-      });
-      setEditing(false);
-      setError(null);
-      onSaved();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save MCP configuration');
-    } finally {
-      setSaving(false);
-    }
+    } finally { setLoading(false); }
   }
 
   const status = item.mcpStatus;
   return (
-    <div className="border-b border-subtle/40 py-2.5 last:border-b-0">
+    <div className="border-b border-subtle/40 py-3 last:border-b-0">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <span className="text-sm">{humanize(item.name)}</span>
-          {status && (
-            <div className="font-mono text-[10px] text-txt-3">
-              {status.state}{status.state === 'connected' ? ` · ${status.toolCount} tools` : ''}
-            </div>
-          )}
+          {status && <div className="mt-1 text-xs text-txt-2">{status.state}{status.state === 'connected' ? ` · ${status.toolCount} tools` : ''}</div>}
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={openConfig} className="font-mono text-[11px] text-accent-2 hover:underline">
-            {editing ? 'Cancel' : 'Configure'}
-          </button>
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={openConfig} disabled={loading} className="text-xs text-accent-2 hover:underline disabled:opacity-50">{loading ? 'Loading…' : editing ? 'Close' : 'Configure'}</button>
           <Toggle checked={item.enabled} onChange={onToggle} label={`Toggle ${humanize(item.name)}`} />
         </div>
       </div>
-      {status?.error && <div className="mt-1 break-words text-xs text-red-400">{status.error}</div>}
-      {error && <div className="mt-1 text-xs text-red-400">{error}</div>}
-      {editing && (
-        <div className="mt-3 grid gap-2">
-          <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://server.example/mcp" className="rounded-lg border border-subtle bg-bg-2 px-3 py-2 font-mono text-xs" />
-          <input value={token} onChange={(event) => setToken(event.target.value)} type="password" placeholder="Optional bearer token" className="rounded-lg border border-subtle bg-bg-2 px-3 py-2 font-mono text-xs" />
-          <button type="button" disabled={saving} onClick={saveConfig} className="justify-self-start rounded-lg border border-accent px-3 py-1.5 font-mono text-[11px] text-accent-2 disabled:opacity-50">
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      )}
+      {status?.error && <div className="mt-2 break-words text-xs text-red-400">{status.error}</div>}
+      {error && <div className="mt-2 text-xs text-red-400">{error}</div>}
+      {editing && config && <McpConfig item={item} initial={config} onSaved={onSaved} />}
     </div>
   );
 }
@@ -142,14 +139,17 @@ function SkillRow({ item, onToggle }: { item: PluginItem; onToggle: () => void }
 export default function PluginsList({ api }: { api: UsePluginsApi }) {
   const [toastMsg, showToast, isError] = useToast();
   const [resyncing, setResyncing] = useState(false);
+  const saves = useSaveCoordinator();
+  const states = useSaveStates();
 
-  async function handleToggle(item: PluginItem) {
-    try {
-      await api.toggle(item);
+  function handleToggle(item: PluginItem) {
+    const key = `plugins.${item.family}.${item.name}.enabled`;
+    const draft = saves.get<boolean>(key);
+    const previous = draft && draft.state !== 'saved' && draft.state !== 'idle' ? draft.value : item.enabled;
+    saves.schedule(key, !previous, async (enabled) => {
+      await api.toggle({ ...item, enabled: !enabled });
       await api.reload();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to update plugin', true);
-    }
+    }, { immediate: true });
   }
 
   async function resyncSkills() {
@@ -165,7 +165,10 @@ export default function PluginsList({ api }: { api: UsePluginsApi }) {
     }
   }
 
-  const groups = groupByFamily(api.items);
+  const groups = groupByFamily(api.items.map((item) => {
+    const draft = saves.get<boolean>(`plugins.${item.family}.${item.name}.enabled`);
+    return draft && draft.state !== 'idle' && draft.state !== 'saved' ? { ...item, enabled: draft.value } : item;
+  }));
 
   return (
     <div className="space-y-4">
@@ -209,6 +212,9 @@ export default function PluginsList({ api }: { api: UsePluginsApi }) {
             </Card>
           )}
         </div>
+      ))}
+      {states.filter((state) => state.key.startsWith('plugins.') && state.key.endsWith('.enabled') && state.state === 'error').map((state) => (
+        <SaveStatus key={state.key} state={state.state} error={state.error} retry={() => { void saves.retry(state.key); }} />
       ))}
       <Toast message={toastMsg} isError={isError} />
     </div>

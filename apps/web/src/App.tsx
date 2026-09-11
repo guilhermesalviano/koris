@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import AdminLayout from './pages/admin/AdminLayout';
 import SetupWizardPage from './pages/setup/SetupWizardPage';
 import { apiRequest } from './lib/api';
+import { ConfigSaveProvider } from './lib/config-save-context';
 
 export default function App() {
   const navigate = useNavigate();
@@ -27,10 +28,12 @@ export default function App() {
   }, []);
 
   return (
+    <ConfigSaveProvider>
     <Routes>
       <Route path="/" element={<Navigate to="/admin" replace />} />
       <Route path="/setup" element={<SetupWizardPage />} />
       <Route path="/admin/*" element={<AdminLayout />} />
     </Routes>
+    </ConfigSaveProvider>
   );
 }

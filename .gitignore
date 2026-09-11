@@ -25,6 +25,7 @@ plugins/*/*/config.yml
 reports/
 .stryker-tmp/
 coverage/
+.vitest/
 
 # Logs
 logs/

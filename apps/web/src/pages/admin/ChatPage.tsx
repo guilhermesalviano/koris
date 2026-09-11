@@ -6,7 +6,6 @@ import { usePageTitle } from '../../lib/use-page-title';
 import { chatSeparatorLabel } from '../../lib/date';
 import ImageLightbox from '../../components/ImageLightbox';
 import ProviderPicker from '../../components/ProviderPicker';
-import ContextBar from '../../components/ContextBar';
 import { AttachIcon, BrokenImageIcon, CloseIcon, MicIcon, RetryIcon, SendIcon, SpeakerIcon, SquareIcon, StopIcon } from '../../components/Icons';
 import type { ImageAttachment } from '../../lib/types';
 
@@ -591,10 +590,6 @@ export default function ChatPage() {
 
   return (
     <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col w-full">
-      <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-subtle px-4 py-2">
-        <span className="truncate font-mono text-[11px] text-txt-3">{activeTitle || 'New chat'}</span>
-        <ContextBar streaming={streaming} sessionId={activeSessionId} />
-      </div>
       {showEmptyState ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 px-4">
           <h2 className="text-center text-xl font-medium">What can I help with?</h2>

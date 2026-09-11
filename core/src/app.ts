@@ -239,6 +239,7 @@ class Application implements IApplication {
         context: mcpContext,
         registry,
         manager: mcpManager,
+        pluginSettings: PluginSettingsRepositoryFactory.create(db),
       },
       mcpPlugins.map((plugin) => plugin.name),
     );

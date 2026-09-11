@@ -57,7 +57,7 @@ export default function MarketplaceList({ api }: { api: UseMarketplaceApi }) {
     try {
       await api.pull(item);
       showToast(item.family === 'mcp'
-        ? `Pulled "${humanize(item.slug)}" — configure and enable it when ready.`
+        ? `Pulled "${humanize(item.slug)}" — enabled. If it doesn't connect, set its URL in Plugins.`
         : `Pulled "${humanize(item.slug)}" — active within a few seconds, no restart needed.`);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to pull from koris-hub', true);
