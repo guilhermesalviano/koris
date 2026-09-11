@@ -336,16 +336,17 @@ function HeaderAppMenu() {
   );
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({ onNavigate, onOpenConfig }: { onNavigate?: () => void; onOpenConfig?: () => void }) {
   return (
     <>
-      <div className="flex-shrink-0 space-y-0.5 p-2 pb-1.5">
-        <NavItems items={MAIN_ITEMS} vertical onNavigate={onNavigate} />
-      </div>
-      <div className="flex-shrink-0 border-t border-subtle" />
       <div className="min-h-0 flex-1">
         <ChatsPanel onNavigate={onNavigate} />
       </div>
+      {onOpenConfig && (
+        <div className="flex-shrink-0 border-t border-subtle p-2">
+          <ConfigButton onOpen={onOpenConfig} />
+        </div>
+      )}
     </>
   );
 }
@@ -436,7 +437,10 @@ export default function AdminLayout() {
             <Drawer open={navOpen} onClose={() => setNavOpen(false)} label="Menu">
               <DrawerHeader title="Menu" onClose={() => setNavOpen(false)} />
               <div className="flex min-h-0 flex-1 flex-col">
-                <SidebarContent onNavigate={() => setNavOpen(false)} />
+                <SidebarContent
+                  onNavigate={() => setNavOpen(false)}
+                  onOpenConfig={() => { setNavOpen(false); handleOpenConfig(); }}
+                />
               </div>
             </Drawer>
 
