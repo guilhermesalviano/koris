@@ -1,6 +1,8 @@
 import { EmptyState } from '../../components/AdminUI';
 import { SaveStatus, SettingsGroup, SettingsSection, settingsButton, settingsInput } from '../../components/SettingsUI';
+import { MoonIcon, SunIcon } from '../../components/Icons';
 import { postSettings, useAutoSave, useConfigSnapshot } from '../../lib/config-save-context';
+import { useUi } from '../../lib/ui-context';
 import type { RuntimeSettings } from '../../lib/use-settings-form';
 
 type PersonalEntry = {
@@ -27,8 +29,38 @@ function GeneralForm({ settings }: { settings: RuntimeSettings }) {
     },
   );
 
+  const { isDark, toggleTheme } = useUi();
+
   return (
     <div className="space-y-4">
+      <SettingsGroup title="Appearance" description="Choose your preferred color scheme.">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => { if (isDark) toggleTheme(); }}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-medium transition-colors ${
+              !isDark
+                ? 'border-accent bg-accent/10 text-accent-2'
+                : 'border-strong bg-bg-3/60 text-txt-2 hover:border-accent hover:text-txt'
+            }`}
+          >
+            <SunIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
+            Light
+          </button>
+          <button
+            type="button"
+            onClick={() => { if (!isDark) toggleTheme(); }}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-medium transition-colors ${
+              isDark
+                ? 'border-accent bg-accent/10 text-accent-2'
+                : 'border-strong bg-bg-3/60 text-txt-2 hover:border-accent hover:text-txt'
+            }`}
+          >
+            <MoonIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
+            Dark
+          </button>
+        </div>
+      </SettingsGroup>
       <SettingsGroup title="Allowed domains" description="Choose which websites your assistant can reach. Leave empty to deny outbound requests.">
         <label htmlFor="allowed-domains" className="mb-2 block text-xs text-txt-2">One domain per line</label>
         <textarea id="allowed-domains" rows={5} value={domains.value} onChange={(event) => domains.update(event.target.value)} placeholder={'example.com\napi.example.com'} className={`${settingsInput} resize-y font-mono`} />

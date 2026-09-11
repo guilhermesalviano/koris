@@ -2,6 +2,8 @@ import { createContext, useContext, type ReactNode } from 'react';
 
 interface UiContextValue {
   openConfig: (sectionId?: string) => void;
+  isDark: boolean;
+  toggleTheme: () => void;
 }
 
 const UiContext = createContext<UiContextValue | null>(null);

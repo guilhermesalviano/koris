@@ -7,13 +7,11 @@ import {
   HeartbeatsIcon,
   MemoriesIcon,
   MenuIcon,
-  MoonIcon,
   MoreIcon,
   OverviewIcon,
   PlusIcon,
   QueueIcon,
   SettingsIcon,
-  SunIcon,
 } from '../../components/Icons';
 import ConfigModal from './ConfigModal';
 import ContextBar from '../../components/ContextBar';
@@ -151,17 +149,13 @@ function getInitialCollapsed(): boolean {
 
 function Header({
   navOpen,
-  isDark,
   onOpenNav,
   onToggleCollapse,
-  onToggleTheme,
   onOpenConfig,
 }: {
   navOpen: boolean;
-  isDark: boolean;
   onOpenNav: () => void;
   onToggleCollapse: () => void;
-  onToggleTheme: () => void;
   onOpenConfig: (sectionId?: string) => void;
 }) {
   const hasConfigError = useSaveStates().some((state) => state.state === 'error' || state.state === 'invalid');
@@ -197,34 +191,7 @@ function Header({
       </div>
 
       <div className="flex flex-shrink-0 items-center gap-2">
-        <button
-          onClick={onToggleTheme}
-          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          title={isDark ? 'Light mode' : 'Dark mode'}
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
-        >
-          {isDark ? (
-            <SunIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-          ) : (
-            <MoonIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenConfig()}
-          aria-label="Configuration"
-          title={hasConfigError ? 'Configuration · changes need attention' : 'Configuration'}
-          className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
-        >
-          <SettingsIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-          {hasConfigError && (
-            <span
-              aria-label="Configuration needs attention"
-              className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-400 ring-2 ring-bg"
-            />
-          )}
-        </button>
-        <HeaderAppMenu onOpenConfig={onOpenConfig} />
+        <HeaderAppMenu />
       </div>
     </header>
   );
@@ -347,7 +314,7 @@ function ConfigButton({ onOpen, collapsed = false }: { onOpen: () => void; colla
   );
 }
 
-function HeaderAppMenu({ onOpenConfig }: { onOpenConfig: (sectionId?: string) => void }) {
+function HeaderAppMenu() {
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -416,14 +383,6 @@ function HeaderAppMenu({ onOpenConfig }: { onOpenConfig: (sectionId?: string) =>
         >
           <div className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-txt-3">Admin views</div>
           <NavItems items={MAIN_ITEMS} vertical onNavigate={() => setOpen(false)} role="menuitem" />
-          <div className="my-1 border-t border-subtle" />
-          <ConfigButton
-            onOpen={() => {
-              container.current?.querySelector('button')?.focus();
-              setOpen(false);
-              onOpenConfig();
-            }}
-          />
           <div className="my-1.5 border-t border-subtle" />
           <div className="px-2 py-1.5">
             <ContextBar />
@@ -529,14 +488,12 @@ export default function AdminLayout() {
   return (
     <ProvidersProvider>
       <ChatProvider>
-        <UiProvider value={{ openConfig: handleOpenConfig }}>
+        <UiProvider value={{ openConfig: handleOpenConfig, isDark, toggleTheme: () => setIsDark((d) => !d) }}>
           <div className="relative z-10 flex h-screen w-full flex-col supports-[height:100dvh]:h-dvh">
             <Header
               navOpen={navOpen}
-              isDark={isDark}
               onOpenNav={() => setNavOpen(true)}
               onToggleCollapse={() => setCollapsed((c) => !c)}
-              onToggleTheme={() => setIsDark((d) => !d)}
               onOpenConfig={handleOpenConfig}
             />
             <div className="flex min-h-0 flex-1">
