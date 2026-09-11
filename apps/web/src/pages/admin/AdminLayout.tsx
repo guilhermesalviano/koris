@@ -14,7 +14,6 @@ import {
   SettingsIcon,
 } from '../../components/Icons';
 import ConfigModal from './ConfigModal';
-import ContextBar from '../../components/ContextBar';
 import { useSaveStates } from '../../lib/config-save-context';
 import ChatPage from './ChatPage';
 import OverviewPage from './OverviewPage';
@@ -271,7 +270,6 @@ function ConfigButton({ onOpen }: { onOpen: () => void }) {
 }
 
 function HeaderAppMenu() {
-  const { openConfig } = useUi();
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -340,18 +338,6 @@ function HeaderAppMenu() {
         >
           <div className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-txt-3">Admin views</div>
           <NavItems items={MAIN_ITEMS} vertical onNavigate={() => setOpen(false)} role="menuitem" />
-          <div className="my-1 border-t border-subtle" />
-          <ConfigButton
-            onOpen={() => {
-              container.current?.querySelector('button')?.focus();
-              setOpen(false);
-              openConfig();
-            }}
-          />
-          <div className="my-1.5 border-t border-subtle" />
-          <div className="px-2 py-1.5">
-            <ContextBar />
-          </div>
         </div>
       )}
     </div>
@@ -373,19 +359,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function Sidebar() {
+  const { openConfig } = useUi();
   return (
     <aside className="relative hidden w-60 flex-shrink-0 flex-col border-r border-subtle bg-bg-2 md:flex">
       <div className="min-h-0 flex-1">
         <ChatsPanel />
       </div>
-      <div className="flex flex-shrink-0 items-center gap-2.5 border-t border-subtle px-3.5 py-3">
-        <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-accent">
-          <img src="/logo.png" alt="koris" className="h-full w-full object-cover" />
-        </div>
-        <div className="min-w-0">
-          <div className="text-[13px] font-medium">koris</div>
-          <div className="font-mono text-[11px] text-txt-3">Admin panel</div>
-        </div>
+      <div className="flex-shrink-0 border-t border-subtle p-2">
+        <ConfigButton onOpen={() => openConfig()} />
       </div>
     </aside>
   );
