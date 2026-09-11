@@ -4,7 +4,7 @@ import { SECTIONS } from './ConfigModal';
 describe('ConfigModal sections and navigation', () => {
   it('defines all 8 standard workspace configuration sections', () => {
     const ids = SECTIONS.map((s) => s.id);
-    expect(ids).toEqual(['providers', 'channels', 'plugins', 'skills', 'memories', 'beats', 'sessions', 'general']);
+    expect(ids).toEqual(['general', 'sessions', 'plugins', 'providers', 'channels', 'skills', 'memories', 'beats']);
   });
 
   it('provides non-empty labels, descriptions, icons, and component mappings for all sections', () => {
