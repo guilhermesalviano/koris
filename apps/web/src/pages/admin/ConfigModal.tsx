@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import Modal from '../../components/Modal';
-import { ChannelsIcon, CloseIcon, PluginsIcon, ProvidersIcon, SessionsIcon, SettingsIcon, SkillsIcon } from '../../components/Icons';
+import { ChannelsIcon, CloseIcon, HeartbeatsIcon, MemoriesIcon, PluginsIcon, ProvidersIcon, SessionsIcon, SettingsIcon, SkillsIcon } from '../../components/Icons';
 import { useSaveCoordinator, useSaveStates } from '../../lib/config-save-context';
 import SessionsPage from './SessionsPage';
 import ChannelsPage from './ChannelsPage';
@@ -8,6 +8,8 @@ import ProvidersPage from './ProvidersPage';
 import PluginsPage from './PluginsPage';
 import GeneralPage from './GeneralPage';
 import SkillsSettingsPage from './SkillsSettingsPage';
+import MemoriesPage from './MemoriesPage';
+import HeartbeatsPage from './HeartbeatsPage';
 
 export interface Section {
   id: string;
@@ -22,6 +24,8 @@ export const SECTIONS: Section[] = [
   { id: 'channels', label: 'Channels', description: 'Messaging & connections', Icon: ChannelsIcon, Component: ChannelsPage },
   { id: 'plugins', label: 'Plugins', description: 'Extensions & marketplace', Icon: PluginsIcon, Component: PluginsPage },
   { id: 'skills', label: 'Skills', description: 'Knowledge & instructions', Icon: SkillsIcon, Component: SkillsSettingsPage },
+  { id: 'memories', label: 'Memories', description: 'Long-term memory', Icon: MemoriesIcon, Component: MemoriesPage },
+  { id: 'beats', label: 'Beats', description: 'Scheduled agents & reminders', Icon: HeartbeatsIcon, Component: HeartbeatsPage },
   { id: 'sessions', label: 'Sessions', description: 'Conversation history', Icon: SessionsIcon, Component: SessionsPage },
   { id: 'general', label: 'General', description: 'Personal context & access', Icon: SettingsIcon, Component: GeneralPage },
 ];

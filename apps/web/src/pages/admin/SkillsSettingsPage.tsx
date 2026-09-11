@@ -23,11 +23,13 @@ function SkillsForm({ settings }: { settings: RuntimeSettings }) {
         </div>
         <SaveStatus {...mode} />
       </SettingsGroup>
-      <SettingsGroup title="Skill limit" description="The maximum number of skills included or available to call in each turn.">
-        <label htmlFor="skills-limit" className="mb-2 block text-xs text-txt-2">Skills per turn</label>
-        <input id="skills-limit" type="number" min={1} step={1} value={limit.value} onChange={(event) => limit.update(event.target.value)} className={`${settingsInput} max-w-32`} aria-invalid={limit.state === 'invalid'} />
-        <SaveStatus {...limit} />
-      </SettingsGroup>
+      {mode.value === 'auto' && (
+        <SettingsGroup title="Skill limit" description="The maximum number of skills included with each message.">
+          <label htmlFor="skills-limit" className="mb-2 block text-xs text-txt-2">Skills per turn</label>
+          <input id="skills-limit" type="number" min={1} step={1} value={limit.value} onChange={(event) => limit.update(event.target.value)} className={`${settingsInput} max-w-32`} aria-invalid={limit.state === 'invalid'} />
+          <SaveStatus {...limit} />
+        </SettingsGroup>
+      )}
       <p className="text-xs text-txt-2">Manage individual skills in Configuration → Plugins.</p>
     </div>
   );

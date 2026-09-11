@@ -4,8 +4,6 @@ import type { SessionSummary } from '../../lib/types';
 import {
   AuditIcon,
   CloseIcon,
-  HeartbeatsIcon,
-  MemoriesIcon,
   MenuIcon,
   MoreIcon,
   OverviewIcon,
@@ -17,8 +15,6 @@ import ConfigModal from './ConfigModal';
 import { useSaveStates } from '../../lib/config-save-context';
 import ChatPage from './ChatPage';
 import OverviewPage from './OverviewPage';
-import MemoriesPage from './MemoriesPage';
-import HeartbeatsPage from './HeartbeatsPage';
 import QueuePage from './QueuePage';
 import AuditPage from './AuditPage';
 import { ChatProvider, useChat } from '../../lib/chat-context';
@@ -27,16 +23,12 @@ import { ProvidersProvider } from '../../lib/use-providers';
 
 const NAV_ICONS = {
   overview: OverviewIcon,
-  memories: MemoriesIcon,
-  heartbeats: HeartbeatsIcon,
   queue: QueueIcon,
   audit: AuditIcon,
 };
 
 const MAIN_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] = [
   { to: '/admin/overview', label: 'Overview', icon: 'overview' },
-  { to: '/admin/memories', label: 'Memories', icon: 'memories' },
-  { to: '/admin/heartbeats', label: 'Beats', icon: 'heartbeats' },
   { to: '/admin/queue', label: 'Queue', icon: 'queue' },
   { to: '/admin/audit', label: 'Audit', icon: 'audit' },
 ];
@@ -372,6 +364,15 @@ function Sidebar() {
   );
 }
 
+/** Keeps old page URLs working for views that now live in the Configuration modal. */
+function ConfigSectionRedirect({ sectionId }: { sectionId: string }) {
+  const { openConfig } = useUi();
+  useEffect(() => {
+    openConfig(sectionId);
+  }, [openConfig, sectionId]);
+  return <Navigate to="/admin/chat" replace />;
+}
+
 function DrawerHeader({ title, onClose }: { title: string; onClose: () => void }) {
   return (
     <div className="flex h-14 flex-shrink-0 items-center gap-2.5 border-b border-subtle px-4">
@@ -422,8 +423,8 @@ export default function AdminLayout() {
                     <Route path="chat" element={<ChatPage />} />
                     <Route path="chat/:sessionId" element={<ChatPage />} />
                     <Route path="overview" element={<OverviewPage />} />
-                    <Route path="memories" element={<MemoriesPage />} />
-                    <Route path="heartbeats" element={<HeartbeatsPage />} />
+                    <Route path="memories" element={<ConfigSectionRedirect sectionId="memories" />} />
+                    <Route path="heartbeats" element={<ConfigSectionRedirect sectionId="beats" />} />
                     <Route path="queue" element={<QueuePage />} />
                     <Route path="audit" element={<AuditPage />} />
                     <Route path="*" element={<Navigate to="/admin/chat" replace />} />

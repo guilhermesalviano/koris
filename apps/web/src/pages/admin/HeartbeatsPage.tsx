@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { PageShell, Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
+import { Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
+import { SettingsSection } from '../../components/SettingsUI';
 import { apiRequest } from '../../lib/api';
 import { useChannelOptions } from '../../lib/use-channel-options';
 import type { HeartbeatsResponse } from '../../lib/types';
@@ -64,7 +65,7 @@ export default function HeartbeatsPage() {
   }
 
   return (
-    <PageShell title="Beats" description="Scheduled heartbeat agents" onRefresh={load}>
+    <SettingsSection title="Beats" description="Scheduled heartbeat agents" onRefresh={load}>
       <Card>
         <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">New beat</div>
         <form onSubmit={createBeat} className="grid grid-cols-1 gap-2 md:grid-cols-4">
@@ -154,6 +155,6 @@ export default function HeartbeatsPage() {
         )}
       </div>
       <Toast message={toastMsg} isError={isError} />
-    </PageShell>
+    </SettingsSection>
   );
 }
