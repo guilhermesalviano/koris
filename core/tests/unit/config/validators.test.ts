@@ -5,7 +5,7 @@ import {
   isValidLogLevel,
   isSupportedProvider,
   checkAiProviderConnectivity,
-} from './validators';
+} from '../../../src/config/validators';
 
 describe('config/validators', () => {
   it('validates URLs', () => {

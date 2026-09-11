@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ChannelHandlerFactory, configureChannelHandler } from './handler';
-import { COMMANDS_RESTRICTED_MESSAGE } from '../constants/commands';
-import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../constants/thinking';
-import type { InboundChannelMessage } from './handler';
+import { ChannelHandlerFactory, configureChannelHandler } from '../../../src/channels/handler';
+import { COMMANDS_RESTRICTED_MESSAGE } from '../../../src/constants/commands';
+import { RESPONSE_ANCHOR, THINK_END, THINK_START } from '../../../src/constants/thinking';
+import type { InboundChannelMessage } from '../../../src/channels/handler';
 
 const { mockSynthesize } = vi.hoisted(() => ({ mockSynthesize: vi.fn() }));
-vi.mock('../services/audio/audio-synthesis-service', () => ({
+vi.mock('../../../src/services/audio/audio-synthesis-service', () => ({
   getSpeechSynthesisService: () => ({ synthesize: mockSynthesize }),
 }));
 

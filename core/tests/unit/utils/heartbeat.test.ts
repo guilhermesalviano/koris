@@ -6,7 +6,7 @@ import {
   matchesCron,
   isCronDue,
   nextCronFire,
-} from './heartbeat';
+} from '../../../src/utils/heartbeat';
 
 describe('isValidCronExpression', () => {
   it('accepts standard 5-field cron', () => {

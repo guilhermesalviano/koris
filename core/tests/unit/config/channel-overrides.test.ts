@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-import { loadChannelOverrides } from './channel-overrides';
+import { loadChannelOverrides } from '../../../src/config/channel-overrides';
 
 const tempDirs: string[] = [];
 

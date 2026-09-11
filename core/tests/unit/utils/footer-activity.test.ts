@@ -4,7 +4,7 @@ import {
   getFooterActivityNote,
   resetFooterActivityStore,
   subscribeToFooterActivity,
-} from './footer-activity';
+} from '../../../src/utils/footer-activity';
 
 describe('footer activity store', () => {
   beforeEach(() => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizeLogText, sanitizeMeta } from './sanitize-log-text';
+import { sanitizeLogText, sanitizeMeta } from '../../../src/utils/sanitize-log-text';
 
 describe('sanitizeLogText', () => {
   it('escapes CR and LF to visible sequences', () => {

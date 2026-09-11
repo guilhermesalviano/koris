@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateId } from './generate-id';
+import { generateId } from '../../../src/utils/generate-id';
 
 describe('generateId', () => {
   it('returns a 13-character lowercase hex string', () => {
