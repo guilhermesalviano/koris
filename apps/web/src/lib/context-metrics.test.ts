@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeContextMetrics, type ContextUsage } from './ContextBar';
+import { computeContextMetrics, type ContextUsage } from './context-metrics';
 
 describe('computeContextMetrics', () => {
   it('returns null when usage is null or limit is non-positive', () => {

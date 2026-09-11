@@ -4,53 +4,14 @@ import { SaveStatus, SettingsGroup, SettingsSection, settingsButton, settingsInp
 import { useAutoSave, useSaveCoordinator, useSaveStates } from '../../lib/config-save-context';
 import { useProviders } from '../../lib/use-providers';
 import { formatConnectionTestResult, type ConnectionTestResult } from '../../lib/use-settings-form';
-import type { ProviderCatalogEntry, ProviderRole } from '../../lib/types';
+import { buildProviderEditPatch, validateProviderDraft, type ProviderDraft, type ProviderEditRole as Role } from '../../lib/provider-draft';
+import type { ProviderCatalogEntry } from '../../lib/types';
 
-type Role = ProviderRole | 'embed';
 const ROLES: { key: Role; label: string; description: string }[] = [
   { key: 'manager', label: 'Manager', description: 'The model that leads your conversations and coordinates tools.' },
   { key: 'workers', label: 'Workers', description: 'The model used for background work, summaries, and scheduled tasks.' },
   { key: 'embed', label: 'Embeddings', description: 'Turn memories into vectors so your assistant can find relevant context.' },
 ];
-
-export type ProviderDraft = {
-  provider: string;
-  model: string;
-  apiToken: string;
-  baseUrl: string;
-  numCtx: string;
-  enabled: boolean;
-};
-
-export function validateProviderDraft(value: ProviderDraft, embed: boolean): string | null {
-  if (!value.provider) return 'Choose a provider.';
-  if ((!embed || value.enabled) && !value.model.trim()) return 'Enter a model to activate this provider.';
-  if (value.baseUrl.trim()) {
-    try {
-      const url = new URL(value.baseUrl);
-      if (!['http:', 'https:'].includes(url.protocol)) return 'Use an HTTP or HTTPS base URL.';
-    } catch { return 'Enter a valid base URL.'; }
-  }
-  if (!embed && value.numCtx.trim()) {
-    const size = Number(value.numCtx);
-    if (!Number.isInteger(size) || size < 512 || size > 131072) return 'Context size must be a whole number between 512 and 131072.';
-  }
-  return null;
-}
-
-export function buildProviderEditPatch(role: Role, value: ProviderDraft, baseline?: ProviderDraft) {
-  const switched = value.provider !== baseline?.provider;
-  const profile: Record<string, unknown> = { provider: value.provider };
-  if (switched || value.model !== baseline?.model) profile.model = value.model.trim();
-  if (switched || value.baseUrl !== baseline?.baseUrl) profile.base_url = value.baseUrl.trim();
-  if (value.apiToken && (switched || value.apiToken !== baseline?.apiToken)) profile.api_token = value.apiToken;
-  if (role === 'embed') {
-    if (switched || value.enabled !== baseline?.enabled) profile.enabled = value.enabled;
-  } else if (value.numCtx.trim() && (switched || value.numCtx !== baseline?.numCtx)) {
-    profile.num_ctx = Number(value.numCtx);
-  }
-  return { ai: { [role]: profile } };
-}
 
 function ProviderEditor({ role }: { role: Role }) {
   const api = useProviders();

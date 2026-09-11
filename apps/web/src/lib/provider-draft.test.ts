@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildProviderEditPatch, validateProviderDraft, type ProviderDraft } from './ProvidersPage';
+import { buildProviderEditPatch, validateProviderDraft, type ProviderDraft } from './provider-draft';
 
 const profile: ProviderDraft = { provider: 'ollama', model: 'chat-model', baseUrl: '', apiToken: '', numCtx: '16384', enabled: false };
 

@@ -1,4 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Only the section table is under test — stub the pages and modal plumbing so
+// importing it doesn't load the whole admin UI (and its coverage) into the run.
+vi.mock('./GeneralPage', () => ({ default: () => null }));
+vi.mock('./SessionsPage', () => ({ default: () => null }));
+vi.mock('./PluginsPage', () => ({ default: () => null }));
+vi.mock('./ProvidersPage', () => ({ default: () => null }));
+vi.mock('./ChannelsPage', () => ({ default: () => null }));
+vi.mock('./SkillsSettingsPage', () => ({ default: () => null }));
+vi.mock('./MemoriesPage', () => ({ default: () => null }));
+vi.mock('./HeartbeatsPage', () => ({ default: () => null }));
+vi.mock('../../components/Modal', () => ({ default: () => null }));
+vi.mock('../../lib/config-save-context', () => ({ useSaveCoordinator: vi.fn(), useSaveStates: vi.fn() }));
+
 import { SECTIONS } from './ConfigModal';
 
 describe('ConfigModal sections and navigation', () => {
