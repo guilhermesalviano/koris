@@ -946,6 +946,17 @@ class AdminRouterFactory {
           const url = new URL(req.body.url);
           if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error();
           patch.url = url.toString();
+          // Warn when a bearer_token would be sent over a plaintext HTTP connection
+          // to a non-loopback host — the token would be exposed in transit.
+          if (
+            url.protocol === 'http:'
+            && url.hostname !== '127.0.0.1'
+            && url.hostname !== 'localhost'
+          ) {
+            logger.warn(
+              `[MCP] Insecure http:// URL configured for "${name}" — bearer_token will be transmitted in plaintext. Consider using https://.`,
+            );
+          }
         } catch {
           res.status(400).json({ error: 'url must be an absolute http or https URL' });
           return;
@@ -958,7 +969,14 @@ class AdminRouterFactory {
       if (resolvePluginEnabled(pluginSettingsRepo, 'mcps', name)) {
         await McpManagerSingleton.getExistingInstance()?.reconnect(name);
       }
-      res.json({ success: true });
+      const configuredUrl = typeof patch.url === 'string' ? patch.url : definition.loadConfig().url;
+      const urlInsecure = (() => {
+        try {
+          const u = new URL(configuredUrl ?? '');
+          return u.protocol === 'http:' && u.hostname !== '127.0.0.1' && u.hostname !== 'localhost';
+        } catch { return false; }
+      })();
+      res.json({ success: true, ...(urlInsecure ? { warning: 'MCP server URL uses http:// — bearer_token is transmitted in plaintext.' } : {}) });
     });
 
     // koris-hub marketplace: tools/skills whose source moved out of this repo

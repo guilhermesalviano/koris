@@ -46,6 +46,7 @@ export interface AppConfig {
   /** Writable data root (koris.json, memory/, logs/). Same as BASE_DIR unless KORIS_DATA_DIR is set. */
   DATA_DIR: string;
   GATEWAY_HOST: string;
+  ADMIN_SECRET: string;
   ALLOWED_DOMAINS: string[];
   SKILLS: {
     /**
@@ -143,6 +144,7 @@ function buildConfig(): AppConfig {
   BASE_DIR:    process.env.KORIS_APP_DIR || process.cwd(),
   DATA_DIR:    process.env.KORIS_DATA_DIR || process.cwd(),
   GATEWAY_HOST: get('gateway_host', 'http://localhost:3000'),
+  ADMIN_SECRET: get('admin_secret', ''),
   ALLOWED_DOMAINS: get('allowed_domains', '')
     .split(',')
     .map((domain) => domain.trim().toLowerCase())

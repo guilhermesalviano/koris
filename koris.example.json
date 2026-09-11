@@ -3,6 +3,7 @@
   "timezone": "America/Sao_Paulo",
   "log_level": "debug",
   "gateway_host": "http://localhost:3000",
+  "admin_secret": "",
   "allowed_domains": [],
   "skills": {
     "mode": "auto",

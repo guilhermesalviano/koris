@@ -14,6 +14,7 @@ import { isCommand } from '../services/commands';
 import { getSpeechSynthesisService, type AudioSynthesisResult } from '../services/audio/audio-synthesis-service';
 import type { ISessionManager } from '../services/session-manager';
 import { stripMarkdown } from '../utils/markdown';
+import { sanitiseContextField } from '../utils/sanitise-context';
 import { resolveResponse } from './utils';
 
 export type {
@@ -184,7 +185,7 @@ class ChannelHandler implements IChannelHandler {
     const parts: string[] = ['[Context]'];
     const trustSuffix = message.isTrustedSender ? '' : ' (untrusted sender)';
     if (message.groupName) {
-      parts.push(`Chat: "${message.groupName}" (group)${trustSuffix}.`);
+      parts.push(`Chat: "${sanitiseContextField(message.groupName)}" (group)${trustSuffix}.`);
     } else if (message.isGroup) {
       parts.push(`Chat: group${trustSuffix}.`);
     } else {
@@ -192,11 +193,11 @@ class ChannelHandler implements IChannelHandler {
     }
 
     if (this.prefixSenderName && message.senderName) {
-      parts.push(`Sender: ${message.senderName}.`);
+      parts.push(`Sender: ${sanitiseContextField(message.senderName)}.`);
     }
 
     if (message.quotedText) {
-      parts.push(`Quoting: "${message.quotedText}"`);
+      parts.push(`Quoting: "${sanitiseContextField(message.quotedText).slice(0, 1024)}"`);
     } else if (message.images?.some((img) => img.source === 'quoted')) {
       parts.push('Quoting an image.');
     }
