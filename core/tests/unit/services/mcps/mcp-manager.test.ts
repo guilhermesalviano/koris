@@ -57,6 +57,24 @@ describe('McpManager', () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it('labels registered tool descriptions with the originating MCP server', async () => {
+    const registry = new PluginRegistry();
+    const undescribed: Tool = { name: 'todo.create', inputSchema: { type: 'object' } };
+    const client: McpClientHandle = {
+      listTools: async () => ({ tools: [remoteTool, undescribed] }),
+      callTool: vi.fn(),
+      close: vi.fn(async () => undefined),
+    };
+    const manager = new McpManager(logger, registry, [definition(() => true)], async () => client);
+
+    await manager.enable('coredash');
+
+    expect(registry.collect(COMMANDS).map((tool) => tool.schema.description)).toEqual([
+      '[coredash MCP server] Look up weather',
+      '[coredash MCP server] Tool todo.create',
+    ]);
+  });
+
   it('shares one connect attempt between concurrent enables', async () => {
     const registry = new PluginRegistry();
     let resolveClient!: (handle: McpClientHandle) => void;
