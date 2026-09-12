@@ -258,12 +258,14 @@ export interface ChannelConfigField {
 export interface HubEntry {
   family: HubFamily;
   slug: string;
+  group?: string;
   summary?: string;
   hints?: ChannelHints;
   configFields?: ChannelConfigField[];
 }
 
 interface CatalogMeta {
+  group?: string;
   summary?: string;
   hints?: ChannelHints;
   configFields?: ChannelConfigField[];
@@ -291,6 +293,7 @@ export async function listMissing(options: HubSyncOptions = {}): Promise<HubEntr
       let summary: string | undefined;
       let hints: ChannelHints | undefined;
       let configFields: ChannelConfigField[] | undefined;
+      let group: string | undefined;
       try {
         const meta = await resolved.http.fetchJson<CatalogMeta>(
           `https://raw.githubusercontent.com/${resolved.owner}/${resolved.repo}/${resolved.branch}/${config.catalogDir}/${slug}.json`,
@@ -298,10 +301,11 @@ export async function listMissing(options: HubSyncOptions = {}): Promise<HubEntr
         summary = meta.summary;
         hints = meta.hints;
         configFields = meta.configFields;
+        group = meta.group;
       } catch {
         // Metadata is best-effort — still report the slug without a summary.
       }
-      entries.push({ family, slug, summary, hints, configFields });
+      entries.push({ family, slug, group, summary, hints, configFields });
     }
   }
 
