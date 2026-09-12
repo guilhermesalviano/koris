@@ -1,9 +1,9 @@
 import { Session } from "../entities/session";
 import { config } from "../config";
-import { IDatabaseService } from "../infrastructure/db-sqlite";
-import { ISessionRepository, SessionRepositoryFactory } from "../repositories/session";
-import { getLastActivityAt, isSessionExpired } from "../utils/session";
+import { ISessionRepository } from "../repositories/session";
+import { isExpired } from "../utils/session";
 import { nowISO } from "../utils/date";
+import { SessionKey } from "../types/session";
 
 interface ISessionService {
   getSession(): Session;
@@ -16,7 +16,7 @@ interface ISessionService {
 class SessionService implements ISessionService {
   private sessionRepository: ISessionRepository;
   private session: Session;
-  private readonly entryChannel: string;
+  private readonly key: SessionKey;
   private readonly persistOnConstruct: boolean;
   private readonly rotateOnExpire: boolean;
 
@@ -26,9 +26,12 @@ class SessionService implements ISessionService {
     options: { persistOnConstruct?: boolean; rotateOnExpire?: boolean } = {},
   ) {
     this.sessionRepository = sessionRepository;
-    this.entryChannel = session.entryChannel;
+    this.key = { channel: session.channel, peerId: session.peerId, kind: session.kind };
     this.persistOnConstruct = options.persistOnConstruct ?? true;
-    this.rotateOnExpire = options.rotateOnExpire ?? true;
+    // Delegated (errand) sessions must not be silently rotated away by idle
+    // TTL — a conversation that goes quiet overnight would otherwise lose
+    // its thread. Explicit options.rotateOnExpire always wins.
+    this.rotateOnExpire = options.rotateOnExpire ?? session.kind !== 'delegated';
 
     if (this.persistOnConstruct) {
       this.sessionRepository.save(session);
@@ -46,78 +49,38 @@ class SessionService implements ISessionService {
       return this.session;
     }
 
-    if (!this.isExpired(this.session)) {
+    if (!isExpired(this.session, config.SESSION.TTL_MS)) {
       return this.session;
     }
 
-    this.endSession(this.session);
-    this.session = this.startNewSession(this.entryChannel);
+    this.session = this.rotate();
     return this.session;
   }
 
   updateCount(): void {
-    const now = nowISO();
-    const updatedSession = new Session({
-      ...this.session,
-      messageCount: this.session.messageCount + 1,
-      metadata: {
-        ...this.session.metadata,
-        lastActivityAt: now,
-      },
-    });
-    this.sessionRepository.update(this.session.id, updatedSession);
-    this.session = updatedSession;
+    const messageCount = this.session.messageCount + 1;
+    const metadata = { ...this.session.metadata, lastActivityAt: nowISO() };
+    this.sessionRepository.update(this.session.id, { messageCount, metadata });
+    this.session = new Session({ ...this.session, messageCount, metadata });
   }
 
   updateMetadata(patch: Record<string, unknown>): void {
-    const updatedSession = new Session({
-      ...this.session,
-      metadata: {
-        ...this.session.metadata,
-        ...patch,
-      },
-    });
-    this.sessionRepository.update(this.session.id, updatedSession);
-    this.session = updatedSession;
+    const metadata = { ...this.session.metadata, ...patch };
+    this.sessionRepository.update(this.session.id, { metadata });
+    this.session = new Session({ ...this.session, metadata });
   }
 
   forceRotate(newMetadata?: Record<string, unknown>): Session {
-    this.endSession(this.session);
-    this.session = this.startNewSession(this.entryChannel, newMetadata);
+    this.session = this.rotate(newMetadata);
     return this.session;
   }
 
-  private isExpired(session: Session): boolean {
-    return isSessionExpired(
-      getLastActivityAt(session),
-      config.SESSION.TTL_MS,
-    );
-  }
-
-  private endSession(session: Session): void {
+  private rotate(metadata?: Record<string, unknown>): Session {
     const endedAt = nowISO();
-    this.sessionRepository.update(session.id, { endedAt });
-  }
-
-  private startNewSession(entryChannel: string, metadata?: Record<string, unknown>): Session {
-    const session = new Session({ entryChannel, metadata });
-    this.sessionRepository.save(session);
-    return session;
+    const newSession = new Session({ ...this.key, metadata });
+    this.sessionRepository.rotate(this.session.id, endedAt, newSession);
+    return newSession;
   }
 }
 
-class SessionServiceFactory {
-  public static create(db: IDatabaseService, entryChannel: string): SessionService {
-    const sessionRepository = SessionRepositoryFactory.create(db);
-    const existing = sessionRepository.findLatestOpenByEntryChannel(entryChannel);
-
-    if (existing && !isSessionExpired(getLastActivityAt(existing), config.SESSION.TTL_MS)) {
-      return new SessionService(sessionRepository, existing, { persistOnConstruct: false });
-    }
-
-    const session = new Session({ entryChannel });
-    return new SessionService(sessionRepository, session);
-  }
-}
-
-export { ISessionService, SessionService, SessionServiceFactory };
+export { ISessionService, SessionService };

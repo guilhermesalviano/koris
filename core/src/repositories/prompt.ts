@@ -36,6 +36,9 @@ interface BuildPromptParams {
   messageHistory?: Message[];
   includeBeatTools?: boolean;
   sessionId?: string;
+  /** False for a delegated (errand) session: an untrusted peer must never be
+   * able to probe the principal's personal facts via long-term memory. */
+  includeMemory?: boolean;
   /** Situation-specific contract/instruction blocks appended to the system prompt. */
   extraSystemBlocks?: string[];
   /** Tool execution results sent to the provider under the `tool` role. */
@@ -83,6 +86,7 @@ class PromptRepository implements IPromptRepository {
     toolResults,
     learnedSkillsEnabled,
     toolsEnabled,
+    includeMemory,
   }: BuildPromptParams): Promise<Message[]> {
     const systemBlocks: string[] = [SYSTEM_PROMPT];
 
@@ -106,7 +110,7 @@ class PromptRepository implements IPromptRepository {
     const stickerRules = (toolsEnabled ?? true) ? this.buildStickerRules(channel) : '';
     if (stickerRules) systemBlocks.push(`# Learned Stickers\n${stickerRules}`);
 
-    const memory = await this.buildMemoryContext(userMessage, sessionId);
+    const memory = (includeMemory ?? true) ? await this.buildMemoryContext(userMessage, sessionId) : '';
     if (memory) systemBlocks.push(`# Long-term Memory Context\n${memory}`);
 
     const context = this.contextRepository.get({ channel });

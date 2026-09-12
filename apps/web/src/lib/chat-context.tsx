@@ -126,7 +126,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const loadSessions = useCallback(async () => {
     try {
-      const res = await apiRequest<SessionsResponse>('/sessions?limit=50');
+      // kind=user: the sidebar is the principal's own chats, not delegated
+      // (errand) sessions running with other contacts.
+      const res = await apiRequest<SessionsResponse>('/sessions?limit=50&kind=user');
       setSessions(res.items);
     } catch {
       // Keep the current list if the request fails.

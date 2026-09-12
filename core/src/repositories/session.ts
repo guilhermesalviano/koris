@@ -1,11 +1,13 @@
 import { Session, SessionProps } from '../entities/session';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { camelToSnakeCase } from '../utils/fields';
-import { nowISO } from '../utils/date';
+import { SessionKey, SessionKind } from '../types/session';
 
 interface SessionRow {
   id: string;
-  entry_channel: string;
+  channel: string;
+  peer_id: string;
+  kind: SessionKind;
   started_at?: string;
   ended_at?: string;
   message_count?: number;
@@ -16,12 +18,14 @@ interface ISessionRepository {
   save(session: Session): void;
   update(id: string, updates: Partial<SessionProps>): void;
   findById(id: string): Session | null;
-  findLatestOpenByEntryChannel(channel: string): Session | null;
-  findAll(limit?: number, offset?: number): Session[];
-  count(): number;
+  findLatestOpen(key: SessionKey): Session | null;
+  findAll(limit?: number, offset?: number, kind?: SessionKind): Session[];
+  count(kind?: SessionKind): number;
   countOpen(): number;
-  deleteExpired(): void;
   deleteById(id: string): void;
+  /** Atomically end `endingId` and insert `newSession` — a partial failure
+   * must never leave the channel with zero open sessions. */
+  rotate(endingId: string, endedAt: string, newSession: Session): void;
 }
 
 function mapRowToSession(row: SessionRow): Session {
@@ -37,7 +41,9 @@ function mapRowToSession(row: SessionRow): Session {
 
   return new Session({
     id: row.id,
-    entryChannel: row.entry_channel,
+    channel: row.channel,
+    peerId: row.peer_id,
+    kind: row.kind,
     startedAt: row.started_at,
     endedAt: row.ended_at,
     messageCount: row.message_count,
@@ -50,11 +56,13 @@ class SessionRepository implements ISessionRepository {
 
   save(session: Session): void {
     this.db.run(
-      `INSERT INTO sessions (id, entry_channel, started_at, ended_at, message_count, metadata)
-      VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sessions (id, channel, peer_id, kind, started_at, ended_at, message_count, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         session.id,
-        session.entryChannel,
+        session.channel,
+        session.peerId,
+        session.kind,
         session.startedAt,
         session.endedAt,
         session.messageCount,
@@ -90,13 +98,13 @@ class SessionRepository implements ISessionRepository {
     return mapRowToSession(row);
   }
 
-  findLatestOpenByEntryChannel(channel: string): Session | null {
+  findLatestOpen(key: SessionKey): Session | null {
     const row = this.db.get(
       `SELECT * FROM sessions
-       WHERE entry_channel = ? AND ended_at IS NULL
+       WHERE channel = ? AND peer_id = ? AND kind = ? AND ended_at IS NULL
        ORDER BY started_at DESC
        LIMIT 1`,
-      [channel],
+      [key.channel, key.peerId, key.kind ?? 'user'],
     ) as SessionRow | undefined;
 
     if (!row) return null;
@@ -104,17 +112,24 @@ class SessionRepository implements ISessionRepository {
     return mapRowToSession(row);
   }
 
-  findAll(limit = 50, offset = 0): Session[] {
-    const rows = this.db.query<any>(
-      `SELECT * FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?`,
-      [limit, offset]
-    );
+  findAll(limit = 50, offset = 0, kind?: SessionKind): Session[] {
+    const rows = kind
+      ? this.db.query<any>(
+          `SELECT * FROM sessions WHERE kind = ? ORDER BY started_at DESC LIMIT ? OFFSET ?`,
+          [kind, limit, offset],
+        )
+      : this.db.query<any>(
+          `SELECT * FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?`,
+          [limit, offset],
+        );
 
     return rows.map((row: SessionRow) => mapRowToSession(row));
   }
 
-  count(): number {
-    const row = this.db.get('SELECT COUNT(*) as total FROM sessions') as { total: number } | undefined;
+  count(kind?: SessionKind): number {
+    const row = kind
+      ? (this.db.get('SELECT COUNT(*) as total FROM sessions WHERE kind = ?', [kind]) as { total: number } | undefined)
+      : (this.db.get('SELECT COUNT(*) as total FROM sessions') as { total: number } | undefined);
     return row?.total ?? 0;
   }
 
@@ -125,15 +140,15 @@ class SessionRepository implements ISessionRepository {
     return row?.total ?? 0;
   }
 
-  deleteExpired(): void {
-    this.db.run(
-      'DELETE FROM sessions WHERE ended_at IS NOT NULL AND ended_at < ?',
-      [nowISO()],
-    );
-  }
-
   deleteById(id: string): void {
     this.db.run('DELETE FROM sessions WHERE id = ?', [id]);
+  }
+
+  rotate(endingId: string, endedAt: string, newSession: Session): void {
+    this.db.transaction(() => {
+      this.db.run('UPDATE sessions SET ended_at = ? WHERE id = ?', [endedAt, endingId]);
+      this.save(newSession);
+    });
   }
 }
 

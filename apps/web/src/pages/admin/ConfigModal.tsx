@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import Modal from '../../components/Modal';
-import { ChannelsIcon, CloseIcon, HeartbeatsIcon, MemoriesIcon, PluginsIcon, ProvidersIcon, SessionsIcon, SettingsIcon, SkillsIcon } from '../../components/Icons';
+import { ChannelsIcon, CloseIcon, ErrandsIcon, HeartbeatsIcon, MemoriesIcon, PluginsIcon, ProvidersIcon, SessionsIcon, SettingsIcon, SkillsIcon } from '../../components/Icons';
 import { useSaveCoordinator, useSaveStates } from '../../lib/config-save-context';
 import SessionsPage from './SessionsPage';
+import ErrandsPage from './ErrandsPage';
 import ChannelsPage from './ChannelsPage';
 import ProvidersPage from './ProvidersPage';
 import PluginsPage from './PluginsPage';
@@ -22,6 +23,7 @@ export interface Section {
 export const SECTIONS: Section[] = [
   { id: 'general', label: 'General', description: 'Personal context & access', Icon: SettingsIcon, Component: GeneralPage },
   { id: 'sessions', label: 'Sessions', description: 'Conversation history', Icon: SessionsIcon, Component: SessionsPage },
+  { id: 'errands', label: 'Errands', description: 'Delegated conversations', Icon: ErrandsIcon, Component: ErrandsPage },
   { id: 'plugins', label: 'Plugins', description: 'Extensions & marketplace', Icon: PluginsIcon, Component: PluginsPage },
   { id: 'providers', label: 'Providers', description: 'Models & intelligence', Icon: ProvidersIcon, Component: ProvidersPage },
   { id: 'channels', label: 'Channels', description: 'Messaging & connections', Icon: ChannelsIcon, Component: ChannelsPage },

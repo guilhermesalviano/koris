@@ -4,6 +4,7 @@ import { MessageServiceFactory, IMessageService } from '../message-service';
 import { MemoryServiceFactory, IMemoryService } from '../memory-service';
 import { ISessionManager } from '../session-manager';
 import { ISessionService } from '../session-service';
+import { SessionKey } from '../../types/session';
 
 export interface SessionContext {
   sessionService: ISessionService;
@@ -12,7 +13,7 @@ export interface SessionContext {
 }
 
 export interface ISessionContextFactory {
-  resolve(originId: string, sessionId?: string): SessionContext;
+  resolve(origin: SessionKey, sessionId?: string): SessionContext;
 }
 
 class SessionContextResolver implements ISessionContextFactory {
@@ -22,8 +23,8 @@ class SessionContextResolver implements ISessionContextFactory {
     private sessionManager: ISessionManager,
   ) {}
 
-  resolve(originId: string, sessionId?: string): SessionContext {
-    const sessionService = this.resolveSessionService(originId, sessionId);
+  resolve(origin: SessionKey, sessionId?: string): SessionContext {
+    const sessionService = this.resolveSessionService(origin, sessionId);
     return {
       sessionService,
       messageService: MessageServiceFactory.create(this.db, sessionService),
@@ -31,16 +32,16 @@ class SessionContextResolver implements ISessionContextFactory {
     };
   }
 
-  private resolveSessionService(originId: string, sessionId?: string): ISessionService {
+  private resolveSessionService(origin: SessionKey, sessionId?: string): ISessionService {
     if (!sessionId) {
-      return this.sessionManager.getSessionService(originId);
+      return this.sessionManager.getSessionService(origin);
     }
 
     try {
       return this.sessionManager.getSessionServiceById(sessionId);
     } catch (err) {
-      this.logger.warn(`Session "${sessionId}" not found, falling back to initiated channel session`, { originId, err });
-      return this.sessionManager.getSessionService(originId);
+      this.logger.warn(`Session "${sessionId}" not found, falling back to initiated channel session`, { origin, err });
+      return this.sessionManager.getSessionService(origin);
     }
   }
 }

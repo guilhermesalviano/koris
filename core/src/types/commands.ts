@@ -12,6 +12,8 @@ export interface CommandContext {
   learnedSkillsEnabled?: boolean;
   /** Stable id of the conversation origin (chat/user), surfaced by `/whoami`. */
   originId?: string;
+  /** The current turn's session row id, needed by `/errand` to record the errand's origin. */
+  sessionId?: string;
   session?: {
     messageCount: number;
     startTime: Date;

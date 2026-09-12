@@ -20,9 +20,30 @@ function makeOutboundRepo(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeService(channels = makeChannels(), outboundRepo = makeOutboundRepo()) {
-  const service = new OutboundMessageService(logger as never, channels as never, outboundRepo as never);
-  return { service, channels, outboundRepo };
+function makeDb() {
+  return { run: vi.fn(), get: vi.fn(), query: vi.fn(() => []), transaction: vi.fn((fn: () => unknown) => fn()) };
+}
+
+function makeSessionManager() {
+  const sessionService = {
+    getSession: () => ({ id: 'target-session' }),
+    ensureActiveSession: () => ({ id: 'target-session' }),
+    updateCount: vi.fn(),
+  };
+  return {
+    getSessionService: vi.fn().mockReturnValue(sessionService),
+    getSessionServiceById: vi.fn(),
+  };
+}
+
+function makeService(
+  channels = makeChannels(),
+  outboundRepo = makeOutboundRepo(),
+  db = makeDb(),
+  sessionManager = makeSessionManager(),
+) {
+  const service = new OutboundMessageService(logger as never, db as never, channels as never, outboundRepo as never, sessionManager as never);
+  return { service, channels, outboundRepo, db, sessionManager };
 }
 
 describe('OutboundMessageService', () => {
@@ -37,6 +58,39 @@ describe('OutboundMessageService', () => {
     expect(result).toBeInstanceOf(OutboundMessage);
     expect(result.status).toBe('sent');
     expect(result.target).toBe('987654321');
+  });
+
+  it('records what was sent into the target session transcript before delivering', async () => {
+    const { service, sessionManager, db } = makeService();
+
+    await service.send({ content: 'Olá!', channel: 'telegram', target: '987654321' });
+
+    expect(sessionManager.getSessionService).toHaveBeenCalledWith({ channel: 'telegram', peerId: '987654321', kind: 'user' });
+    // MessageService.save → MessageRepository.save issues an INSERT INTO messages.
+    expect(db.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO messages'), expect.any(Array));
+  });
+
+  it('records into the delegated session when kind is passed through', async () => {
+    const { service, sessionManager } = makeService();
+
+    await service.send({ content: 'Hi there', channel: 'whatsapp', target: '5551234', kind: 'delegated' });
+
+    expect(sessionManager.getSessionService).toHaveBeenCalledWith({ channel: 'whatsapp', peerId: '5551234', kind: 'delegated' });
+  });
+
+  it('still delivers the message even if recording the transcript fails', async () => {
+    const channels = makeChannels();
+    const sessionManager = makeSessionManager();
+    sessionManager.getSessionService.mockImplementation(() => {
+      throw new Error('session layer down');
+    });
+    const { service } = makeService(channels, makeOutboundRepo(), makeDb(), sessionManager);
+
+    const result = await service.send({ content: 'Olá!', channel: 'telegram', target: '987654321' });
+
+    expect(channels.sendMessage).toHaveBeenCalledWith('telegram', '987654321', 'Olá!');
+    expect(result.status).toBe('sent');
+    expect(logger.warn).toHaveBeenCalled();
   });
 
   it('records a failed message when sending throws', async () => {

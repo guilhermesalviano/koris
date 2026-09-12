@@ -4,6 +4,9 @@ import { AIServiceError } from '../../../../src/services/ai-completion-service';
 import { config } from '../../../../src/config';
 import { applyTestConfigDefaults } from '../../../helpers/test-config';
 import type { ILogger } from '../../../../src/infrastructure/logger';
+import { buildErrandService } from '../../../../src/services/errands';
+
+vi.mock('../../../../src/services/errands', () => ({ buildErrandService: vi.fn() }));
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
@@ -44,24 +47,31 @@ function makeDeps() {
 function makeGateway(channel = 'tui') {
   const logger = makeLogger();
   const deps = makeDeps();
+  const db = {} as never;
+  const sessionManager = {} as never;
+  const negotiator = { run: vi.fn().mockResolvedValue({ reply: 'negotiator reply', applied: 'continue' }) };
 
   const gateway = new MessageGateway(
     logger,
     channel,
+    db,
+    sessionManager,
     deps.sessionContextFactory as never,
     deps.backgroundDispatcher as never,
     deps.mainAgent as never,
     deps.channelService as never,
     deps.auditLogRepo as never,
+    negotiator as never,
   );
 
-  return { gateway, logger, deps };
+  return { gateway, logger, deps, negotiator };
 }
 
 describe('MessageGateway', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     applyTestConfigDefaults();
+    vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null) } as never);
   });
 
   afterEach(() => {
@@ -225,7 +235,10 @@ describe('MessageGateway', () => {
 
     await gateway.handle('hello', 'origin-1', { sessionId: 'session-by-id' });
 
-    expect(deps.sessionContextFactory.resolve).toHaveBeenCalledWith('origin-1', 'session-by-id');
+    expect(deps.sessionContextFactory.resolve).toHaveBeenCalledWith(
+      { channel: 'tui', peerId: 'origin-1', kind: 'user' },
+      'session-by-id',
+    );
   });
 
   it('coerces non-string input before processing', async () => {
@@ -300,6 +313,9 @@ describe('MessageGateway', () => {
       deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'hi' }] as never);
       deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
       deps.sessionService.getSession
+        // One extra call up front: the command dispatcher reads the current
+        // session id to attribute e.g. `/errand` to its origin session.
+        .mockReturnValueOnce({ id: 'session-1' })
         .mockReturnValueOnce({ id: 'session-1' })
         .mockReturnValue({ id: 'session-2' });
 
@@ -353,6 +369,7 @@ describe('MessageGateway', () => {
       deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
       deps.sessionService.getSession
         .mockReturnValueOnce({ id: 'session-1' })
+        .mockReturnValueOnce({ id: 'session-1' })
         .mockReturnValue({ id: 'session-2' });
       const onSessionRotated = vi.fn();
 
@@ -368,6 +385,7 @@ describe('MessageGateway', () => {
       deps.messageService.getHistory.mockReturnValue([{ role: 'user', content: 'hi' }] as never);
       deps.sessionService.forceRotate.mockReturnValue({ id: 'session-2' });
       deps.sessionService.getSession
+        .mockReturnValueOnce({ id: 'session-1' })
         .mockReturnValueOnce({ id: 'session-1' })
         .mockReturnValue({ id: 'session-2' });
       const onSessionRotated = vi.fn();
@@ -569,6 +587,86 @@ describe('MessageGateway', () => {
       expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
         expect.objectContaining({ answerErrorCode: 'context_length' }),
       );
+    });
+  });
+
+  describe('errand routing', () => {
+    it('a trusted sender always reaches their own user session, never the negotiator', async () => {
+      const { gateway, deps, negotiator } = makeGateway('whatsapp');
+
+      await gateway.handle('hello', 'origin-1', { toolsEnabled: true, isTrustedSender: true });
+
+      expect(buildErrandService).not.toHaveBeenCalled();
+      expect(negotiator.run).not.toHaveBeenCalled();
+      expect(deps.sessionContextFactory.resolve).toHaveBeenCalledWith(
+        { channel: 'whatsapp', peerId: 'origin-1', kind: 'user' },
+        undefined,
+      );
+      expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
+    });
+
+    it('an untrusted sender with no active errand gets today\'s behaviour: routed to the user session, tools disabled by the caller', async () => {
+      const { gateway, deps, negotiator } = makeGateway('whatsapp');
+
+      await gateway.handle('hello', 'origin-1', { toolsEnabled: false, isTrustedSender: false });
+
+      expect(negotiator.run).not.toHaveBeenCalled();
+      expect(deps.sessionContextFactory.resolve).toHaveBeenCalledWith(
+        { channel: 'whatsapp', peerId: 'origin-1', kind: 'user' },
+        undefined,
+      );
+      expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
+    });
+
+    it('an untrusted sender with an active errand is routed to the negotiator on the delegated session', async () => {
+      const { gateway, deps, negotiator } = makeGateway('whatsapp');
+      vi.mocked(buildErrandService).mockReturnValue({
+        findActiveForPeer: vi.fn().mockReturnValue({ errand: { id: 'errand-1' }, sessionId: 'delegated-session' }),
+      } as never);
+
+      const result = await gateway.handle('what is the status?', 'origin-1', { isTrustedSender: false });
+
+      expect(deps.sessionContextFactory.resolve).toHaveBeenCalledWith(
+        { channel: 'whatsapp', peerId: 'origin-1', kind: 'delegated' },
+        undefined,
+      );
+      expect(negotiator.run).toHaveBeenCalledWith({
+        errandId: 'errand-1',
+        sessionId: 'session-1',
+        channel: 'whatsapp',
+        peerMessage: 'what is the status?',
+        messageHistory: [],
+      });
+      expect(result).toBe('negotiator reply');
+    });
+
+    it('never dispatches a command, and never calls the main agent, for a delegated turn', async () => {
+      const { gateway, deps } = makeGateway('whatsapp');
+      vi.mocked(buildErrandService).mockReturnValue({
+        findActiveForPeer: vi.fn().mockReturnValue({ errand: { id: 'errand-1' }, sessionId: 'delegated-session' }),
+      } as never);
+
+      await gateway.handle('/clear', 'origin-1', { isTrustedSender: false });
+
+      expect(deps.mainAgent.run).not.toHaveBeenCalled();
+      expect(deps.sessionService.forceRotate).not.toHaveBeenCalled();
+    });
+
+    it('persists the delegated turn into the same (delegated) session transcript', async () => {
+      const { gateway, deps } = makeGateway('whatsapp');
+      vi.mocked(buildErrandService).mockReturnValue({
+        findActiveForPeer: vi.fn().mockReturnValue({ errand: { id: 'errand-1' }, sessionId: 'delegated-session' }),
+      } as never);
+
+      await gateway.handle('hello', 'origin-1', { isTrustedSender: false });
+
+      expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        ask: 'hello',
+        askImages: undefined,
+        answer: 'negotiator reply',
+        channel: 'whatsapp',
+      });
     });
   });
 });

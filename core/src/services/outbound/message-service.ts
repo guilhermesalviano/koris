@@ -4,11 +4,15 @@ import { IChannelsManager } from '../../channels';
 import { OutboundMessage } from '../../entities/outbound-message';
 import { ChannelType, CHANNEL_TYPES } from '../../entities/channel';
 import { IOutboundMessageRepository, OutboundMessageRepositoryFactory } from '../../repositories/outbound-message';
+import { ISessionManager } from '../session-manager';
+import { MessageServiceFactory } from '../message-service';
+import { SessionKind } from '../../types/session';
 
 export interface SendOutboundInput {
   content: string;
   channel: string;
   target: string;
+  kind?: SessionKind;
 }
 
 interface DeliveryTarget {
@@ -27,8 +31,10 @@ function isValidChannel(channel: string): channel is ChannelType {
 class OutboundMessageService implements IOutboundMessageService {
   constructor(
     private logger: ILogger,
+    private db: IDatabaseService,
     private channelsManager: IChannelsManager,
     private outboundMessageRepository: IOutboundMessageRepository,
+    private sessionManager: ISessionManager,
   ) {}
 
   async send(input: SendOutboundInput): Promise<OutboundMessage> {
@@ -41,6 +47,24 @@ class OutboundMessageService implements IOutboundMessageService {
       status: 'sent',
     });
     this.outboundMessageRepository.save(message);
+
+    // Record what koris said in the target's own transcript so the session
+    // isn't half-deaf from turn two: without this, the session holds the
+    // contact's replies but never what was sent to them.
+    try {
+      const sessionService = this.sessionManager.getSessionService({
+        channel: delivery.channel,
+        peerId: delivery.target,
+        kind: input.kind ?? 'user',
+      });
+      MessageServiceFactory.create(this.db, sessionService).save({ role: 'assistant', content: input.content });
+    } catch (err) {
+      this.logger.warn('Failed to record outbound message in session transcript', {
+        channel: delivery.channel,
+        target: delivery.target,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     try {
       await this.channelsManager.sendMessage(delivery.channel, delivery.target, input.content);
@@ -65,11 +89,18 @@ class OutboundMessageService implements IOutboundMessageService {
 }
 
 class OutboundMessageServiceFactory {
-  public static create(logger: ILogger, channelsManager: IChannelsManager, db: IDatabaseService): OutboundMessageService {
+  public static create(
+    logger: ILogger,
+    channelsManager: IChannelsManager,
+    db: IDatabaseService,
+    sessionManager: ISessionManager,
+  ): OutboundMessageService {
     return new OutboundMessageService(
       logger,
+      db,
       channelsManager,
       OutboundMessageRepositoryFactory.create(db),
+      sessionManager,
     );
   }
 }

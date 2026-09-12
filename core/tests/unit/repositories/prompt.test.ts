@@ -587,3 +587,44 @@ describe('PromptRepository prompt sanitizer', () => {
     expect(logger.info).not.toHaveBeenCalledWith('[prompt-sanitizer] prompt sanitized', expect.anything());
   });
 });
+
+describe('PromptRepository includeMemory gating (delegated/errand sessions)', () => {
+  const originalEmbeddingEnabled = config.AI.EMBED.ENABLED;
+
+  beforeEach(() => {
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = false;
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    (config.AI.EMBED as { ENABLED: boolean }).ENABLED = originalEmbeddingEnabled;
+  });
+
+  it('includes the memory block by default', async () => {
+    const memoryRepository = {
+      getAll: vi.fn().mockReturnValue([makeMemory({ id: 'm1', content: 'User likes coffee.' })]),
+      search: vi.fn(),
+    };
+    const repository = makeRepository({ memoryRepository });
+
+    const { messages } = await repository.build({ userMessage: 'hi', channel: 'whatsapp' });
+
+    expect(messages[0].content).toContain('# Long-term Memory Context');
+  });
+
+  // A delegated (errand) session talks to an untrusted third party — they must
+  // never be able to probe the principal's personal facts via long-term memory.
+  it('omits the memory block entirely when includeMemory is false, without even querying the repository', async () => {
+    const memoryRepository = {
+      getAll: vi.fn().mockReturnValue([makeMemory({ id: 'm1', content: 'User likes coffee.' })]),
+      search: vi.fn(),
+    };
+    const repository = makeRepository({ memoryRepository });
+
+    const { messages } = await repository.build({ userMessage: 'hi', channel: 'whatsapp', includeMemory: false });
+
+    expect(messages[0].content).not.toContain('# Long-term Memory Context');
+    expect(memoryRepository.getAll).not.toHaveBeenCalled();
+    expect(memoryRepository.search).not.toHaveBeenCalled();
+  });
+});

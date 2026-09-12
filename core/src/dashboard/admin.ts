@@ -53,6 +53,11 @@ import { OutboundMessageRepositoryFactory } from '../repositories/outbound-messa
 import { ChannelsSingleton } from '../channels';
 import { OutboundMessageServiceFactory } from '../services/outbound/message-service';
 import { IMessageGateway } from '../services/agents/message-gateway';
+import { ISessionManager } from '../services/session-manager';
+import { ErrandRepositoryFactory } from '../repositories/errand';
+import { buildErrandService } from '../services/errands';
+import { ERRAND_STATES, ErrandState } from '../types/errand';
+import { Errand } from '../entities/errand';
 import { PluginSettingsRepositoryFactory, type IPluginSettingsRepository } from '../repositories/plugin-settings';
 import { resolvePluginEnabled } from '../services/plugins/plugin-enablement';
 import { PluginCatalogSingleton } from '../services/plugins/plugin-catalog-singleton';
@@ -313,7 +318,7 @@ function toAuditJson(row: AuditLogRow) {
 }
 
 class AdminRouterFactory {
-  static create(logger: ILogger, db: IDatabaseService, gateway: IMessageGateway): Router {
+  static create(logger: ILogger, db: IDatabaseService, gateway: IMessageGateway, sessionManager: ISessionManager): Router {
     const router = express.Router();
 
     const sessionRepo = SessionRepositoryFactory.create(db);
@@ -379,6 +384,8 @@ class AdminRouterFactory {
       res.json({
         sessions: sessionRepo.count(),
         openSessions: sessionRepo.countOpen(),
+        openErrands: (['draft', 'queued', 'open', 'awaiting_peer', 'awaiting_principal'] as ErrandState[])
+          .reduce((sum, state) => sum + ErrandRepositoryFactory.create(db).countByState(state), 0),
         messages: messageRepo.count(),
         memories: memoryRepo.count(),
         heartbeats: beats.length,
@@ -416,14 +423,17 @@ class AdminRouterFactory {
 
     router.get('/sessions', (req: Request, res: Response) => {
       const { limit, offset } = parsePagination(req);
-      const sessions = sessionRepo.findAll(limit, offset);
+      const kind = req.query.kind === 'user' || req.query.kind === 'delegated' ? req.query.kind : undefined;
+      const sessions = sessionRepo.findAll(limit, offset, kind);
       res.json({
-        total: sessionRepo.count(),
+        total: sessionRepo.count(kind),
         limit,
         offset,
         items: sessions.map((session) => ({
           id: session.id,
-          entryChannel: session.entryChannel,
+          channel: session.channel,
+          peerId: session.peerId,
+          kind: session.kind,
           startedAt: session.startedAt,
           endedAt: session.endedAt,
           messageCount: session.messageCount,
@@ -434,11 +444,14 @@ class AdminRouterFactory {
     });
 
     router.post('/sessions', (_req: Request, res: Response) => {
-      const session = new Session({ entryChannel: 'web' });
+      const session = new Session({ channel: 'web', peerId: 'web' });
       sessionRepo.save(session);
+      sessionManager.invalidateKey({ channel: session.channel, peerId: session.peerId, kind: session.kind });
       res.status(201).json({
         id: session.id,
-        entryChannel: session.entryChannel,
+        channel: session.channel,
+        peerId: session.peerId,
+        kind: session.kind,
         startedAt: session.startedAt,
         endedAt: session.endedAt,
         messageCount: session.messageCount,
@@ -459,7 +472,9 @@ class AdminRouterFactory {
       res.json({
         session: {
           id: session.id,
-          entryChannel: session.entryChannel,
+          channel: session.channel,
+          peerId: session.peerId,
+          kind: session.kind,
           startedAt: session.startedAt,
           endedAt: session.endedAt,
           messageCount: session.messageCount,
@@ -486,13 +501,117 @@ class AdminRouterFactory {
     });
 
     router.delete('/sessions/:id', (req: Request, res: Response) => {
-      if (!sessionRepo.findById(String(req.params.id))) {
+      const id = String(req.params.id);
+      if (!sessionRepo.findById(id)) {
         res.status(404).json({ error: 'Session not found' });
         return;
       }
 
-      sessionRepo.deleteById(String(req.params.id));
+      sessionRepo.deleteById(id);
+      sessionManager.invalidate(id);
       res.json({ success: true });
+    });
+
+    function toErrandJson(errand: Errand) {
+      return {
+        id: errand.id,
+        goal: errand.goal,
+        state: errand.state,
+        originSessionId: errand.originSessionId,
+        pendingMessage: errand.pendingMessage ?? null,
+        notes: errand.notes ?? null,
+        result: errand.result ?? null,
+        createdAt: errand.createdAt,
+        lastProgressAt: errand.lastProgressAt ?? null,
+        closedAt: errand.closedAt ?? null,
+      };
+    }
+
+    router.get('/errands', (req: Request, res: Response) => {
+      const errandService = buildErrandService(logger, db, sessionManager);
+      if (!errandService) {
+        res.status(503).json({ error: 'Errands are not available: no channel manager is running.' });
+        return;
+      }
+
+      const { limit, offset } = parsePagination(req);
+      const rawState = typeof req.query.state === 'string' ? req.query.state : undefined;
+      const state = rawState && (ERRAND_STATES as readonly string[]).includes(rawState) ? (rawState as ErrandState) : undefined;
+
+      const errands = errandService.listAll(state, limit, offset);
+      res.json({
+        limit,
+        offset,
+        items: errands.map((errand) => ({
+          ...toErrandJson(errand),
+          targets: ErrandRepositoryFactory.create(db).findTargets(errand.id),
+        })),
+      });
+    });
+
+    router.get('/errands/:id', (req: Request, res: Response) => {
+      const errandService = buildErrandService(logger, db, sessionManager);
+      if (!errandService) {
+        res.status(503).json({ error: 'Errands are not available: no channel manager is running.' });
+        return;
+      }
+
+      const errand = errandService.get(String(req.params.id));
+      if (!errand) {
+        res.status(404).json({ error: 'Errand not found' });
+        return;
+      }
+
+      res.json({
+        ...toErrandJson(errand),
+        targets: ErrandRepositoryFactory.create(db).findTargets(errand.id),
+      });
+    });
+
+    router.post('/errands/:id/approve', (req: Request, res: Response) => {
+      const errandService = buildErrandService(logger, db, sessionManager);
+      if (!errandService) {
+        res.status(503).json({ error: 'Errands are not available: no channel manager is running.' });
+        return;
+      }
+
+      try {
+        res.json(toErrandJson(errandService.approve(String(req.params.id))));
+      } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    router.post('/errands/:id/cancel', (req: Request, res: Response) => {
+      const errandService = buildErrandService(logger, db, sessionManager);
+      if (!errandService) {
+        res.status(503).json({ error: 'Errands are not available: no channel manager is running.' });
+        return;
+      }
+
+      try {
+        res.json(toErrandJson(errandService.cancel(String(req.params.id))));
+      } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    router.post('/errands/:id/close', (req: Request, res: Response) => {
+      const errandService = buildErrandService(logger, db, sessionManager);
+      if (!errandService) {
+        res.status(503).json({ error: 'Errands are not available: no channel manager is running.' });
+        return;
+      }
+
+      const result = typeof req.body?.result === 'string' && req.body.result.trim()
+        ? req.body.result.trim()
+        : 'Closed by the principal.';
+
+      try {
+        res.json(toErrandJson(errandService.resolve(String(req.params.id), result)));
+      } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+      }
     });
 
     router.get('/memories', (req: Request, res: Response) => {
@@ -594,7 +713,7 @@ class AdminRouterFactory {
     });
 
     router.get('/chat/history', (_req: Request, res: Response) => {
-      const session = sessionRepo.findLatestOpenByEntryChannel('web');
+      const session = sessionRepo.findLatestOpen({ channel: 'web', peerId: 'web' });
       if (!session) {
         res.json({ sessionId: null, messages: [] });
         return;
@@ -623,7 +742,7 @@ class AdminRouterFactory {
       const requestedId = typeof req.query.sessionId === 'string' ? req.query.sessionId : '';
       const session = requestedId
         ? sessionRepo.findById(requestedId)
-        : sessionRepo.findLatestOpenByEntryChannel('web');
+        : sessionRepo.findLatestOpen({ channel: 'web', peerId: 'web' });
       const limit = config.AI.MANAGER.NUM_CTX;
       if (!session) {
         res.json({ used: 0, limit, threshold: compactTriggerTokens() });
@@ -708,7 +827,7 @@ class AdminRouterFactory {
         return;
       }
 
-      const service = OutboundMessageServiceFactory.create(logger, channelsManager, db);
+      const service = OutboundMessageServiceFactory.create(logger, channelsManager, db, sessionManager);
       const message = await service.send({
         content: content.trim(),
         channel: String(channel),

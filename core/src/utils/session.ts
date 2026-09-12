@@ -21,3 +21,13 @@ export function getLastActivityAt(session: {
 
   return session.startedAt;
 }
+
+/** Single source of truth for "has this session gone idle past the TTL?" —
+ * previously duplicated at every call site. */
+export function isExpired(
+  session: { startedAt?: string; metadata?: Record<string, unknown> },
+  ttlMs: number,
+  now: number = Date.now(),
+): boolean {
+  return isSessionExpired(getLastActivityAt(session), ttlMs, now);
+}

@@ -142,6 +142,35 @@ async function main() {
     `${Math.round(config.SESSION.COMPACT_THRESHOLD * 100)}% of manager num_ctx`,
   );
 
+  check(
+    Number.isFinite(config.SESSION.TTL_MS) && config.SESSION.TTL_MS > 0,
+    'session.ttl_ms is a positive number',
+    // A garbage value coerces to NaN, and `now - x > NaN` is always false — sessions never expire.
+    `Got: ${JSON.stringify(deepGet(rawSettings, 'session.ttl_ms'))}. Expected a positive number of milliseconds; an invalid value makes sessions never expire.`,
+    `${config.SESSION.TTL_MS}ms`,
+  );
+
+  check(
+    Number.isFinite(config.ERRANDS.HARD_EXPIRY_MS) && config.ERRANDS.HARD_EXPIRY_MS > 0,
+    'errands.hard_expiry_ms is a positive number',
+    `Got: ${JSON.stringify(deepGet(rawSettings, 'errands.hard_expiry_ms'))}. Expected a positive number of milliseconds.`,
+    `${config.ERRANDS.HARD_EXPIRY_MS}ms`,
+  );
+
+  check(
+    Number.isInteger(config.ERRANDS.HISTORY_LIMIT) && config.ERRANDS.HISTORY_LIMIT > 0,
+    'errands.history_limit is a positive integer',
+    `Got: ${JSON.stringify(deepGet(rawSettings, 'errands.history_limit'))}. Expected a positive integer.`,
+    String(config.ERRANDS.HISTORY_LIMIT),
+  );
+
+  check(
+    Number.isInteger(config.ERRANDS.MAX_CONCURRENT) && config.ERRANDS.MAX_CONCURRENT > 0,
+    'errands.max_concurrent is a positive integer',
+    `Got: ${JSON.stringify(deepGet(rawSettings, 'errands.max_concurrent'))}. Expected a positive integer.`,
+    String(config.ERRANDS.MAX_CONCURRENT),
+  );
+
   const channelsAllowingUnlisted = listLiveChannels()
     .filter((channel) => channel.loadConfig().allowUnlistedSenders === true)
     .map((channel) => channel.name);

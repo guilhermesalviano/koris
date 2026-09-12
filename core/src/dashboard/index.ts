@@ -14,6 +14,7 @@ import type { ImageAttachment } from '../types/messages';
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { SessionRepositoryFactory } from '../repositories/session';
+import { ISessionManager } from '../services/session-manager';
 import { getAudioTranscriptionService } from '../services/audio/audio-transcription-service';
 import { getSpeechSynthesisService } from '../services/audio/audio-synthesis-service';
 import { AdminRouterFactory } from './admin';
@@ -454,6 +455,7 @@ class DashboardServer implements WebServerHandle {
     private readonly logger: ILogger,
     private readonly gateway: IMessageGateway,
     private readonly db: IDatabaseService,
+    private readonly sessionManager: ISessionManager,
     private readonly listen: WebListenOptions = {},
   ) {}
 
@@ -520,7 +522,7 @@ class DashboardServer implements WebServerHandle {
     const healthHandler = new HealthRouteHandler(this.logger);
     const audioTranscribeHandler = new AudioTranscribeRouteHandler(this.logger);
     const audioSpeakHandler = new SpeechSynthesizeRouteHandler(this.logger);
-    const adminRouter = AdminRouterFactory.create(this.logger, this.db, this.gateway);
+    const adminRouter = AdminRouterFactory.create(this.logger, this.db, this.gateway, this.sessionManager);
 
     // Security headers — applied to every response
     app.use(securityHeaders());
@@ -571,14 +573,15 @@ class DashboardServerFactory {
     logger: ILogger,
     gateway: IMessageGateway,
     db: IDatabaseService,
+    sessionManager: ISessionManager,
     listen?: WebListenOptions,
   ): WebServerHandle {
-    return new DashboardServer(logger, gateway, db, listen);
+    return new DashboardServer(logger, gateway, db, sessionManager, listen);
   }
 }
 
-function createApp(options: { logger: ILogger; gateway: IMessageGateway; db: IDatabaseService }): Application {
-  return new DashboardServer(options.logger, options.gateway, options.db).createApp();
+function createApp(options: { logger: ILogger; gateway: IMessageGateway; db: IDatabaseService; sessionManager: ISessionManager }): Application {
+  return new DashboardServer(options.logger, options.gateway, options.db, options.sessionManager).createApp();
 }
 
 function serveIndexHandler(publicDir: string) {
@@ -609,9 +612,10 @@ async function startWebServer(
   logger: ILogger,
   gateway: IMessageGateway,
   db: IDatabaseService,
+  sessionManager: ISessionManager,
   listen?: WebListenOptions,
 ): Promise<WebServerHandle> {
-  return new DashboardServer(logger, gateway, db, listen).start();
+  return new DashboardServer(logger, gateway, db, sessionManager, listen).start();
 }
 
 export {

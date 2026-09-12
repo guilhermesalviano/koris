@@ -47,6 +47,10 @@ export type ProcessOptions = {
   channel?: string;
   /** Skill documentation loaded for this turn only, by a `/<skill>` command. */
   skillBlocks?: string[];
+  /** Forwarded from `InboundChannelMessage.isTrustedSender` so the gateway can
+   * route an untrusted peer with an active errand to the negotiator instead
+   * of the principal's own session. Undefined (web/tui) is treated as trusted. */
+  isTrustedSender?: boolean;
 };
 
 export type InboundInput = string | { text: string; images?: ImageAttachment[]; stickers?: StickerReference[] };

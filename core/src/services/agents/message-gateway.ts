@@ -14,10 +14,13 @@ import { generateId } from '../../utils/generate-id';
 import { replacePlaceholders } from '../../utils/prompt';
 import { SKILL_INVOCATION_PROMPT } from '../../constants';
 import { ISessionContextFactory, SessionContextFactory, SessionContext } from './session-context';
+import { SessionKey } from '../../types/session';
 import { IBackgroundDispatcher, BackgroundDispatcherFactory } from './background-dispatcher';
 import { shouldAutoCompact } from './context-budget';
 import { IChannelService, ChannelServiceFactory } from '../channel-service';
 import type { InboundInput, IMessageGateway, StickerReference } from '../../../../plugins/channels/contracts';
+import { buildErrandService } from '../errands';
+import { Negotiator, NegotiatorFactory } from './sub-agents/negotiator/sub-agent';
 
 export type { InboundInput, IMessageGateway };
 
@@ -56,11 +59,14 @@ class MessageGateway implements IMessageGateway {
   constructor(
     private logger: ILogger,
     private channel: string,
+    private db: IDatabaseService,
+    private sessionManager: ISessionManager,
     private sessionContextFactory: ISessionContextFactory,
     private backgroundDispatcher: IBackgroundDispatcher,
     private mainAgent: IMainAgent,
     private channelService: IChannelService,
     private auditRepo: IAuditLogRepository,
+    private negotiator: Negotiator,
   ) {}
 
   async handle(input: InboundInput, originId: string, options?: ProcessOptions): Promise<ProcessedMessage> {
@@ -70,11 +76,41 @@ class MessageGateway implements IMessageGateway {
 
     this.logger.info(`Processing message from ${channel} (origin: ${originId}): "${previewMessage(safeMessage)}"${images?.length ? ` with ${images.length} image(s)` : ''}`);
 
-    const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(originId, options?.sessionId);
+    // An untrusted peer with an active errand talks to the negotiator, not
+    // the principal's own session — resolved against the peer's *delegated*
+    // session, never the trusted `user` one.
+    const activeErrand = options?.isTrustedSender === false
+      ? buildErrandService(this.logger, this.db, this.sessionManager)?.findActiveForPeer(channel, originId) ?? null
+      : null;
+
+    const origin: SessionKey = activeErrand
+      ? { channel, peerId: originId, kind: 'delegated' }
+      : { channel, peerId: originId, kind: 'user' };
+    const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(origin, options?.sessionId);
 
     this.channelService.record(channel, originId);
 
     const sessionCtx: SessionContext = { sessionService, messageService, memoryService };
+
+    if (activeErrand) {
+      // Delegated turn: the negotiator drives it end to end — commands and
+      // tools are never dispatched for an untrusted peer's message.
+      const result = await this.negotiator.run({
+        errandId: activeErrand.errand.id,
+        sessionId: sessionService.getSession().id,
+        channel,
+        peerMessage: safeMessage,
+        messageHistory: messageService.getHistory(),
+      });
+      this.backgroundDispatcher.persistConversation({
+        sessionId: sessionService.getSession().id,
+        ask: safeMessage,
+        askImages: images,
+        answer: result.reply,
+        channel,
+      });
+      return result.reply;
+    }
 
     let agentMessage = safeMessage;
     let skillBlocks: string[] | undefined;
@@ -85,6 +121,7 @@ class MessageGateway implements IMessageGateway {
         trusted: !!options?.toolsEnabled,
         learnedSkillsEnabled: options?.learnedSkillsEnabled,
         originId,
+        sessionId: sessionService.getSession().id,
       });
 
       // A skill command is the one command that does not answer the turn: it
@@ -379,8 +416,9 @@ class MessageGatewayFactory {
     const mainAgent = MainAgentFactory.create(logger);
     const channelService = ChannelServiceFactory.create(db);
     const auditRepo = AuditLogRepositoryFactory.create(db);
+    const negotiator = NegotiatorFactory.create(logger, db, sessionManager);
 
-    return new MessageGateway(logger, channel, sessionContextFactory, backgroundDispatcher, mainAgent, channelService, auditRepo);
+    return new MessageGateway(logger, channel, db, sessionManager, sessionContextFactory, backgroundDispatcher, mainAgent, channelService, auditRepo, negotiator);
   }
 }
 
