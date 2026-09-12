@@ -692,7 +692,8 @@ describe('MessageGateway', () => {
       const first = gateway.handle('10 is unavailable', 'origin-1', { isTrustedSender: false });
       const second = gateway.handle('11 or 14', 'origin-1', { isTrustedSender: false });
       await vi.waitFor(() => expect(negotiator.run).toHaveBeenCalledTimes(1));
-      expect(deps.messageService.save).not.toHaveBeenCalled();
+      expect(history).toEqual([expect.objectContaining({ role: 'user', content: '10 is unavailable' })]);
+      expect(negotiator.run).toHaveBeenNthCalledWith(1, expect.objectContaining({ messageHistory: [] }));
       release();
       await Promise.all([first, second]);
       expect(negotiator.run).toHaveBeenNthCalledWith(2, expect.objectContaining({

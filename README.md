@@ -135,7 +135,8 @@ Negotiator.run(goal + notes + delegated transcript)              |
   |                                                             |
   +-> continue -> awaiting_peer -> reply to contact              |
   +-> escalate -> awaiting_principal -> question to principal ---+
-  +-> resolved / failed -> terminal -> result to principal ------+
+  +-> resolved -> deliver thank-you -> result to principal ------+
+  +-> failed -> terminal -> result to principal -----------------+
                                                                 |
 Principal: /errand reply <id> <answer> or admin Reply             |
   |                                                             |
@@ -158,7 +159,7 @@ composeResume() -> send to contact -> awaiting_peer              |
                                          -> merge by saved message ID
 ```
 
-Creation stages the opener for approval. Closing an errand as `resolved`, `failed`, or `cancelled` can promote the oldest eligible queued errand to `draft`; it still needs approval. Cancellation sends no notice. Reading a stale `open`, `awaiting_peer`, or `awaiting_principal` errand lazily marks it `expired`; that path currently neither notifies the principal nor promotes queued work. `open` is accepted by the model, but the normal approval path goes directly from `draft` to `awaiting_peer`.
+Creation stages the opener for approval. When the negotiator achieves the goal, it sends a brief thank-you in the contact's language and waits for delivery before resolving the errand and notifying the parent session. An empty model reply uses a default thank-you; failed delivery leaves the errand open. Closing an errand as `resolved`, `failed`, or `cancelled` can promote the oldest eligible queued errand to `draft`; it still needs approval. Cancellation sends no notice. Reading a stale `open`, `awaiting_peer`, or `awaiting_principal` errand lazily marks it `expired`; that path currently neither notifies the principal nor promotes queued work. `open` is accepted by the model, but the normal approval path goes directly from `draft` to `awaiting_peer`.
 
 Use `/errand` to list errands from the current session, `/errand approve <id>` to approve, `/errand reply <id> <answer>` (or `answer`) to respond to a question, `/errand close <id>` to resolve manually, and `/errand cancel <id>` to cancel. The admin Errands page exposes details, contact transcripts, and these actions. An ordinary chat answer is not automatically routed back to a waiting errand.
 
@@ -186,7 +187,7 @@ The web synchronization fix is covered by regression tests for saved-message rec
 - **Fixed: new messages no longer depend on the history count growing.** The client retains database message IDs and merges unseen records, including when the latest-200 window stays the same size. Matching saved copies acquire the optimistic message's UI identity; pending replies and local request failures remain visible. Older loaded messages are retained. The API still returns only 200 records, so more than 200 arrivals between successful polls require the cursor-based replay planned below.
 - **Fixed: polling cannot overwrite another chat after navigation.** Requests and queued UI updates check the session and view/turn generation; overlapping requests within a poller are skipped and disposed pollers ignore delayed responses. Polling pauses only for work in the viewed session and catches up immediately after streaming or background processing finishes.
 - **Notices belong to the original chat.** Errand notices use the exact originating session across transports, even after `/clear`, `/compact`, or navigation to another chat. Only the active web chat is polled; there is no errand notice notification for other chats.
-- **Delivery success is not awaited by errands.** Channel pushes run with `void outboundMessageService.send(...)`. Approval/resume can report `awaiting_peer` or "sent" before delivery finishes; failed sends are recorded in the outbound log without changing that errand state.
+- **Approval/resume delivery success is not awaited.** These channel pushes run with `void outboundMessageService.send(...)` and can report `awaiting_peer` or "sent" before delivery finishes; failed sends are recorded in the outbound log without changing that errand state. The negotiator's closing thank-you awaits successful delivery before completion.
 
 ### Plan: Reliable Replies to the Invoking Channel
 

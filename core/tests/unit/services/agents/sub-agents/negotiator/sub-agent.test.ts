@@ -15,6 +15,7 @@ function makeErrandService(overrides: Record<string, unknown> = {}) {
     recordPeerReply: vi.fn(),
     escalate: vi.fn(),
     resolve: vi.fn(),
+    resolveWithClosingReply: vi.fn().mockResolvedValue({ state: 'resolved' }),
     fail: vi.fn(),
     ...overrides,
   };
@@ -234,15 +235,24 @@ describe('Negotiator', () => {
     expect(result.reply).toBe('Let me check with them.');
   });
 
-  it('"resolved": closes the errand with the result and replies', async () => {
+  it('"resolved": sends the thank-you before closing without returning a duplicate channel reply', async () => {
     const { negotiator, errandService } = makeNegotiator({
-      completionText: JSON.stringify({ action: 'resolved', reply: 'Great, deal closed!', detail: 'agreed on $10' }),
+      completionText: JSON.stringify({ action: 'resolved', reply: 'Thank you for your help!', detail: 'agreed on $10' }),
     });
 
     const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'deal', messageHistory: [] });
 
-    expect(errandService.resolve).toHaveBeenCalledWith('errand-1', 'agreed on $10', undefined);
-    expect(result).toEqual({ reply: 'Great, deal closed!', applied: 'resolved' });
+    expect(errandService.resolveWithClosingReply).toHaveBeenCalledWith('errand-1', 's1', 'Thank you for your help!', 'agreed on $10', undefined);
+    expect(errandService.resolve).not.toHaveBeenCalled();
+    expect(result).toEqual({ reply: '', applied: 'resolved' });
+  });
+
+  it.each([undefined, '', '   '])('uses a thank-you fallback when the resolved reply is %s', async (reply) => {
+    const { negotiator, errandService } = makeNegotiator({
+      completionText: JSON.stringify({ action: 'resolved', reply, detail: 'Booking confirmed' }),
+    });
+    await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'Confirmed', messageHistory: [] });
+    expect(errandService.resolveWithClosingReply).toHaveBeenCalledWith('errand-1', 's1', 'Thank you for your help!', 'Booking confirmed', undefined);
   });
 
   it('"failed": closes the errand with the reason', async () => {

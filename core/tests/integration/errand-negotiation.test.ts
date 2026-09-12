@@ -190,7 +190,24 @@ describe('errand negotiation across contact and parent sessions', () => {
     expect(errands.get(errand.id)?.pendingMessage).toBeUndefined();
     expect(errands.get(errand.id)?.state).toBe('awaiting_peer');
 
-    await peer('Confirmed for Saturday at 11, $25.');
+    let finishDelivery!: () => void;
+    const deliveryStarted = new Promise<void>((started) => {
+      channels.sendMessage.mockImplementationOnce(() => {
+        started();
+        return new Promise<void>((resolve) => { finishDelivery = resolve; });
+      });
+    });
+    const finalTurn = peer('Confirmed for Saturday at 11, $25.');
+    await deliveryStarted;
+    expect(channels.sendMessage).toHaveBeenLastCalledWith('whatsapp', '555', 'Thank you, see you then!');
+    expect(errands.get(errand.id)?.state).toBe('awaiting_peer');
+    expect(messages.getBySessionId(parent.id).some((m) => m.content.includes('Haircut confirmed Saturday at 11'))).toBe(false);
+    finishDelivery();
+    expect(await finalTurn).toBe('');
+    expect(messages.getBySessionId(delegatedId).slice(-2).map((m) => m.content)).toEqual([
+      'Confirmed for Saturday at 11, $25.', 'Thank you, see you then!',
+    ]);
+    expect(messages.getBySessionId(delegatedId).filter((m) => m.content === 'Thank you, see you then!')).toHaveLength(1);
     expect(requests[5].messages[0].content).toContain('Principal answer: "11 works for me; please book it."');
     expect(requests[5].messages.map((m) => m.content)).toContain('Alex approved Saturday at 11 for $25. Could you confirm that booking?');
     expect(errands.get(errand.id)?.state).toBe('resolved');

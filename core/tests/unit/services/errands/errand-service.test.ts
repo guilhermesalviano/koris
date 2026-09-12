@@ -206,6 +206,34 @@ describe('ErrandService', () => {
   });
 
   describe('resolve / fail / cancel', () => {
+    it('does not resolve or notify the parent when the closing reply fails delivery', async () => {
+      const { service, errandRepo, outbound } = makeService();
+      errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'Book a haircut', state: 'awaiting_peer', originSessionId: 'parent' }));
+      errandRepo.findTargets.mockReturnValue(['contact']);
+      outbound.send.mockResolvedValue({ status: 'failed' });
+
+      await expect(service.resolveWithClosingReply('e1', 'contact', 'Thank you!', 'Booked')).rejects.toThrow('Could not deliver the closing reply');
+
+      expect(outbound.send).toHaveBeenCalledTimes(1);
+      expect(outbound.send).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'contact', content: 'Thank you!' }));
+      expect(errandRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('preserves cancellation while a closing reply is being delivered', async () => {
+      const { service, errandRepo, outbound } = makeService();
+      const errand = new Errand({ id: 'e1', goal: 'Book a haircut', state: 'awaiting_peer', originSessionId: 'parent' });
+      errandRepo.findById.mockReturnValue(errand);
+      errandRepo.findTargets.mockReturnValue(['contact']);
+      outbound.send.mockImplementationOnce(async () => {
+        errandRepo.findById.mockReturnValue(new Errand({ ...errand, state: 'cancelled' }));
+        return { status: 'sent' };
+      });
+
+      expect((await service.resolveWithClosingReply('e1', 'contact', 'Thank you!', 'Booked')).state).toBe('cancelled');
+      expect(errandRepo.update).not.toHaveBeenCalled();
+      expect(outbound.send).toHaveBeenCalledTimes(1);
+    });
+
     it('resolve closes the errand, sets result and closedAt, and notifies the origin', () => {
       const { service, db, errandRepo, sessionRepo } = makeService();
       errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'buy milk', state: 'awaiting_peer', originSessionId: 'origin-1' }));

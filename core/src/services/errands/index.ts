@@ -42,6 +42,7 @@ interface IErrandService {
   recordPeerReply(id: string, notes?: string): Errand;
   escalate(id: string, question: string, notes?: string): Errand;
   resolve(id: string, result: string, notes?: string): Errand;
+  resolveWithClosingReply(id: string, sessionId: string, reply: string, result: string, notes?: string): Promise<Errand>;
   fail(id: string, reason: string, notes?: string): Errand;
   cancel(id: string): Errand;
   hydrate(errand: Errand): Errand;
@@ -142,6 +143,29 @@ class ErrandService implements IErrandService {
   resolve(id: string, result: string, notes?: string): Errand {
     const errand = this.mustFind(id);
     return this.close(errand, 'resolved', result, notes, `✅ Errand "${errand.goal}" resolved: ${result}`);
+  }
+
+  async resolveWithClosingReply(id: string, sessionId: string, reply: string, result: string, notes?: string): Promise<Errand> {
+    const errand = this.mustFind(id);
+    if (errand.state !== 'open' && errand.state !== 'awaiting_peer') return errand;
+    if (!this.errandRepository.findTargets(id).includes(sessionId)) {
+      throw new Error(`Session ${sessionId} is not a target of errand ${id}.`);
+    }
+    const session = this.sessionRepository.findById(sessionId);
+    if (!session) throw new Error(`Errand target session not found: ${sessionId}`);
+    const delivery = await this.outboundMessageService.send({
+      channel: session.channel,
+      target: session.peerId,
+      kind: session.kind,
+      sessionId,
+      content: reply,
+    });
+    if (delivery.status !== 'sent') {
+      throw new Error(`Could not deliver the closing reply for errand ${id}.`);
+    }
+    const latest = this.mustFind(id);
+    if (latest.state !== errand.state) return latest;
+    return this.resolve(id, result, notes);
   }
 
   fail(id: string, reason: string, notes?: string): Errand {

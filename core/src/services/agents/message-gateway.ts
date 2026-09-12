@@ -111,14 +111,15 @@ class MessageGateway implements IMessageGateway {
       // tools are never dispatched for a contact's delegated message. Read and
       // persist within the queue so the next turn sees the preceding exchange.
       return this.runDelegatedTurn(activeErrand.errand.id, async () => {
+        const messageHistory = messageService.getHistory();
+        messageService.save({ role: 'user', content: safeMessage, images });
         const result = await this.negotiator.run({
           errandId: activeErrand.errand.id,
           sessionId: sessionService.getSession().id,
           channel,
           peerMessage: safeMessage,
-          messageHistory: messageService.getHistory(),
+          messageHistory,
         });
-        messageService.save({ role: 'user', content: safeMessage, images });
         if (result.reply) messageService.save({ role: 'assistant', content: result.reply });
         return result.reply;
       });

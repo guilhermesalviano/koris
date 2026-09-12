@@ -43,6 +43,7 @@ export interface NegotiatorTurnResult {
 }
 
 const HOLDING_REPLY = "Let me check on that and get back to you shortly.";
+const THANK_YOU_REPLY = 'Thank you for your help!';
 const OPENER_REQUEST = 'Write the opening message now.';
 
 class Negotiator {
@@ -192,8 +193,11 @@ class Negotiator {
         errandService.escalate(errand.id, verdict.detail || 'The negotiator needs your input.', verdict.notes);
         break;
       case 'resolved':
-        errandService.resolve(errand.id, verdict.detail || verdict.reply || 'Resolved.', verdict.notes);
-        break;
+        await errandService.resolveWithClosingReply(
+          errand.id, props.sessionId, verdict.reply || THANK_YOU_REPLY,
+          verdict.detail || verdict.reply || 'Resolved.', verdict.notes,
+        );
+        return { reply: '', applied: 'resolved' };
       case 'failed':
         errandService.fail(errand.id, verdict.detail || verdict.reply || 'Failed.', verdict.notes);
         break;
