@@ -43,7 +43,6 @@
     "test:coverage": "vitest run --coverage",
     "test:mutation": "stryker run",
     "release": "tsx scripts/release.ts",
-    "bundle:channels": "tsx scripts/bundle-channels.ts",
     "scaffold:tool": "tsx scripts/scaffold-tool-cli.ts",
     "hub:list": "tsx scripts/hub-sync-cli.ts list",
     "hub:pull": "tsx scripts/hub-sync-cli.ts pull",

@@ -9,8 +9,6 @@ vi.mock('../../../src/services/audio/audio-synthesis-service', () => ({
   getSpeechSynthesisService: () => ({ synthesize: mockSynthesize }),
 }));
 
-const MENTION_ID = '162157312364643';
-
 function configureMode(mode: 'text' | 'voice'): void {
   configureChannelHandler({
     sessionManager: {
@@ -29,7 +27,6 @@ function makeHandler() {
     channel: 'test-channel',
     gateway,
     reply,
-    mentionId: MENTION_ID,
   });
   return { handler, gateway, reply };
 }
@@ -198,10 +195,12 @@ describe('channels/handler', () => {
     expect(reply.sendText).toHaveBeenCalledWith('jid', COMMANDS_RESTRICTED_MESSAGE);
   });
 
-  it('refuses commands from untrusted senders even behind a mention', async () => {
+  // The channel plugin strips its bot's mention before handing the message over,
+  // so what arrives here is the bare command.
+  it('refuses commands from untrusted senders even when the message addressed the bot', async () => {
     const { handler, gateway, reply } = makeHandler();
 
-    await handler.handle('jid', message({ text: `@${MENTION_ID} /compact`, isTrustedSender: false }));
+    await handler.handle('jid', message({ text: '/compact', isTrustedSender: false }));
 
     expect(gateway.handle).not.toHaveBeenCalled();
     expect(reply.sendText).toHaveBeenCalledWith('jid', COMMANDS_RESTRICTED_MESSAGE);
@@ -215,19 +214,6 @@ describe('channels/handler', () => {
 
     expect(gateway.handle).toHaveBeenCalled();
     expect(reply.sendText).toHaveBeenCalledWith('jid', 'pong');
-  });
-
-  it('strips the configured mention from the text', async () => {
-    const { handler, gateway, reply } = makeHandler();
-    gateway.handle.mockResolvedValue('pong');
-
-    await handler.handle('jid', message({ text: `hey @${MENTION_ID} help` }));
-
-    expect(gateway.handle).toHaveBeenCalledWith(
-      { text: '[Context] Chat: direct (untrusted sender). Message: hey  help', images: undefined },
-      'jid',
-      expect.any(Object),
-    );
   });
 
   it('enables tools and learned skills only for trusted senders', async () => {

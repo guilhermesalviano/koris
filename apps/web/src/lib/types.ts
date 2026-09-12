@@ -154,7 +154,6 @@ export interface ChannelHints {
   inactive?: string;
   active?: string;
   pairing?: string;
-  botNumber?: string;
   allowUnlisted?: string;
   whitelist?: string;
   [key: string]: string | undefined;

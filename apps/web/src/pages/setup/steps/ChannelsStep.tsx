@@ -24,7 +24,7 @@ type ConfigurableSlug = "telegram" | "whatsapp";
 const CONFIGURABLE_SLUGS: ConfigurableSlug[] = ["telegram", "whatsapp"];
 
 /** Hint keys that a rendered config field already covers — dropped from the active-hint list. */
-const FIELD_HINT_KEYS = new Set(["uninstalled", "inactive", "allowUnlisted", "botNumber", "whitelist"]);
+const FIELD_HINT_KEYS = new Set(["uninstalled", "inactive", "allowUnlisted", "whitelist"]);
 
 /**
  * Setup-wizard form for one channel, rendered from the hub catalog's `configFields`.

@@ -114,11 +114,43 @@ describe('channel scanner', () => {
     expect(plugins).toEqual([]);
   });
 
+  it('skips a channel whose create() throws, so a bad context never takes boot down', () => {
+    const onLoadError = vi.fn();
+    const boom = new Error('Cannot read properties of undefined');
+
+    const plugins = createPlugins({
+      directory: DIRECTORY,
+      readdirSync: () => dirEntries('whatsapp', 'telegram'),
+      loadModule: (modulePath: string) => {
+        if (modulePath.endsWith('whatsapp')) {
+          return {
+            create: () => {
+              throw boom;
+            },
+          };
+        }
+        return workingModule;
+      },
+      onLoadError,
+    });
+
+    expect(plugins.map((plugin) => plugin.name)).toEqual(['telegram']);
+    expect(onLoadError).toHaveBeenCalledWith('whatsapp', boom);
+  });
+
   it('runs with default options when none are passed', () => {
+    // Exercises the real defaults — `resolveDefaultChannelsDir`, `require` as
+    // `loadModule`, `console.warn` as `onLoadError` — against whatever channels
+    // happen to be installed, so it must not assume any particular one is
+    // present or that `create()` tolerates an undefined context.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
     const plugins = createPlugins();
     expect(Array.isArray(plugins)).toBe(true);
 
     const live = listLiveChannels();
     expect(Array.isArray(live)).toBe(true);
+
+    warn.mockRestore();
   });
 });

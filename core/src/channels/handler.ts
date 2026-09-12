@@ -40,14 +40,12 @@ class ChannelHandler implements IChannelHandler {
   private channel: string;
   private gateway: IMessageGateway;
   private reply: ChannelReply;
-  private mentionId?: string;
   private prefixSenderName: boolean;
 
   constructor(options: ChannelHandlerOptions) {
     this.channel = options.channel;
     this.gateway = options.gateway;
     this.reply = options.reply;
-    this.mentionId = options.mentionId;
     this.prefixSenderName = options.prefixSenderName ?? true;
   }
 
@@ -56,7 +54,10 @@ class ChannelHandler implements IChannelHandler {
       return false;
     }
 
-    const text = this.stripMention(message.text);
+    // Channel plugins strip their own bot's mention before calling in — only
+    // they know every identity it can be addressed by (phone number, LID,
+    // display name), so core never sees an addressing token here.
+    const text = message.text;
 
     if (isCommand(text) && !message.isTrustedSender) {
       await this.reply.sendText(target, COMMANDS_RESTRICTED_MESSAGE);
@@ -170,11 +171,6 @@ class ChannelHandler implements IChannelHandler {
         throw err;
       }
     }
-  }
-
-  private stripMention(text: string): string {
-    if (!this.mentionId) return text;
-    return text.replace(`@${this.mentionId}`, '').trim();
   }
 
   private buildPrompt(message: InboundChannelMessage, text: string): string {

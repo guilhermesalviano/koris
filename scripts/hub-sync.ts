@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path, { basename } from 'node:path';
 import { NAME_PATTERN } from './scaffold-tool';
 
@@ -37,8 +37,14 @@ const HUB_BRANCH = 'main';
 /**
  * Channels aren't pulled as source from a branch like tools/skills — they ship
  * as self-contained, pre-bundled CJS artifacts attached to this rolling GitHub
- * release (built by `pnpm bundle:channels` in koris-hub). Each asset is named
+ * release (built by `pnpm build:channels` in koris-hub). Each asset is named
  * `<slug>-index.js` and lands as `plugins/channels/<slug>/index.js`.
+ *
+ * "Self-contained" is load-bearing, and `assertChannelBundleLoads` enforces it:
+ * a bundle that leaves koris's own modules (`../contracts`, ...) external can't
+ * resolve them here — koris ships those as `.ts` — so it would install cleanly
+ * and then be skipped at boot by `plugins/channels/index.ts` with only a
+ * console warning. The pull fails loudly instead.
  */
 const HUB_CHANNELS_RELEASE_TAG = 'channels-latest';
 const CHANNEL_BUNDLE_ASSET_SUFFIX = '-index.js';
@@ -50,6 +56,8 @@ export interface HubSyncFileIO {
   listDirs(targetPath: string): string[];
   mkdir(targetPath: string): void;
   writeFile(targetPath: string, content: string): void;
+  /** Recursively deletes targetPath; a no-op when it doesn't exist. Used to roll back a freshly pulled channel whose bundle won't load. */
+  remove(targetPath: string): void;
 }
 
 const defaultFileIO: HubSyncFileIO = {
@@ -62,11 +70,55 @@ const defaultFileIO: HubSyncFileIO = {
   },
   mkdir: (targetPath) => mkdirSync(targetPath, { recursive: true }),
   writeFile: (targetPath, content) => writeFileSync(targetPath, content, 'utf-8'),
+  remove: (targetPath) => rmSync(targetPath, { recursive: true, force: true }),
 };
 
 export interface HubSyncHttp {
   fetchJson<T>(url: string): Promise<T>;
   fetchText(url: string): Promise<string>;
+}
+
+/** What a channel bundle must export to be usable by `plugins/channels/index.ts`. */
+interface ChannelBundleModule {
+  create?: unknown;
+  liveChannel?: { name?: string };
+}
+
+/**
+ * Loads a just-written channel bundle so `pullEntry` can prove it actually
+ * resolves before reporting success. Injectable so tests (whose `io` writes to
+ * a Map, not to disk) can stub it.
+ */
+export type ChannelBundleLoader = (modulePath: string) => unknown;
+
+const defaultChannelBundleLoader: ChannelBundleLoader = (modulePath) => {
+  // Drop any cached copy so re-pulling with --force checks the new bytes.
+  const resolvedPath = require.resolve(modulePath);
+  delete require.cache[resolvedPath];
+  return require(resolvedPath) as unknown;
+};
+
+/**
+ * Requires the pulled bundle and asserts it exports what the channel loader
+ * needs. A bundle that leaves host modules (`../contracts`, ...) unresolved
+ * throws here instead of at boot — where `scanChannelModules` catches the error
+ * and the channel simply never appears.
+ */
+function assertChannelBundleLoads(bundlePath: string, slug: string, load: ChannelBundleLoader): void {
+  let mod: ChannelBundleModule;
+  try {
+    mod = load(bundlePath) as ChannelBundleModule;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`The "${slug}" bundle was downloaded but fails to load: ${message}`);
+  }
+
+  if (typeof mod.create !== 'function') {
+    throw new Error(`The "${slug}" bundle loaded but exports no create() function.`);
+  }
+  if (mod.liveChannel?.name !== slug) {
+    throw new Error(`The "${slug}" bundle loaded but its liveChannel descriptor is missing or names "${mod.liveChannel?.name ?? 'nothing'}".`);
+  }
 }
 
 async function httpGet(url: string): Promise<Response> {
@@ -91,6 +143,8 @@ export interface HubSyncOptions {
   repo?: string;
   branch?: string;
   hubLocalDir?: string;
+  /** Overrides how a pulled channel bundle is required for its smoke check. */
+  loadChannelBundle?: ChannelBundleLoader;
 }
 
 interface GitTreeEntry {
@@ -182,7 +236,6 @@ export interface ChannelHints {
   inactive?: string;
   active?: string;
   pairing?: string;
-  botNumber?: string;
   allowUnlisted?: string;
   whitelist?: string;
 }
@@ -467,6 +520,8 @@ export async function pullEntry(
     throw new Error(`"${config.localDir}/${slug}" already exists locally. Pass --force to overwrite.`);
   }
 
+  const targetExisted = resolved.io.exists(target);
+
   resolved.io.mkdir(target);
   const createdFiles: string[] = [];
   for (const { relativeFile, url } of downloads) {
@@ -476,6 +531,21 @@ export async function pullEntry(
     if (fileDir !== target) resolved.io.mkdir(fileDir);
     resolved.io.writeFile(filePath, content);
     createdFiles.push(path.join(config.localDir, slug, relativeFile));
+  }
+
+  if (family === 'channel') {
+    try {
+      assertChannelBundleLoads(
+        path.join(target, CHANNEL_BUNDLE_FILENAME),
+        slug,
+        options.loadChannelBundle ?? defaultChannelBundleLoader,
+      );
+    } catch (error) {
+      // Only roll back a directory this pull created — on --force over an
+      // existing install, deleting would take a working channel with it.
+      if (!targetExisted) resolved.io.remove(target);
+      throw error;
+    }
   }
 
   return { family, slug, createdFiles };

@@ -69,7 +69,7 @@ const {
     loadChannelConfig: vi.fn((name: string) =>
       name === 'telegram'
         ? { token: '', whitelist: '', allowUnlistedSenders: false }
-        : { authFolder: '', whitelist: '', botNumber: '', allowUnlistedSenders: false },
+        : { authFolder: '', whitelist: '', allowUnlistedSenders: false },
     ),
     writeChannelConfigPatch: vi.fn(),
     reprimeChannelRuntime: vi.fn(),
