@@ -33,6 +33,12 @@ export default defineConfig({
         'dist/**',
         '**/*.test.ts',
         '**/*.config.ts',
+        // Hub-owned bundles pulled into plugins/* are gitignored vendor code
+        // (see .gitignore) and are already skipped by test.exclude above —
+        // keep them out of coverage too, or their bundled size swamps the
+        // global thresholds.
+        'plugins/channels/*/**',
+        'plugins/tools/*/**',
       ],
     },
     onConsoleLog(log: string, type: 'stdout' | 'stderr'): boolean | void {

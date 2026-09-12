@@ -70,6 +70,13 @@ export interface IChannelsManager {
   stopChannel(name: string): void;
   sendMessage(channel: string, target: string, message: string): Promise<void>;
   sendSticker(channel: string, target: string, sticker: StickerReference): Promise<void>;
+  /**
+   * The logger and gateway this manager was built with. The admin API receives
+   * both from its own factory, but a chat command only has a channel name — it
+   * reads them from here so `/channels activate` can bring a channel up live
+   * through the same `startChannelLive` path the dashboard uses.
+   */
+  readonly runtimeDeps: { logger: ILogger; gateway: IMessageGateway };
 }
 
 class ChannelsManager implements IChannelsManager {
@@ -86,6 +93,10 @@ class ChannelsManager implements IChannelsManager {
     this.logger = logger;
     this.gateway = gateway;
     this.channels = channels;
+  }
+
+  get runtimeDeps(): { logger: ILogger; gateway: IMessageGateway } {
+    return { logger: this.logger, gateway: this.gateway };
   }
 
   startAll() {

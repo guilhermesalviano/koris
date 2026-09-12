@@ -62,7 +62,7 @@ export function PluginsStep({
           'Turn off any tools, channels, MCP servers, or skills you don’t want enabled. Toggling here takes effect immediately and can be changed later from Configuration → Plugins.'
         ) : (
           <>
-            Browse and download tools, channels, MCP servers, and skills from Koris Hub. Downloaded tools and skills activate automatically; MCP servers must be enabled explicitly. You can also explore available plugins on the hub website at{' '}
+            Browse and download tools, channels, MCP servers, and skills from Koris Hub. Downloaded tools and skills activate automatically; channels and MCP servers are installed inactive and must be configured, then enabled. You can also explore available plugins on the hub website at{' '}
             <a
               href="https://hub.koaris.com/marketplace/"
               target="_blank"

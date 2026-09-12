@@ -147,7 +147,6 @@ export interface InboundChannelMessage {
   isGroup: boolean;
   mentionsBot: boolean;
   isTrustedSender: boolean;
-  mentionId?: string;
   groupName?: string;
   /**
    * The channel's own id for this specific message (Telegram `message_id`,
@@ -183,7 +182,6 @@ export interface ChannelHandlerOptions {
   channel: string;
   gateway: IMessageGateway;
   reply: ChannelReply;
-  mentionId?: string;
   prefixSenderName?: boolean;
 }
 

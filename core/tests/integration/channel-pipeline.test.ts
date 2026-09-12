@@ -73,7 +73,7 @@ function inbound(overrides: Partial<InboundChannelMessage> = {}): InboundChannel
 }
 
 function makeHandler(gateway: IMessageGateway, reply: ChannelReply) {
-  return ChannelHandlerFactory.create({ channel: 'test-channel', gateway, reply, mentionId: 'korisbot' });
+  return ChannelHandlerFactory.create({ channel: 'test-channel', gateway, reply });
 }
 
 describe('channel-agnostic end-to-end pipeline', () => {
@@ -128,13 +128,15 @@ describe('channel-agnostic end-to-end pipeline', () => {
     expect(texts).toEqual([]);
   });
 
-  it('processes a group message that mentions the bot, stripping the mention', async () => {
+  // The channel plugin owns mention detection and stripping, so a message that
+  // addressed the bot arrives here flagged and already clean.
+  it('processes a group message that addressed the bot, with no addressing token left in the prompt', async () => {
     const { gateway, mainAgent } = makeGatewayWithFakeAgent('on it');
     const { reply } = makeReply();
 
     await makeHandler(gateway, reply).handle(
       'group-1',
-      inbound({ isGroup: true, mentionsBot: true, groupName: 'Family', text: 'hey @korisbot help' }),
+      inbound({ isGroup: true, mentionsBot: true, groupName: 'Family', text: 'hey help' }),
     );
 
     expect(mainAgent.run).toHaveBeenCalledWith(

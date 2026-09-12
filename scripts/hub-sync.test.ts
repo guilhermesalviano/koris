@@ -13,7 +13,21 @@ function makeIO(dirContents: Record<string, string[]> = {}, existingPaths: strin
     listDirs: vi.fn((p: string) => dirContents[p] ?? []),
     mkdir: vi.fn(),
     writeFile: vi.fn((p: string, content: string) => { written.set(p, content); }),
+    remove: vi.fn((p: string) => {
+      existing.delete(p);
+      for (const key of [...written.keys()]) {
+        if (key === p || key.startsWith(p + path.sep)) written.delete(key);
+      }
+    }),
   };
+}
+
+/**
+ * Stands in for `require()`ing a pulled channel bundle: `io` here writes to a
+ * Map rather than to disk, so the real loader would have nothing to read.
+ */
+function makeBundleLoader(slug: string): (modulePath: string) => unknown {
+  return () => ({ create: () => null, liveChannel: { name: slug } });
 }
 
 interface HttpFixture {
@@ -236,7 +250,7 @@ describe('pullEntry', () => {
       files: { [assetUrl]: 'channel bundle' },
     });
 
-    const result = await pullEntry('telegram', { baseDir: BASE_DIR, io, http });
+    const result = await pullEntry('telegram', { baseDir: BASE_DIR, io, http, loadChannelBundle: makeBundleLoader('telegram') });
 
     expect(result.family).toBe('channel');
     expect(result.createdFiles).toEqual(['plugins/channels/telegram/index.js']);
@@ -251,7 +265,7 @@ describe('pullEntry', () => {
       files: { [assetUrl]: 'wa bundle' },
     });
 
-    const result = await pullEntry('whatsapp', { baseDir: BASE_DIR, io, http, family: 'channel' });
+    const result = await pullEntry('whatsapp', { baseDir: BASE_DIR, io, http, family: 'channel', loadChannelBundle: makeBundleLoader('whatsapp') });
 
     expect(result.createdFiles).toEqual(['plugins/channels/whatsapp/index.js']);
     expect(io.written.get(path.join(LOCAL_CHANNELS_DIR, 'whatsapp', 'index.js'))).toBe('wa bundle');
@@ -262,6 +276,83 @@ describe('pullEntry', () => {
     const http = makeHttp({ release: { assets: [{ name: 'telegram-index.js', browser_download_url: 'https://x/telegram-index.js' }] } });
 
     await expect(pullEntry('signal', { baseDir: BASE_DIR, io, http, family: 'channel' })).rejects.toThrow(/no "signal-index\.js" asset/);
+  });
+
+  describe('channel bundle smoke check', () => {
+    const assetUrl = 'https://x/whatsapp-index.js';
+
+    function channelHttp(): HubSyncHttp {
+      return makeHttp({
+        release: { assets: [{ name: 'whatsapp-index.js', browser_download_url: assetUrl }] },
+        files: { [assetUrl]: 'wa bundle' },
+      });
+    }
+
+    it('rejects and rolls back a bundle that fails to load, so a dead channel never installs silently', async () => {
+      const io = makeIO();
+      const loadChannelBundle = () => {
+        throw new Error("Cannot find module '../contracts'");
+      };
+
+      await expect(
+        pullEntry('whatsapp', { baseDir: BASE_DIR, io, http: channelHttp(), family: 'channel', loadChannelBundle }),
+      ).rejects.toThrow(/fails to load: Cannot find module '\.\.\/contracts'/);
+
+      expect(io.remove).toHaveBeenCalledWith(path.join(LOCAL_CHANNELS_DIR, 'whatsapp'));
+      expect(io.written.size).toBe(0);
+    });
+
+    it('rejects a bundle with no create() export', async () => {
+      const io = makeIO();
+
+      await expect(
+        pullEntry('whatsapp', {
+          baseDir: BASE_DIR, io, http: channelHttp(), family: 'channel',
+          loadChannelBundle: () => ({ liveChannel: { name: 'whatsapp' } }),
+        }),
+      ).rejects.toThrow(/exports no create\(\) function/);
+    });
+
+    it('rejects a bundle whose liveChannel names a different slug', async () => {
+      const io = makeIO();
+
+      await expect(
+        pullEntry('whatsapp', {
+          baseDir: BASE_DIR, io, http: channelHttp(), family: 'channel',
+          loadChannelBundle: () => ({ create: () => null, liveChannel: { name: 'telegram' } }),
+        }),
+      ).rejects.toThrow(/names "telegram"/);
+    });
+
+    it('keeps an existing install when --force pulls a broken bundle over it', async () => {
+      const target = path.join(LOCAL_CHANNELS_DIR, 'whatsapp');
+      const io = makeIO({}, [target]);
+      const loadChannelBundle = () => {
+        throw new Error('boom');
+      };
+
+      await expect(
+        pullEntry('whatsapp', { baseDir: BASE_DIR, io, http: channelHttp(), family: 'channel', force: true, loadChannelBundle }),
+      ).rejects.toThrow(/fails to load: boom/);
+
+      expect(io.remove).not.toHaveBeenCalled();
+    });
+
+    it('leaves tool pulls alone — only channels ship a prebuilt bundle', async () => {
+      const io = makeIO();
+      const http = makeHttp({
+        tree: HUB_TREE,
+        files: {
+          'https://raw.githubusercontent.com/guilhermesalviano/koris-hub/main/koris-plugins/tools/issue/index.ts': 'tool source',
+          'https://raw.githubusercontent.com/guilhermesalviano/koris-hub/main/koris-plugins/tools/issue/index.test.ts': 'tool test',
+        },
+      });
+
+      const result = await pullEntry('issue', { baseDir: BASE_DIR, io, http });
+
+      expect(result.family).toBe('tool');
+      expect(io.remove).not.toHaveBeenCalled();
+    });
   });
 });
 

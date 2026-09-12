@@ -20,7 +20,6 @@ import {
   loadChannelConfig,
   writeChannelConfigPatch,
   reprimeChannelRuntime,
-  reprimeLiveChannelDescriptors,
   liveChannelNames,
 } from './live-channel-runtime';
 import { ILogger } from '../infrastructure/logger';
@@ -57,6 +56,7 @@ import { IMessageGateway } from '../services/agents/message-gateway';
 import { PluginSettingsRepositoryFactory, type IPluginSettingsRepository } from '../repositories/plugin-settings';
 import { resolvePluginEnabled } from '../services/plugins/plugin-enablement';
 import { PluginCatalogSingleton } from '../services/plugins/plugin-catalog-singleton';
+import { registerPulledChannel } from '../services/plugins/channel-install';
 import {
   listMissing,
   pullEntry,
@@ -108,7 +108,6 @@ function buildChannelsSnapshot(pluginSettingsRepo: IPluginSettingsRepository) {
   const whatsapp = (loadChannelConfig('whatsapp') ?? {}) as {
     authFolder?: string;
     whitelist?: string;
-    botNumber?: string;
     allowUnlistedSenders?: boolean;
   };
   return {
@@ -122,7 +121,6 @@ function buildChannelsSnapshot(pluginSettingsRepo: IPluginSettingsRepository) {
       ENABLED: resolvePluginEnabled(pluginSettingsRepo, 'channels', 'whatsapp'),
       AUTH_FOLDER: whatsapp.authFolder ?? '',
       WHITELIST: whatsapp.whitelist ?? '',
-      BOT_NUMBER: whatsapp.botNumber ?? '',
       ALLOW_UNLISTED_SENDERS: whatsapp.allowUnlistedSenders ?? false,
     },
   };
@@ -1069,8 +1067,8 @@ class AdminRouterFactory {
         } else if (item.family === 'skill') {
           SkillSyncSingleton.getExistingInstance()?.sync();
         } else if (item.family === 'channel') {
-          reprimeLiveChannelDescriptors();
-          PluginCatalogSingleton.append([{ family: 'channels', name: item.slug }]);
+          // Installed inactive on purpose — see `registerPulledChannel`.
+          registerPulledChannel(item.slug, pluginSettingsRepo);
         }
         res.status(201).json({ success: true, item });
       } catch (err) {

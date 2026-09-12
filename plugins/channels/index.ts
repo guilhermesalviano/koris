@@ -15,11 +15,12 @@ interface CreatePluginsOptions {
   readdirSync?: (directory: string, options: { withFileTypes: true }) => PluginDirectoryEntry[];
   loadModule?: (modulePath: string) => PluginModule;
   /**
-   * Called when a channel folder is present but its module throws on load.
-   * Defaults to a console warning: one broken channel must not take the host
-   * down, but it must not vanish silently either — a pulled bundle that expects
-   * host modules it can't resolve fails exactly here, and without this the
-   * channel just never appears (no adapter, no `liveChannel`, no log).
+   * Called when a channel folder is present but its module throws — either on
+   * `require` or inside its own `create()`. Defaults to a console warning: one
+   * broken channel must not take the host down, but it must not vanish silently
+   * either — a pulled bundle that expects host modules it can't resolve fails
+   * exactly here, and without this the channel just never appears (no adapter,
+   * no `liveChannel`, no log).
    */
   onLoadError?: (channel: string, error: unknown) => void;
   context?: PluginContext;
@@ -40,7 +41,13 @@ function resolveDefaultChannelsDir(): string {
   return __dirname;
 }
 
-function scanChannelModules(options: ScanOptions = {}): PluginModule[] {
+/** A channel module that loaded, paired with the folder it came from (for error reporting). */
+interface ScannedChannel {
+  channel: string;
+  mod: PluginModule;
+}
+
+function scanChannelModules(options: ScanOptions = {}): ScannedChannel[] {
   const {
     directory = resolveDefaultChannelsDir(),
     readdirSync = fs.readdirSync as CreatePluginsOptions['readdirSync'],
@@ -54,7 +61,7 @@ function scanChannelModules(options: ScanOptions = {}): PluginModule[] {
     .filter((entry) => entry.isDirectory())
     .flatMap((entry) => {
       try {
-        return [loadModule(path.join(directory, entry.name))];
+        return [{ channel: entry.name, mod: loadModule(path.join(directory, entry.name)) }];
       } catch (error) {
         onLoadError(entry.name, error);
         return [];
@@ -64,11 +71,20 @@ function scanChannelModules(options: ScanOptions = {}): PluginModule[] {
 
 function createPlugins(options: CreatePluginsOptions = {}): Plugin[] {
   const { context, ...scan } = options;
+  const onLoadError = scan.onLoadError ?? warnLoadFailure;
 
-  return scanChannelModules(scan).flatMap((mod) => {
+  return scanChannelModules(scan).flatMap(({ channel, mod }) => {
     if (typeof mod.create !== 'function') return [];
-    const plugin = mod.create(context);
-    return plugin ? [plugin] : [];
+    try {
+      // `create()` is plugin code reading `context`, so it can throw for
+      // reasons that have nothing to do with the host — same containment as a
+      // failed `require`: report it and carry on with the other channels.
+      const plugin = mod.create(context);
+      return plugin ? [plugin] : [];
+    } catch (error) {
+      onLoadError(channel, error);
+      return [];
+    }
   });
 }
 
@@ -78,7 +94,7 @@ function createPlugins(options: CreatePluginsOptions = {}): Plugin[] {
  * Lets the dashboard start/reprime channels without importing any by name.
  */
 function listLiveChannels(options: ScanOptions = {}): LiveChannelDescriptor[] {
-  return scanChannelModules(options).flatMap((mod) => (mod.liveChannel ? [mod.liveChannel] : []));
+  return scanChannelModules(options).flatMap(({ mod }) => (mod.liveChannel ? [mod.liveChannel] : []));
 }
 
 export const CHANNELS_DIR = __dirname;
