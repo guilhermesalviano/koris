@@ -1,4 +1,5 @@
 import { Card, EmptyState, Toast, useToast } from './AdminUI';
+import { Badge, Button } from './ui';
 import type { UseMarketplaceApi } from '../lib/use-marketplace';
 import type { MarketplaceItem } from '../lib/types';
 import { pullSuccessMessage } from '../lib/marketplace-messages';
@@ -10,14 +11,21 @@ function humanize(slug: string): string {
     .join(' ');
 }
 
-const FAMILY_ORDER: MarketplaceItem['family'][] = ['channel', 'tool', 'mcp', 'skill'];
+const FAMILY_ORDER: MarketplaceItem['family'][] = ['channel', 'tool', 'skill', 'mcp'];
+
+function familyLabel(family: MarketplaceItem['family']): string {
+  if (family === 'channel') return 'Channels';
+  if (family === 'tool') return 'Tools';
+  if (family === 'skill') return 'Skills';
+  return 'MCP Servers';
+}
 
 function groupByFamily(items: MarketplaceItem[]): [MarketplaceItem['family'], MarketplaceItem[]][] {
   const groups = new Map<MarketplaceItem['family'], MarketplaceItem[]>();
   for (const item of items) {
-    const group = groups.get(item.family);
-    if (group) {
-      group.push(item);
+    const list = groups.get(item.family);
+    if (list) {
+      list.push(item);
     } else {
       groups.set(item.family, [item]);
     }
@@ -26,27 +34,27 @@ function groupByFamily(items: MarketplaceItem[]): [MarketplaceItem['family'], Ma
   return [...groups.entries()].sort(([a], [b]) => FAMILY_ORDER.indexOf(a) - FAMILY_ORDER.indexOf(b));
 }
 
-function familyLabel(family: MarketplaceItem['family']): string {
-  if (family === 'channel') return 'Channels';
-  if (family === 'tool') return 'Tools';
-  return family === 'mcp' ? 'MCP Servers' : 'Skills';
-}
-
 function MarketplaceRow({ item, pulling, onPull }: { item: MarketplaceItem; pulling: boolean; onPull: () => void }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2.5">
+    <div className="flex items-start justify-between gap-3 py-3">
       <div className="min-w-0 flex-1">
-        <div className="text-sm">{humanize(item.slug)}</div>
-        {item.summary && <div className="mt-0.5 text-xs text-txt-3">{item.summary}</div>}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-body font-medium text-txt">{humanize(item.slug)}</span>
+          {item.group && (
+            <Badge tone="accent" className="text-micro">{item.group}</Badge>
+          )}
+        </div>
+        {item.summary && <div className="mt-1 text-caption text-txt-2">{item.summary}</div>}
       </div>
-      <button
-        type="button"
+      <Button
+        size="sm"
+        variant="secondary"
+        loading={pulling}
         onClick={onPull}
-        disabled={pulling}
-        className="flex min-h-[32px] flex-shrink-0 items-center justify-center rounded-lg border border-subtle bg-bg-3 px-3 py-1.5 font-mono text-[11px] text-txt-2 hover:border-accent hover:text-accent-2 disabled:opacity-50"
+        className="flex-shrink-0"
       >
-        {pulling ? 'Pulling…' : 'Pull'}
-      </button>
+        Pull
+      </Button>
     </div>
   );
 }
@@ -75,7 +83,9 @@ export default function MarketplaceList({ api }: { api: UseMarketplaceApi }) {
 
       {!api.error && !api.loading && api.items.length > 0 && groups.map(([family, items]) => (
         <div key={family}>
-          <div className="mb-2 font-mono text-[11px] uppercase tracking-wide text-txt-3">{familyLabel(family)}</div>
+          <div className="mb-2 font-mono text-micro uppercase tracking-wide text-txt-3">
+            {familyLabel(family)} ({items.length})
+          </div>
           <Card className="divide-y divide-subtle p-3.5 sm:p-4">
             {items.map((item) => (
               <MarketplaceRow

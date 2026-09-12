@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import type { SettingsFormApi } from '../../../lib/use-settings-form';
-
-const inputClass = 'rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent';
-const buttonClass = 'rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm font-medium hover:border-accent';
+import { Button, Input } from '../../../components/ui';
 
 interface Entry {
   id: number;
@@ -50,42 +48,46 @@ export function PersonalInfoStep({ api }: { api: SettingsFormApi }) {
 
   return (
     <div>
-      <p className="mb-3 font-mono text-[11px] text-txt-3">
-        Optional context the assistant can use about you (name, location, preferences...).
+      <p className="mb-4 text-caption leading-relaxed text-txt-2">
+        Optional context the assistant can use about you — name, location, preferences. Leave it empty
+        if you'd rather not say.
       </p>
       <div className="space-y-3 sm:space-y-2">
         {entries.map((entry) => (
           <div
             key={entry.id}
-            className="flex flex-col gap-2 rounded-lg border border-subtle/60 bg-bg-3/40 p-2.5 sm:flex-row sm:items-center sm:border-0 sm:bg-transparent sm:p-0"
+            className="flex flex-col gap-2 rounded-panel border border-subtle bg-bg-3/40 p-2.5 sm:flex-row sm:items-center sm:border-0 sm:bg-transparent sm:p-0"
           >
             <div className="flex flex-1 flex-col gap-2 sm:flex-row">
-              <input
+              <Input
                 value={entry.key}
                 onChange={(e) => updateEntry(entry.id, 'key', e.target.value)}
                 placeholder="key"
-                className={`${inputClass} w-full sm:w-1/3`}
+                aria-label="Field name"
+                className="w-full sm:w-1/3"
               />
-              <input
+              <Input
                 value={entry.value}
                 onChange={(e) => updateEntry(entry.id, 'value', e.target.value)}
                 placeholder={entry.key.trim().toLowerCase() === 'name' ? 'e.g. John Doe' : 'value'}
-                className={`${inputClass} w-full sm:flex-1`}
+                aria-label="Field value"
+                className="w-full sm:flex-1"
               />
             </div>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => removeEntry(entry.id)}
-              className={`${buttonClass} w-full sm:w-auto text-xs sm:text-sm py-1.5 sm:py-2 text-txt-2 hover:border-red-400/50 hover:text-red-400`}
+              aria-label={entry.key.trim() ? `Remove ${entry.key}` : 'Remove field'}
+              className="w-full hover:text-danger sm:w-auto"
             >
               Remove
-            </button>
+            </Button>
           </div>
         ))}
       </div>
-      <button type="button" onClick={addEntry} className={`${buttonClass} mt-3 w-full sm:w-auto`}>
+      <Button onClick={addEntry} className="mt-4 w-full sm:w-auto">
         Add field
-      </button>
+      </Button>
     </div>
   );
 }

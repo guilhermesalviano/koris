@@ -55,13 +55,13 @@ export function seedDefaultBeats(db: IDatabaseService, logger: ILogger, filepath
   const path = filepath ?? join(config.BASE_DIR, DEFAULT_HEARTBEATS_FILENAME);
 
   if (!existsSync(path)) {
-    logger.warn(`[default-beats] No ${DEFAULT_HEARTBEATS_FILENAME} found — skipping default beat sync.`);
+    logger.warn(`[beat] No ${DEFAULT_HEARTBEATS_FILENAME} found — skipping default beat sync.`);
     return;
   }
 
   const defaults = loadDefaultBeats(path);
   if (defaults === null) {
-    logger.warn(`[default-beats] Failed to parse ${DEFAULT_HEARTBEATS_FILENAME} — skipping default beat sync.`);
+    logger.warn(`[beat] Failed to parse ${DEFAULT_HEARTBEATS_FILENAME} — skipping default beat sync.`);
     return;
   }
 
@@ -71,7 +71,7 @@ export function seedDefaultBeats(db: IDatabaseService, logger: ILogger, filepath
   const valid = defaults.filter(isValidEntry);
   const invalidCount = defaults.length - valid.length;
   if (invalidCount > 0) {
-    logger.warn(`[default-beats] Skipped ${invalidCount} invalid default beat entry(ies).`);
+    logger.warn(`[beat] Skipped ${invalidCount} invalid default beat entry(ies).`);
   }
 
   const configTexts = new Set(valid.map((entry) => entry.beat.trim()));
@@ -114,5 +114,5 @@ export function seedDefaultBeats(db: IDatabaseService, logger: ILogger, filepath
     }
   }
 
-  logger.info(`[default-beats] Synced ${valid.length} default beat(s) from ${path} (${created} created, ${updated} updated, ${pruned} pruned).`);
+  logger.info(`[beat] Synced ${valid.length} default beat(s) from ${path} (${created} created, ${updated} updated, ${pruned} pruned).`);
 }

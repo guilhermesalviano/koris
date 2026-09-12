@@ -32,7 +32,7 @@ function makeBundleLoader(slug: string): (modulePath: string) => unknown {
 
 interface HttpFixture {
   tree?: { tree: { path: string; type: 'blob' | 'tree' }[]; truncated?: boolean };
-  catalog?: Record<string, { name?: string; summary?: string; hints?: ChannelHints; configFields?: ChannelConfigField[] }>;
+  catalog?: Record<string, { name?: string; group?: string; summary?: string; hints?: ChannelHints; configFields?: ChannelConfigField[] }>;
   files?: Record<string, string>;
   release?: { assets: { name: string; browser_download_url: string }[] };
 }
@@ -94,6 +94,20 @@ describe('listMissing', () => {
     expect(entries).toEqual([
       { family: 'skill', slug: 'weather', summary: undefined },
       { family: 'tool', slug: 'issue', summary: 'File a GitHub issue.' },
+    ]);
+  });
+
+  it('preserves catalog group metadata when present', async () => {
+    const io = makeIO({ [LOCAL_TOOLS_DIR]: ['list-beats'], [LOCAL_SKILLS_DIR]: ['weather', 'cat-fact'], [LOCAL_CHANNELS_DIR]: ['telegram'] });
+    const http = makeHttp({
+      tree: HUB_TREE,
+      catalog: { issue: { summary: 'File a GitHub issue.', group: 'github' } },
+    });
+
+    const entries = await listMissing({ baseDir: BASE_DIR, io, http });
+
+    expect(entries).toEqual([
+      { family: 'tool', slug: 'issue', summary: 'File a GitHub issue.', group: 'github' },
     ]);
   });
 

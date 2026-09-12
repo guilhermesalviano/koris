@@ -51,6 +51,39 @@ describe('createInputFilter', () => {
     expect(result.page).not.toHaveBeenCalled();
   });
 
+  it('handles SGR wheel down and high rawBtn values', async () => {
+    // 65 -> down, 96 (>=96) -> 64 (up), 97 -> 65 (down), 100 -> undefined
+    const result = await collectFilterOutput([
+      '\x1b[<65;5;5M',
+      '\x1b[<96;5;5M',
+      '\x1b[<97;5;5M',
+      '\x1b[<100;5;5M',
+    ]);
+
+    expect(result.line.mock.calls).toEqual([['down'], ['up'], ['down']]);
+  });
+
+  it('handles X10 mouse reporting sequences and incomplete buffers', async () => {
+    // X10 format: \x1b[M + cb + cx + cy (6 bytes total)
+    // cbByte = code - 32. If code = 64 + 32 = 96, btn = 64 -> 'up'
+    // If code = 65 + 32 = 97, btn = 65 -> 'down'
+    const upChar = String.fromCharCode(64 + 32);
+    const downChar = String.fromCharCode(65 + 32);
+    const otherChar = String.fromCharCode(10 + 32);
+
+    const result = await collectFilterOutput([
+      `\x1b[M${upChar}!!`,
+      `\x1b[M${downChar}!!`,
+      `\x1b[M${otherChar}!!`,
+      '\x1b[M12', // incomplete, length < 6 -> breaks and flushes on end
+    ]);
+
+    expect(result.line.mock.calls).toEqual([['up'], ['down']]);
+    expect(result.output).toBe('\x1b[M12');
+  });
+
+
+
   it('exposes tty metadata from process.stdin', async () => {
     const originalIsTTY = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
     const originalSetRawMode = process.stdin.setRawMode;

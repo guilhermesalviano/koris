@@ -1,8 +1,5 @@
 import { formatConnectionTestResult, type SettingsFormApi } from '../../../lib/use-settings-form';
-
-const inputClass = 'w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm outline-none focus:border-accent';
-const labelClass = 'mb-1 block font-mono text-[10px] uppercase tracking-wide text-txt-3';
-const buttonClass = 'rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm font-medium hover:border-accent disabled:opacity-60';
+import { Button, Field, Input, Select } from '../../../components/ui';
 
 function ProfileFields({
   api,
@@ -16,86 +13,98 @@ function ProfileFields({
   const profile = api.form[role];
   const result = api.connectionResults[role];
   const testing = api.testingConnection[role];
+  const original = role === 'manager' ? api.original?.AI?.MANAGER : api.original?.AI?.WORKERS;
+
+  function patch(field: keyof typeof profile, value: string) {
+    api.update((prev) => ({ ...prev, [role]: { ...prev[role], [field]: value } }));
+  }
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <div>
-        <label className={labelClass}>Provider</label>
-        <select
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <Field label="Provider">
+        {({ id }) => (
+          <Select id={id} disabled={disabled} value={profile.provider} onChange={(e) => patch('provider', e.target.value)}>
+            {api.providers.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+
+      <Field label="Base URL">
+        {({ id }) => (
+          <Input
+            id={id}
+            disabled={disabled}
+            value={profile.base_url}
+            onChange={(e) => patch('base_url', e.target.value)}
+            className="font-mono"
+            placeholder="leave blank to use the provider default"
+          />
+        )}
+      </Field>
+
+      <Field label="Model">
+        {({ id }) => (
+          <Input
+            id={id}
+            disabled={disabled}
+            value={profile.model}
+            onChange={(e) => patch('model', e.target.value)}
+            className="font-mono"
+            placeholder="gemma4:e4b"
+          />
+        )}
+      </Field>
+
+      <Field label="API token">
+        {({ id }) => (
+          <Input
+            id={id}
+            disabled={disabled}
+            type="password"
+            value={profile.api_token}
+            onChange={(e) => patch('api_token', e.target.value)}
+            className="font-mono"
+            placeholder={
+              original?.API_TOKEN?.includes('••••')
+                ? 'Leave blank to keep current token'
+                : 'Only required by some providers'
+            }
+          />
+        )}
+      </Field>
+
+      <Field label="Context size" hint="Tokens the model can consider at once.">
+        {({ id }) => (
+          <Input
+            id={id}
+            disabled={disabled}
+            value={profile.num_ctx}
+            inputMode="numeric"
+            onChange={(e) => patch('num_ctx', e.target.value.replace(/[^\d]/g, ''))}
+            className="font-mono"
+            placeholder={String(original?.NUM_CTX ?? 16384)}
+          />
+        )}
+      </Field>
+
+      <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row sm:items-center sm:gap-3">
+        <Button
           disabled={disabled}
-          value={profile.provider}
-          onChange={(e) => api.update((prev) => ({ ...prev, [role]: { ...prev[role], provider: e.target.value } }))}
-          className={inputClass}
-        >
-          {api.providers.map((p) => (
-            <option key={p} value={p}>{p}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className={labelClass}>Base URL</label>
-        <input
-          disabled={disabled}
-          value={profile.base_url}
-          onChange={(e) => api.update((prev) => ({ ...prev, [role]: { ...prev[role], base_url: e.target.value } }))}
-          className={`${inputClass} font-mono`}
-          placeholder="leave blank to use the provider default"
-        />
-      </div>
-      <div>
-        <label className={labelClass}>Model</label>
-        <input
-          disabled={disabled}
-          value={profile.model}
-          onChange={(e) => api.update((prev) => ({ ...prev, [role]: { ...prev[role], model: e.target.value } }))}
-          className={`${inputClass} font-mono`}
-          placeholder="gemma4:e4b"
-        />
-      </div>
-      <div>
-        <label className={labelClass}>API token</label>
-        <input
-          disabled={disabled}
-          type="password"
-          value={profile.api_token}
-          onChange={(e) => api.update((prev) => ({ ...prev, [role]: { ...prev[role], api_token: e.target.value } }))}
-          className={`${inputClass} font-mono`}
-          placeholder={
-            (role === 'manager' ? api.original?.AI?.MANAGER?.API_TOKEN : api.original?.AI?.WORKERS?.API_TOKEN)?.includes('••••')
-              ? 'Leave blank to keep current token'
-              : 'Only required by some providers'
-          }
-        />
-      </div>
-      <div>
-        <label className={labelClass}>Context size</label>
-        <input
-          disabled={disabled}
-          value={profile.num_ctx}
-          inputMode="numeric"
-          onChange={(e) =>
-            api.update((prev) => ({
-              ...prev,
-              [role]: { ...prev[role], num_ctx: e.target.value.replace(/[^\d]/g, '') },
-            }))
-          }
-          className={`${inputClass} font-mono`}
-          placeholder={String(
-            (role === 'manager' ? api.original?.AI?.MANAGER?.NUM_CTX : api.original?.AI?.WORKERS?.NUM_CTX) ?? 16384,
-          )}
-        />
-      </div>
-      <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-        <button
-          type="button"
-          disabled={disabled || testing}
+          loading={testing}
           onClick={() => api.testProviderConnection(role)}
-          className={`${buttonClass} w-full sm:w-auto`}
+          className="w-full sm:w-auto"
         >
           {testing ? 'Testing…' : 'Test connection'}
-        </button>
+        </Button>
         {result && (
-          <span className={`font-mono text-[11px] break-words min-w-0 ${result.ok ? 'text-green-400' : 'text-red-400'}`}>
+          <span
+            role="status"
+            className={`min-w-0 break-words font-mono text-mini ${result.ok ? 'text-success' : 'text-danger-2'}`}
+          >
             {formatConnectionTestResult(result)}
           </span>
         )}
@@ -106,19 +115,19 @@ function ProfileFields({
 
 export function ProviderStep({ api }: { api: SettingsFormApi }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-medium">Manager model</h3>
-        <p className="mt-1 font-mono text-[11px] text-txt-3">Handles conversation and decides what to do.</p>
+        <h3 className="text-body font-semibold text-txt">Manager model</h3>
+        <p className="mt-1 text-caption text-txt-2">Handles conversation and decides what to do.</p>
       </div>
       <ProfileFields api={api} role="manager" disabled={false} />
 
-      <label className="flex items-start gap-2.5 pt-2 text-sm cursor-pointer">
+      <label className="flex cursor-pointer items-start gap-2.5 border-t border-subtle pt-5 text-body">
         <input
           type="checkbox"
           checked={api.form.sameForBoth}
           onChange={(e) => api.update((prev) => ({ ...prev, sameForBoth: e.target.checked }))}
-          className="mt-0.5"
+          className="mt-1 accent-[var(--color-accent)]"
         />
         <span>Use the same provider for worker/background tasks</span>
       </label>
@@ -126,8 +135,8 @@ export function ProviderStep({ api }: { api: SettingsFormApi }) {
       {!api.form.sameForBoth && (
         <>
           <div>
-            <h3 className="text-sm font-medium">Worker model</h3>
-            <p className="mt-1 font-mono text-[11px] text-txt-3">Handles background tasks like summarization.</p>
+            <h3 className="text-body font-semibold text-txt">Worker model</h3>
+            <p className="mt-1 text-caption text-txt-2">Handles background tasks like summarization.</p>
           </div>
           <ProfileFields api={api} role="workers" disabled={false} />
         </>

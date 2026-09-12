@@ -392,10 +392,12 @@ class AudioTranscribeRouteHandler {
       }
       const result = await service.transcribe(audioBuffer, transcribeOpts);
       if (result.error) {
+        this.logger.warn(`[AudioTranscribeRouteHandler] Voice server failed or unreachable at ${config.AUDIO.STT.ENDPOINT}: ${result.error}`);
         const statusCode = result.error.includes('disabled') ? 400 : 500;
         res.status(statusCode).json({ error: result.error });
         return;
       }
+      this.logger.info(`[AudioTranscribeRouteHandler] Connected to voice server (${config.AUDIO.STT.ENDPOINT}) - transcribed ${result.text.length} characters`);
       res.status(200).json({ text: result.text });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -432,10 +434,12 @@ class SpeechSynthesizeRouteHandler {
       const result = await service.synthesize(text, voice ? { voice } : undefined);
       if (result.error || !result.audio) {
         const errorMsg = result.error || 'Audio synthesis produced no audio.';
+        this.logger.warn(`[SpeechSynthesizeRouteHandler] Voice server failed or unreachable at ${config.AUDIO.TTS.ENDPOINT}: ${errorMsg}`);
         const statusCode = /disabled|exceeds maximum length/.test(errorMsg) ? 400 : 500;
         res.status(statusCode).json({ error: errorMsg });
         return;
       }
+      this.logger.info(`[SpeechSynthesizeRouteHandler] Connected to voice server (${config.AUDIO.TTS.ENDPOINT}) - synthesized ${result.audio.length} bytes`);
       res.status(200).setHeader('Content-Type', result.contentType);
       res.send(result.audio);
     } catch (error) {

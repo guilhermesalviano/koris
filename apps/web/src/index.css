@@ -21,7 +21,57 @@
   --color-border-accent-muted: rgba(243, 98, 70, 0.3);
   --color-accent-muted: rgba(243, 98, 70, 0.12);
 
+  /* Semantic status colors. Use these instead of raw palette classes
+     (green-500/red-400/emerald-500) so light mode stays legible. */
+  --color-success: #34d399;
+  --color-success-2: #6ee7b7;
+  --color-success-muted: rgba(52, 211, 153, 0.12);
+  --color-border-success: rgba(52, 211, 153, 0.3);
+
+  --color-danger: #f87171;
+  --color-danger-2: #fca5a5;
+  --color-danger-muted: rgba(248, 113, 113, 0.12);
+  --color-border-danger: rgba(248, 113, 113, 0.32);
+
+  --color-warn: #fbbf24;
+  --color-warn-2: #fcd34d;
+  --color-warn-muted: rgba(251, 191, 36, 0.12);
+  --color-border-warn: rgba(251, 191, 36, 0.3);
+
+  --color-info: #60a5fa;
+  --color-info-2: #93c5fd;
+  --color-info-muted: rgba(96, 165, 250, 0.12);
+  --color-border-info: rgba(96, 165, 250, 0.3);
+
+  /* Type scale. Replaces the ad-hoc text-[9px]..text-[13px] arbitrary values.
+     Tailwind's own text-xs/sm/... are left untouched. */
+  --text-micro: 0.625rem;
+  --text-micro--line-height: 0.875rem;
+  --text-micro--letter-spacing: 0.04em;
+  --text-mini: 0.6875rem;
+  --text-mini--line-height: 1rem;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.125rem;
+  --text-body: 0.8125rem;
+  --text-body--line-height: 1.35rem;
+  --text-lead: 0.9375rem;
+  --text-lead--line-height: 1.5rem;
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.5rem;
+  --text-title--letter-spacing: -0.01em;
+  --text-display: 1.5rem;
+  --text-display--line-height: 1.875rem;
+  --text-display--letter-spacing: -0.02em;
+  --text-hero: 2rem;
+  --text-hero--line-height: 2.375rem;
+  --text-hero--letter-spacing: -0.02em;
+
+  --radius-control: 10px;
+  --radius-panel: 14px;
   --radius-card: 18px;
+
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.28), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  --shadow-pop: 0 4px 12px rgba(0, 0, 0, 0.32), 0 16px 48px -16px rgba(0, 0, 0, 0.6);
 
   --animate-msg-in: msgIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   --animate-blink: blink 1.3s ease-in-out infinite;
@@ -79,6 +129,22 @@
   border-color: var(--color-border-accent-muted);
 }
 
+@utility border-success {
+  border-color: var(--color-border-success);
+}
+
+@utility border-danger {
+  border-color: var(--color-border-danger);
+}
+
+@utility border-warn {
+  border-color: var(--color-border-warn);
+}
+
+@utility border-info {
+  border-color: var(--color-border-info);
+}
+
 @utility bg-accent-muted {
   background-color: var(--color-accent-muted);
 }
@@ -94,6 +160,29 @@ html.light {
   --color-txt-3: #8f8fa3;
   --color-border-subtle: rgba(0, 0, 0, 0.07);
   --color-border-strong: rgba(0, 0, 0, 0.12);
+
+  --color-success: #047857;
+  --color-success-2: #065f46;
+  --color-success-muted: rgba(4, 120, 87, 0.1);
+  --color-border-success: rgba(4, 120, 87, 0.28);
+
+  --color-danger: #b91c1c;
+  --color-danger-2: #991b1b;
+  --color-danger-muted: rgba(185, 28, 28, 0.08);
+  --color-border-danger: rgba(185, 28, 28, 0.28);
+
+  --color-warn: #b45309;
+  --color-warn-2: #92400e;
+  --color-warn-muted: rgba(180, 83, 9, 0.1);
+  --color-border-warn: rgba(180, 83, 9, 0.28);
+
+  --color-info: #1d4ed8;
+  --color-info-2: #1e40af;
+  --color-info-muted: rgba(29, 78, 216, 0.08);
+  --color-border-info: rgba(29, 78, 216, 0.26);
+
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px -12px rgba(0, 0, 0, 0.14);
+  --shadow-pop: 0 4px 12px rgba(0, 0, 0, 0.08), 0 16px 48px -16px rgba(0, 0, 0, 0.18);
 }
 
 html.light body::before {
