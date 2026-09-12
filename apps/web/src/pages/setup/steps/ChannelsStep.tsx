@@ -4,7 +4,8 @@ import { usePlugins, type UsePluginsApi } from "../../../lib/use-plugins";
 import { useChannelsCatalog } from "../../../lib/use-channels-catalog";
 import { apiRequest } from "../../../lib/api";
 import type { ChannelHints, ChannelConfigField } from "../../../lib/types";
-import { Toggle } from "../../../components/AdminUI";
+import { Toast, Toggle, useToast } from "../../../components/AdminUI";
+import { channelDownloadedMessage } from "../../../lib/marketplace-messages";
 import { SaveStatus } from "../../../components/SettingsUI";
 import { postSettings, useAutoSave, useSaveCoordinator } from "../../../lib/config-save-context";
 
@@ -183,6 +184,7 @@ export function ChannelsStep({
   const [downloading, setDownloading] = useState<string | null>(null);
   const [activating, setActivating] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [toastMsg, showToast, toastIsError] = useToast();
 
   const channels = useMemo(() => {
     const map = new Map<
@@ -212,17 +214,20 @@ export function ChannelsStep({
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [catalogItems, pluginsApi.items]);
 
-  async function handleDownloadChannel(slug: string) {
+  /**
+   * Downloads only — it deliberately does NOT enable the channel. A channel
+   * can't work before its configuration exists (whitelist, token, paired
+   * device), so it lands in the "Installed (Inactive)" state with its config
+   * form and an Activate button, and the toast says so.
+   */
+  async function handleDownloadChannel(slug: string, name: string) {
     setDownloading(slug);
     setDownloadError(null);
     try {
       await apiRequest(`/marketplace/${slug}/pull`, { method: "POST" });
-      await apiRequest(`/plugins/channels/${slug}`, {
-        method: "PATCH",
-        body: JSON.stringify({ enabled: true }),
-      });
       await pluginsApi.reload();
       await catalogReload();
+      showToast(channelDownloadedMessage(name));
     } catch (err) {
       setDownloadError(err instanceof Error ? err.message : `Failed to download ${slug}`);
     } finally {
@@ -315,7 +320,7 @@ export function ChannelsStep({
                   <button
                     type="button"
                     disabled={downloading === channel.slug}
-                    onClick={() => handleDownloadChannel(channel.slug)}
+                    onClick={() => handleDownloadChannel(channel.slug, channel.name)}
                     className={`${buttonClass} whitespace-nowrap`}
                   >
                     {downloading === channel.slug ? "Downloading…" : `Download ${channel.name}`}
@@ -388,6 +393,8 @@ export function ChannelsStep({
           </div>
         );
       })}
+
+      <Toast message={toastMsg} isError={toastIsError} />
     </div>
   );
 }

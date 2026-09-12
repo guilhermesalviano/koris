@@ -1,6 +1,7 @@
 import { Card, EmptyState, Toast, useToast } from './AdminUI';
 import type { UseMarketplaceApi } from '../lib/use-marketplace';
 import type { MarketplaceItem } from '../lib/types';
+import { pullSuccessMessage } from '../lib/marketplace-messages';
 
 function humanize(slug: string): string {
   return slug
@@ -56,9 +57,7 @@ export default function MarketplaceList({ api }: { api: UseMarketplaceApi }) {
   async function handlePull(item: MarketplaceItem) {
     try {
       await api.pull(item);
-      showToast(item.family === 'mcp'
-        ? `Pulled "${humanize(item.slug)}" — enabled. If it doesn't connect, set its URL in Plugins.`
-        : `Pulled "${humanize(item.slug)}" — active within a few seconds, no restart needed.`);
+      showToast(pullSuccessMessage(item.family, humanize(item.slug)));
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to pull from koris-hub', true);
     }

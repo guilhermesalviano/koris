@@ -20,9 +20,17 @@ vi.mock('../../../../src/infrastructure/db-sqlite', () => ({
 
 const isChannelLiveStartedMock = vi.fn();
 const reprimeLiveChannelDescriptorsMock = vi.fn();
+const loadChannelConfigMock = vi.fn();
+const writeChannelConfigPatchMock = vi.fn();
+const reprimeChannelRuntimeMock = vi.fn();
+const startChannelLiveMock = vi.fn();
 vi.mock('../../../../src/dashboard/live-channel-runtime', () => ({
   isChannelLiveStarted: (...args: unknown[]) => isChannelLiveStartedMock(...args),
   reprimeLiveChannelDescriptors: () => reprimeLiveChannelDescriptorsMock(),
+  loadChannelConfig: (...args: unknown[]) => loadChannelConfigMock(...args),
+  writeChannelConfigPatch: (...args: unknown[]) => writeChannelConfigPatchMock(...args),
+  reprimeChannelRuntime: (...args: unknown[]) => reprimeChannelRuntimeMock(...args),
+  startChannelLive: (...args: unknown[]) => startChannelLiveMock(...args),
 }));
 
 const appendMock = vi.fn();
@@ -33,19 +41,24 @@ vi.mock('../../../../src/services/plugins/plugin-catalog-singleton', () => ({
 }));
 
 const stopChannelMock = vi.fn();
+const runtimeDeps = { logger: { warn: vi.fn() }, gateway: {} };
+const channelsInstance: { stopChannel: typeof stopChannelMock; runtimeDeps: typeof runtimeDeps } | null = {
+  stopChannel: stopChannelMock,
+  runtimeDeps,
+};
 vi.mock('../../../../src/channels', () => ({
   ChannelsSingleton: {
-    getExistingInstance: vi.fn(() => ({
-      stopChannel: stopChannelMock,
-    })),
+    getExistingInstance: vi.fn(() => channelsInstance),
   },
 }));
 
 const listMissingMock = vi.fn();
 const pullEntryMock = vi.fn();
+const fetchChannelCatalogMock = vi.fn();
 vi.mock('../../../../../scripts/hub-sync', () => ({
   listMissing: (...args: unknown[]) => listMissingMock(...args),
   pullEntry: (...args: unknown[]) => pullEntryMock(...args),
+  fetchChannelCatalog: (...args: unknown[]) => fetchChannelCatalogMock(...args),
 }));
 
 const readdirSyncMock = vi.fn();
@@ -190,6 +203,125 @@ describe('channels command', () => {
       expect(reprimeLiveChannelDescriptorsMock).toHaveBeenCalled();
       expect(appendMock).toHaveBeenCalledWith([{ family: 'channels', name: 'telegram' }]);
       expect(result.response).toContain('Successfully downloaded channel "telegram"');
+    });
+
+    it('leaves the downloaded channel inactive and says how to turn it on', async () => {
+      pullEntryMock.mockResolvedValueOnce({
+        family: 'channel',
+        slug: 'telegram',
+        createdFiles: ['index.js'],
+      });
+
+      const result = await handleChannelsCommand('/channels download telegram', { source: 'tui', trusted: true });
+
+      // A channel can't work before it's configured, so downloading must force
+      // it off rather than trust the "no row means off" default — a re-pull
+      // would otherwise inherit a stale enabled=1 row and come back up live.
+      expect(setEnabledMock).toHaveBeenCalledWith('channels', 'telegram', false);
+      expect(result.response).toContain('installed but inactive');
+      expect(result.response).toContain('/channels activate telegram');
+    });
+
+    describe('activate', () => {
+      const TELEGRAM_FIELDS = [
+        { name: 'bot_token', label: 'Bot Token', type: 'password', required: true, placeholder: '123:AA' },
+        { name: 'whitelist', label: 'Whitelist', type: 'text', placeholder: '123456' },
+      ];
+
+      beforeEach(() => {
+        existsSyncMock.mockReturnValue(true);
+        readdirSyncMock.mockReturnValue([{ name: 'telegram', isDirectory: () => true }]);
+        loadChannelConfigMock.mockReturnValue({});
+        fetchChannelCatalogMock.mockResolvedValue([
+          { slug: 'telegram', name: 'Telegram', configFields: TELEGRAM_FIELDS, hints: { pairing: 'Scan the QR.' } },
+        ]);
+      });
+
+      it('asks for the variables instead of activating when given none', async () => {
+        const result = await handleChannelsCommand('/channels activate telegram', { source: 'tui', trusted: true });
+
+        expect(result.response).toContain('bot_token');
+        expect(result.response).toContain('/channels activate telegram');
+        // The ask step must not change anything.
+        expect(setEnabledMock).not.toHaveBeenCalled();
+        expect(writeChannelConfigPatchMock).not.toHaveBeenCalled();
+        expect(startChannelLiveMock).not.toHaveBeenCalled();
+      });
+
+      it('refuses to activate while a required variable is missing', async () => {
+        const result = await handleChannelsCommand('/channels activate telegram whitelist=123', { source: 'tui', trusted: true });
+
+        expect(result.response).toContain('required variable');
+        expect(result.response).toContain('bot_token');
+        expect(setEnabledMock).not.toHaveBeenCalled();
+        expect(writeChannelConfigPatchMock).not.toHaveBeenCalled();
+      });
+
+      it('saves the values, enables the channel and starts it live', async () => {
+        const result = await handleChannelsCommand(
+          '/channels activate telegram bot_token=123:AA whitelist=555',
+          { source: 'tui', trusted: true },
+        );
+
+        expect(writeChannelConfigPatchMock).toHaveBeenCalledWith('telegram', { bot_token: '123:AA', whitelist: '555' });
+        expect(reprimeChannelRuntimeMock).toHaveBeenCalledWith('telegram');
+        expect(setEnabledMock).toHaveBeenCalledWith('channels', 'telegram', true);
+        expect(startChannelLiveMock).toHaveBeenCalledWith('telegram', runtimeDeps.logger, runtimeDeps.gateway);
+        expect(result.response).toContain('is now active');
+        expect(result.response).toContain('Scan the QR.');
+      });
+
+      it('accepts a required value already present in config.yml', async () => {
+        loadChannelConfigMock.mockReturnValue({ bot_token: 'already-there' });
+
+        const result = await handleChannelsCommand('/channels activate telegram whitelist=555', { source: 'tui', trusted: true });
+
+        expect(setEnabledMock).toHaveBeenCalledWith('channels', 'telegram', true);
+        expect(result.response).toContain('is now active');
+      });
+
+      it('activates with --defaults when nothing is required', async () => {
+        fetchChannelCatalogMock.mockResolvedValue([{ slug: 'telegram', name: 'Telegram', configFields: [] }]);
+
+        const result = await handleChannelsCommand('/channels activate telegram --defaults', { source: 'tui', trusted: true });
+
+        expect(writeChannelConfigPatchMock).not.toHaveBeenCalled();
+        expect(setEnabledMock).toHaveBeenCalledWith('channels', 'telegram', true);
+        expect(result.response).toContain('is now active');
+      });
+
+      it('rejects an unknown variable and re-shows the real ones', async () => {
+        const result = await handleChannelsCommand('/channels activate telegram nope=1', { source: 'tui', trusted: true });
+
+        expect(result.response).toContain('"nope" is not a variable of telegram');
+        expect(result.response).toContain('bot_token');
+        expect(setEnabledMock).not.toHaveBeenCalled();
+      });
+
+      it('tells the user to download a channel that is not installed', async () => {
+        readdirSyncMock.mockReturnValue([]);
+
+        const result = await handleChannelsCommand('/channels activate signal', { source: 'tui', trusted: true });
+
+        expect(result.response).toContain('/channels download signal');
+        expect(setEnabledMock).not.toHaveBeenCalled();
+      });
+
+      it('requires a channel name', async () => {
+        const result = await handleChannelsCommand('/channels activate', { source: 'tui', trusted: true });
+
+        expect(result.response).toContain('Missing channel name');
+        expect(result.response).toContain('/channels activate <name>');
+      });
+
+      it('still activates when koris-hub is unreachable', async () => {
+        fetchChannelCatalogMock.mockRejectedValue(new Error('offline'));
+
+        const result = await handleChannelsCommand('/channels activate telegram --defaults', { source: 'tui', trusted: true });
+
+        expect(setEnabledMock).toHaveBeenCalledWith('channels', 'telegram', true);
+        expect(result.response).toContain('is now active');
+      });
     });
 
     it('supports --force flag on download', async () => {

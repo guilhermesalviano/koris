@@ -746,6 +746,33 @@ describe('AdminRouterFactory /marketplace', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Request to https://api.github.com/... failed: 500 Internal Server Error' });
   });
 
+  it('POST /marketplace/:slug/pull installs a channel INACTIVE, overriding any stale enabled row', async () => {
+    hubSync.pullEntry.mockResolvedValue({ family: 'channel', slug: 'whatsapp', createdFiles: ['plugins/channels/whatsapp/index.js'] });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/marketplace/whatsapp/pull'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // A channel is useless until it's configured, so a pull must write
+    // enabled=false rather than rely on "no row means off" — a re-pull would
+    // otherwise inherit the row a previous install left behind.
+    expect(pluginSettingsRepo.setEnabled).toHaveBeenCalledWith('channels', 'whatsapp', false);
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('POST /marketplace/:slug/pull leaves tool enablement alone', async () => {
+    hubSync.pullEntry.mockResolvedValue({ family: 'tool', slug: 'issue', createdFiles: ['plugins/tools/issue/index.ts'] });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/marketplace/issue/pull'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(pluginSettingsRepo.setEnabled).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
   it('GET /channels/hints fetches hints dynamically', async () => {
     hubSync.fetchChannelHints.mockResolvedValue({
       telegram: { uninstalled: 'Download TG' },

@@ -103,13 +103,17 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: '/channels',
-    summary: 'List loaded or remote channels, or download one from koris-hub',
-    usage: '/channels [remote|download <name>]',
+    summary: 'List, download, configure and activate channels from koris-hub',
+    usage: '/channels [remote|download <name>|activate <name> [key=value ...]]',
     trusted: true,
     details:
       'Without arguments, lists all installed channels and their status. ' +
       'Use `/channels remote` to list channels available in koris-hub. ' +
-      'Use `/channels download <name>` to install a channel.',
+      'Use `/channels download <name>` to install a channel — it is installed INACTIVE, ' +
+      'because a channel cannot work before it is configured. ' +
+      'Then `/channels activate <name>` shows the variables that channel needs, and ' +
+      '`/channels activate <name> key=value ...` saves them and switches it on. ' +
+      '`/channels enable` / `/channels disable` flip the switch without touching configuration.',
   },
   {
     name: '/mcps',
