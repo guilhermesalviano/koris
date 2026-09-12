@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
 import { SettingsSection } from '../../components/SettingsUI';
+import { Badge, Button } from '../../components/ui';
 import { apiRequest } from '../../lib/api';
 import type { MemoriesResponse } from '../../lib/types';
 
@@ -39,21 +40,27 @@ export default function MemoriesPage() {
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data && data.items.length === 0 && <EmptyState text="No memories yet." />}
       {!error && data && data.items.length > 0 && (
-        <Card>
+        <Card className="flex flex-col gap-3 p-4">
           {data.items.map((m) => (
-            <div key={m.id} className="mb-2 flex items-start justify-between gap-3 rounded-lg border border-subtle bg-bg-3 px-3 py-2.5">
+            <div key={m.id} className="flex items-start justify-between gap-3 rounded-panel border border-subtle bg-bg-3 px-4 py-3">
               <div className="min-w-0 flex-1">
-                <div className="font-mono text-[10px] uppercase text-txt-3">
-                  {m.type} · session {(m.sessionId ?? '').slice(0, 8)}… · {formatDate(m.createdAt)}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="accent">{m.type}</Badge>
+                  <span className="font-mono text-micro uppercase text-txt-3">
+                    session {(m.sessionId ?? '').slice(0, 8)}… · {formatDate(m.createdAt)}
+                  </span>
                 </div>
-                <div className="mt-1 whitespace-pre-wrap text-sm">{m.content}</div>
+                <div className="mt-2 whitespace-pre-wrap text-body text-txt">{m.content}</div>
               </div>
-              <button
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-label="Delete memory"
                 onClick={() => deleteMemory(m.id)}
-                className="flex-shrink-0 rounded-md border border-subtle px-2 py-1 font-mono text-[11px] text-txt-3 hover:border-red-500/40 hover:text-red-400"
+                className="border-subtle text-txt-3 hover:bg-danger-muted hover:text-danger-2"
               >
                 Delete
-              </button>
+              </Button>
             </div>
           ))}
         </Card>

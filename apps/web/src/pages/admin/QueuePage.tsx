@@ -1,28 +1,33 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { PageShell, Card, EmptyState, StatCard } from '../../components/AdminUI';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Card, EmptyState, StatCard } from '../../components/AdminUI';
+import { Badge, type BadgeTone } from '../../components/ui';
+import { cn } from '../../lib/cn';
 import { apiRequest } from '../../lib/api';
 import type { QueueResponse, QueueTaskInfo } from '../../lib/types';
 
 const POLL_INTERVAL_MS = 1500;
 
-function priorityInfo(priority: number): { label: string; className: string } {
-  return priority >= 1
-    ? { label: 'interactive', className: 'border-green-500/40 bg-green-500/10 text-green-300' }
-    : { label: 'background', className: 'border-amber-500/40 bg-amber-500/10 text-amber-300' };
+function SectionTitle({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn('mb-3 font-mono text-micro uppercase text-txt-3', className)}>{children}</div>;
+}
+
+function priorityInfo(priority: number): { label: string; tone: BadgeTone } {
+  return priority >= 1 ? { label: 'interactive', tone: 'success' } : { label: 'background', tone: 'warn' };
 }
 
 function TaskChip({ task, muted = false }: { task: QueueTaskInfo; muted?: boolean }) {
   const prio = priorityInfo(task.priority);
   return (
     <div
-      className={`flex w-44 flex-col gap-2 rounded-card border bg-bg-3 p-3 ${muted ? 'border-subtle opacity-50' : 'border-strong'}`}
+      className={cn(
+        'flex w-44 flex-col gap-2 rounded-panel border bg-bg-3 p-3',
+        muted ? 'border-subtle opacity-50' : 'border-strong',
+      )}
     >
-      <span className="truncate font-mono text-xs text-txt">{task.label || 'unnamed'}</span>
+      <span className="truncate font-mono text-caption text-txt">{task.label || 'unnamed'}</span>
       <div className="flex items-center gap-1.5">
-        <span className={`rounded-full border px-2 py-0.5 font-mono text-[10px] ${prio.className}`}>{prio.label}</span>
-        {!task.eligible && (
-          <span className="rounded-full border border-subtle bg-bg px-2 py-0.5 font-mono text-[10px] text-txt-3">held</span>
-        )}
+        <Badge tone={prio.tone}>{prio.label}</Badge>
+        {!task.eligible && <Badge>held</Badge>}
       </div>
     </div>
   );
@@ -31,7 +36,7 @@ function TaskChip({ task, muted = false }: { task: QueueTaskInfo; muted?: boolea
 function Processor({ running }: { running: QueueTaskInfo[] }) {
   if (running.length === 0) {
     return (
-      <div className="flex h-20 items-center justify-center rounded-card border border-dashed border-subtle bg-bg-2 font-mono text-xs text-txt-3">
+      <div className="flex h-20 items-center justify-center rounded-panel border border-dashed border-subtle bg-bg font-mono text-caption text-txt-3">
         Idle — no LLM call in progress
       </div>
     );
@@ -42,13 +47,16 @@ function Processor({ running }: { running: QueueTaskInfo[] }) {
       {running.map((task, index) => {
         const prio = priorityInfo(task.priority);
         return (
-          <div key={`${task.label}-${index}`} className="flex h-18 items-center gap-3 rounded-card border border-accent/50 bg-accent-muted p-4">
+          <div
+            key={`${task.label}-${index}`}
+            className="flex items-center gap-3 rounded-panel border border-accent-muted bg-accent-muted p-4"
+          >
             <span className="h-3 w-3 flex-shrink-0 animate-pulse rounded-full bg-accent" />
             <div className="min-w-0 flex-1">
-              <div className="truncate font-mono text-sm text-txt">{task.label || 'unnamed'}</div>
-              <div className="mt-1 flex items-center gap-1.5">
-                <span className={`rounded-full border px-2 py-0.5 font-mono text-[10px] ${prio.className}`}>{prio.label}</span>
-                <span className="font-mono text-[10px] text-txt-3">running</span>
+              <div className="truncate font-mono text-body text-txt">{task.label || 'unnamed'}</div>
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <Badge tone={prio.tone}>{prio.label}</Badge>
+                <span className="font-mono text-micro uppercase text-txt-3">running</span>
               </div>
             </div>
           </div>
@@ -58,7 +66,7 @@ function Processor({ running }: { running: QueueTaskInfo[] }) {
   );
 }
 
-export default function QueuePage() {
+export default function QueuePanel({ onRegisterRefresh }: { onRegisterRefresh: (refresh: () => void) => void }) {
   const [data, setData] = useState<QueueResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -79,6 +87,11 @@ export default function QueuePage() {
   }, []);
 
   useEffect(() => {
+    onRegisterRefresh(load);
+  }, [onRegisterRefresh, load]);
+
+  // The 1.5s poll lives and dies with this panel — switching tabs unmounts it.
+  useEffect(() => {
     load();
     timerRef.current = setInterval(load, POLL_INTERVAL_MS);
     return () => {
@@ -89,10 +102,14 @@ export default function QueuePage() {
   }, [load]);
 
   return (
-    <PageShell title="LLM queue" description="LLM call queue status" onRefresh={load}>
-      <div className="mb-4 flex items-center gap-2 font-mono text-[11px] text-txt-3">
-        {lastUpdated && <span>Last update: {lastUpdated.toLocaleTimeString()}</span>}
-        <span>·</span>
+    <>
+      <div className="mb-4 flex flex-wrap items-center gap-2 font-mono text-micro text-txt-3">
+        {lastUpdated && (
+          <>
+            <span>Last update: {lastUpdated.toLocaleTimeString()}</span>
+            <span aria-hidden="true">·</span>
+          </>
+        )}
         <span>auto-refresh {POLL_INTERVAL_MS / 1000}s</span>
       </div>
 
@@ -100,50 +117,21 @@ export default function QueuePage() {
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data && (
         <>
-          <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <StatCard label="Provider mode" value={data.parallel ? 'Parallel' : 'Serialized'} />
+          <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
+            <StatCard label="Provider mode" value={data.parallel ? 'Parallel' : 'Serialized'} hint="ai.parallel" />
             <StatCard label="LLM running" value={data.running.length} />
             <StatCard label="LLM waiting" value={totalWaiting} />
-            <StatCard label="Grace period" value={`${data.backgroundGraceMs / 1000}s`} />
+            <StatCard label="Grace period" value={`${data.backgroundGraceMs / 1000}s`} hint="background hold" />
           </div>
 
-          {/* {data.parallel ? (
-            <div className="mb-4">
-              <Card>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="h-2 w-2 rounded-full bg-green-500" />
-                  <span>
-                    <span className="font-mono">ai.parallel</span> is on — LLM calls run concurrently, so nothing queues
-                    here. The Processor panel below shows all in-flight activity.
-                  </span>
-                </div>
-              </Card>
-            </div>
-          ) : (
-            <div className="mb-4">
-              <Card>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="h-2 w-2 rounded-full bg-amber-500" />
-                  <span>
-                    <span className="font-mono">ai.parallel</span> is off — only one LLM call runs at a time.
-                    Interactive calls (manager, executor) jump ahead of background work (summarizer, heartbeat).
-                  </span>                </div>
-              </Card>
-            </div>
-          )} */}
-
-          <div className={`grid grid-cols-1 gap-4 ${data.parallel ? '' : 'lg:grid-cols-2'}`}>
+          <div className={cn('grid grid-cols-1 gap-4', !data.parallel && 'lg:grid-cols-2')}>
             <Card>
-              <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">
-                Processor — LLM calls in flight ({data.running.length})
-              </div>
+              <SectionTitle>Processor — LLM calls in flight ({data.running.length})</SectionTitle>
               <Processor running={data.running} />
             </Card>
 
             <Card>
-              <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">
-                Waiting — LLM calls queued ({totalWaiting})
-              </div>
+              <SectionTitle>Waiting — LLM calls queued ({totalWaiting})</SectionTitle>
               <div className="flex flex-col gap-4">
                 {!data.parallel &&
                   (data.queued.length === 0 ? (
@@ -157,9 +145,9 @@ export default function QueuePage() {
                   ))}
                 {subAgentQueuedLabels.length > 0 && (
                   <div>
-                    <div className="mb-2 font-mono text-[10px] uppercase tracking-wide text-txt-3">
+                    <SectionTitle className="mb-2">
                       Sub-agent tasks enqueued ({subAgentQueuedLabels.length})
-                    </div>
+                    </SectionTitle>
                     <div className="flex flex-wrap gap-2">
                       {subAgentQueuedLabels.map((label, index) => (
                         <TaskChip key={`sub-${label}-${index}`} task={{ label, priority: 0, eligible: true }} />
@@ -173,15 +161,15 @@ export default function QueuePage() {
 
           <div className="mt-4">
             <Card>
-              <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">How queueing works</div>
-              <ul className="list-inside list-disc space-y-1 text-[13px] leading-relaxed text-txt-2">
+              <SectionTitle>How queueing works</SectionTitle>
+              <ul className="list-inside list-disc space-y-1.5 text-body text-txt-2">
                 <li>
-                  <span className="font-mono">ai.parallel</span> controls the provider queue (Processor/Waiting above).
-                  Off: one LLM call at a time. On: calls run concurrently.
+                  <span className="font-mono text-txt">ai.parallel</span> controls the provider queue
+                  (Processor/Waiting above). Off: one LLM call at a time. On: calls run concurrently.
                 </li>
                 <li>
-                  <span className="font-mono">ai.subagents_parallel</span> controls the sub-agent queues. Off: heartbeat
-                  and summarizer share one queue. On: each has its own.
+                  <span className="font-mono text-txt">ai.subagents_parallel</span> controls the sub-agent queues. Off:
+                  heartbeat and summarizer share one queue. On: each has its own.
                 </li>
                 <li>Sub-agents never run their own tasks concurrently — at most one task per queue at a time.</li>
               </ul>
@@ -189,6 +177,6 @@ export default function QueuePage() {
           </div>
         </>
       )}
-    </PageShell>
+    </>
   );
 }

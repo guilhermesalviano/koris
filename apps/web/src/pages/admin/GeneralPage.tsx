@@ -1,6 +1,9 @@
+import type { ReactNode } from 'react';
 import { EmptyState } from '../../components/AdminUI';
-import { SaveStatus, SettingsGroup, SettingsSection, settingsButton, settingsInput } from '../../components/SettingsUI';
+import { SaveStatus, SettingsGroup, SettingsSection } from '../../components/SettingsUI';
 import { MoonIcon, SunIcon } from '../../components/Icons';
+import { Button, Field, Input, Textarea } from '../../components/ui';
+import { cn } from '../../lib/cn';
 import { postSettings, useAutoSave, useConfigSnapshot } from '../../lib/config-save-context';
 import { useUi } from '../../lib/ui-context';
 import type { RuntimeSettings } from '../../lib/use-settings-form';
@@ -10,6 +13,31 @@ type PersonalEntry = {
   key: string;
   value: string;
 };
+
+function ThemeChoice({
+  active,
+  onSelect,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onSelect: () => void;
+  icon: ReactNode;
+  label: string;
+}) {
+  return (
+    <Button
+      size="lg"
+      variant={active ? 'subtle' : 'secondary'}
+      aria-pressed={active}
+      onClick={onSelect}
+      iconLeft={icon}
+      className={cn('flex-1 rounded-panel text-body', active && 'border-accent')}
+    >
+      {label}
+    </Button>
+  );
+}
 
 function GeneralForm({ settings }: { settings: RuntimeSettings }) {
   const domains = useAutoSave('general.domains', (settings.ALLOWED_DOMAINS ?? []).join('\n'), async (text) => {
@@ -32,50 +60,75 @@ function GeneralForm({ settings }: { settings: RuntimeSettings }) {
   const { isDark, toggleTheme } = useUi();
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <SettingsGroup title="Appearance" description="Choose your preferred color scheme.">
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => { if (isDark) toggleTheme(); }}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-medium transition-colors ${
-              !isDark
-                ? 'border-accent bg-accent/10 text-accent-2'
-                : 'border-strong bg-bg-3/60 text-txt-2 hover:border-accent hover:text-txt'
-            }`}
-          >
-            <SunIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-            Light
-          </button>
-          <button
-            type="button"
-            onClick={() => { if (!isDark) toggleTheme(); }}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-medium transition-colors ${
-              isDark
-                ? 'border-accent bg-accent/10 text-accent-2'
-                : 'border-strong bg-bg-3/60 text-txt-2 hover:border-accent hover:text-txt'
-            }`}
-          >
-            <MoonIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-            Dark
-          </button>
+        <div className="flex gap-3">
+          <ThemeChoice
+            active={!isDark}
+            onSelect={() => { if (isDark) toggleTheme(); }}
+            icon={<SunIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />}
+            label="Light"
+          />
+          <ThemeChoice
+            active={isDark}
+            onSelect={() => { if (!isDark) toggleTheme(); }}
+            icon={<MoonIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />}
+            label="Dark"
+          />
         </div>
       </SettingsGroup>
+
       <SettingsGroup title="Allowed domains" description="Choose which websites your assistant can reach. Leave empty to deny outbound requests.">
-        <label htmlFor="allowed-domains" className="mb-2 block text-xs text-txt-2">One domain per line</label>
-        <textarea id="allowed-domains" rows={5} value={domains.value} onChange={(event) => domains.update(event.target.value)} placeholder={'example.com\napi.example.com'} className={`${settingsInput} resize-y font-mono`} />
+        <Field label="Allowed domains" hint="One domain per line.">
+          {({ id, describedBy }) => (
+            <Textarea
+              id={id}
+              aria-describedby={describedBy}
+              rows={5}
+              value={domains.value}
+              onChange={(event) => domains.update(event.target.value)}
+              placeholder={'example.com\napi.example.com'}
+              className="font-mono"
+            />
+          )}
+        </Field>
         <SaveStatus {...domains} />
       </SettingsGroup>
+
       <SettingsGroup title="Personal context" description="A few details to help your assistant give more relevant answers.">
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {personal.value.map((entry) => (
             <div key={entry.id} className="flex flex-wrap items-center gap-2">
-              <input aria-label="Field name" value={entry.key} placeholder="Name, location, preferences…" className={`${settingsInput} min-w-0 flex-1 basis-36`} onChange={(event) => personal.update((entries) => entries.map((row) => row.id === entry.id ? { ...row, key: event.target.value } : row))} />
-              <input aria-label={`Value for ${entry.key || 'new field'}`} value={entry.value} placeholder="Your details" className={`${settingsInput} min-w-0 flex-1 basis-44`} onChange={(event) => personal.update((entries) => entries.map((row) => row.id === entry.id ? { ...row, value: event.target.value } : row))} />
-              <button type="button" aria-label={`Remove ${entry.key || 'field'}`} className={`${settingsButton} hover:!text-red-400`} onClick={() => personal.update((entries) => entries.filter((row) => row.id !== entry.id), true)}>Remove</button>
+              <Input
+                aria-label="Field name"
+                value={entry.key}
+                placeholder="Name, location, preferences…"
+                className="min-w-0 flex-1 basis-36"
+                onChange={(event) => personal.update((entries) => entries.map((row) => row.id === entry.id ? { ...row, key: event.target.value } : row))}
+              />
+              <Input
+                aria-label={`Value for ${entry.key || 'new field'}`}
+                value={entry.value}
+                placeholder="Your details"
+                className="min-w-0 flex-1 basis-44"
+                onChange={(event) => personal.update((entries) => entries.map((row) => row.id === entry.id ? { ...row, value: event.target.value } : row))}
+              />
+              <Button
+                variant="ghost"
+                aria-label={`Remove ${entry.key || 'field'}`}
+                className="hover:bg-danger-muted hover:text-danger-2"
+                onClick={() => personal.update((entries) => entries.filter((row) => row.id !== entry.id), true)}
+              >
+                Remove
+              </Button>
             </div>
           ))}
-          <button type="button" className={settingsButton} onClick={() => personal.update((entries) => [...entries, { id: crypto.randomUUID(), key: '', value: '' }])}>+ Add field</button>
+          <Button
+            className="self-start"
+            onClick={() => personal.update((entries) => [...entries, { id: crypto.randomUUID(), key: '', value: '' }])}
+          >
+            + Add field
+          </Button>
         </div>
         <SaveStatus {...personal} />
       </SettingsGroup>

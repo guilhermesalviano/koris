@@ -9,9 +9,9 @@ import { channelDownloadedMessage } from "../../../lib/marketplace-messages";
 import { SaveStatus } from "../../../components/SettingsUI";
 import { postSettings, useAutoSave, useSaveCoordinator } from "../../../lib/config-save-context";
 
-const buttonClass = "rounded-lg border border-strong bg-bg-3 px-3 py-2 text-sm font-medium hover:border-accent disabled:opacity-60";
-const inputClass = "w-full rounded-lg border border-strong bg-bg-3 px-3 py-2 font-mono text-sm outline-none focus:border-accent";
-const labelClass = "mb-1 block font-mono text-[10px] uppercase tracking-wide text-txt-3";
+const buttonClass = "rounded-control border border-strong bg-bg-3 px-3 py-2 text-sm font-medium hover:border-accent disabled:opacity-60";
+const inputClass = "w-full rounded-control border border-strong bg-bg-3 px-3 py-2 font-mono text-sm outline-none focus:border-accent";
+const labelClass = "mb-1 block font-mono text-micro uppercase tracking-wide text-txt-3";
 
 function formatName(slug: string): string {
   return slug
@@ -96,7 +96,7 @@ function ChannelConfigForm({
                 }
               />
               {field.description && (
-                <p className="mt-1 font-mono text-[11px] text-txt-3">{field.description}</p>
+                <p className="mt-1 font-mono text-mini text-txt-3">{field.description}</p>
               )}
             </div>
           ))}
@@ -115,8 +115,8 @@ function ChannelConfigForm({
           </button>
           {api.telegramTestResult && (
             <span
-              className={`font-mono text-[11px] break-words min-w-0 ${
-                api.telegramTestResult.ok ? "text-green-400" : "text-red-400"
+              className={`font-mono text-mini break-words min-w-0 ${
+                api.telegramTestResult.ok ? "text-success" : "text-danger-2"
               }`}
             >
               {api.telegramTestResult.ok
@@ -138,7 +138,7 @@ function ChannelConfigForm({
             {api.whatsappConnecting ? "Connecting…" : "Connect"}
           </button>
           {api.whatsappConnectResult && (
-            <span className="font-mono text-[11px] break-words min-w-0 text-txt-3">
+            <span className="font-mono text-mini break-words min-w-0 text-txt-3">
               {api.whatsappConnectResult}
             </span>
           )}
@@ -152,7 +152,7 @@ function ChannelConfigForm({
           <div className="min-w-0 flex-1">
             <div className="text-sm">{field.label}</div>
             {field.description && (
-              <div className="font-mono text-[11px] text-txt-3">{field.description}</div>
+              <div className="font-mono text-mini text-txt-3">{field.description}</div>
             )}
           </div>
           <Toggle
@@ -256,25 +256,25 @@ export function ChannelsStep({
     <div className="space-y-6">
       <div className="text-center sm:text-left">
         <p className="text-sm font-medium">{autoSave ? "Messaging channels" : "Chat channels (optional)"}</p>
-        <p className="mt-1 font-mono text-[11px] text-txt-3">
+        <p className="mt-1 font-mono text-mini text-txt-3">
           {autoSave ? "Connect your messaging apps and manage who can reach your assistant." : "Download and activate chat channels to communicate with your agent via messaging apps, or click Next to proceed with Web & TUI only."}
         </p>
       </div>
 
       {downloadError && (
-        <div className="rounded-lg border border-red-500/40 bg-[#2a1212] px-4 py-2.5 text-xs text-red-300">
+        <div className="rounded-control border border-danger bg-danger-muted px-4 py-2.5 text-xs text-danger">
           {downloadError}
         </div>
       )}
 
       {catalogLoading && channels.length === 0 && (
-        <div className="rounded-lg border border-subtle bg-bg-3 p-6 text-center font-mono text-xs text-txt-3">
+        <div className="rounded-control border border-subtle bg-bg-3 p-6 text-center font-mono text-xs text-txt-3">
           Loading channels…
         </div>
       )}
 
       {!catalogLoading && channels.length === 0 && (
-        <div className="rounded-lg border border-subtle bg-bg-3 p-6 text-center font-mono text-xs text-txt-3">
+        <div className="rounded-control border border-subtle bg-bg-3 p-6 text-center font-mono text-xs text-txt-3">
           No channels found.
         </div>
       )}
@@ -296,20 +296,20 @@ export function ChannelsStep({
             && !(isConfigurable && FIELD_HINT_KEYS.has(key)));
 
         return (
-          <div key={channel.slug} className="rounded-lg border border-subtle bg-bg-3 p-4">
+          <div key={channel.slug} className="rounded-control border border-subtle bg-bg-3 p-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-subtle pb-3">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">{channel.name}</span>
                 {!isInstalled ? (
-                  <span className="font-mono text-[10px] uppercase text-amber-400 border border-amber-400/30 rounded px-1.5 py-0.5">
+                  <span className="font-mono text-micro uppercase text-warn border border-warn rounded px-1.5 py-0.5">
                     Not installed
                   </span>
                 ) : !isEnabled ? (
-                  <span className="font-mono text-[10px] uppercase text-txt-3 border border-subtle rounded px-1.5 py-0.5">
+                  <span className="font-mono text-micro uppercase text-txt-3 border border-subtle rounded px-1.5 py-0.5">
                     Installed (Inactive)
                   </span>
                 ) : (
-                  <span className="font-mono text-[10px] uppercase text-emerald-400 border border-emerald-400/30 rounded px-1.5 py-0.5">
+                  <span className="font-mono text-micro uppercase text-success border border-success rounded px-1.5 py-0.5">
                     Active
                   </span>
                 )}
@@ -339,7 +339,7 @@ export function ChannelsStep({
                     type="button"
                     disabled={activating === channel.slug}
                     onClick={() => handleToggleChannel(channel.slug, false)}
-                    className="rounded-lg border border-subtle bg-bg px-3 py-1.5 font-mono text-[11px] text-txt-3 hover:border-red-500/40 hover:text-red-400 disabled:opacity-50 whitespace-nowrap"
+                    className="rounded-control border border-subtle bg-bg px-3 py-1.5 font-mono text-mini text-txt-3 hover:border-danger hover:text-danger-2 disabled:opacity-50 whitespace-nowrap"
                   >
                     {activating === channel.slug ? "Deactivating…" : "Deactivate"}
                   </button>
@@ -350,17 +350,17 @@ export function ChannelsStep({
             <div className="mt-3">
               {!isInstalled ? (
                 (channel.hints?.uninstalled || channel.summary) ? (
-                  <p className="font-mono text-[11px] text-txt-3">
+                  <p className="font-mono text-mini text-txt-3">
                     {channel.hints?.uninstalled || channel.summary}
                   </p>
                 ) : null
               ) : !isEnabled ? (
                 channel.hints?.inactive ? (
-                  <p className="font-mono text-[11px] text-txt-3">
+                  <p className="font-mono text-mini text-txt-3">
                     {channel.hints.inactive}
                   </p>
                 ) : (
-                  <p className="font-mono text-[11px] text-txt-3">
+                  <p className="font-mono text-mini text-txt-3">
                     {channel.name} channel is installed locally. Click Activate above to enable it.
                   </p>
                 )
@@ -369,7 +369,7 @@ export function ChannelsStep({
                   {activeHints.length > 0 ? (
                     <div className="space-y-1.5">
                       {activeHints.map(([key, hint]) => (
-                        <p key={key} className="font-mono text-[11px] text-txt-3">
+                        <p key={key} className="font-mono text-mini text-txt-3">
                           {hint}
                         </p>
                       ))}

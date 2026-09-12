@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { SettingsSection } from '../../components/SettingsUI';
+import { Segmented, type SegmentedOption } from '../../components/ui';
 import { useSaveCoordinator } from '../../lib/config-save-context';
 import PluginsList from '../../components/PluginsList';
 import MarketplaceList from '../../components/MarketplaceList';
@@ -7,12 +8,11 @@ import { usePlugins } from '../../lib/use-plugins';
 import { useMarketplace } from '../../lib/use-marketplace';
 import type { MarketplaceItem } from '../../lib/types';
 
-const secondaryBtn = 'rounded-lg border border-strong bg-bg-3 px-3 py-1.5 text-sm font-medium hover:border-accent disabled:opacity-60';
-
 type TabKey = 'installed' | 'marketplace';
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'installed', label: 'Installed' },
-  { key: 'marketplace', label: 'Marketplace' },
+
+const TABS: readonly SegmentedOption<TabKey>[] = [
+  { value: 'installed', label: 'Installed' },
+  { value: 'marketplace', label: 'Marketplace' },
 ];
 
 export default function PluginsPage() {
@@ -34,25 +34,19 @@ export default function PluginsPage() {
 
   return (
     <SettingsSection title="Plugins" description="Extend your assistant with tools, channels, skills, and MCP servers.">
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => { void saves.flush(); setTab(t.key); }}
-            aria-pressed={tab === t.key}
-            className={
-              tab === t.key
-                ? 'rounded-lg border border-accent-muted bg-accent-muted px-3 py-1.5 text-sm font-medium text-accent-2'
-                : secondaryBtn
-            }
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="mb-6">
+        <Segmented
+          options={TABS}
+          value={tab}
+          label="Plugin source"
+          panelId={(value) => `plugins-panel-${value}`}
+          onChange={(value) => { void saves.flush(); setTab(value); }}
+        />
       </div>
 
-      {tab === 'installed' ? <PluginsList api={pluginsApi} /> : <MarketplaceList api={wrappedMarketplaceApi} />}
+      <div id={`plugins-panel-${tab}`} role="tabpanel">
+        {tab === 'installed' ? <PluginsList api={pluginsApi} /> : <MarketplaceList api={wrappedMarketplaceApi} />}
+      </div>
     </SettingsSection>
   );
 }

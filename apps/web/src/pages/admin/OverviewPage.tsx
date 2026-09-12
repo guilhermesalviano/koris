@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { PageShell, Card, EmptyState, StatCard, formatDate } from '../../components/AdminUI';
+import { useCallback, useEffect, useRef, type ReactNode, useState } from 'react';
+import { Card, EmptyState, StatCard, formatDate } from '../../components/AdminUI';
+import { Badge } from '../../components/ui';
+import { cn } from '../../lib/cn';
 import { apiRequest } from '../../lib/api';
 import type { OverviewResponse } from '../../lib/types';
 
@@ -19,16 +21,25 @@ function formatDuration(ms: number): string {
   return hours >= 48 ? `${(hours / 24).toFixed(1)}d` : `${hours}h ${minutes % 60}m`;
 }
 
+function SectionTitle({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn('mb-3 font-mono text-micro uppercase text-txt-3', className)}>{children}</div>;
+}
+
 function StatusPill({ on, label }: { on: boolean; label?: string }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[10px] ${
-        on ? 'border-green-500/40 bg-green-500/10 text-green-300' : 'border-subtle bg-bg text-txt-3'
-      }`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${on ? 'bg-green-500' : 'bg-bg-3'}`} />
+    <Badge tone={on ? 'success' : 'neutral'} dot>
       {label ?? (on ? 'on' : 'off')}
-    </span>
+    </Badge>
+  );
+}
+
+/** Label/value row used by the provider and usage cards. */
+function Row({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-body text-txt-2">{label}</span>
+      <span className="truncate font-mono text-caption text-txt">{value}</span>
+    </div>
   );
 }
 
@@ -39,10 +50,13 @@ function LiveActivity({ data }: { data: OverviewResponse }) {
 
   return (
     <Card>
-      <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">Live activity</div>
+      <SectionTitle>Live activity</SectionTitle>
 
-      <div className="mb-3 flex flex-wrap gap-3">
-        <StatusPill on={data.activeRuns.length > 0} label={`${data.activeRuns.length} active run${data.activeRuns.length === 1 ? '' : 's'}`} />
+      <div className="mb-4 flex flex-wrap gap-2">
+        <StatusPill
+          on={data.activeRuns.length > 0}
+          label={`${data.activeRuns.length} active run${data.activeRuns.length === 1 ? '' : 's'}`}
+        />
         <StatusPill on={queue.running.length > 0} label={`${queue.running.length} LLM running`} />
         <StatusPill on={totalWaiting > 0} label={`${totalWaiting} LLM waiting`} />
       </div>
@@ -52,12 +66,12 @@ function LiveActivity({ data }: { data: OverviewResponse }) {
       ) : (
         <div className="space-y-2">
           {data.activeRuns.map((run) => (
-            <div key={run.id} className="rounded-lg border border-accent/40 bg-accent-muted px-3 py-2">
+            <div key={run.id} className="rounded-panel border border-accent-muted bg-accent-muted px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-accent" />
-                <span className="truncate text-sm text-txt">{run.question || 'Untitled run'}</span>
+                <span className="truncate text-body text-txt">{run.question || 'Untitled run'}</span>
               </div>
-              <div className="mt-1 font-mono text-[10px] text-txt-3">
+              <div className="mt-1 font-mono text-micro text-txt-3">
                 {run.channel} · started {formatDate(run.startedAt)}
               </div>
             </div>
@@ -66,13 +80,13 @@ function LiveActivity({ data }: { data: OverviewResponse }) {
       )}
 
       {queue.running.length > 0 && (
-        <div className="mt-3">
-          <div className="mb-2 font-mono text-[10px] uppercase tracking-wide text-txt-3">In-flight LLM calls</div>
+        <div className="mt-4">
+          <SectionTitle className="mb-2">In-flight LLM calls</SectionTitle>
           <div className="flex flex-wrap gap-2">
             {queue.running.map((task, index) => (
-              <span key={`${task.label}-${index}`} className="rounded-full border border-strong bg-bg-3 px-2.5 py-1 font-mono text-[11px] text-txt">
+              <Badge key={`${task.label}-${index}`} tone="accent">
                 {task.label || 'unnamed'}
-              </span>
+              </Badge>
             ))}
           </div>
         </div>
@@ -85,14 +99,12 @@ function UsageSummary({ data }: { data: OverviewResponse }) {
   const usage = data.usage;
   return (
     <Card>
-      <div className="mb-3 flex items-center justify-between">
-        <span className="font-mono text-[11px] uppercase tracking-wide text-txt-3">Usage (last 7 days)</span>
-      </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-        <div className="flex justify-between"><span className="text-txt-2">LLM calls</span><span className="font-mono">{usage.calls}</span></div>
-        <div className="flex justify-between"><span className="text-txt-2">Tool calls</span><span className="font-mono">{usage.toolCalls}</span></div>
-        <div className="flex justify-between"><span className="text-txt-2">Tokens</span><span className="font-mono">{formatTokens(usage.totalTokens)}</span></div>
-        <div className="flex justify-between"><span className="text-txt-2">Time</span><span className="font-mono">{formatDuration(usage.durationMs)}</span></div>
+      <SectionTitle>Usage — last 7 days</SectionTitle>
+      <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+        <Row label="LLM calls" value={usage.calls} />
+        <Row label="Tool calls" value={usage.toolCalls} />
+        <Row label="Tokens" value={formatTokens(usage.totalTokens)} />
+        <Row label="Time" value={formatDuration(usage.durationMs)} />
       </div>
     </Card>
   );
@@ -101,24 +113,12 @@ function UsageSummary({ data }: { data: OverviewResponse }) {
 function ProvidersCard({ data }: { data: OverviewResponse }) {
   return (
     <Card>
-      <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">Providers</div>
-      <div className="space-y-1.5 text-sm">
-        <div className="flex justify-between">
-          <span className="text-txt-2">Manager</span>
-          <span className="font-mono">{data.provider} · {data.model}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-txt-2">Workers</span>
-          <span className="font-mono">{data.workerProvider} · {data.workerModel}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-txt-2">Environment</span>
-          <span className="font-mono">{data.environment}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-txt-2">Timezone</span>
-          <span className="font-mono">{data.timezone}</span>
-        </div>
+      <SectionTitle>Providers</SectionTitle>
+      <div className="space-y-2">
+        <Row label="Manager" value={`${data.provider} · ${data.model}`} />
+        <Row label="Workers" value={`${data.workerProvider} · ${data.workerModel}`} />
+        <Row label="Environment" value={data.environment} />
+        <Row label="Timezone" value={data.timezone} />
       </div>
     </Card>
   );
@@ -127,32 +127,32 @@ function ProvidersCard({ data }: { data: OverviewResponse }) {
 function ConfigCard({ data }: { data: OverviewResponse }) {
   return (
     <Card>
-      <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">Config &amp; channels</div>
-      <div className="mb-3 flex flex-wrap gap-2">
+      <SectionTitle>Config &amp; channels</SectionTitle>
+      <div className="mb-4 flex flex-wrap gap-2">
         <StatusPill on={data.heartbeatEnabled} label="heartbeat" />
         <StatusPill on={data.summarizerEnabled} label="summarizer" />
         <StatusPill on={data.aiParallel} label="ai.parallel" />
         <StatusPill on={data.aiSubagentsParallel} label="subagents_parallel" />
       </div>
       {data.channels.length > 0 && (
-        <div className="mb-3 space-y-1.5 text-sm">
+        <div className="mb-4 space-y-2">
           {data.channels.map((channel) => (
-            <div key={channel.type} className="flex items-center justify-between">
-              <span className="font-mono text-txt-2">{channel.type}</span>
+            <div key={channel.type} className="flex items-center justify-between gap-3">
+              <span className="font-mono text-caption text-txt-2">{channel.type}</span>
               <StatusPill on={channel.enabled} />
             </div>
           ))}
         </div>
       )}
       {data.registeredChannels.length > 0 && (
-        <div className="space-y-1.5 text-sm">
-          <div className="font-mono text-[10px] uppercase tracking-wide text-txt-3">Connected channels</div>
+        <div className="space-y-2">
+          <SectionTitle className="mb-2">Connected channels</SectionTitle>
           {data.registeredChannels.map((channel) => (
-            <div key={`${channel.type}:${channel.target}`} className="flex items-center justify-between">
-              <span className="truncate font-mono text-xs text-txt-2">{channel.target}</span>
-              <div className="flex items-center gap-1.5">
-                {channel.principal && <span className="rounded-full border border-accent/40 bg-accent-muted px-2 py-0.5 font-mono text-[10px] text-accent-2">principal</span>}
-                <span className="font-mono text-[10px] text-txt-3">{channel.type}</span>
+            <div key={`${channel.type}:${channel.target}`} className="flex items-center justify-between gap-3">
+              <span className="truncate font-mono text-caption text-txt-2">{channel.target}</span>
+              <div className="flex flex-shrink-0 items-center gap-1.5">
+                {channel.principal && <Badge tone="accent">principal</Badge>}
+                <span className="font-mono text-micro text-txt-3">{channel.type}</span>
               </div>
             </div>
           ))}
@@ -168,19 +168,16 @@ function HealthCard({ data }: { data: OverviewResponse }) {
 
   return (
     <Card>
-      <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">Health</div>
-      <div className="flex items-center gap-2 text-sm">
-        <span className={`h-2 w-2 rounded-full ${ok ? 'bg-green-500' : 'bg-red-500'}`} />
-        <span className={`font-mono ${ok ? 'text-green-400' : 'text-red-400'}`}>{data.health.status}</span>
-      </div>
+      <SectionTitle>Health</SectionTitle>
+      <Badge tone={ok ? 'success' : 'danger'} dot>
+        {data.health.status}
+      </Badge>
       {details !== undefined && details !== null && (
-        <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-bg-3 p-3 font-mono text-[11px] text-txt-2">
+        <pre className="mt-3 max-h-40 overflow-auto rounded-panel bg-bg-3 p-3 font-mono text-mini text-txt-2">
           {typeof details === 'string' ? details : JSON.stringify(details, null, 2)}
         </pre>
       )}
-      {ok && details === undefined && (
-        <div className="mt-3 font-mono text-[11px] text-txt-3">Provider reachable.</div>
-      )}
+      {ok && details === undefined && <div className="mt-3 text-mini text-txt-3">Provider reachable.</div>}
     </Card>
   );
 }
@@ -190,22 +187,22 @@ function RecentErrorsCard({ data }: { data: OverviewResponse }) {
 
   return (
     <Card>
-      <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">Recent errors</div>
+      <SectionTitle>Recent errors</SectionTitle>
       {errors.length === 0 ? (
         <EmptyState text="No recent errors" />
       ) : (
         <div className="space-y-2">
           {errors.map((error) => (
-            <div key={error.id} className="rounded-lg border border-red-500/30 bg-[#2a1212]/60 px-3 py-2">
+            <div key={error.id} className="rounded-panel border border-danger bg-danger-muted px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate font-mono text-xs text-red-300">
+                <span className="truncate font-mono text-caption text-danger">
                   {error.agentName ?? 'unknown'}
                   {error.type && <span className="text-txt-3"> · {error.type}</span>}
                 </span>
-                <span className="flex-shrink-0 font-mono text-[10px] text-txt-3">{formatDate(error.createdAt)}</span>
+                <span className="flex-shrink-0 font-mono text-micro text-txt-3">{formatDate(error.createdAt)}</span>
               </div>
               {(error.errorMessage || error.errorCode) && (
-                <div className="mt-1 truncate font-mono text-[11px] text-txt-2">
+                <div className="mt-1 truncate font-mono text-mini text-txt-2">
                   {error.errorCode && <span className="text-txt-3">{error.errorCode} · </span>}
                   {error.errorMessage}
                 </div>
@@ -218,7 +215,7 @@ function RecentErrorsCard({ data }: { data: OverviewResponse }) {
   );
 }
 
-export default function OverviewPage() {
+export default function OverviewPanel({ onRegisterRefresh }: { onRegisterRefresh: (refresh: () => void) => void }) {
   const [data, setData] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -234,6 +231,12 @@ export default function OverviewPage() {
   }, []);
 
   useEffect(() => {
+    onRegisterRefresh(load);
+  }, [onRegisterRefresh, load]);
+
+  // Polling is owned by this panel, so it stops the moment the tab is switched
+  // away and this component unmounts.
+  useEffect(() => {
     load();
     timerRef.current = setInterval(load, POLL_INTERVAL_MS);
     return () => {
@@ -244,27 +247,38 @@ export default function OverviewPage() {
   }, [load]);
 
   return (
-    <PageShell title="Overview" description="System status, usage and live activity" onRefresh={load}>
-      <div className="mb-4 font-mono text-[11px] text-txt-3">auto-refresh {POLL_INTERVAL_MS / 1000}s</div>
+    <>
+      <div className="mb-4 font-mono text-micro text-txt-3">auto-refresh {POLL_INTERVAL_MS / 1000}s</div>
 
       {error && <EmptyState text={error} />}
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data && (
         <>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <StatCard label="Sessions" value={data.sessions} />
-            <StatCard label="Open sessions" value={data.openSessions} />
+            <StatCard label="Sessions" value={data.sessions} hint={`${data.openSessions} open`} />
             <StatCard label="Messages" value={data.messages} />
             <StatCard label="Memories" value={data.memories} />
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
             <StatCard label="Beats" value={data.heartbeats} />
-            <StatCard label="Learned skills" value={`${data.learnedSkills}/${data.learnedSkillsLimit}`} />
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3">
+            <StatCard
+              label="Learned skills"
+              value={`${data.learnedSkills}/${data.learnedSkillsLimit}`}
+              hint="of limit"
+            />
             <StatCard label="Available skills" value={data.skills} />
-            <div className="rounded-card border border-subtle bg-bg-2 p-5">
-              <div className="font-mono text-[11px] uppercase tracking-wide text-txt-3">Audit errors</div>
-              <div className={`mt-2 text-2xl font-medium ${data.auditErrors > 0 ? 'text-red-400' : ''}`}>{data.auditErrors}</div>
-            </div>
+            <Card className="p-4">
+              <div className="font-mono text-micro uppercase text-txt-3">Audit errors</div>
+              <div
+                className={cn(
+                  'mt-2 text-display font-semibold tabular-nums',
+                  data.auditErrors > 0 ? 'text-danger' : 'text-txt',
+                )}
+              >
+                {data.auditErrors}
+              </div>
+              {data.auditErrors > 0 && <div className="mt-1 text-mini text-txt-2">see the Audit tab</div>}
+            </Card>
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -283,6 +297,6 @@ export default function OverviewPage() {
           </div>
         </>
       )}
-    </PageShell>
+    </>
   );
 }
