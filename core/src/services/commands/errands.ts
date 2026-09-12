@@ -1,6 +1,8 @@
 import { DatabaseServiceFactory, IDatabaseService } from '../../infrastructure/db-sqlite';
 import { LoggerFactory } from '../../infrastructure/logger';
-import { SessionManager } from '../session-manager';
+import { ISessionManager, SessionManager } from '../session-manager';
+import { NegotiatorFactory } from '../agents/sub-agents/negotiator/sub-agent';
+import type { ILogger } from '../../infrastructure/logger';
 import { buildErrandService, IErrandService } from '../errands';
 import { ErrandRepositoryFactory } from '../../repositories/errand';
 import { CHANNEL_TYPES } from '../../entities/channel';
@@ -12,11 +14,18 @@ import type { Errand } from '../../entities/errand';
 // the keywords anchor from the end of the string.
 const CREATE_PATTERN = /^(.+?)\s+with\s+(\S+)\s+on\s+(\S+)$/i;
 
-function resolveErrandService(logger = LoggerFactory.create()): { db: IDatabaseService; errandService: IErrandService } | null {
+interface ResolvedErrands {
+  db: IDatabaseService;
+  errandService: IErrandService;
+  sessionManager: ISessionManager;
+  logger: ILogger;
+}
+
+function resolveErrandService(logger = LoggerFactory.create()): ResolvedErrands | null {
   const db = DatabaseServiceFactory.create();
   const sessionManager = new SessionManager(db);
   const errandService = buildErrandService(logger, db, sessionManager);
-  return errandService ? { db, errandService } : null;
+  return errandService ? { db, errandService, sessionManager, logger } : null;
 }
 
 function formatErrand(errand: Errand, db: IDatabaseService): string {
@@ -48,7 +57,7 @@ function listErrands(context: CommandContext): CommandResult {
   return formatCommandResult(errands.map((errand) => formatErrand(errand, db)).join('\n\n'), context.source);
 }
 
-function createErrand(rest: string, context: CommandContext): CommandResult {
+async function createErrand(rest: string, context: CommandContext): Promise<CommandResult> {
   const match = rest.match(CREATE_PATTERN);
   if (!match) {
     return formatCommandResult('Usage: /errand <goal> with <contact> on <channel>', context.source);
@@ -68,15 +77,25 @@ function createErrand(rest: string, context: CommandContext): CommandResult {
     return formatCommandResult('Errands are not available: no channel manager is running.', context.source);
   }
 
+  const target = { channel: channel.toLowerCase(), peerId };
+
   try {
+    const negotiator = NegotiatorFactory.create(resolved.logger, resolved.db, resolved.sessionManager);
+    const openingMessage = await negotiator.composeOpener({
+      goal: goal.trim(),
+      channel: target.channel,
+      peerId: target.peerId,
+      originSessionId: context.sessionId,
+    });
+
     const errand = resolved.errandService.create(
       goal.trim(),
-      [{ channel: channel.toLowerCase(), peerId }],
+      [target],
       context.sessionId,
-      goal.trim(),
+      openingMessage,
     );
     const staged = errand.state === 'draft'
-      ? `Staged as a draft — approve with \`/errand approve ${errand.id}\` before it sends.`
+      ? `Draft message to ${target.peerId}:\n"${openingMessage}"\n\nApprove with \`/errand approve ${errand.id}\` to send it.`
       : `Queued behind an existing errand with that contact — it will start once the other one closes.`;
     return formatCommandResult(`Errand [${errand.id}] created: "${errand.goal}".\n${staged}`, context.source);
   } catch (err) {
@@ -115,7 +134,7 @@ function runAction(
  * - `/errand close <id>` — mark it resolved
  * - `/errand cancel <id>` — cancel it
  */
-export function handleErrandCommand(command: string, context: CommandContext): CommandResult {
+export function handleErrandCommand(command: string, context: CommandContext): CommandResult | Promise<CommandResult> {
   if (!context.trusted) {
     return formatCommandResult('Only trusted senders can manage errands.', context.source);
   }

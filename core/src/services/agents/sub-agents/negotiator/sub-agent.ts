@@ -3,7 +3,7 @@ import type { ILogger } from "../../../../infrastructure/logger";
 import { IPromptRepository, PromptRepositoryFactory } from "../../../../repositories/prompt";
 import { getAIProvider } from "../../../providers";
 import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
-import { NEGOTIATOR_INSTRUCTIONS } from "../../../../constants";
+import { NEGOTIATOR_INSTRUCTIONS, ERRAND_OPENER_INSTRUCTIONS, THIRD_PARTY_CONVERSATION_CONTEXT } from "../../../../constants";
 import { replacePlaceholders } from "../../../../utils/prompt";
 import { parseNegotiatorResponse } from "../../../../utils/negotiator-response";
 import { ISessionManager } from "../../../session-manager";
@@ -18,12 +18,20 @@ export interface NegotiatorTurnProps {
   messageHistory: Message[];
 }
 
+export interface NegotiatorOpenerProps {
+  goal: string;
+  channel: string;
+  peerId: string;
+  originSessionId: string;
+}
+
 export interface NegotiatorTurnResult {
   reply: string;
   applied: 'continue' | 'escalate' | 'resolved' | 'failed' | 'skipped';
 }
 
 const HOLDING_REPLY = "Let me check on that and get back to you shortly.";
+const OPENER_REQUEST = 'Write the opening message now.';
 
 class Negotiator {
   constructor(
@@ -33,6 +41,37 @@ class Negotiator {
     private completionService: IAICompletionService,
     private promptRepository: IPromptRepository,
   ) {}
+
+  async composeOpener(props: NegotiatorOpenerProps): Promise<string> {
+    const instructions = replacePlaceholders(ERRAND_OPENER_INSTRUCTIONS, {
+      v1: props.goal,
+      v2: props.peerId,
+      v3: props.channel,
+    });
+
+    try {
+      const payload = await this.promptRepository.build({
+        userMessage: OPENER_REQUEST,
+        channel: props.channel,
+        toolsEnabled: false,
+        learnedSkillsEnabled: false,
+        includeMemory: false,
+        extraSystemBlocks: [THIRD_PARTY_CONVERSATION_CONTEXT, instructions],
+      });
+
+      const response = await this.completionService.complete(payload, {
+        audit: { sessionId: props.originSessionId, channel: props.channel },
+      });
+
+      const text = response.kind === 'message' ? response.text.trim() : '';
+      if (text) return text;
+      this.logger.warn('Negotiator: opener composition returned no text, falling back to the raw goal');
+    } catch (err) {
+      this.logger.warn(`Negotiator: opener composition failed, falling back to the raw goal: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    return props.goal;
+  }
 
   async run(props: NegotiatorTurnProps): Promise<NegotiatorTurnResult> {
     const errandService = buildErrandService(this.logger, this.db, this.sessionManager);
@@ -60,7 +99,7 @@ class Negotiator {
       learnedSkillsEnabled: false,
       includeMemory: false,
       sessionId: props.sessionId,
-      extraSystemBlocks: [instructions],
+      extraSystemBlocks: [THIRD_PARTY_CONVERSATION_CONTEXT, instructions],
     });
 
     const response = await this.completionService.complete(payload, {

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Negotiator } from '../../../../../../src/services/agents/sub-agents/negotiator/sub-agent';
 import { buildErrandService } from '../../../../../../src/services/errands';
+import { THIRD_PARTY_CONVERSATION_CONTEXT } from '../../../../../../src/constants';
 
 vi.mock('../../../../../../src/services/errands', () => ({ buildErrandService: vi.fn() }));
 
@@ -66,14 +67,66 @@ describe('Negotiator', () => {
     }));
   });
 
-  it('includes the errand goal and notes in the extra system block', async () => {
+  it('includes the errand goal and notes in the extra system blocks', async () => {
     const { negotiator, promptRepository } = makeNegotiator();
 
     await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'hi', messageHistory: [] });
 
     const [call] = promptRepository.build.mock.calls[0];
-    expect(call.extraSystemBlocks[0]).toContain('buy milk');
-    expect(call.extraSystemBlocks[0]).toContain('previous notes');
+    expect(call.extraSystemBlocks.join('\n')).toContain('buy milk');
+    expect(call.extraSystemBlocks.join('\n')).toContain('previous notes');
+  });
+
+  it('leads every peer turn with the third-party conversation context', async () => {
+    const { negotiator, promptRepository } = makeNegotiator();
+
+    await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'hi', messageHistory: [] });
+
+    const [call] = promptRepository.build.mock.calls[0];
+    expect(call.extraSystemBlocks[0]).toBe(THIRD_PARTY_CONVERSATION_CONTEXT);
+  });
+
+  describe('composeOpener', () => {
+    it('generates a friendly opening message from the goal, fronted by the third-party context', async () => {
+      const { negotiator, promptRepository } = makeNegotiator({
+        completionText: 'Hi Ana! Guilherme asked me to check whether you still have the bike available.',
+      });
+
+      const opener = await negotiator.composeOpener({
+        goal: 'buy milk', channel: 'whatsapp', peerId: 'ana', originSessionId: 'origin-1',
+      });
+
+      expect(opener).toBe('Hi Ana! Guilherme asked me to check whether you still have the bike available.');
+
+      const [call] = promptRepository.build.mock.calls[0];
+      expect(call.extraSystemBlocks[0]).toBe(THIRD_PARTY_CONVERSATION_CONTEXT);
+      expect(call.extraSystemBlocks[1]).toContain('buy milk');
+      expect(call.extraSystemBlocks[1]).toContain('ana');
+      expect(call.extraSystemBlocks[1]).toContain('whatsapp');
+      expect(call.includeMemory).toBe(false);
+      expect(call.toolsEnabled).toBe(false);
+    });
+
+    it('falls back to the raw goal when the model returns nothing', async () => {
+      const { negotiator } = makeNegotiator({ completionText: '   ' });
+
+      const opener = await negotiator.composeOpener({
+        goal: 'buy milk', channel: 'whatsapp', peerId: 'ana', originSessionId: 'origin-1',
+      });
+
+      expect(opener).toBe('buy milk');
+    });
+
+    it('falls back to the raw goal when composition throws', async () => {
+      const { negotiator, completionService } = makeNegotiator();
+      completionService.complete.mockRejectedValueOnce(new Error('provider down'));
+
+      const opener = await negotiator.composeOpener({
+        goal: 'buy milk', channel: 'whatsapp', peerId: 'ana', originSessionId: 'origin-1',
+      });
+
+      expect(opener).toBe('buy milk');
+    });
   });
 
   it('"continue": records the peer reply, keeps the errand open, and replies', async () => {
