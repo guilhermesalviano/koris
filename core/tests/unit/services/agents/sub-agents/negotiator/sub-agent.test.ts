@@ -11,7 +11,7 @@ function makeLogger() {
 
 function makeErrandService(overrides: Record<string, unknown> = {}) {
   return {
-    get: vi.fn().mockReturnValue({ id: 'errand-1', goal: 'buy milk', notes: 'previous notes' }),
+    get: vi.fn().mockReturnValue({ id: 'errand-1', state: 'awaiting_peer', goal: 'buy milk', notes: 'previous notes' }),
     recordPeerReply: vi.fn(),
     escalate: vi.fn(),
     resolve: vi.fn(),
@@ -28,6 +28,10 @@ function makePromptRepository() {
   return { build: vi.fn().mockResolvedValue({ messages: [], tools: undefined }) };
 }
 
+function makeSessionManager(instructions = THIRD_PARTY_CONVERSATION_CONTEXT) {
+  return { getSessionServiceById: vi.fn(() => ({ getSession: () => ({ metadata: { instructions } }) })) };
+}
+
 function makeNegotiator(opts: { errandService?: ReturnType<typeof makeErrandService>; completionText?: string } = {}) {
   const errandService = opts.errandService ?? makeErrandService();
   vi.mocked(buildErrandService).mockReturnValue(errandService as never);
@@ -36,9 +40,10 @@ function makeNegotiator(opts: { errandService?: ReturnType<typeof makeErrandServ
   const promptRepository = makePromptRepository();
   const logger = makeLogger();
 
-  const negotiator = new Negotiator(logger, {} as never, {} as never, completionService as never, promptRepository as never);
+  const sessionManager = makeSessionManager();
+  const negotiator = new Negotiator(logger, {} as never, sessionManager as never, completionService as never, promptRepository as never);
 
-  return { negotiator, errandService, completionService, promptRepository, logger };
+  return { negotiator, errandService, completionService, promptRepository, logger, sessionManager };
 }
 
 describe('Negotiator', () => {
@@ -61,6 +66,9 @@ describe('Negotiator', () => {
       toolsEnabled: false,
       learnedSkillsEnabled: false,
       includeMemory: false,
+      systemPrompt: '',
+      includeGlobalContext: false,
+      historyLimit: 100,
       userMessage: 'is this still available?',
       channel: 'whatsapp',
       sessionId: 'session-1',
@@ -75,6 +83,28 @@ describe('Negotiator', () => {
     const [call] = promptRepository.build.mock.calls[0];
     expect(call.extraSystemBlocks.join('\n')).toContain('buy milk');
     expect(call.extraSystemBlocks.join('\n')).toContain('previous notes');
+  });
+
+  it.each(['draft', 'queued', 'awaiting_principal', 'resolved', 'failed', 'cancelled', 'expired'])(
+    'does not restart or advance an errand in state %s on a contact reply', async (state) => {
+      const errandService = makeErrandService({ get: vi.fn().mockReturnValue({ id: 'errand-1', state }) });
+      const { negotiator, completionService } = makeNegotiator({ errandService });
+      const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'Can we confirm?', messageHistory: [] });
+      expect(result).toEqual({ reply: '', applied: 'skipped' });
+      expect(completionService.complete).not.toHaveBeenCalled();
+      expect(errandService.recordPeerReply).not.toHaveBeenCalled();
+    },
+  );
+
+  it('discards a verdict if the errand was cancelled during the LLM call', async () => {
+    const { negotiator, completionService, errandService } = makeNegotiator();
+    completionService.complete.mockImplementationOnce(async () => {
+      errandService.get.mockReturnValue({ id: 'errand-1', state: 'cancelled' });
+      return { kind: 'message', text: JSON.stringify({ action: 'resolved', reply: 'Booked!' }) };
+    });
+    const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'Yes', messageHistory: [] });
+    expect(result.applied).toBe('skipped');
+    expect(errandService.resolve).not.toHaveBeenCalled();
   });
 
   it('leads every peer turn with the third-party conversation context', async () => {
@@ -126,6 +156,45 @@ describe('Negotiator', () => {
       });
 
       expect(opener).toBe('buy milk');
+    });
+  });
+
+  describe('composeResume', () => {
+    it('generates a message incorporating the principal answer', async () => {
+      const { negotiator, promptRepository } = makeNegotiator({
+        completionText: 'Saturday at 10am works for Guilherme, let us lock that in.',
+      });
+
+      const reply = await negotiator.composeResume({
+        errandId: 'e1',
+        goal: 'haircut',
+        notes: 'peer offered saturday 10am',
+        answer: 'Saturday 10am is good',
+        channel: 'whatsapp',
+        sessionId: 's1',
+        messageHistory: [],
+      });
+
+      expect(reply).toBe('Saturday at 10am works for Guilherme, let us lock that in.');
+      const [call] = promptRepository.build.mock.calls[0];
+      expect(call.extraSystemBlocks[0]).toBe(THIRD_PARTY_CONVERSATION_CONTEXT);
+      expect(call.extraSystemBlocks[1]).toContain('haircut');
+      expect(call.extraSystemBlocks[1]).toContain('Saturday 10am is good');
+    });
+
+    it('falls back to the raw answer when the model returns nothing', async () => {
+      const { negotiator } = makeNegotiator({ completionText: '   ' });
+
+      const reply = await negotiator.composeResume({
+        errandId: 'e1',
+        goal: 'haircut',
+        answer: 'Confirm Saturday',
+        channel: 'whatsapp',
+        sessionId: 's1',
+        messageHistory: [],
+      });
+
+      expect(reply).toBe('Confirm Saturday');
     });
   });
 
@@ -191,7 +260,7 @@ describe('Negotiator', () => {
     vi.mocked(buildErrandService).mockReturnValue(null);
     const completionService = makeCompletionService('irrelevant');
     const promptRepository = makePromptRepository();
-    const negotiator = new Negotiator(makeLogger() as never, {} as never, {} as never, completionService as never, promptRepository as never);
+    const negotiator = new Negotiator(makeLogger() as never, {} as never, makeSessionManager() as never, completionService as never, promptRepository as never);
 
     const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'hi', messageHistory: [] });
 
@@ -214,7 +283,7 @@ describe('Negotiator', () => {
     vi.mocked(buildErrandService).mockReturnValue(errandService as never);
     const completionService = { complete: vi.fn().mockResolvedValue({ kind: 'tool_calls', calls: [] }) };
     const promptRepository = makePromptRepository();
-    const negotiator = new Negotiator(makeLogger() as never, {} as never, {} as never, completionService as never, promptRepository as never);
+    const negotiator = new Negotiator(makeLogger() as never, {} as never, makeSessionManager() as never, completionService as never, promptRepository as never);
 
     const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'hi', messageHistory: [] });
 

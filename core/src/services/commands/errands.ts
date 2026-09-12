@@ -134,7 +134,7 @@ function runAction(
  * - `/errand close <id>` — mark it resolved
  * - `/errand cancel <id>` — cancel it
  */
-export function handleErrandCommand(command: string, context: CommandContext): CommandResult | Promise<CommandResult> {
+export async function handleErrandCommand(command: string, context: CommandContext): Promise<CommandResult> {
   if (!context.trusted) {
     return formatCommandResult('Only trusted senders can manage errands.', context.source);
   }
@@ -151,6 +151,23 @@ export function handleErrandCommand(command: string, context: CommandContext): C
 
   if (sub === 'approve') {
     return runAction(context, arg, 'approve', (svc, id) => svc.approve(id));
+  }
+  if (sub === 'reply' || sub === 'answer') {
+    const [id, ...ansParts] = arg.split(/\s+/);
+    const answerText = ansParts.join(' ').trim();
+    if (!id || !answerText) {
+      return formatCommandResult(`Usage: /errand ${sub} <id> <your message/answer>`, context.source);
+    }
+    const resolved = resolveErrandService();
+    if (!resolved) {
+      return formatCommandResult('Errands are not available: no channel manager is running.', context.source);
+    }
+    try {
+      const result = await resolved.errandService.resumeWithPrincipalAnswer(id, answerText);
+      return formatCommandResult(`Errand [${id}] resumed: sent "${result.reply}" to the contact. Status is now "waiting on them".`, context.source);
+    } catch (err) {
+      return formatCommandResult(err instanceof Error ? err.message : String(err), context.source);
+    }
   }
   if (sub === 'close') {
     return runAction(context, arg, 'close', (svc, id) => svc.resolve(id, 'Closed by the principal.'));

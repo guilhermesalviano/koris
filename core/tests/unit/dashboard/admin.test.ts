@@ -1571,6 +1571,22 @@ describe('AdminRouterFactory /errands', () => {
     expect(res.status).toHaveBeenCalledWith(503);
   });
 
+  it('POST /errands/:id/reply returns 503 when no channel manager is running', async () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    await router.handle(makeRequest('POST', '/errands/e1/reply', { answer: 'yes' }), res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(503);
+  });
+
+  it('GET /errands/:id/transcript returns 503 when no channel manager is running', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/errands/e1/transcript'), res);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+  });
+
   it('/overview folds every non-terminal errand state into openErrands', async () => {
     errandRepo.countByState.mockImplementation((state: string) =>
       ({ draft: 1, queued: 2, open: 0, awaiting_peer: 3, awaiting_principal: 1 } as Record<string, number>)[state] ?? 0,

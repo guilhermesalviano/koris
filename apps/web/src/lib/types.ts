@@ -61,6 +61,16 @@ export type ErrandState =
   | 'cancelled'
   | 'expired';
 
+export interface ErrandTargetSession {
+  sessionId: string;
+  channel: string;
+  peerId: string;
+  kind: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  messageCount: number;
+}
+
 export interface ErrandItem {
   id: string;
   goal: string;
@@ -72,7 +82,20 @@ export interface ErrandItem {
   createdAt: string;
   lastProgressAt: string | null;
   closedAt: string | null;
-  targets: string[];
+  targets: ErrandTargetSession[];
+}
+
+export interface ErrandTranscriptMessage {
+  id: string;
+  sessionId: string;
+  role: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface ErrandTranscriptResponse {
+  errandId: string;
+  messages: ErrandTranscriptMessage[];
 }
 
 export interface ErrandsResponse {

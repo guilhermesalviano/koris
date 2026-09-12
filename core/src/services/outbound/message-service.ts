@@ -13,6 +13,8 @@ export interface SendOutboundInput {
   channel: string;
   target: string;
   kind?: SessionKind;
+  /** Pin persistence to this conversation when several sessions share a peer. */
+  sessionId?: string;
 }
 
 interface DeliveryTarget {
@@ -52,11 +54,13 @@ class OutboundMessageService implements IOutboundMessageService {
     // isn't half-deaf from turn two: without this, the session holds the
     // contact's replies but never what was sent to them.
     try {
-      const sessionService = this.sessionManager.getSessionService({
+      const sessionService = input.sessionId
+        ? this.sessionManager.getSessionServiceById(input.sessionId)
+        : this.sessionManager.getSessionService({
         channel: delivery.channel,
         peerId: delivery.target,
         kind: input.kind ?? 'user',
-      });
+        });
       MessageServiceFactory.create(this.db, sessionService).save({ role: 'assistant', content: input.content });
     } catch (err) {
       this.logger.warn('Failed to record outbound message in session transcript', {

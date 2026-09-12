@@ -11,6 +11,8 @@ export default function SessionsPage() {
   const [detail, setDetail] = useState<SessionDetailResponse | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [toastMsg, showToast, isError] = useToast();
+  const parentSessionId = typeof detail?.session.metadata.parentSessionId === 'string' ? detail.session.metadata.parentSessionId : null;
+  const instructions = typeof detail?.session.metadata.instructions === 'string' ? detail.session.metadata.instructions : null;
 
   const load = useCallback(async () => {
     setError(null);
@@ -83,7 +85,9 @@ export default function SessionsPage() {
                     <td className="px-3 py-2 font-mono text-xs text-txt-2">{s.peerId}</td>
                     <td className="px-3 py-2 text-sm">
                       {s.kind === 'delegated' ? (
-                        <span className="rounded-full border border-accent/40 bg-accent-muted px-2 py-0.5 text-[11px] text-accent-2">delegated</span>
+                        <span className="rounded-full border border-accent/40 bg-accent-muted px-2 py-0.5 text-[11px] text-accent-2" title="Child delegated session for an errand">
+                          errand child
+                        </span>
                       ) : (
                         <span className="text-txt-3">user</span>
                       )}
@@ -115,6 +119,21 @@ export default function SessionsPage() {
           {!detailError && !detail && <EmptyState text="Loading session…" />}
           {!detailError && detail && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {(parentSessionId || instructions) && (
+                <Card className="md:col-span-2">
+                  {parentSessionId && (
+                    <button className="text-sm text-accent-2 hover:underline" onClick={() => loadDetail(parentSessionId)}>
+                      Open parent session · {parentSessionId}
+                    </button>
+                  )}
+                  {instructions && (
+                    <details className="mt-3">
+                      <summary className="cursor-pointer text-sm text-txt-2">Session instructions</summary>
+                      <div className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap text-sm text-txt-2">{instructions}</div>
+                    </details>
+                  )}
+                </Card>
+              )}
               <Card>
                 <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">Messages</div>
                 <div className="max-h-96 overflow-y-auto">

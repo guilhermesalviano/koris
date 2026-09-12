@@ -591,12 +591,12 @@ describe('MessageGateway', () => {
   });
 
   describe('errand routing', () => {
-    it('a trusted sender always reaches their own user session, never the negotiator', async () => {
+    it('a trusted sender without an active errand reaches their own user session', async () => {
       const { gateway, deps, negotiator } = makeGateway('whatsapp');
 
       await gateway.handle('hello', 'origin-1', { toolsEnabled: true, isTrustedSender: true });
 
-      expect(buildErrandService).not.toHaveBeenCalled();
+      expect(buildErrandService).toHaveBeenCalled();
       expect(negotiator.run).not.toHaveBeenCalled();
       expect(deps.sessionContextFactory.resolve).toHaveBeenCalledWith(
         { channel: 'whatsapp', peerId: 'origin-1', kind: 'user' },
@@ -618,17 +618,17 @@ describe('MessageGateway', () => {
       expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
     });
 
-    it('an untrusted sender with an active errand is routed to the negotiator on the delegated session', async () => {
+    it.each([false, true])('a contact with trust=%s and an active errand uses the matched delegated session', async (isTrustedSender) => {
       const { gateway, deps, negotiator } = makeGateway('whatsapp');
       vi.mocked(buildErrandService).mockReturnValue({
         findActiveForPeer: vi.fn().mockReturnValue({ errand: { id: 'errand-1' }, sessionId: 'delegated-session' }),
       } as never);
 
-      const result = await gateway.handle('what is the status?', 'origin-1', { isTrustedSender: false });
+      const result = await gateway.handle('what is the status?', 'origin-1', { isTrustedSender });
 
       expect(deps.sessionContextFactory.resolve).toHaveBeenCalledWith(
         { channel: 'whatsapp', peerId: 'origin-1', kind: 'delegated' },
-        undefined,
+        'delegated-session',
       );
       expect(negotiator.run).toHaveBeenCalledWith({
         errandId: 'errand-1',
@@ -638,6 +638,18 @@ describe('MessageGateway', () => {
         messageHistory: [],
       });
       expect(result).toBe('negotiator reply');
+      expect(deps.mainAgent.run).not.toHaveBeenCalled();
+    });
+
+    it('a trusted contact can still run commands in their own user session', async () => {
+      const { gateway, deps, negotiator } = makeGateway('whatsapp');
+      vi.mocked(buildErrandService).mockReturnValue({
+        findActiveForPeer: vi.fn().mockReturnValue({ errand: { id: 'errand-1' }, sessionId: 'delegated-session' }),
+      } as never);
+      await gateway.handle('/help', 'origin-1', { isTrustedSender: true, toolsEnabled: true });
+      expect(buildErrandService).not.toHaveBeenCalled();
+      expect(negotiator.run).not.toHaveBeenCalled();
+      expect(deps.sessionContextFactory.resolve).toHaveBeenCalledWith({ channel: 'whatsapp', peerId: 'origin-1', kind: 'user' }, undefined);
     });
 
     it('never dispatches a command, and never calls the main agent, for a delegated turn', async () => {
@@ -660,13 +672,36 @@ describe('MessageGateway', () => {
 
       await gateway.handle('hello', 'origin-1', { isTrustedSender: false });
 
-      expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith({
-        sessionId: 'session-1',
-        ask: 'hello',
-        askImages: undefined,
-        answer: 'negotiator reply',
-        channel: 'whatsapp',
-      });
+      expect(deps.messageService.save).toHaveBeenNthCalledWith(1, { role: 'user', content: 'hello', images: undefined });
+      expect(deps.messageService.save).toHaveBeenNthCalledWith(2, { role: 'assistant', content: 'negotiator reply' });
+      expect(deps.backgroundDispatcher.persistConversation).not.toHaveBeenCalled();
+    });
+
+    it('processes consecutive contact messages only after the preceding exchange is persisted', async () => {
+      const { gateway, deps, negotiator } = makeGateway('whatsapp');
+      vi.mocked(buildErrandService).mockReturnValue({
+        findActiveForPeer: vi.fn().mockReturnValue({ errand: { id: 'errand-1' }, sessionId: 'delegated-session' }),
+      } as never);
+      let release!: () => void;
+      const history: { role: string; content: string }[] = [];
+      deps.messageService.getHistory.mockImplementation(() => [...history]);
+      deps.messageService.save.mockImplementation((message) => { history.push(message); });
+      negotiator.run.mockImplementationOnce(() => new Promise((resolve) => {
+        release = () => resolve({ reply: 'What other hours are available?', applied: 'continue' });
+      }));
+      const first = gateway.handle('10 is unavailable', 'origin-1', { isTrustedSender: false });
+      const second = gateway.handle('11 or 14', 'origin-1', { isTrustedSender: false });
+      await vi.waitFor(() => expect(negotiator.run).toHaveBeenCalledTimes(1));
+      expect(deps.messageService.save).not.toHaveBeenCalled();
+      release();
+      await Promise.all([first, second]);
+      expect(negotiator.run).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        peerMessage: '11 or 14',
+        messageHistory: [
+          expect.objectContaining({ role: 'user', content: '10 is unavailable' }),
+          { role: 'assistant', content: 'What other hours are available?' },
+        ],
+      }));
     });
   });
 });

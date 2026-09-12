@@ -56,6 +56,19 @@ function normalizeInput(input: InboundInput): { text: string; images?: ImageAtta
 }
 
 class MessageGateway implements IMessageGateway {
+  private readonly delegatedTurns = new Map<string, Promise<ProcessedMessage>>();
+
+  private async runDelegatedTurn(errandId: string, run: () => Promise<ProcessedMessage>): Promise<ProcessedMessage> {
+    const previous = this.delegatedTurns.get(errandId) ?? Promise.resolve();
+    const turn = previous.catch(() => undefined).then(run);
+    this.delegatedTurns.set(errandId, turn);
+    try {
+      return await turn;
+    } finally {
+      if (this.delegatedTurns.get(errandId) === turn) this.delegatedTurns.delete(errandId);
+    }
+  }
+
   constructor(
     private logger: ILogger,
     private channel: string,
@@ -76,17 +89,18 @@ class MessageGateway implements IMessageGateway {
 
     this.logger.info(`Processing message from ${channel} (origin: ${originId}): "${previewMessage(safeMessage)}"${images?.length ? ` with ${images.length} image(s)` : ''}`);
 
-    // An untrusted peer with an active errand talks to the negotiator, not
-    // the principal's own session — resolved against the peer's *delegated*
-    // session, never the trusted `user` one.
-    const activeErrand = options?.isTrustedSender === false
+    // An approved errand owns the contact conversation regardless of whether
+    // that contact is also trusted. Trusted slash commands still belong to
+    // their user session; web/TUI requests without channel trust stay there too.
+    const activeErrand = options?.isTrustedSender !== undefined
+      && (!isCommand(safeMessage) || options.isTrustedSender === false)
       ? buildErrandService(this.logger, this.db, this.sessionManager)?.findActiveForPeer(channel, originId) ?? null
       : null;
 
     const origin: SessionKey = activeErrand
       ? { channel, peerId: originId, kind: 'delegated' }
       : { channel, peerId: originId, kind: 'user' };
-    const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(origin, options?.sessionId);
+    const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(origin, activeErrand?.sessionId ?? options?.sessionId);
 
     this.channelService.record(channel, originId);
 
@@ -94,22 +108,20 @@ class MessageGateway implements IMessageGateway {
 
     if (activeErrand) {
       // Delegated turn: the negotiator drives it end to end — commands and
-      // tools are never dispatched for an untrusted peer's message.
-      const result = await this.negotiator.run({
-        errandId: activeErrand.errand.id,
-        sessionId: sessionService.getSession().id,
-        channel,
-        peerMessage: safeMessage,
-        messageHistory: messageService.getHistory(),
+      // tools are never dispatched for a contact's delegated message. Read and
+      // persist within the queue so the next turn sees the preceding exchange.
+      return this.runDelegatedTurn(activeErrand.errand.id, async () => {
+        const result = await this.negotiator.run({
+          errandId: activeErrand.errand.id,
+          sessionId: sessionService.getSession().id,
+          channel,
+          peerMessage: safeMessage,
+          messageHistory: messageService.getHistory(),
+        });
+        messageService.save({ role: 'user', content: safeMessage, images });
+        if (result.reply) messageService.save({ role: 'assistant', content: result.reply });
+        return result.reply;
       });
-      this.backgroundDispatcher.persistConversation({
-        sessionId: sessionService.getSession().id,
-        ask: safeMessage,
-        askImages: images,
-        answer: result.reply,
-        channel,
-      });
-      return result.reply;
     }
 
     let agentMessage = safeMessage;

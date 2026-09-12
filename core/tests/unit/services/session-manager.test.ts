@@ -31,6 +31,19 @@ describe('SessionManager', () => {
   });
 
   describe('getSessionService (composite key)', () => {
+    it('reopens a delegated conversation from storage after idle TTL without losing its transcript', () => {
+      const repo = makeRepo();
+      const existing = new Session({
+        id: 'negotiation', channel: 'whatsapp', peerId: '555', kind: 'delegated',
+        startedAt: '2000-01-01T00:00:00.000Z', metadata: { lastActivityAt: '2000-01-01T00:00:00.000Z' },
+      });
+      repo.findLatestOpen.mockReturnValue(existing);
+      vi.mocked(SessionRepositoryFactory.create).mockReturnValue(repo as never);
+      const service = new SessionManager({} as never).getSessionService({ channel: 'whatsapp', peerId: '555', kind: 'delegated' });
+      expect(service.ensureActiveSession().id).toBe('negotiation');
+      expect(repo.save).not.toHaveBeenCalled();
+      expect(repo.rotate).not.toHaveBeenCalled();
+    });
     it('creates a new session when none is open, keyed by channel+peerId+kind', () => {
       const repo = makeRepo();
       vi.mocked(SessionRepositoryFactory.create).mockReturnValue(repo as any);

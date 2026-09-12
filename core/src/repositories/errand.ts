@@ -28,6 +28,8 @@ interface IErrandRepository {
   findById(id: string): Errand | null;
   findActiveBySessionId(sessionId: string): Errand | null;
   findNextQueuedBySessionId(sessionId: string): Errand | null;
+  findActiveByPeer(channel: string, peerIds: string[]): { errand: Errand; sessionId: string } | null;
+  findNextQueuedByPeer(channel: string, peerIds: string[]): Errand | null;
   findByOriginSessionId(originSessionId: string): Errand[];
   findAll(state?: ErrandState, limit?: number, offset?: number): Errand[];
   addTarget(errandId: string, sessionId: string): void;
@@ -124,6 +126,37 @@ class ErrandRepository implements IErrandRepository {
       [originSessionId],
     );
     return rows.map(mapRowToErrand);
+  }
+
+  // Every errand now has its own session. Contention and inbound routing must
+  // match the contact across those sessions, not just the most recent session.
+  findActiveByPeer(channel: string, peerIds: string[]): { errand: Errand; sessionId: string } | null {
+    if (!peerIds.length) return null;
+    const row = this.db.get(
+      `SELECT e.*, s.id AS target_session_id FROM errands e
+       JOIN errand_targets t ON t.errand_id = e.id
+       JOIN sessions s ON s.id = t.session_id
+       WHERE s.channel = ? AND s.peer_id IN (${peerIds.map(() => '?').join(', ')})
+         AND s.kind = 'delegated' AND s.ended_at IS NULL
+         AND e.state IN (${ACTIVE_STATES.map(() => '?').join(', ')})
+       ORDER BY e.created_at ASC, e.rowid ASC LIMIT 1`,
+      [channel, ...peerIds, ...ACTIVE_STATES],
+    ) as (ErrandRow & { target_session_id: string }) | undefined;
+    return row ? { errand: mapRowToErrand(row), sessionId: row.target_session_id } : null;
+  }
+
+  findNextQueuedByPeer(channel: string, peerIds: string[]): Errand | null {
+    if (!peerIds.length) return null;
+    const row = this.db.get(
+      `SELECT e.* FROM errands e
+       JOIN errand_targets t ON t.errand_id = e.id
+       JOIN sessions s ON s.id = t.session_id
+       WHERE s.channel = ? AND s.peer_id IN (${peerIds.map(() => '?').join(', ')})
+         AND s.kind = 'delegated' AND s.ended_at IS NULL AND e.state = 'queued'
+       ORDER BY e.created_at ASC, e.rowid ASC LIMIT 1`,
+      [channel, ...peerIds],
+    ) as ErrandRow | undefined;
+    return row ? mapRowToErrand(row) : null;
   }
 
   findAll(state?: ErrandState, limit = 50, offset = 0): Errand[] {

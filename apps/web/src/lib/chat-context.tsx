@@ -2,25 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useNavigate } from 'react-router-dom';
 import { checkHealth, streamChat, cancelChat, apiRequest } from './api';
 import { clearResponseAlert, triggerResponseDone } from './response-alert';
+import { createHistoryPoller, mapMessages, nextId, timeStr, type ChatMessage, type HistoryMessage } from './chat-history';
 import type { ActiveRun, ActiveRunsResponse, AllowedDomainsResponse, GateBlock, GateBlocksResponse, ImageAttachment, SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
 
-export interface ChatMessage {
-  id: number;
-  role: 'user' | 'assistant';
-  content: string;
-  images?: ImageAttachment[];
-  missingImages?: number;
-  status?: string;
-  pending?: boolean;
-  error?: boolean;
-  /** Display-only "HH:MM" caption; deliberately empty while a reply is pending. */
-  timestamp: string;
-  /** Creation time in epoch ms, for the thread's time separators. Never updated. */
-  at: number;
-  backgroundRunKey?: string;
-}
-
-type HistoryMessage = { id: string; role: string; content: string; images?: ImageAttachment[]; missingImages?: number; errorCode?: string; createdAt: string };
+export type { ChatMessage } from './chat-history';
 
 interface ChatHistoryResponse {
   sessionId: string | null;
@@ -59,29 +44,7 @@ const ChatContext = createContext<ChatContextValue | null>(null);
 
 const HEALTH_CHECK_MS = 5000;
 const ACTIVE_RUN_POLL_MS = 4000;
-
-let idCounter = 0;
-function nextId(): number {
-  idCounter += 1;
-  return idCounter;
-}
-
-function timeStr(date: Date): string {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function mapMessages(messages: HistoryMessage[]): ChatMessage[] {
-  return messages.map((m) => ({
-    id: nextId(),
-    role: m.role === 'user' ? 'user' : 'assistant',
-    content: m.content,
-    images: m.images,
-    missingImages: m.missingImages,
-    error: !!m.errorCode,
-    timestamp: timeStr(new Date(m.createdAt)),
-    at: new Date(m.createdAt).getTime(),
-  }));
-}
+const MESSAGE_POLL_MS = 3500;
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
@@ -99,6 +62,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [responseMode, setResponseMode] = useState<'text' | 'voice'>('text');
   const dismissedDomainsRef = useRef<Set<string>>(new Set());
   const loadToken = useRef(0);
+  const historyLoadingRef = useRef(false);
+  const historyGenerationRef = useRef(0);
   const pendingNewChatRef = useRef(false);
   const streamingRef = useRef(false);
   const streamTargetRef = useRef<string | null>(null);
@@ -140,6 +105,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // A token guards against stale responses when switching sessions quickly.
   const loadSession = useCallback(async (target: string | null) => {
     const token = ++loadToken.current;
+    historyGenerationRef.current += 1;
+    historyLoadingRef.current = true;
     setHistoryLoaded(false);
 
     try {
@@ -198,7 +165,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setActiveSessionId(target);
       setMessages([]);
     } finally {
-      if (token === loadToken.current) setHistoryLoaded(true);
+      if (token === loadToken.current) {
+        historyLoadingRef.current = false;
+        setHistoryLoaded(true);
+      }
     }
   }, [loadSessions]);
 
@@ -209,6 +179,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const newChat = useCallback(async () => {
     pendingNewChatRef.current = true;
     loadToken.current += 1;
+    historyGenerationRef.current += 1;
+    historyLoadingRef.current = false;
+    activeSessionIdRef.current = null;
     setActiveSessionId(null);
     setMessages([]);
     setHistoryLoaded(true);
@@ -276,6 +249,33 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       clearInterval(interval);
     };
   }, []);
+
+  // Poll for background messages in the active session (e.g. errand escalations or notices).
+  useEffect(() => {
+    const poller = createHistoryPoller({
+      getState: () => {
+        const sessionId = activeSessionIdRef.current;
+        return {
+          sessionId,
+          generation: historyGenerationRef.current,
+          busy: historyLoadingRef.current
+            || (streamingRef.current && (!streamTargetRef.current || streamTargetRef.current === sessionId))
+            || (!!backgroundRunRef.current && backgroundRunRef.current.sessionId === sessionId),
+        };
+      },
+      fetchHistory: async (sessionId) => {
+        const detail = await apiRequest<SessionDetailResponse>(`/sessions/${encodeURIComponent(sessionId)}`);
+        return detail.messages;
+      },
+      update: setMessages,
+    });
+    void poller.poll();
+    const interval = setInterval(() => { void poller.poll(); }, MESSAGE_POLL_MS);
+    return () => {
+      poller.dispose();
+      clearInterval(interval);
+    };
+  }, [activeSessionId, historyLoaded, streaming, backgroundRun]);
 
   // Poll for questions still being processed server-side. When the page is
   // reloaded mid-run the SSE stream is gone, so this restores the current
@@ -404,6 +404,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     setStreaming(true);
     streamingRef.current = true;
+    historyGenerationRef.current += 1;
     clearResponseAlert();
     const sentAt = Date.now();
     const userMsg: ChatMessage = { id: nextId(), role: 'user', content: text, images, timestamp: timeStr(new Date()), at: sentAt };
@@ -446,6 +447,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           // to the new session (and its resumed summary / memory reach the model),
           // redirect the URL to the new chat, and refresh the sidebar list.
           streamTargetRef.current = rotatedSessionId;
+          historyGenerationRef.current += 1;
           if (inFlightRef.current) inFlightRef.current.sessionId = rotatedSessionId;
           setActiveSessionId(rotatedSessionId);
           void loadSessions();

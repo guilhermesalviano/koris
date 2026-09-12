@@ -95,6 +95,123 @@ Koris provides two native desktop shells that wrap the local server and web dash
   pnpm desktop:dev
   ```
 
+## Errands: Delegated Conversations
+
+An errand asks Koris to pursue a goal with a contact while keeping the requesting user (the principal) informed. Every errand creates a fresh `kind: delegated` child session per distinct target, even when an earlier errand used the same contact. The invoking `originSessionId` remains the parent; creating a child does not rotate or close it. Both sessions remain open while the errand runs. The service supports multiple targets; the chat command currently creates one.
+
+Each child's SQLite `metadata` persists `parentSessionId`, `errandId`, and `instructions` containing the full **Speaking To Someone Else On The Human's Behalf** block. Follow-up and resume prompts read this saved instruction text after restarts. Older sessions without it retain the runtime default. In Configuration → Sessions, select a child to inspect its instructions or open its parent session.
+
+```text
+Principal: web / TUI / channel
+  |
+  | /errand <goal> with <contact> on <channel>
+  v
+MessageGateway -> command handler -> Negotiator.composeOpener()
+  |                                  (worker LLM; fallback: raw goal)
+  v
+ErrandService.create() -- SQLite transaction ---------------------+
+  |                                                             |
+  +-> errands: goal, origin_session_id, pending_message, state    |
+  +-> fresh child session: parent ID + saved instructions        |
+  +-> errand_targets: links errand to its own child session      |
+  |                                                             |
+  +-> target busy? queued -- after blocker closes --> draft      |
+  +-> target free? draft                                        |
+                     |                                          |
+                     | /errand approve <id> or admin Approve     |
+                     v                                          |
+               awaiting_peer                                    |
+                     |                                          |
+                     +-> OutboundMessageService -> contact       |
+                                                                |
+Contact replies through its channel                             |
+  |                                                             |
+  v                                                             |
+ChannelHandler -> MessageGateway                                |
+  | approved errand lookup (trusted or untrusted contact)       |
+  v                                                             |
+Negotiator.run(goal + notes + delegated transcript)              |
+  | tools, learned skills and memory retrieval disabled         |
+  |                                                             |
+  +-> continue -> awaiting_peer -> reply to contact              |
+  +-> escalate -> awaiting_principal -> question to principal ---+
+  +-> resolved / failed -> terminal -> result to principal ------+
+                                                                |
+Principal: /errand reply <id> <answer> or admin Reply             |
+  |                                                             |
+  v                                                             |
+composeResume() -> send to contact -> awaiting_peer              |
+  +-> resume notice to principal -------------------------------+
+                                                                |
+                  How principal notices return today <----------+
+                                |
+                    lookup originSessionId
+                                |
+              +-----------------+------------------+
+              |                                    |
+       supported channel                        web / TUI
+              |                                    |
+       outbound service                  save assistant message
+       -> channel adapter                in exact origin transcript
+       -> principal                                |
+                                         web: poll session detail
+                                         -> merge by saved message ID
+```
+
+Creation stages the opener for approval. Closing an errand as `resolved`, `failed`, or `cancelled` can promote the oldest eligible queued errand to `draft`; it still needs approval. Cancellation sends no notice. Reading a stale `open`, `awaiting_peer`, or `awaiting_principal` errand lazily marks it `expired`; that path currently neither notifies the principal nor promotes queued work. `open` is accepted by the model, but the normal approval path goes directly from `draft` to `awaiting_peer`.
+
+Use `/errand` to list errands from the current session, `/errand approve <id>` to approve, `/errand reply <id> <answer>` (or `answer`) to respond to a question, `/errand close <id>` to resolve manually, and `/errand cancel <id>` to cancel. The admin Errands page exposes details, contact transcripts, and these actions. An ordinary chat answer is not automatically routed back to a waiting errand.
+
+The opener uses `ERRAND_OPENER_INSTRUCTIONS`. Following turns use `NEGOTIATOR_INSTRUCTIONS` plus a goal-specific `ERRAND_FOLLOWUP_CONTEXT` built from the goal, cumulative notes, current state, and last sent message. This prompt replaces the general chat policy and excludes global personal context. It tells the negotiator to remember rejected options, collect concrete alternatives, and request principal approval before accepting a change outside the goal's authorization. For example: "10 is unavailable" leads to asking which hours are available; "11 or 14" leads to a concrete choice in the parent session once essential details are known. After approval, `ERRAND_RESUME_INSTRUCTIONS` receives the pending question, answer, notes, and contact transcript, and continues toward contact confirmation.
+
+Contact replies use the exact child session matched by the active errand, including when the inbound peer address uses a different spelling. Routing and queue checks match the contact across errand sessions, so a newer queued child cannot steal replies from an active one. Openers and resumed replies also write to the exact child, keeping other errands' histories separate. Delegated sessions survive idle TTL when reopened from storage. Each gateway serializes turns for an errand and saves the exchange before reading history for the next turn. The prompt honors `errands.history_limit` (default 100), rather than truncating it again to the general chat limit of 20. While awaiting principal approval, further contact messages are recorded without advancing the negotiation; trusted slash commands still use the contact's own user session.
+
+Implementation entry points:
+
+| Concern | Source |
+| --- | --- |
+| Creation and principal commands | [`core/src/services/commands/errands.ts`](core/src/services/commands/errands.ts) |
+| State transitions, origin notices, queue promotion | [`core/src/services/errands/index.ts`](core/src/services/errands/index.ts) |
+| Errand records and target links | [`core/src/repositories/errand.ts`](core/src/repositories/errand.ts) |
+| Peer routing and conversation persistence | [`core/src/services/agents/message-gateway.ts`](core/src/services/agents/message-gateway.ts) |
+| Opener, peer verdict, and resumed reply | [`core/src/services/agents/sub-agents/negotiator/sub-agent.ts`](core/src/services/agents/sub-agents/negotiator/sub-agent.ts) |
+| Channel delivery and outbound status | [`core/src/services/outbound/message-service.ts`](core/src/services/outbound/message-service.ts) |
+| Web transcript loading and polling | [`apps/web/src/lib/chat-context.tsx`](apps/web/src/lib/chat-context.tsx), [`apps/web/src/lib/chat-history.ts`](apps/web/src/lib/chat-history.ts), [`core/src/dashboard/admin.ts`](core/src/dashboard/admin.ts) |
+
+### Web Replies: Fix and Remaining Limitations
+
+The web synchronization fix is covered by regression tests for saved-message reconciliation and delayed polling responses. Live channel-account delivery has not been exercised by those tests.
+
+- **Saving is separate from displaying.** `pushToSession()` saves web/TUI notices directly in the origin transcript. The web `/api/chat` SSE connection ends after each request, so it cannot carry a later contact reply. The current web client polls `/api/admin/sessions/:id` every 3.5 seconds while idle.
+- **Fixed: new messages no longer depend on the history count growing.** The client retains database message IDs and merges unseen records, including when the latest-200 window stays the same size. Matching saved copies acquire the optimistic message's UI identity; pending replies and local request failures remain visible. Older loaded messages are retained. The API still returns only 200 records, so more than 200 arrivals between successful polls require the cursor-based replay planned below.
+- **Fixed: polling cannot overwrite another chat after navigation.** Requests and queued UI updates check the session and view/turn generation; overlapping requests within a poller are skipped and disposed pollers ignore delayed responses. Polling pauses only for work in the viewed session and catches up immediately after streaming or background processing finishes.
+- **Notices belong to the original chat.** Errand notices use the exact originating session across transports, even after `/clear`, `/compact`, or navigation to another chat. Only the active web chat is polled; there is no errand notice notification for other chats.
+- **Delivery success is not awaited by errands.** Channel pushes run with `void outboundMessageService.send(...)`. Approval/resume can report `awaiting_peer` or "sent" before delivery finishes; failed sends are recorded in the outbound log without changing that errand state.
+
+### Plan: Reliable Replies to the Invoking Channel
+
+The web reconciliation portion of step 1 is implemented. The remaining work below extends delivery and recovery beyond the polling fix. Preserve `originSessionId` as attribution and deliver questions/results through a shared runtime service; the negotiator should return its verdict, with the runtime choosing the destination.
+
+1. **Web reconciliation implemented; cursor replay next.** Saved IDs, optimistic-message reconciliation, stale-response guards, and catch-up polling are implemented in `chat-history.ts` and `chat-context.tsx`. Add a paginated message endpoint with an opaque monotonic cursor so reconnects can fetch every missed notice beyond the 200-message window. Keep SQL in the repository layer.
+
+2. **Make origin delivery explicit.** Introduce a shared session-notification service used by `escalate`, `resolve`, `fail`, and resume acknowledgements. Persist a notification ID, errand ID, event type, origin session, content, and delivery state. Keep the original transcript as the durable record, including when closed; do not silently redirect it to whichever web chat is newest. Expose unread notices linking back to that chat. Resolve channel/peer/kind from the origin session, and preserve available thread/reply context for channel plugins that support it. Missing sessions or unavailable transports must produce visible delivery errors.
+
+3. **Add live delivery independently of chat requests.** Publish a session-message event only after persistence. Add a long-lived dashboard event stream that observes existing dashboard access rules, supports reconnect/cursor replay, and cleans up disconnected subscribers. Web and desktop clients merge events by persisted ID, show the notice immediately in the matching chat, and show an unread indicator elsewhere. TUI can subscribe to the same runtime notification events. Keep cursor polling as a fallback.
+
+4. **Track delivery separately from errand progress.** Persist the notice and a pending delivery job atomically, then send through the channel manager or notify local subscribers. Await the send outcome before claiming an opener/resumed reply was sent; record failures and retry without regenerating the message. Use a unique errand-event key to prevent duplicate transcript entries and repeat sends on ordinary retries. External delivery may remain ambiguous after a crash unless the adapter supports idempotency. Outbound persistence now accepts an exact session ID, which errands use for their child transcripts and parent notices. Discover adapter capabilities dynamically instead of extending the current hardcoded `CHANNEL_TYPES`; plugin-specific normalization and thread handling belong in `koris-hub`.
+
+5. **Connect the principal's answer to the pending question.** Give escalation notices structured errand metadata and an inline Reply action that calls the existing `/api/admin/errands/:id/reply` route. Preserve `/errand reply` for every interface. If ordinary-text replies are supported later, bind them to an explicitly selected pending errand; ask which one when ambiguous. Validate caller authority, errand ownership, and `awaiting_principal` state before sending. Reuse the persisted resume notice for acknowledgement so the command response and background event do not appear twice.
+
+6. **Finish lifecycle and multiple-target handling.** Exact delegated-session routing, trusted-contact negotiation, draft/paused guards, per-gateway errand turn serialization, and state rechecks after LLM work are implemented. Remaining work: make expiry release queued work and notify the origin, and notify when queued work becomes ready for approval. For multiple targets, coordinate turns across gateways and retain which contact asked the pending question; resume currently composes from the first target's history and sends the same answer to all targets.
+
+Acceptance checks for the implementation:
+
+- Start in web chat A, approve, receive a contact question, answer from A, and receive the final result there without reload. Repeat from a channel origin and verify the same peer/thread receives the notice.
+- Exercise 200+ messages, a notice during streaming, equal-length history windows, fast A/B switching, and an active run in another chat; no notice is lost or shown in the wrong chat.
+- Disconnect/reload and reconnect after more than 200 new messages; replay each notice once. After `/clear` or `/compact`, show an unread link to the original chat and preserve its transcript.
+- Simulate adapter failure/recovery, duplicate events, concurrent principal/peer replies, cancellation during LLM work, and process restart with pending deliveries. Verify accurate status and no duplicate local records.
+- Verify expiry/queue promotion, peer normalization, trusted-contact behavior, multiple waiting errands, multiple targets, and caller authorization with repository/service/API tests. Add browser coverage for reconciliation and reconnect behavior.
+
 ## Voice & Audio Sidecar (STT & TTS)
 
 Koris supports fully local speech-to-text (Whisper) and neural text-to-speech (Piper) via a lightweight HTTP sidecar running on port `6006`.

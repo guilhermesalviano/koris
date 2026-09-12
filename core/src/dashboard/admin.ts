@@ -527,6 +527,24 @@ class AdminRouterFactory {
       };
     }
 
+    function getTargetDetails(errandId: string) {
+      const targetSessionIds = ErrandRepositoryFactory.create(db).findTargets(errandId);
+      const sessionRepo = SessionRepositoryFactory.create(db);
+
+      return targetSessionIds.map((sessionId) => {
+        const session = sessionRepo.findById(sessionId);
+        return {
+          sessionId,
+          channel: session?.channel ?? 'unknown',
+          peerId: session?.peerId ?? 'unknown',
+          kind: session?.kind ?? 'delegated',
+          startedAt: session?.startedAt ?? null,
+          endedAt: session?.endedAt ?? null,
+          messageCount: session?.messageCount ?? 0,
+        };
+      });
+    }
+
     router.get('/errands', (req: Request, res: Response) => {
       const errandService = buildErrandService(logger, db, sessionManager);
       if (!errandService) {
@@ -544,7 +562,7 @@ class AdminRouterFactory {
         offset,
         items: errands.map((errand) => ({
           ...toErrandJson(errand),
-          targets: ErrandRepositoryFactory.create(db).findTargets(errand.id),
+          targets: getTargetDetails(errand.id),
         })),
       });
     });
@@ -564,7 +582,38 @@ class AdminRouterFactory {
 
       res.json({
         ...toErrandJson(errand),
-        targets: ErrandRepositoryFactory.create(db).findTargets(errand.id),
+        targets: getTargetDetails(errand.id),
+      });
+    });
+
+    router.get('/errands/:id/transcript', (req: Request, res: Response) => {
+      const errandService = buildErrandService(logger, db, sessionManager);
+      if (!errandService) {
+        res.status(503).json({ error: 'Errands are not available: no channel manager is running.' });
+        return;
+      }
+
+      const errand = errandService.get(String(req.params.id));
+      if (!errand) {
+        res.status(404).json({ error: 'Errand not found' });
+        return;
+      }
+
+      const targetSessionIds = ErrandRepositoryFactory.create(db).findTargets(errand.id);
+      const messageRepo = MessageRepositoryFactory.create(db);
+      const messages = targetSessionIds.flatMap((sessionId) => {
+        return messageRepo.getBySessionId(sessionId, 100).map((msg) => ({
+          id: msg.id,
+          sessionId,
+          role: msg.role,
+          content: msg.content,
+          createdAt: msg.createdAt,
+        }));
+      }).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+      res.json({
+        errandId: errand.id,
+        messages,
       });
     });
 
@@ -577,6 +626,30 @@ class AdminRouterFactory {
 
       try {
         res.json(toErrandJson(errandService.approve(String(req.params.id))));
+      } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    router.post('/errands/:id/reply', async (req: Request, res: Response) => {
+      const errandService = buildErrandService(logger, db, sessionManager);
+      if (!errandService) {
+        res.status(503).json({ error: 'Errands are not available: no channel manager is running.' });
+        return;
+      }
+
+      const answer = typeof req.body?.answer === 'string' ? req.body.answer.trim() : '';
+      if (!answer) {
+        res.status(400).json({ error: 'Missing "answer" in request body.' });
+        return;
+      }
+
+      try {
+        const result = await errandService.resumeWithPrincipalAnswer(String(req.params.id), answer);
+        res.json({
+          errand: toErrandJson(result.errand),
+          reply: result.reply,
+        });
       } catch (err) {
         res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
       }

@@ -46,12 +46,12 @@ class MessageRepository implements IMessageRepository {
   getBySessionId(sessionId: string, limit = 15): Message[] {
     const rows = this.db.query<any>(
       `SELECT id, session_id, role, content, image_ids, error_code, created_at FROM (
-         SELECT id, session_id, role, content, image_ids, error_code, created_at FROM messages
+         SELECT rowid AS insertion_order, id, session_id, role, content, image_ids, error_code, created_at FROM messages
          WHERE session_id = ?
-         ORDER BY created_at DESC
+         ORDER BY created_at DESC, rowid DESC
          LIMIT ?
        ) recent_messages
-       ORDER BY created_at ASC`,
+       ORDER BY created_at ASC, insertion_order ASC`,
       [sessionId, limit]
     );
 

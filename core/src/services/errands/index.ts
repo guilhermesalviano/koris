@@ -2,6 +2,9 @@ import { ILogger } from '../../infrastructure/logger';
 import { IDatabaseService } from '../../infrastructure/db-sqlite';
 import { config } from '../../config';
 import { Errand, ErrandProps } from '../../entities/errand';
+import { Session } from '../../entities/session';
+import { ErrandSessionMetadata } from '../../types/session';
+import { THIRD_PARTY_CONVERSATION_CONTEXT } from '../../constants';
 import { IErrandRepository, ErrandRepositoryFactory } from '../../repositories/errand';
 import { ISessionRepository, SessionRepositoryFactory } from '../../repositories/session';
 import { ISessionManager } from '../session-manager';
@@ -12,7 +15,7 @@ import { CHANNEL_TYPES } from '../../entities/channel';
 import { nowISO } from '../../utils/date';
 import { ErrandState, ERRAND_OPEN_STATES } from '../../types/errand';
 
-const ACTIVE_STATES: ErrandState[] = ['draft', 'open', 'awaiting_peer', 'awaiting_principal'];
+const NEGOTIATING_STATES: ErrandState[] = ['open', 'awaiting_peer', 'awaiting_principal'];
 const NON_TERMINAL_STATES: ErrandState[] = ['draft', 'queued', 'open', 'awaiting_peer', 'awaiting_principal'];
 
 export interface ErrandTargetRef {
@@ -22,6 +25,15 @@ export interface ErrandTargetRef {
 
 function isDeliverableChannel(channel: string): boolean {
   return (CHANNEL_TYPES as readonly string[]).includes(channel);
+}
+
+// Preserve the address equivalence already supported by inbound errand lookup
+// when checking contention and promoting a queued errand, too.
+function peerAliases(channel: string, peerId: string): string[] {
+  if (channel !== 'whatsapp') return [peerId];
+  return [peerId, peerId.endsWith('@s.whatsapp.net')
+    ? peerId.replace(/@s\.whatsapp\.net$/, '')
+    : `${peerId}@s.whatsapp.net`];
 }
 
 interface IErrandService {
@@ -36,6 +48,7 @@ interface IErrandService {
   get(id: string): Errand | null;
   listByOrigin(originSessionId: string): Errand[];
   listAll(state?: ErrandState, limit?: number, offset?: number): Errand[];
+  resumeWithPrincipalAnswer(id: string, answer: string): Promise<{ errand: Errand; reply: string }>;
   findActiveForPeer(channel: string, peerId: string): { errand: Errand; sessionId: string } | null;
 }
 
@@ -61,17 +74,27 @@ class ErrandService implements IErrandService {
     }
 
     return this.db.transaction(() => {
-      const targetSessionIds = targets.map((target) => this.sessionManager
-        .getSessionService({ channel: target.channel, peerId: target.peerId, kind: 'delegated' })
-        .getSession().id);
-
-      const blocked = targetSessionIds.some((sessionId) => this.errandRepository.findActiveBySessionId(sessionId));
+      if (!this.sessionRepository.findById(originSessionId)) throw new Error(`Parent session not found: ${originSessionId}`);
+      const blocked = targets.some((target) => this.errandRepository.findActiveByPeer(target.channel, peerAliases(target.channel, target.peerId)));
       const state: ErrandState = blocked ? 'queued' : 'draft';
 
       const errand = new Errand({ goal, state, originSessionId, pendingMessage: openingMessage });
       this.errandRepository.save(errand);
-      for (const sessionId of targetSessionIds) {
-        this.errandRepository.addTarget(errand.id, sessionId);
+      const createdTargets = new Set<string>();
+      for (const target of targets) {
+        const key = JSON.stringify([target.channel, [...peerAliases(target.channel, target.peerId)].sort()]);
+        if (createdTargets.has(key)) continue;
+        createdTargets.add(key);
+        const metadata: ErrandSessionMetadata = {
+          parentSessionId: originSessionId,
+          errandId: errand.id,
+          instructions: THIRD_PARTY_CONVERSATION_CONTEXT,
+        };
+        // Insert a fresh child; never rotate the parent or reuse another
+        // errand's contact transcript (even for the same channel and peer).
+        const child = new Session({ channel: target.channel, peerId: target.peerId, kind: 'delegated', metadata });
+        this.sessionRepository.save(child);
+        this.errandRepository.addTarget(errand.id, child.id);
       }
 
       return errand;
@@ -105,10 +128,14 @@ class ErrandService implements IErrandService {
     const errand = this.mustFind(id);
     const updated = this.transition(errand, {
       state: 'awaiting_principal',
+      pendingMessage: question,
       notes: notes ?? errand.notes,
       lastProgressAt: nowISO(),
     });
-    this.pushToSession(errand.originSessionId, `❓ Errand "${errand.goal}" needs your input: ${question}`);
+    this.pushToSession(
+      errand.originSessionId,
+      `❓ Errand "${errand.goal}" needs your input: ${question}\n\nReply with: \`/errand reply ${errand.id} <your answer>\``,
+    );
     return updated;
   }
 
@@ -159,17 +186,67 @@ class ErrandService implements IErrandService {
     return this.errandRepository.findAll(state, limit, offset).map((errand) => this.hydrate(errand));
   }
 
-  findActiveForPeer(channel: string, peerId: string): { errand: Errand; sessionId: string } | null {
-    const session = this.sessionRepository.findLatestOpen({ channel, peerId, kind: 'delegated' });
-    if (!session) return null;
+  async resumeWithPrincipalAnswer(id: string, answer: string): Promise<{ errand: Errand; reply: string }> {
+    const errand = this.mustFind(id);
+    if (errand.state !== 'awaiting_principal') {
+      throw new Error(`Errand ${id} is not awaiting your input (state=${errand.state}).`);
+    }
 
-    const active = this.errandRepository.findActiveBySessionId(session.id);
+    const targetSessionIds = this.errandRepository.findTargets(id);
+    if (targetSessionIds.length === 0) {
+      throw new Error(`Errand ${id} has no target sessions.`);
+    }
+
+    const targetSession = this.sessionRepository.findById(targetSessionIds[0]);
+    const targetSessionService = this.sessionManager.getSessionServiceById(targetSessionIds[0]);
+    const messageHistory = MessageServiceFactory.create(this.db, targetSessionService).getHistory();
+
+    const { NegotiatorFactory } = await import('../agents/sub-agents/negotiator/sub-agent');
+    const negotiator = NegotiatorFactory.create(this.logger, this.db, this.sessionManager);
+    const reply = await negotiator.composeResume({
+      errandId: errand.id,
+      goal: errand.goal,
+      notes: errand.notes,
+      answer,
+      question: errand.pendingMessage,
+      channel: targetSession?.channel ?? 'unknown',
+      sessionId: targetSessionIds[0],
+      messageHistory,
+    });
+
+    const latest = this.mustFind(id);
+    if (latest.state !== 'awaiting_principal' || latest.pendingMessage !== errand.pendingMessage) {
+      throw new Error(`Errand ${id} changed while composing the reply. Review its current state before answering again.`);
+    }
+
+    for (const sessionId of targetSessionIds) {
+      this.pushToSession(sessionId, reply);
+    }
+
+    const updatedNotes = (errand.notes ? errand.notes + '\n' : '') + `Principal answer: "${answer}"`;
+    const updated = this.transition(errand, {
+      state: 'awaiting_peer',
+      notes: updatedNotes,
+      pendingMessage: undefined,
+      lastProgressAt: nowISO(),
+    });
+
+    this.pushToSession(
+      errand.originSessionId,
+      `📤 Errand "${errand.goal}" resumed. Sent to contact: "${reply}"`,
+    );
+
+    return { errand: updated, reply };
+  }
+
+  findActiveForPeer(channel: string, peerId: string): { errand: Errand; sessionId: string } | null {
+    const active = this.errandRepository.findActiveByPeer(channel, peerAliases(channel, peerId));
     if (!active) return null;
 
-    const hydrated = this.hydrate(active);
-    if (!ACTIVE_STATES.includes(hydrated.state)) return null;
+    const hydrated = this.hydrate(active.errand);
+    if (!NEGOTIATING_STATES.includes(hydrated.state)) return null;
 
-    return { errand: hydrated, sessionId: session.id };
+    return { errand: hydrated, sessionId: active.sessionId };
   }
 
   private close(errand: Errand, state: ErrandState, result: string | undefined, notes: string | undefined, notice?: string): Errand {
@@ -195,12 +272,17 @@ class ErrandService implements IErrandService {
   private promoteQueued(sessionIds: string[]): void {
     const promoted = new Set<string>();
     for (const sessionId of sessionIds) {
-      const next = this.errandRepository.findNextQueuedBySessionId(sessionId);
+      const target = this.sessionRepository.findById(sessionId);
+      if (!target) continue;
+      const next = this.errandRepository.findNextQueuedByPeer(target.channel, peerAliases(target.channel, target.peerId));
       if (!next || promoted.has(next.id)) continue;
 
       const stillBlocked = this.errandRepository
         .findTargets(next.id)
-        .some((targetSessionId) => this.errandRepository.findActiveBySessionId(targetSessionId));
+        .some((targetSessionId) => {
+          const other = this.sessionRepository.findById(targetSessionId);
+          return !other || !!this.errandRepository.findActiveByPeer(other.channel, peerAliases(other.channel, other.peerId));
+        });
 
       if (!stillBlocked) {
         this.errandRepository.update(next.id, { state: 'draft' });
@@ -222,6 +304,7 @@ class ErrandService implements IErrandService {
         target: session.peerId,
         content,
         kind: session.kind,
+        sessionId: session.id,
       });
       return;
     }
