@@ -15,9 +15,7 @@ export type ConfigValue = string | number | boolean;
 export interface ParsedActivateArgs {
   /** `key=value` answers, coerced to the field's declared type. */
   values: Record<string, ConfigValue>;
-  /** `--defaults`: activate with whatever is already configured. */
-  useDefaults: boolean;
-  /** Arguments that are neither a flag nor `key=value`, echoed back as errors. */
+  /** Arguments that aren't `key=value`, echoed back as errors. */
   invalid: string[];
   /** `key=value` pairs naming something the channel doesn't declare. */
   unknownKeys: string[];
@@ -39,14 +37,9 @@ function coerce(field: ChannelConfigField | undefined, raw: string): ConfigValue
  */
 export function parseActivateArgs(args: string[], fields: ChannelConfigField[]): ParsedActivateArgs {
   const byName = new Map(fields.map((field) => [field.name, field]));
-  const parsed: ParsedActivateArgs = { values: {}, useDefaults: false, invalid: [], unknownKeys: [] };
+  const parsed: ParsedActivateArgs = { values: {}, invalid: [], unknownKeys: [] };
 
   for (const arg of args) {
-    if (arg === '--defaults' || arg === '--yes' || arg === '-y') {
-      parsed.useDefaults = true;
-      continue;
-    }
-
     const separator = arg.indexOf('=');
     if (separator <= 0) {
       parsed.invalid.push(arg);
@@ -84,6 +77,17 @@ export function missingRequiredFields(
   return fields.filter((field) => field.required && field.type !== 'boolean' && !isSet(merged[field.name]));
 }
 
+/**
+ * Optional fields still unset after activation — named in the success reply so
+ * the variables stay discoverable without a separate "show me the form" step.
+ */
+export function unsetOptionalFields(
+  fields: ChannelConfigField[],
+  merged: Record<string, unknown>,
+): ChannelConfigField[] {
+  return fields.filter((field) => !field.required && !isSet(merged[field.name]));
+}
+
 /** Never echo a secret back into a chat transcript. */
 function displayValue(field: ChannelConfigField, value: unknown): string {
   if (!isSet(value)) return 'not set';
@@ -106,9 +110,9 @@ function exampleFor(field: ChannelConfigField): string {
 }
 
 /**
- * The "what does this channel need?" reply — shown when `/channels activate
- * <slug>` is run with no answers, and again (narrowed to what's missing) when a
- * required field is still unset.
+ * The "this channel still needs something" reply. `/channels activate <slug>`
+ * only stops to ask when a required field is unset — everything else activates
+ * straight away — so this is what the user sees in place of activation.
  */
 export function formatActivatePrompt(
   slug: string,
@@ -119,24 +123,21 @@ export function formatActivatePrompt(
   const missing = options.missingOnly;
 
   if (fields.length === 0) {
-    return (
-      `*Activate ${slug}*\n\n` +
-      'This channel has no configuration variables.\n\n' +
-      `Run \`/channels activate ${slug} --defaults\` to switch it on.`
-    );
+    return `*${slug}* has no configuration variables — \`/channels activate ${slug}\` switches it on.`;
   }
 
   const shown = missing?.length ? missing : fields;
   const heading = missing?.length
-    ? `*${slug}: ${missing.length} required variable${missing.length === 1 ? '' : 's'} still missing*`
-    : `*Activate ${slug}* — set its variables, then run the command again`;
+    ? `*${slug} needs ${missing.length} more variable${missing.length === 1 ? '' : 's'} before it can be activated*`
+    : `*${slug} variables*`;
 
   const example = `/channels activate ${slug} ${shown.map(exampleFor).join(' ')}`;
-  const lines = [heading, '', shown.map((field) => fieldLine(field, current)).join('\n'), '', 'Example:', `  ${example}`];
-
-  if (!missing?.length && fields.every((field) => !field.required)) {
-    lines.push('', `Nothing is strictly required — \`/channels activate ${slug} --defaults\` activates it as-is.`);
-  }
-
-  return lines.join('\n');
+  return [
+    heading,
+    '',
+    shown.map((field) => fieldLine(field, current)).join('\n'),
+    '',
+    'Run:',
+    `  ${example}`,
+  ].join('\n');
 }

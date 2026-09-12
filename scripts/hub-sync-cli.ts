@@ -4,9 +4,9 @@ function printUsage(): void {
   console.log(
     'Usage:\n' +
     '  pnpm hub:list\n' +
-    '  pnpm hub:pull <slug> [<slug2> ...] [--force]\n' +
-    '  pnpm hub:pull --all [--force]\n\n' +
-    'Lists/pulls tools, skills, MCP servers, and channels from koris-hub ' +
+    '  pnpm hub:download <slug> [<slug2> ...] [--force]\n' +
+    '  pnpm hub:download --all [--force]\n\n' +
+    'Lists/downloads tools, skills, MCP servers, and channels from koris-hub ' +
     '(https://github.com/guilhermesalviano/koris-hub) that are not already present locally.',
   );
 }
@@ -18,15 +18,15 @@ async function runList(): Promise<void> {
     return;
   }
 
-  console.log(`${entries.length} available to pull:\n`);
+  console.log(`${entries.length} available to download:\n`);
   for (const entry of entries) {
     const summary = entry.summary ? ` — ${entry.summary}` : '';
     console.log(`  [${entry.family}] ${entry.slug}${summary}`);
   }
-  console.log('\nRun `pnpm hub:pull <slug>` to pull one, or `pnpm hub:pull --all` for all of them.');
+  console.log('\nRun `pnpm hub:download <slug>` to download one, or `pnpm hub:download --all` for all of them.');
 }
 
-async function runPull(argv: string[]): Promise<void> {
+async function runDownload(argv: string[]): Promise<void> {
   const force = argv.includes('--force');
   const all = argv.includes('--all');
   const slugs = argv.filter((arg) => arg !== '--force' && arg !== '--all');
@@ -34,7 +34,7 @@ async function runPull(argv: string[]): Promise<void> {
   const targets = all ? (await listMissing()).map((entry) => entry.slug) : slugs;
   if (targets.length === 0) {
     if (all) {
-      console.log('Nothing new to pull.');
+      console.log('Nothing new to download.');
     } else {
       console.error('Missing <slug>.\n');
       printUsage();
@@ -46,7 +46,7 @@ async function runPull(argv: string[]): Promise<void> {
   for (const slug of targets) {
     try {
       const result = await pullEntry(slug, { force });
-      console.log(`Pulled ${result.family} "${result.slug}":`);
+      console.log(`Downloaded ${result.family} "${result.slug}":`);
       for (const file of result.createdFiles) console.log(`  ${file}`);
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err));
@@ -67,8 +67,8 @@ async function main(): Promise<void> {
 
   if (command === 'list') {
     await runList();
-  } else if (command === 'pull') {
-    await runPull(rest);
+  } else if (command === 'download' || command === 'pull') {
+    await runDownload(rest);
   } else {
     printUsage();
     process.exitCode = command ? 1 : 0;

@@ -13,7 +13,7 @@ import {
 import { registerPulledChannel } from '../plugins/channel-install';
 import { ChannelsSingleton } from '../../channels';
 import { fetchChannelCatalog, listMissing, pullEntry, type ChannelConfigField } from '../../../../scripts/hub-sync';
-import { formatActivatePrompt, missingRequiredFields, parseActivateArgs } from './channel-activation';
+import { formatActivatePrompt, missingRequiredFields, parseActivateArgs, unsetOptionalFields } from './channel-activation';
 import type { CommandContext, CommandResult } from '../../types/commands';
 import { formatCommandResult } from './format';
 
@@ -88,10 +88,12 @@ export async function handleChannelsCommand(command: string, context: CommandCon
 
   const isRemote = sub === 'remote' || sub === 'available' || (sub === 'list' && rawArgs[1]?.toLowerCase() === 'remote');
   const isLocal = !sub || sub === 'local' || (sub === 'list' && rawArgs[1]?.toLowerCase() !== 'remote');
-  const isDownload = sub === 'download' || sub === 'pull' || sub === 'install';
-  const isActivate = sub === 'activate' || sub === 'configure' || sub === 'setup';
-  const isEnable = sub === 'enable';
-  const isDisable = sub === 'disable';
+  const isPull = sub === 'pull' || sub === 'download' || sub === 'install';
+  // `enable` is an alias, not a second command: turning a channel on and
+  // configuring it are the same act, and splitting them is what let a channel
+  // be switched on with no config at all.
+  const isActivate = sub === 'activate' || sub === 'enable' || sub === 'configure' || sub === 'setup';
+  const isDisable = sub === 'disable' || sub === 'deactivate';
 
   if (isLocal) {
     const channels = listChannels();
@@ -110,8 +112,8 @@ export async function handleChannelsCommand(command: string, context: CommandCon
 
     const message =
       `*Channels* (${channels.length})\n\n${rows.join('\n')}\n\n` +
-      'Use `/channels remote` to see channels available for download.\n' +
-      'Use `/channels download <name>` to install a channel.';
+      'Use `/channels remote` to see channels available in koris-hub.\n' +
+      'Use `/channels download <name>` to install one, then `/channels activate <name>`.';
     return formatCommandResult(message, context.source);
   }
 
@@ -130,7 +132,7 @@ export async function handleChannelsCommand(command: string, context: CommandCon
       const rows = channels.map((c) => `  ${c.slug.padEnd(24)} ${c.summary ?? ''}`.trimEnd());
       const message =
         `*Available Remote Channels* (${channels.length})\n\n${rows.join('\n')}\n\n` +
-        'Use `/channels download <name>` to download and install a channel.';
+        'Use `/channels download <name>` to install a channel.';
       return formatCommandResult(message, context.source);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -138,7 +140,7 @@ export async function handleChannelsCommand(command: string, context: CommandCon
     }
   }
 
-  if (isDownload) {
+  if (isPull) {
     const remaining = rawArgs.slice(1);
     const force = remaining.includes('--force');
     const slug = remaining.find((arg) => arg !== '--force')?.toLowerCase();
@@ -155,9 +157,10 @@ export async function handleChannelsCommand(command: string, context: CommandCon
       // Installed inactive on purpose — see `registerPulledChannel`.
       registerPulledChannel(slug, PluginSettingsRepositoryFactory.create(DatabaseServiceFactory.create()));
       return formatCommandResult(
-        `Successfully downloaded channel "${slug}" — installed but inactive.\n\n` +
-        `Next: run \`/channels activate ${slug}\` to see which variables it needs, ` +
-        `then run it again with those values to configure and switch it on.\n` +
+        `Downloaded channel "${slug}" — installed but inactive.\n\n` +
+        `Next: run \`/channels activate ${slug}\`. It switches the channel on, and if the ` +
+        `channel still needs a variable it replies with exactly which one and how to pass it ` +
+        `(\`/channels activate ${slug} key=value\`).\n` +
         `You can also configure it in the web dashboard, or edit plugins/channels/${slug}/config.yml directly.`,
         context.source,
       );
@@ -207,13 +210,11 @@ export async function handleChannelsCommand(command: string, context: CommandCon
       );
     }
 
-    const suppliedAnything = Object.keys(answers.values).length > 0 || answers.useDefaults;
-    if (!suppliedAnything) {
-      // The "ask" step: show what this channel needs before changing anything.
-      return formatCommandResult(formatActivatePrompt(slug, fields, current), context.source);
-    }
-
     const merged = { ...current, ...answers.values };
+
+    // The only thing that stops activation: a variable the channel declares
+    // required and nobody has supplied — not here, not in its config.yml. Ask
+    // for exactly those, and change nothing until they arrive.
     const missing = missingRequiredFields(fields, merged);
     if (missing.length > 0) {
       return formatCommandResult(
@@ -243,6 +244,18 @@ export async function handleChannelsCommand(command: string, context: CommandCon
 
       const pairing = await activationHint(slug);
       if (pairing) lines.push('', pairing);
+
+      // Optional variables stay discoverable without a separate "show me the
+      // form" command: name the ones still unset right where the user is.
+      const optional = unsetOptionalFields(fields, merged);
+      if (optional.length > 0) {
+        lines.push(
+          '',
+          `Optional, still unset: ${optional.map((field) => field.name).join(', ')}.`,
+          `Set any of them with \`/channels activate ${slug} <key>=<value>\`.`,
+        );
+      }
+
       lines.push('', `Run \`/channels disable ${slug}\` to turn it back off.`);
 
       return formatCommandResult(lines.join('\n'), context.source);
@@ -252,7 +265,7 @@ export async function handleChannelsCommand(command: string, context: CommandCon
     }
   }
 
-  if (isEnable || isDisable) {
+  if (isDisable) {
     const slug = rawArgs[1]?.toLowerCase();
     if (!slug) {
       return formatCommandResult(
@@ -272,15 +285,11 @@ export async function handleChannelsCommand(command: string, context: CommandCon
 
     try {
       const db = DatabaseServiceFactory.create();
-      const repo = PluginSettingsRepositoryFactory.create(db);
-      repo.setEnabled('channels', slug, isEnable);
-
-      if (isDisable) {
-        ChannelsSingleton.getExistingInstance()?.stopChannel(slug);
-      }
+      PluginSettingsRepositoryFactory.create(db).setEnabled('channels', slug, false);
+      ChannelsSingleton.getExistingInstance()?.stopChannel(slug);
 
       return formatCommandResult(
-        `Channel "${slug}" is now ${isEnable ? 'enabled' : 'disabled'}.`,
+        `Channel "${slug}" is now disabled.\nRun \`/channels activate ${slug}\` to turn it back on.`,
         context.source,
       );
     } catch (err) {
@@ -290,14 +299,14 @@ export async function handleChannelsCommand(command: string, context: CommandCon
   }
 
   return formatCommandResult(
-    'Usage: /channels [remote | download <name> [--force] | activate <name> [key=value ...] | enable <name> | disable <name>]\n\n' +
+    'Usage: /channels [remote | download <name> [--force] | activate <name> [key=value ...] | disable <name>]\n\n' +
     '  /channels                          — List installed channels\n' +
-    '  /channels remote                   — List available channels in koris-hub\n' +
-    '  /channels download <name>          — Download a channel (installed inactive)\n' +
-    '  /channels activate <name>          — Show the variables that channel needs\n' +
-    '  /channels activate <name> k=v ...  — Set them, then switch the channel on\n' +
-    '  /channels enable <name>            — Enable a channel without configuring it\n' +
-    '  /channels disable <name>           — Disable a channel',
+    '  /channels remote                   — List channels available in koris-hub\n' +
+    '  /channels download <name>          — Install a channel (it lands inactive)\n' +
+    '  /channels activate <name>          — Turn it on, or say which variable is missing\n' +
+    '  /channels activate <name> k=v ...  — Set variables, then turn it on\n' +
+    '  /channels disable <name>           — Turn a channel off\n\n' +
+    '`enable` is an alias of `activate`; `pull` of `download`.',
     context.source,
   );
 }

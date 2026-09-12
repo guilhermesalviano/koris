@@ -3,6 +3,7 @@ import {
   formatActivatePrompt,
   missingRequiredFields,
   parseActivateArgs,
+  unsetOptionalFields,
 } from '../../../../src/services/commands/channel-activation';
 import type { ChannelConfigField } from '../../../../../scripts/hub-sync';
 
@@ -54,16 +55,10 @@ describe('parseActivateArgs', () => {
     expect(parseActivateArgs(['port=nope'], fields).values.port).toBe('nope');
   });
 
-  it('collects --defaults and its aliases', () => {
-    for (const flag of ['--defaults', '--yes', '-y']) {
-      expect(parseActivateArgs([flag], TELEGRAM_FIELDS).useDefaults).toBe(true);
-    }
-  });
-
   it('separates malformed args from unknown variable names', () => {
-    const parsed = parseActivateArgs(['garbage', '=leading', 'nope=1'], TELEGRAM_FIELDS);
+    const parsed = parseActivateArgs(['garbage', '=leading', '--defaults', 'nope=1'], TELEGRAM_FIELDS);
 
-    expect(parsed.invalid).toEqual(['garbage', '=leading']);
+    expect(parsed.invalid).toEqual(['garbage', '=leading', '--defaults']);
     expect(parsed.unknownKeys).toEqual(['nope']);
     expect(parsed.values).toEqual({});
   });
@@ -88,9 +83,23 @@ describe('missingRequiredFields', () => {
   });
 });
 
+describe('unsetOptionalFields', () => {
+  it('names optional fields with no value, so they stay discoverable after activation', () => {
+    expect(unsetOptionalFields(TELEGRAM_FIELDS, {}).map((f) => f.name))
+      .toEqual(['whitelist', 'allow_unlisted_senders']);
+  });
+
+  it('drops the ones already configured, and never reports a required field', () => {
+    expect(unsetOptionalFields(TELEGRAM_FIELDS, { whitelist: '1,2' }).map((f) => f.name))
+      .toEqual(['allow_unlisted_senders']);
+    expect(unsetOptionalFields(TELEGRAM_FIELDS, {}).some((f) => f.required)).toBe(false);
+  });
+});
+
 describe('formatActivatePrompt', () => {
   it('lists every variable with its requirement, type and current value', () => {
     const prompt = formatActivatePrompt('telegram', TELEGRAM_FIELDS, { whitelist: '123' });
+
 
     expect(prompt).toContain('bot_token');
     expect(prompt).toContain('required');
@@ -111,20 +120,15 @@ describe('formatActivatePrompt', () => {
     const missing = missingRequiredFields(TELEGRAM_FIELDS, {});
     const prompt = formatActivatePrompt('telegram', TELEGRAM_FIELDS, {}, { missingOnly: missing });
 
-    expect(prompt).toContain('1 required variable still missing');
+    expect(prompt).toContain('needs 1 more variable before it can be activated');
     expect(prompt).toContain('bot_token');
     expect(prompt).not.toContain('allow_unlisted_senders');
-  });
-
-  it('offers --defaults when the channel requires nothing', () => {
-    const optionalOnly = TELEGRAM_FIELDS.filter((f) => !f.required);
-    expect(formatActivatePrompt('whatsapp', optionalOnly, {})).toContain('--defaults');
   });
 
   it('handles a channel with no configuration at all', () => {
     const prompt = formatActivatePrompt('webhook', [], {});
 
     expect(prompt).toContain('no configuration variables');
-    expect(prompt).toContain('/channels activate webhook --defaults');
+    expect(prompt).toContain('/channels activate webhook');
   });
 });

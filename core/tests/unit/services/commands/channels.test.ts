@@ -202,7 +202,7 @@ describe('channels command', () => {
       });
       expect(reprimeLiveChannelDescriptorsMock).toHaveBeenCalled();
       expect(appendMock).toHaveBeenCalledWith([{ family: 'channels', name: 'telegram' }]);
-      expect(result.response).toContain('Successfully downloaded channel "telegram"');
+      expect(result.response).toContain('Downloaded channel "telegram"');
     });
 
     it('leaves the downloaded channel inactive and says how to turn it on', async () => {
@@ -237,21 +237,37 @@ describe('channels command', () => {
         ]);
       });
 
-      it('asks for the variables instead of activating when given none', async () => {
+      it('asks for the missing required variable instead of activating', async () => {
         const result = await handleChannelsCommand('/channels activate telegram', { source: 'tui', trusted: true });
 
         expect(result.response).toContain('bot_token');
         expect(result.response).toContain('/channels activate telegram');
-        // The ask step must not change anything.
+        // Asking must change nothing.
         expect(setEnabledMock).not.toHaveBeenCalled();
         expect(writeChannelConfigPatchMock).not.toHaveBeenCalled();
         expect(startChannelLiveMock).not.toHaveBeenCalled();
       });
 
+      it('asks the same way for `enable`, which is an alias of activate', async () => {
+        const result = await handleChannelsCommand('/channels enable telegram', { source: 'tui', trusted: true });
+
+        expect(result.response).toContain('bot_token');
+        expect(setEnabledMock).not.toHaveBeenCalled();
+      });
+
+      it('names the optional variables still unset after activating', async () => {
+        loadChannelConfigMock.mockReturnValue({ bot_token: 'already-there' });
+
+        const result = await handleChannelsCommand('/channels activate telegram', { source: 'tui', trusted: true });
+
+        expect(result.response).toContain('is now active');
+        expect(result.response).toContain('Optional, still unset: whitelist');
+      });
+
       it('refuses to activate while a required variable is missing', async () => {
         const result = await handleChannelsCommand('/channels activate telegram whitelist=123', { source: 'tui', trusted: true });
 
-        expect(result.response).toContain('required variable');
+        expect(result.response).toContain('needs 1 more variable');
         expect(result.response).toContain('bot_token');
         expect(setEnabledMock).not.toHaveBeenCalled();
         expect(writeChannelConfigPatchMock).not.toHaveBeenCalled();
@@ -280,10 +296,10 @@ describe('channels command', () => {
         expect(result.response).toContain('is now active');
       });
 
-      it('activates with --defaults when nothing is required', async () => {
+      it('activates straight away when the channel needs nothing', async () => {
         fetchChannelCatalogMock.mockResolvedValue([{ slug: 'telegram', name: 'Telegram', configFields: [] }]);
 
-        const result = await handleChannelsCommand('/channels activate telegram --defaults', { source: 'tui', trusted: true });
+        const result = await handleChannelsCommand('/channels activate telegram', { source: 'tui', trusted: true });
 
         expect(writeChannelConfigPatchMock).not.toHaveBeenCalled();
         expect(setEnabledMock).toHaveBeenCalledWith('channels', 'telegram', true);
@@ -317,7 +333,7 @@ describe('channels command', () => {
       it('still activates when koris-hub is unreachable', async () => {
         fetchChannelCatalogMock.mockRejectedValue(new Error('offline'));
 
-        const result = await handleChannelsCommand('/channels activate telegram --defaults', { source: 'tui', trusted: true });
+        const result = await handleChannelsCommand('/channels activate telegram', { source: 'tui', trusted: true });
 
         expect(setEnabledMock).toHaveBeenCalledWith('channels', 'telegram', true);
         expect(result.response).toContain('is now active');
@@ -345,15 +361,26 @@ describe('channels command', () => {
       expect(result.response).toContain('Failed to download channel "non-existent": Not found in hub');
     });
 
-    it('enables an installed channel', async () => {
+    it('still accepts `pull` as an alias of `download`', async () => {
+      pullEntryMock.mockResolvedValueOnce({ family: 'channel', slug: 'telegram', createdFiles: ['index.js'] });
+
+      const result = await handleChannelsCommand('/channels pull telegram', { source: 'tui', trusted: true });
+
+      expect(pullEntryMock).toHaveBeenCalledWith('telegram', expect.objectContaining({ family: 'channel' }));
+      expect(result.response).toContain('Downloaded channel "telegram"');
+    });
+
+    it('enables an installed channel through the activate path', async () => {
       existsSyncMock.mockReturnValue(true);
       readdirSyncMock.mockReturnValue([
         { name: 'telegram', isDirectory: () => true },
       ]);
+      loadChannelConfigMock.mockReturnValue({});
+      fetchChannelCatalogMock.mockResolvedValue([{ slug: 'telegram', name: 'Telegram', configFields: [] }]);
 
       const result = await handleChannelsCommand('/channels enable telegram', { source: 'tui', trusted: true });
       expect(setEnabledMock).toHaveBeenCalledWith('channels', 'telegram', true);
-      expect(result.response).toContain('Channel "telegram" is now enabled.');
+      expect(result.response).toContain('Channel "telegram" is now active.');
     });
 
     it('disables and stops an installed channel', async () => {
@@ -366,6 +393,17 @@ describe('channels command', () => {
       expect(setEnabledMock).toHaveBeenCalledWith('channels', 'telegram', false);
       expect(stopChannelMock).toHaveBeenCalledWith('telegram');
       expect(result.response).toContain('Channel "telegram" is now disabled.');
+      expect(result.response).toContain('/channels activate telegram');
+    });
+
+    it('accepts `deactivate` as an alias of `disable`', async () => {
+      existsSyncMock.mockReturnValue(true);
+      readdirSyncMock.mockReturnValue([{ name: 'telegram', isDirectory: () => true }]);
+
+      const result = await handleChannelsCommand('/channels deactivate telegram', { source: 'tui', trusted: true });
+
+      expect(setEnabledMock).toHaveBeenCalledWith('channels', 'telegram', false);
+      expect(result.response).toContain('is now disabled');
     });
 
     it('returns usage instructions for invalid subcommands', async () => {
