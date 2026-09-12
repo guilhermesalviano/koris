@@ -27,7 +27,7 @@ class HeartbeatRunner implements IHeartbeatRunner {
 
   start(): void {
     if (!config.HEARTBEAT) {
-      this.logger.info('Heartbeat disabled by configuration.');
+      this.logger.info('[beat] Heartbeat disabled by configuration.');
       return;
     }
 

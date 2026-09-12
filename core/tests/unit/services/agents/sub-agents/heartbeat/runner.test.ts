@@ -66,7 +66,7 @@ describe('HeartbeatSingleton', () => {
     runner.start();
 
     expect(nextCronFire).not.toHaveBeenCalled();
-    expect(logger.info).toHaveBeenCalledWith('Heartbeat disabled by configuration.');
+    expect(logger.info).toHaveBeenCalledWith('[beat] Heartbeat disabled by configuration.');
   });
 
   it('schedules next heartbeat based on earliest cron fire time', async () => {

@@ -107,6 +107,7 @@ export class AudioTranscriptionService implements IAudioTranscriptionService {
         return { text: '', error: errorMsg };
       }
 
+      this.logger?.info(`[AudioTranscriptionService] Connected to voice server at ${endpoint} - transcription successful`);
       return { text: (data as { text: string }).text };
     } catch (err: unknown) {
       const error = err as Error & { cause?: Error & { code?: string } };

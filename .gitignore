@@ -10,6 +10,8 @@ apps/tauri/src-tauri/gen
 next-env.d.ts
 *.tsbuildinfo
 
+.agents
+
 # Dependencies
 node_modules
 

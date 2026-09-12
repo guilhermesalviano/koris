@@ -5,72 +5,29 @@ import { useChat, type ChatMessage } from '../../lib/chat-context';
 import { usePageTitle } from '../../lib/use-page-title';
 import { chatSeparatorLabel } from '../../lib/date';
 import ImageLightbox from '../../components/ImageLightbox';
-import ProviderPicker from '../../components/ProviderPicker';
-import { AttachIcon, BrokenImageIcon, CloseIcon, MicIcon, RetryIcon, SendIcon, SpeakerIcon, SquareIcon, StopIcon } from '../../components/Icons';
+import AudioRecognitionModal from '../../components/chat/AudioRecognitionModal';
+import ChatComposer from '../../components/chat/ChatComposer';
+import { imageSrc, readFileAsAttachment } from '../../components/chat/shared';
+import { BrokenImageIcon, RetryIcon, SpeakerIcon, SquareIcon } from '../../components/Icons';
 import type { ImageAttachment } from '../../lib/types';
-
-const MAX_CHARS = 4000;
-
-function imageSrc(image: ImageAttachment): string {
-  return `data:${image.mimeType ?? 'image/png'};base64,${image.data}`;
-}
-
-function formatDuration(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
-      const base64 = result.includes(',') ? result.slice(result.indexOf(',') + 1) : result;
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
 
 export default function ChatPage() {
   const { sessionId } = useParams();
   const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, setToast, submit, resendLast, cancel, openSession, sessions, activeSessionId, gateBlocks, allowDomain, dismissGateBlock, responseMode } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<{ images: ImageAttachment[]; index: number } | null>(null);
   const [localToast, setLocalToast] = useState<string | null>(null);
   const activeTitle = activeSessionId ? sessions.find((s) => s.id === activeSessionId)?.preview?.trim() : undefined;
 
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
-  const [autoSend, setAutoSend] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('koris_voice_autosend') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
 
   const [speakingId, setSpeakingId] = useState<number | null>(null);
   const [loadingSpeakId, setLoadingSpeakId] = useState<number | null>(null);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const isDiscardingRef = useRef(false);
-  const autoSendRef = useRef(autoSend);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speechCacheRef = useRef<Map<number, string>>(new Map());
   const lastAutoPlayedIdRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    autoSendRef.current = autoSend;
-  }, [autoSend]);
 
   function showToast(msg: string) {
     if (setToast) setToast(msg);
@@ -78,159 +35,6 @@ export default function ChatPage() {
     setTimeout(() => setLocalToast(null), 3000);
   }
 
-  async function startRecording() {
-    if (streaming || isRecording || isTranscribing) return;
-
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      showToast('Microphone recording is not supported in this browser');
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
-
-      let mimeType = '';
-      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-        mimeType = 'audio/webm;codecs=opus';
-      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-        mimeType = 'audio/webm';
-      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-        mimeType = 'audio/mp4';
-      } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
-        mimeType = 'audio/ogg';
-      }
-
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      audioChunksRef.current = [];
-      isDiscardingRef.current = false;
-
-      recorder.ondataavailable = (e: BlobEvent) => {
-        if (e.data && e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
-        }
-      };
-
-      recorder.onstop = async () => {
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-          mediaStreamRef.current = null;
-        }
-
-        if (isDiscardingRef.current) {
-          audioChunksRef.current = [];
-          return;
-        }
-
-        const chunks = audioChunksRef.current;
-        audioChunksRef.current = [];
-        if (chunks.length === 0) return;
-
-        const actualMime = recorder.mimeType || mimeType || 'audio/webm';
-        const blob = new Blob(chunks, { type: actualMime });
-        if (blob.size === 0) return;
-
-        await handleTranscribe(blob, actualMime);
-      };
-
-      recorder.start(250);
-      setIsRecording(true);
-      setRecordingDuration(0);
-
-      const startTime = Date.now();
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration(Math.floor((Date.now() - startTime) / 1000));
-      }, 1000);
-    } catch (err) {
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
-        mediaStreamRef.current = null;
-      }
-      const isDenied = err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
-      showToast(isDenied ? 'Microphone permission denied' : `Microphone error: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  function stopRecording() {
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    isDiscardingRef.current = false;
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    setIsRecording(false);
-  }
-
-  function cancelRecording() {
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    isDiscardingRef.current = true;
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
-      mediaStreamRef.current = null;
-    }
-    audioChunksRef.current = [];
-    setIsRecording(false);
-    setRecordingDuration(0);
-  }
-
-  async function handleTranscribe(blob: Blob, mimeType: string) {
-    setIsTranscribing(true);
-    try {
-      const base64 = await blobToBase64(blob);
-      const filename = mimeType.includes('mp4')
-        ? 'recording.mp4'
-        : mimeType.includes('ogg')
-        ? 'recording.ogg'
-        : 'recording.webm';
-
-      const res = await fetch('/api/audio/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio: base64, mimeType, filename }),
-      });
-
-      const isJson = (res.headers.get('content-type') || '').includes('application/json');
-      const data = isJson ? await res.json().catch(() => ({})) : null;
-
-      if (!res.ok) {
-        const errorMsg = (data && (data as { error?: string }).error) || `Transcription failed (${res.status})`;
-        showToast(errorMsg);
-        return;
-      }
-
-      const text = (data as { text?: string })?.text?.trim() || '';
-      if (!text) {
-        showToast('No speech detected');
-        return;
-      }
-
-      if (autoSendRef.current) {
-        const fullText = input.trim() ? `${input.trim()} ${text}` : text;
-        setInput(fullText);
-        await submit(fullText);
-      } else {
-        const fullText = input.trim() ? `${input.trim()} ${text}` : text;
-        setInput(fullText);
-        setTimeout(() => {
-          textareaRef.current?.focus();
-        }, 50);
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Transcription failed';
-      showToast(errorMsg);
-    } finally {
-      setIsTranscribing(false);
-    }
-  }
 
   function stopPlayback() {
     const audio = audioRef.current;
@@ -310,33 +114,6 @@ export default function ChatPage() {
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-      }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        isDiscardingRef.current = true;
-        mediaRecorderRef.current.stop();
-      }
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isRecording) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        cancelRecording();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isRecording]);
-
   usePageTitle(activeTitle || 'Chat', 'Chat with the koris agent');
 
   // Sync the viewed session with the URL. `null` targets the live chat (latest
@@ -366,50 +143,13 @@ export default function ChatPage() {
     if (messages.length > 0) positionedFor.current = activeSessionId;
   }, [messages, activeSessionId]);
 
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 130)}px`;
-    }
-  }, [input]);
+  const canSend = !streaming && (input.trim().length > 0 || attachments.length > 0);
 
-  const canSend = !streaming && !isRecording && !isTranscribing && (input.trim().length > 0 || attachments.length > 0);
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (canSend) submit();
-    } else if (e.key === 'Escape' && streaming) {
-      e.preventDefault();
-      cancel();
-    }
-  }
-
-  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const files = Array.from(e.clipboardData?.files ?? []);
-    if (files.length === 0) return;
-    e.preventDefault();
-    addFiles(files);
-  }
-
-  function handleFiles(files: FileList | null) {
-    if (!files) return;
-    addFiles(Array.from(files));
-  }
-
-  function addFiles(files: File[]) {
+  async function addFiles(files: File[]) {
     const images = files.filter((f) => f.type.startsWith('image/'));
     if (images.length === 0) return;
-
-    for (const file of images) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = typeof reader.result === 'string' ? reader.result : '';
-        const base64 = result.includes(',') ? result.slice(result.indexOf(',') + 1) : result;
-        setAttachments((prev) => [...prev, { data: base64, mimeType: file.type }]);
-      };
-      reader.readAsDataURL(file);
-    }
+    const newAttachments = await Promise.all(images.map(readFileAsAttachment));
+    setAttachments((prev) => [...prev, ...newAttachments]);
   }
 
   function removeAttachment(index: number) {
@@ -421,8 +161,6 @@ export default function ChatPage() {
   }
 
   const showEmptyState = historyLoaded && messages.length === 0;
-  const footerHint = '↵ send · ⇧↵ newline';
-  const charCount = input.length;
   const lastMessageId = messages.length ? messages[messages.length - 1].id : -1;
 
   // A fresh chat centers the composer — put the cursor in it straight away.
@@ -430,162 +168,21 @@ export default function ChatPage() {
     if (showEmptyState) textareaRef.current?.focus();
   }, [showEmptyState]);
 
-  const composerBody = (
-    <>
-      {attachments.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {attachments.map((img, i) => (
-            <div key={i} className="relative">
-              <button
-                type="button"
-                onClick={() => setPreview({ images: attachments, index: i })}
-                title="View image"
-                className="block h-16 w-16 overflow-hidden rounded-lg border border-strong transition-transform duration-150 hover:scale-[1.03] focus:outline-none focus:ring-2 focus:ring-accent"
-              >
-                <img src={imageSrc(img)} alt={`attachment ${i + 1}`} className="h-full w-full cursor-zoom-in object-cover" />
-              </button>
-              <button
-                onClick={() => removeAttachment(i)}
-                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-strong bg-bg text-txt-2 hover:text-red-400"
-                title="Remove image"
-              >
-                <CloseIcon className="h-3 w-3 fill-none stroke-current" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="flex items-start gap-2 rounded-card border border-strong bg-bg-3 px-4 py-2.5 pr-2.5 transition-colors duration-200 focus-within:border-accent">
-        {isRecording ? (
-          <div className="flex min-h-[34px] flex-1 items-center justify-between gap-3 px-1">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
-              </span>
-              <span className="font-mono text-xs font-medium text-txt">
-                {formatDuration(recordingDuration)}
-              </span>
-              <span className="hidden text-xs text-txt-3 sm:inline">Recording audio…</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={cancelRecording}
-                title="Cancel recording"
-                className="flex h-[30px] items-center gap-1 rounded-lg border border-subtle bg-bg-2 px-2.5 font-mono text-xs text-txt-2 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-400"
-              >
-                <CloseIcon className="h-3 w-3 fill-none stroke-current" />
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={stopRecording}
-                title="Stop & Transcribe"
-                className="flex h-[30px] items-center gap-1.5 rounded-lg bg-accent px-3 font-mono text-xs font-medium text-white transition-opacity hover:opacity-90 active:scale-95"
-              >
-                <SquareIcon className="h-3 w-3 fill-current" />
-                Stop & Transcribe
-              </button>
-            </div>
-          </div>
-        ) : isTranscribing ? (
-          <div className="flex min-h-[34px] flex-1 items-center gap-2 px-1 font-mono text-xs text-txt-3">
-            <span className="h-2 w-2 rounded-full bg-accent animate-ping" />
-            Transcribing audio…
-          </div>
-        ) : (
-          <>
-            <button
-              type="button"
-              disabled={streaming}
-              onClick={() => fileInputRef.current?.click()}
-              title="Attach image"
-              className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[10px] border-none bg-transparent text-txt-3 transition-all duration-150 hover:bg-bg-2 hover:text-accent-2 disabled:opacity-35 disabled:cursor-default"
-            >
-              <AttachIcon className="h-[16px] w-[16px] fill-none stroke-current" />
-            </button>
-            <button
-              type="button"
-              disabled={streaming}
-              onClick={startRecording}
-              title="Record voice note"
-              className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[10px] border-none bg-transparent text-txt-3 transition-all duration-150 hover:bg-bg-2 hover:text-accent-2 disabled:opacity-35 disabled:cursor-default"
-            >
-              <MicIcon className="h-[16px] w-[16px] fill-none stroke-current" />
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                handleFiles(e.target.files);
-                e.target.value = '';
-              }}
-            />
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              placeholder="Ask something…"
-              autoComplete="off"
-              value={input}
-              maxLength={MAX_CHARS}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              className="max-h-32 min-h-[22px] flex-1 resize-none bg-transparent font-sans text-sm leading-snug text-txt outline-none placeholder:text-txt-3"
-            />
-            {streaming ? (
-              <button
-                type="button"
-                title="Stop generating"
-                onClick={cancel}
-                className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:opacity-90 active:scale-95"
-              >
-                <StopIcon className="relative z-10 h-3.5 w-3.5 fill-white" />
-              </button>
-            ) : (
-              <button
-                disabled={!canSend}
-                title="Send message"
-                onClick={() => void submit()}
-                className="relative flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border-none bg-accent transition-all duration-150 hover:enabled:opacity-90 active:enabled:scale-95 disabled:opacity-35 disabled:cursor-default"
-              >
-                <SendIcon className="relative z-10 h-[15px] w-[15px] fill-none stroke-white" />
-              </button>
-            )}
-          </>
-        )}
-      </div>
-      <div className="mt-1.5 flex items-center justify-between gap-2 px-1 font-mono text-[11px] text-txt-3">
-        <div className="flex items-center gap-3">
-          <ProviderPicker />
-          <label className="flex cursor-pointer items-center gap-1.5 select-none hover:text-txt-2 transition-colors" title="Automatically send message after transcription">
-            <input
-              type="checkbox"
-              checked={autoSend}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                setAutoSend(checked);
-                try {
-                  localStorage.setItem('koris_voice_autosend', String(checked));
-                } catch {
-                  // ignore localStorage errors
-                }
-              }}
-              className="h-3 w-3 rounded border-strong bg-bg-2 text-accent accent-accent focus:ring-1 focus:ring-accent"
-            />
-            <span>Auto-send</span>
-          </label>
-        </div>
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="hidden shrink-0 sm:inline">{footerHint}</span>
-          <span className={`shrink-0 ${charCount > MAX_CHARS * 0.85 ? 'text-amber-500' : ''}`}>{charCount}</span>
-        </div>
-      </div>
-    </>
+  const composer = (
+    <ChatComposer
+      ref={textareaRef}
+      input={input}
+      onInputChange={setInput}
+      onSubmit={() => void submit()}
+      onCancelStreaming={cancel}
+      streaming={streaming}
+      canSend={canSend}
+      attachments={attachments}
+      onAddFiles={addFiles}
+      onRemoveAttachment={removeAttachment}
+      onPreviewAttachment={(index) => setPreview({ images: attachments, index })}
+      onOpenAudioModal={() => setIsAudioModalOpen(true)}
+    />
   );
 
   return (
@@ -593,7 +190,7 @@ export default function ChatPage() {
       {showEmptyState ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 px-4">
           <h2 className="text-center text-xl font-medium">What can I help with?</h2>
-          <div className="w-full max-w-2xl">{composerBody}</div>
+          <div className="w-full max-w-2xl">{composer}</div>
         </div>
       ) : (
         <>
@@ -734,7 +331,9 @@ export default function ChatPage() {
       )}
 
       <div className="flex-shrink-0 border-t border-subtle bg-bg/90 px-4 pb-4 pt-3 backdrop-blur-md">
-        {composerBody}
+        <div className="mx-auto w-full max-w-3xl">
+          {composer}
+        </div>
       </div>
         </>
       )}
@@ -751,6 +350,22 @@ export default function ChatPage() {
         onClose={() => setPreview(null)}
         onPrev={preview && preview.images.length > 1 ? () => cyclePreview(-1) : undefined}
         onNext={preview && preview.images.length > 1 ? () => cyclePreview(1) : undefined}
+      />
+
+      <AudioRecognitionModal
+        open={isAudioModalOpen}
+        onClose={() => setIsAudioModalOpen(false)}
+        streaming={streaming}
+        onSend={async (text) => {
+          await submit(text);
+        }}
+        onInsert={(text) => {
+          const fullText = input.trim() ? `${input.trim()} ${text}` : text;
+          setInput(fullText);
+          setTimeout(() => {
+            textareaRef.current?.focus();
+          }, 50);
+        }}
       />
     </div>
   );

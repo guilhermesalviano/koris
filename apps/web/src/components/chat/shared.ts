@@ -12,3 +12,28 @@ export function imageSrc(image: ImageAttachment): string {
 
 /** Opens the lightbox on one image of a set. */
 export type PreviewImages = (images: ImageAttachment[], index: number) => void;
+
+/** Reads an image file into an ImageAttachment payload. */
+export function readFileAsAttachment(file: File): Promise<ImageAttachment> {
+  if (typeof FileReader !== 'undefined') {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        const base64 = result.includes(',') ? result.slice(result.indexOf(',') + 1) : result;
+        resolve({ data: base64, mimeType: file.type });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+  return file.arrayBuffer().then((buffer) => {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = typeof btoa === 'function' ? btoa(binary) : Buffer.from(buffer).toString('base64');
+    return { data: base64, mimeType: file.type };
+  });
+}

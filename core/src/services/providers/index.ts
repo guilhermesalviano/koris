@@ -140,7 +140,7 @@ export function createAIProvider(logger: ILogger, role: AIProviderRole = 'manage
     numCtx: role === 'manager' ? config.AI.MANAGER.NUM_CTX : config.AI.WORKERS.NUM_CTX,
   };
 
-  logger.info(`Initializing AI provider: ${providerType} (${role})`);
+  logger.info(`[provider] Initializing AI provider: ${providerType} (${role})`);
   return registration.create(logger, opts);
 }
 
