@@ -3,7 +3,7 @@ import type { ILogger } from "../../../../infrastructure/logger";
 import { IPromptRepository, PromptRepositoryFactory } from "../../../../repositories/prompt";
 import { getAIProvider } from "../../../providers";
 import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
-import { NEGOTIATOR_INSTRUCTIONS, ERRAND_FOLLOWUP_CONTEXT, ERRAND_OPENER_INSTRUCTIONS, ERRAND_RESUME_INSTRUCTIONS, THIRD_PARTY_CONVERSATION_CONTEXT } from "../../../../constants";
+import { NEGOTIATOR_INSTRUCTIONS, ERRAND_ACTION_FOLLOWUPS, ERRAND_FOLLOWUP_CONTEXT, ERRAND_OPENER_INSTRUCTIONS, ERRAND_RESUME_INSTRUCTIONS, THIRD_PARTY_CONVERSATION_CONTEXT } from "../../../../constants";
 import { config } from "../../../../config";
 import { replacePlaceholders } from "../../../../utils/prompt";
 import { parseNegotiatorResponse } from "../../../../utils/negotiator-response";
@@ -42,8 +42,6 @@ export interface NegotiatorTurnResult {
   applied: 'continue' | 'escalate' | 'resolved' | 'failed' | 'skipped';
 }
 
-const HOLDING_REPLY = "Let me check on that and get back to you shortly.";
-const THANK_YOU_REPLY = 'Thank you for your help!';
 const OPENER_REQUEST = 'Write the opening message now.';
 
 class Negotiator {
@@ -188,13 +186,15 @@ class Negotiator {
     const latest = errandService.get(props.errandId);
     if (!latest || latest.state !== errand.state) return { reply: '', applied: 'skipped' };
 
+    const reply = verdict.reply || ERRAND_ACTION_FOLLOWUPS[verdict.action] || '';
+
     switch (verdict.action) {
       case 'escalate':
         errandService.escalate(errand.id, verdict.detail || 'The negotiator needs your input.', verdict.notes);
         break;
       case 'resolved':
         await errandService.resolveWithClosingReply(
-          errand.id, props.sessionId, verdict.reply || THANK_YOU_REPLY,
+          errand.id, props.sessionId, reply,
           verdict.detail || verdict.reply || 'Resolved.', verdict.notes,
         );
         return { reply: '', applied: 'resolved' };
@@ -207,7 +207,6 @@ class Negotiator {
         break;
     }
 
-    const reply = verdict.reply || (verdict.action === 'escalate' ? HOLDING_REPLY : '');
     return { reply, applied: verdict.action };
   }
 }
