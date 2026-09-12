@@ -55,6 +55,43 @@ export function handleComposerKeyDown(
   }
 }
 
+export function handleComposerPaste(
+  e: { clipboardData: { files: FileList | File[] } | null; preventDefault: () => void },
+  onAddFiles?: (files: File[]) => void,
+): void {
+  const files = Array.from(e.clipboardData?.files ?? []);
+  if (files.length === 0) return;
+  const images = filterImageFiles(files);
+  if (images.length === 0) return;
+  e.preventDefault();
+  onAddFiles?.(images);
+}
+
+export function handleComposerDrop(
+  e: { dataTransfer: { files: FileList | File[] } | null; preventDefault: () => void; stopPropagation: () => void },
+  onAddFiles?: (files: File[]) => void,
+): void {
+  e.preventDefault();
+  e.stopPropagation();
+  const files = Array.from(e.dataTransfer?.files ?? []);
+  const images = filterImageFiles(files);
+  if (images.length > 0) {
+    onAddFiles?.(images);
+  }
+}
+
+export function handleComposerFileInput(
+  files: File[] | FileList | null | undefined,
+  onAddFiles?: (files: File[]) => void,
+): void {
+  if (files && files.length > 0) {
+    const images = filterImageFiles(Array.from(files));
+    if (images.length > 0) {
+      onAddFiles?.(images);
+    }
+  }
+}
+
 export const ChatComposer = forwardRef<HTMLTextAreaElement, ChatComposerProps>(function ChatComposer(
   {
     input,
@@ -94,12 +131,7 @@ export const ChatComposer = forwardRef<HTMLTextAreaElement, ChatComposerProps>(f
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const files = Array.from(e.clipboardData?.files ?? []);
-    if (files.length === 0) return;
-    const images = filterImageFiles(files);
-    if (images.length === 0) return;
-    e.preventDefault();
-    onAddFiles?.(images);
+    handleComposerPaste(e, onAddFiles);
   }
 
   function handleDragOver(e: React.DragEvent) {
@@ -116,24 +148,12 @@ export const ChatComposer = forwardRef<HTMLTextAreaElement, ChatComposerProps>(f
   }
 
   function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
     setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files ?? []);
-    const images = files.filter((f) => f.type.startsWith('image/'));
-    if (images.length > 0) {
-      onAddFiles?.(images);
-    }
+    handleComposerDrop(e, onAddFiles);
   }
 
   function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (e.target.files && e.target.files.length > 0) {
-      const files = Array.from(e.target.files);
-      const images = filterImageFiles(files);
-      if (images.length > 0) {
-        onAddFiles?.(images);
-      }
-    }
+    handleComposerFileInput(e.target.files, onAddFiles);
     e.target.value = '';
   }
 

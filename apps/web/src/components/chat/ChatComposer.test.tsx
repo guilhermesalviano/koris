@@ -5,7 +5,15 @@ vi.mock('../ProviderPicker', () => ({
   default: () => <div data-testid="provider-picker">ProviderPicker</div>,
 }));
 
-import { ChatComposer, computeCanSend, filterImageFiles, handleComposerKeyDown } from './ChatComposer';
+import {
+  ChatComposer,
+  computeCanSend,
+  filterImageFiles,
+  handleComposerKeyDown,
+  handleComposerPaste,
+  handleComposerDrop,
+  handleComposerFileInput,
+} from './ChatComposer';
 import { imageSrc, readFileAsAttachment } from './shared';
 import type { ImageAttachment } from '../../lib/types';
 
@@ -294,6 +302,88 @@ describe('ChatComposer Logic & Branch Tests', () => {
       );
       expect(preventDefault).not.toHaveBeenCalled();
       expect(onSubmit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleComposerPaste', () => {
+    it('does nothing when clipboard has no files', () => {
+      const onAdd = vi.fn();
+      const preventDefault = vi.fn();
+      handleComposerPaste({ clipboardData: null, preventDefault }, onAdd);
+      expect(preventDefault).not.toHaveBeenCalled();
+      expect(onAdd).not.toHaveBeenCalled();
+
+      handleComposerPaste({ clipboardData: { files: [] }, preventDefault }, onAdd);
+      expect(preventDefault).not.toHaveBeenCalled();
+      expect(onAdd).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when clipboard has non-image files', () => {
+      const onAdd = vi.fn();
+      const preventDefault = vi.fn();
+      const txt = new File(['text'], 'note.txt', { type: 'text/plain' });
+      handleComposerPaste({ clipboardData: { files: [txt] }, preventDefault }, onAdd);
+      expect(preventDefault).not.toHaveBeenCalled();
+      expect(onAdd).not.toHaveBeenCalled();
+    });
+
+    it('prevents default and adds images when clipboard has images', () => {
+      const onAdd = vi.fn();
+      const preventDefault = vi.fn();
+      const png = new File(['img'], 'photo.png', { type: 'image/png' });
+      const txt = new File(['text'], 'note.txt', { type: 'text/plain' });
+      handleComposerPaste({ clipboardData: { files: [png, txt] }, preventDefault }, onAdd);
+      expect(preventDefault).toHaveBeenCalledTimes(1);
+      expect(onAdd).toHaveBeenCalledWith([png]);
+    });
+  });
+
+  describe('handleComposerDrop', () => {
+    it('prevents default and stops propagation even with no files', () => {
+      const onAdd = vi.fn();
+      const preventDefault = vi.fn();
+      const stopPropagation = vi.fn();
+      handleComposerDrop({ dataTransfer: null, preventDefault, stopPropagation }, onAdd);
+      expect(preventDefault).toHaveBeenCalledTimes(1);
+      expect(stopPropagation).toHaveBeenCalledTimes(1);
+      expect(onAdd).not.toHaveBeenCalled();
+    });
+
+    it('adds images when present in dataTransfer', () => {
+      const onAdd = vi.fn();
+      const preventDefault = vi.fn();
+      const stopPropagation = vi.fn();
+      const png = new File(['img'], 'photo.png', { type: 'image/png' });
+      const txt = new File(['text'], 'note.txt', { type: 'text/plain' });
+      handleComposerDrop({ dataTransfer: { files: [png, txt] }, preventDefault, stopPropagation }, onAdd);
+      expect(preventDefault).toHaveBeenCalledTimes(1);
+      expect(stopPropagation).toHaveBeenCalledTimes(1);
+      expect(onAdd).toHaveBeenCalledWith([png]);
+    });
+  });
+
+  describe('handleComposerFileInput', () => {
+    it('does nothing when files is empty or null', () => {
+      const onAdd = vi.fn();
+      handleComposerFileInput(null, onAdd);
+      handleComposerFileInput(undefined, onAdd);
+      handleComposerFileInput([], onAdd);
+      expect(onAdd).not.toHaveBeenCalled();
+    });
+
+    it('calls onAddFiles with filtered images', () => {
+      const onAdd = vi.fn();
+      const png = new File(['img'], 'photo.png', { type: 'image/png' });
+      const txt = new File(['text'], 'note.txt', { type: 'text/plain' });
+      handleComposerFileInput([png, txt], onAdd);
+      expect(onAdd).toHaveBeenCalledWith([png]);
+    });
+
+    it('does not call onAddFiles if no images are selected', () => {
+      const onAdd = vi.fn();
+      const txt = new File(['text'], 'note.txt', { type: 'text/plain' });
+      handleComposerFileInput([txt], onAdd);
+      expect(onAdd).not.toHaveBeenCalled();
     });
   });
 });

@@ -246,6 +246,32 @@ describe('ToolsQueue', () => {
         errorMessage: 'kaboom',
       });
     });
+
+    it('throws error when signal is already aborted', async () => {
+      abortController.abort();
+      await expect(
+        orchestrator.handle([{ name: 'test', arguments: {} }], abortController.signal),
+      ).rejects.toThrow('Tool execution aborted');
+    });
+
+    it('catches and handles execution error when agnosticExecutionTool throws', async () => {
+      const failingTool = {
+        handle: vi.fn().mockRejectedValue(new Error('Fatal execution crash')),
+      };
+      const queue = new ToolsQueue(mockLogger, failingTool as never, 2);
+      const results = await queue.handle([{ id: 'c1', name: 'crash_tool', arguments: {} }], abortController.signal);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({
+        toolName: 'crash_tool',
+        success: false,
+        error: 'Fatal execution crash',
+        toolCallId: 'c1',
+      });
+      expect(mockLogger.error).toHaveBeenCalledWith('Tool execution failed', {
+        toolName: 'crash_tool',
+        error: 'Fatal execution crash',
+      });
+    });
   });
 
   describe('constructor', () => {

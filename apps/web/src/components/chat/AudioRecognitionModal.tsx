@@ -55,18 +55,19 @@ type SpeechRecognitionInstance = {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
 
-export function getSpeechRecognitionClass(): SpeechRecognitionConstructor | null {
-  if (typeof window === 'undefined') return null;
-  const win = window as unknown as {
+export function getSpeechRecognitionClass(win?: unknown): SpeechRecognitionConstructor | null {
+  const target = (win !== undefined ? win : (typeof window !== 'undefined' ? window : undefined)) as unknown as {
     SpeechRecognition?: SpeechRecognitionConstructor;
     webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  };
-  return win.SpeechRecognition || win.webkitSpeechRecognition || null;
+  } | undefined;
+  if (!target) return null;
+  return target.SpeechRecognition || target.webkitSpeechRecognition || null;
 }
 
 export function formatDuration(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(safeSeconds / 60);
+  const secs = safeSeconds % 60;
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
@@ -81,6 +82,340 @@ export async function blobToBase64(blob: Blob): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+}
+
+export function getAudioFilename(mimeType: string): string {
+  if (mimeType.includes('mp4')) return 'recording.mp4';
+  if (mimeType.includes('ogg')) return 'recording.ogg';
+  return 'recording.webm';
+}
+
+export function resolveSupportedMimeType(
+  isTypeSupported?: (mime: string) => boolean,
+): string {
+  if (!isTypeSupported) return '';
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/ogg',
+  ];
+  for (const candidate of candidates) {
+    if (isTypeSupported(candidate)) return candidate;
+  }
+  return '';
+}
+
+export function resolveActualMimeType(recorderMime?: string, fallbackMime?: string): string {
+  return recorderMime || fallbackMime || 'audio/webm';
+}
+
+export function filterAudioInputs(devices: { kind: string }[]): { kind: string }[] {
+  return devices.filter((d) => d.kind === 'audioinput');
+}
+
+export function checkRecordingEnvironment(options: {
+  isSecureContext?: boolean;
+  hostname?: string;
+  hasMediaDevices?: boolean;
+  hasGetUserMedia?: boolean;
+}): AudioErrorState | null {
+  if (
+    options.isSecureContext === false &&
+    options.hostname !== 'localhost' &&
+    options.hostname !== '127.0.0.1'
+  ) {
+    return {
+      type: 'insecure-context',
+      title: 'HTTPS Required',
+      message: 'Microphone access is restricted on insecure connections.',
+      suggestion:
+        'Please open this application over HTTPS or via localhost to allow microphone recording.',
+    };
+  }
+
+  if (!options.hasMediaDevices || !options.hasGetUserMedia) {
+    return {
+      type: 'unsupported',
+      title: 'Not Supported',
+      message: 'Audio recording is not supported in this browser or environment.',
+      suggestion: 'Please use a modern browser such as Chrome, Firefox, Safari, or Edge.',
+    };
+  }
+
+  return null;
+}
+
+export function buildAudioConstraints(forceRetryFallback: boolean): MediaStreamConstraints {
+  return forceRetryFallback
+    ? { audio: true }
+    : {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      };
+}
+
+export interface AudioErrorResolution {
+  errorState: AudioErrorState | null;
+  retryFallback: boolean;
+}
+
+export function mapAudioError(err: unknown, forceRetryFallback = false): AudioErrorResolution {
+  if (err instanceof DOMException) {
+    if (
+      err.name === 'NotAllowedError' ||
+      err.name === 'PermissionDeniedError' ||
+      err.name === 'SecurityError'
+    ) {
+      return {
+        errorState: {
+          type: 'permission-denied',
+          title: 'Microphone Permission Blocked',
+          message: 'Microphone access was denied in your browser settings.',
+          suggestion:
+            'Click the lock or settings icon in your browser address bar to allow microphone access, then click Try Again.',
+          actionLabel: 'Try Again',
+        },
+        retryFallback: false,
+      };
+    }
+
+    if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+      return {
+        errorState: {
+          type: 'no-microphone',
+          title: 'No Microphone Detected',
+          message: 'We could not find any connected microphone or audio input hardware.',
+          suggestion:
+            'Please plug in or connect a microphone, headset, or webcam and click Check Devices.',
+          actionLabel: 'Check Devices',
+        },
+        retryFallback: false,
+      };
+    }
+
+    if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+      return {
+        errorState: {
+          type: 'device-busy',
+          title: 'Microphone In Use',
+          message:
+            'Your microphone is currently in use by another application or locked by the system.',
+          suggestion:
+            'Please close other applications using audio (such as video conferencing or screen recording apps) and try again.',
+          actionLabel: 'Retry Connection',
+        },
+        retryFallback: false,
+      };
+    }
+
+    if (err.name === 'OverconstrainedError' && !forceRetryFallback) {
+      return {
+        errorState: null,
+        retryFallback: true,
+      };
+    }
+  }
+
+  return {
+    errorState: {
+      type: 'general',
+      title: 'Microphone Error',
+      message: err instanceof Error ? err.message : String(err),
+      suggestion: 'Please check your microphone settings and try reconnecting your device.',
+      actionLabel: 'Retry',
+    },
+    retryFallback: false,
+  };
+}
+
+export interface SpeechRecognitionResultItem {
+  transcript: string;
+}
+export interface SpeechRecognitionResultEntry {
+  isFinal: boolean;
+  [j: number]: SpeechRecognitionResultItem;
+  0: SpeechRecognitionResultItem;
+}
+export interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: {
+    length: number;
+    [i: number]: SpeechRecognitionResultEntry;
+  };
+}
+
+export function parseSpeechRecognitionResults(
+  event: SpeechRecognitionEventLike,
+): { newFinal: string; interim: string } {
+  let interim = '';
+  let newFinal = '';
+
+  for (let i = event.resultIndex; i < event.results.length; i++) {
+    const res = event.results[i];
+    if (res && res[0]) {
+      if (res.isFinal) {
+        newFinal += res[0].transcript;
+      } else {
+        interim += res[0].transcript;
+      }
+    }
+  }
+
+  return { newFinal, interim };
+}
+
+export function appendTranscript(prev: string, newFinal: string): string {
+  const trimmed = prev.trim();
+  const addition = newFinal.trim();
+  if (!addition) return prev;
+  return trimmed ? `${trimmed} ${addition}` : addition;
+}
+
+export function computeSoundLevel(
+  dataArray: Uint8Array,
+  bufferLength: number,
+  prevSmoothedLevel: number,
+): { smoothedLevel: number; hasSoundDetected: boolean } {
+  let sum = 0;
+  for (let i = 0; i < bufferLength; i++) {
+    sum += dataArray[i];
+  }
+  const currentLevel = sum / (bufferLength * 255);
+  const smoothed = prevSmoothedLevel * 0.7 + currentLevel * 0.3;
+  return {
+    smoothedLevel: smoothed,
+    hasSoundDetected: smoothed > 0.07,
+  };
+}
+
+export function computeVisualizerBar(options: {
+  index: number;
+  barCount: number;
+  dataArray: Uint8Array;
+  bufferLength: number;
+  width: number;
+  height: number;
+  barWidth?: number;
+}): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  alpha: number;
+  isHighlighted: boolean;
+  fillColor: string;
+} {
+  const { index, barCount, dataArray, bufferLength, width, height, barWidth = 4 } = options;
+  const totalBarsWidth = barCount * barWidth;
+  const totalSpacing = width - totalBarsWidth;
+  const barGap = totalSpacing / (barCount - 1);
+  const centerY = height / 2;
+
+  const dataIndex = Math.floor((index / barCount) * (bufferLength / 2));
+  const value = dataArray[dataIndex] || 0;
+  const normalized = Math.max(0.08, value / 255);
+  const barHeight = Math.max(4, normalized * (height * 0.88));
+
+  const x = index * (barWidth + barGap);
+  const y = centerY - barHeight / 2;
+
+  const alpha = Math.min(1, 0.35 + normalized * 0.65);
+  const isHighlighted = normalized > 0.35;
+  const fillColor = isHighlighted
+    ? `rgba(255, 128, 100, ${alpha})`
+    : `rgba(243, 98, 70, ${alpha * 0.85})`;
+
+  return { x, y, width: barWidth, height: barHeight, alpha, isHighlighted, fillColor };
+}
+
+export function parseTranscriptionResponse(
+  status: number,
+  isOk: boolean,
+  data: unknown,
+): { text: string; errorState: AudioErrorState | null } {
+  if (!isOk) {
+    const errorMsg =
+      (data && typeof data === 'object' && 'error' in data && typeof (data as { error: unknown }).error === 'string'
+        ? (data as { error: string }).error
+        : null) || `Transcription failed (${status})`;
+    return {
+      text: '',
+      errorState: {
+        type: 'transcription-failed',
+        title: 'Transcription Failed',
+        message: errorMsg,
+        suggestion: 'Server speech synthesis or Whisper sidecar may be offline. Your live text was preserved.',
+        actionLabel: 'Retry',
+      },
+    };
+  }
+
+  const whisperText =
+    (data && typeof data === 'object' && 'text' in data && typeof (data as { text: unknown }).text === 'string'
+      ? (data as { text: string }).text
+      : '') || '';
+
+  return { text: whisperText.trim(), errorState: null };
+}
+
+export interface AudioBadgeState {
+  tone: 'danger' | 'warn' | 'success' | 'accent' | 'neutral';
+  label: string;
+  animatePulse?: boolean;
+}
+
+export function getAudioBadgeState(options: {
+  audioError: AudioErrorState | null;
+  isTranscribing: boolean;
+  isRecording: boolean;
+  hasSoundDetected: boolean;
+  hasText: boolean;
+}): AudioBadgeState {
+  if (options.audioError) {
+    return { tone: 'danger', label: options.audioError.title };
+  }
+  if (options.isTranscribing) {
+    return { tone: 'warn', label: 'Transcribing…', animatePulse: true };
+  }
+  if (options.isRecording) {
+    if (options.hasSoundDetected) {
+      return { tone: 'success', label: 'Sound Detected', animatePulse: true };
+    }
+    return { tone: 'accent', label: 'Listening…' };
+  }
+  if (options.hasText) {
+    return { tone: 'neutral', label: 'Ready' };
+  }
+  return { tone: 'neutral', label: 'Paused' };
+}
+
+export function getAudioPlaceholderText(options: {
+  audioError: AudioErrorState | null;
+  isRecording: boolean;
+}): string {
+  if (options.audioError) {
+    return 'Microphone is currently unavailable. Follow the suggestions above to enable recording.';
+  }
+  if (options.isRecording) {
+    return 'Speak clearly into your microphone… text will appear in real time.';
+  }
+  return 'Microphone is paused. Click the button above to begin speaking.';
+}
+
+export function resolveAudioOutputText(transcript: string, interimText: string): string {
+  return transcript.trim() || interimText.trim();
+}
+
+export function shouldShowMicOffIcon(errorType: AudioErrorType): boolean {
+  return (
+    errorType === 'permission-denied' ||
+    errorType === 'no-microphone' ||
+    errorType === 'disconnected'
+  );
 }
 
 export default function AudioRecognitionModal({
@@ -181,44 +516,32 @@ export default function AudioRecognitionModal({
     const dataArray = new Uint8Array(bufferLength);
     analyser.getByteFrequencyData(dataArray);
 
-    let sum = 0;
-    for (let i = 0; i < bufferLength; i++) {
-      sum += dataArray[i];
-    }
-    const currentLevel = sum / (bufferLength * 255);
-    soundLevelSmoothedRef.current = soundLevelSmoothedRef.current * 0.7 + currentLevel * 0.3;
-    const level = soundLevelSmoothedRef.current;
-    setSoundLevel(level);
-    setHasSoundDetected(level > 0.07);
+    const { smoothedLevel, hasSoundDetected: detected } = computeSoundLevel(
+      dataArray,
+      bufferLength,
+      soundLevelSmoothedRef.current,
+    );
+    soundLevelSmoothedRef.current = smoothedLevel;
+    setSoundLevel(smoothedLevel);
+    setHasSoundDetected(detected);
 
     const width = canvas.width;
     const height = canvas.height;
     ctx.clearRect(0, 0, width, height);
 
     const barCount = 36;
-    const barWidth = 4;
-    const totalBarsWidth = barCount * barWidth;
-    const totalSpacing = width - totalBarsWidth;
-    const barGap = totalSpacing / (barCount - 1);
-    const centerY = height / 2;
-
     for (let i = 0; i < barCount; i++) {
-      const dataIndex = Math.floor((i / barCount) * (bufferLength / 2));
-      const value = dataArray[dataIndex] || 0;
-      const normalized = Math.max(0.08, value / 255);
-      const barHeight = Math.max(4, normalized * (height * 0.88));
-
-      const x = i * (barWidth + barGap);
-      const y = centerY - barHeight / 2;
-
-      const alpha = Math.min(1, 0.35 + normalized * 0.65);
-      const isHighlighted = normalized > 0.35;
-      ctx.fillStyle = isHighlighted
-        ? `rgba(255, 128, 100, ${alpha})`
-        : `rgba(243, 98, 70, ${alpha * 0.85})`;
-
+      const bar = computeVisualizerBar({
+        index: i,
+        barCount,
+        dataArray,
+        bufferLength,
+        width,
+        height,
+      });
+      ctx.fillStyle = bar.fillColor;
       ctx.beginPath();
-      ctx.roundRect(x, y, barWidth, barHeight, 2);
+      ctx.roundRect(bar.x, bar.y, bar.width, bar.height, 2);
       ctx.fill();
     }
 
@@ -231,11 +554,7 @@ export default function AudioRecognitionModal({
 
     try {
       const base64 = await blobToBase64(blob);
-      const filename = mimeType.includes('mp4')
-        ? 'recording.mp4'
-        : mimeType.includes('ogg')
-        ? 'recording.ogg'
-        : 'recording.webm';
+      const filename = getAudioFilename(mimeType);
 
       const res = await fetch('/api/audio/transcribe', {
         method: 'POST',
@@ -246,22 +565,15 @@ export default function AudioRecognitionModal({
       const isJson = (res.headers.get('content-type') || '').includes('application/json');
       const data = isJson ? await res.json().catch(() => ({})) : null;
 
-      if (!res.ok) {
-        const errorMsg = (data && (data as { error?: string }).error) || `Transcription failed (${res.status})`;
-        console.warn(`[audio] Voice server transcription failed: ${errorMsg}`);
-        setAudioError({
-          type: 'transcription-failed',
-          title: 'Transcription Failed',
-          message: errorMsg,
-          suggestion: 'Server speech synthesis or Whisper sidecar may be offline. Your live text was preserved.',
-          actionLabel: 'Retry',
-        });
+      const parsed = parseTranscriptionResponse(res.status, res.ok, data);
+      if (parsed.errorState) {
+        console.warn(`[audio] Voice server transcription failed: ${parsed.errorState.message}`);
+        setAudioError(parsed.errorState);
         return '';
       }
 
-      const whisperText = ((data as { text?: string })?.text || '').trim();
-      console.info(`[audio] Voice server connected at /api/audio/transcribe (transcribed ${whisperText.length} characters)`);
-      return whisperText;
+      console.info(`[audio] Voice server connected at /api/audio/transcribe (transcribed ${parsed.text.length} characters)`);
+      return parsed.text;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Transcription request failed';
       console.warn(`[audio] Voice server network error: ${errorMsg}`);
@@ -295,31 +607,24 @@ export default function AudioRecognitionModal({
     setAudioError(null);
     setInterimText('');
 
-    if (typeof window !== 'undefined' && window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      setAudioError({
-        type: 'insecure-context',
-        title: 'HTTPS Required',
-        message: 'Microphone access is restricted on insecure connections.',
-        suggestion: 'Please open this application over HTTPS or via localhost to allow microphone recording.',
+    if (typeof window !== 'undefined') {
+      const envError = checkRecordingEnvironment({
+        isSecureContext: window.isSecureContext,
+        hostname: window.location.hostname,
+        hasMediaDevices: Boolean(navigator?.mediaDevices),
+        hasGetUserMedia: Boolean(navigator?.mediaDevices?.getUserMedia),
       });
-      return;
-    }
-
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      setAudioError({
-        type: 'unsupported',
-        title: 'Not Supported',
-        message: 'Audio recording is not supported in this browser or environment.',
-        suggestion: 'Please use a modern browser such as Chrome, Firefox, Safari, or Edge.',
-      });
-      return;
+      if (envError) {
+        setAudioError(envError);
+        return;
+      }
     }
 
     try {
-      if (navigator.mediaDevices.enumerateDevices) {
+      if (navigator.mediaDevices?.enumerateDevices) {
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
-          const audioInputs = devices.filter((d) => d.kind === 'audioinput');
+          const audioInputs = filterAudioInputs(devices);
           if (audioInputs.length === 0) {
             setAudioError({
               type: 'no-microphone',
@@ -335,16 +640,7 @@ export default function AudioRecognitionModal({
         }
       }
 
-      const constraints: MediaStreamConstraints = forceRetryFallback
-        ? { audio: true }
-        : {
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            },
-          };
-
+      const constraints = buildAudioConstraints(forceRetryFallback);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       mediaStreamRef.current = stream;
 
@@ -379,33 +675,11 @@ export default function AudioRecognitionModal({
           rec.lang = navigator.language || 'en-US';
 
           rec.onresult = (event: unknown) => {
-            const ev = event as {
-              resultIndex: number;
-              results: {
-                length: number;
-                [i: number]: {
-                  isFinal: boolean;
-                  [j: number]: { transcript: string };
-                };
-              };
-            };
-            let interim = '';
-            let newFinal = '';
-
-            for (let i = ev.resultIndex; i < ev.results.length; i++) {
-              const res = ev.results[i];
-              if (res.isFinal) {
-                newFinal += res[0].transcript;
-              } else {
-                interim += res[0].transcript;
-              }
-            }
+            const ev = event as SpeechRecognitionEventLike;
+            const { newFinal, interim } = parseSpeechRecognitionResults(ev);
 
             if (newFinal) {
-              setTranscript((prev) => {
-                const trimmed = prev.trim();
-                return trimmed ? `${trimmed} ${newFinal.trim()}` : newFinal.trim();
-              });
+              setTranscript((prev) => appendTranscript(prev, newFinal));
             }
             setInterimText(interim);
           };
@@ -423,15 +697,7 @@ export default function AudioRecognitionModal({
 
       let mimeType = '';
       if (typeof MediaRecorder !== 'undefined') {
-        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-          mimeType = 'audio/webm;codecs=opus';
-        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-          mimeType = 'audio/webm';
-        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          mimeType = 'audio/mp4';
-        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
-          mimeType = 'audio/ogg';
-        }
+        mimeType = resolveSupportedMimeType((mime) => MediaRecorder.isTypeSupported(mime));
 
         const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
         mediaRecorderRef.current = recorder;
@@ -448,7 +714,7 @@ export default function AudioRecognitionModal({
           audioChunksRef.current = [];
           if (chunks.length === 0) return;
 
-          const actualMime = recorder.mimeType || mimeType || 'audio/webm';
+          const actualMime = resolveActualMimeType(recorder.mimeType, mimeType);
           const blob = new Blob(chunks, { type: actualMime });
           if (blob.size === 0) return;
 
@@ -473,53 +739,14 @@ export default function AudioRecognitionModal({
     } catch (err) {
       cleanupAudio();
 
-      if (err instanceof DOMException) {
-        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || err.name === 'SecurityError') {
-          setAudioError({
-            type: 'permission-denied',
-            title: 'Microphone Permission Blocked',
-            message: 'Microphone access was denied in your browser settings.',
-            suggestion: 'Click the lock or settings icon in your browser address bar to allow microphone access, then click Try Again.',
-            actionLabel: 'Try Again',
-          });
-          return;
-        }
-
-        if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-          setAudioError({
-            type: 'no-microphone',
-            title: 'No Microphone Detected',
-            message: 'We could not find any connected microphone or audio input hardware.',
-            suggestion: 'Please plug in or connect a microphone, headset, or webcam and click Check Devices.',
-            actionLabel: 'Check Devices',
-          });
-          return;
-        }
-
-        if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-          setAudioError({
-            type: 'device-busy',
-            title: 'Microphone In Use',
-            message: 'Your microphone is currently in use by another application or locked by the system.',
-            suggestion: 'Please close other applications using audio (such as video conferencing or screen recording apps) and try again.',
-            actionLabel: 'Retry Connection',
-          });
-          return;
-        }
-
-        if (err.name === 'OverconstrainedError' && !forceRetryFallback) {
-          void startRecording(true);
-          return;
-        }
+      const resolution = mapAudioError(err, forceRetryFallback);
+      if (resolution.retryFallback) {
+        void startRecording(true);
+        return;
       }
-
-      setAudioError({
-        type: 'general',
-        title: 'Microphone Error',
-        message: err instanceof Error ? err.message : String(err),
-        suggestion: 'Please check your microphone settings and try reconnecting your device.',
-        actionLabel: 'Retry',
-      });
+      if (resolution.errorState) {
+        setAudioError(resolution.errorState);
+      }
     }
   }, [cleanupAudio, drawVisualizer, handleTrackEnded, handleTranscribe]);
 
@@ -648,7 +875,7 @@ export default function AudioRecognitionModal({
   };
 
   const handleSend = async () => {
-    const textToSend = transcript.trim() || interimText.trim();
+    const textToSend = resolveAudioOutputText(transcript, interimText);
     if (!textToSend || streaming) return;
     stopRecording();
     await onSend(textToSend);
@@ -656,7 +883,7 @@ export default function AudioRecognitionModal({
   };
 
   const handleInsert = () => {
-    const textToInsert = transcript.trim() || interimText.trim();
+    const textToInsert = resolveAudioOutputText(transcript, interimText);
     if (!textToInsert) return;
     stopRecording();
     onInsert(textToInsert);
@@ -673,7 +900,7 @@ export default function AudioRecognitionModal({
   };
 
   const handleCopy = async () => {
-    const text = transcript.trim() || interimText.trim();
+    const text = resolveAudioOutputText(transcript, interimText);
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
@@ -686,6 +913,17 @@ export default function AudioRecognitionModal({
 
   const displayText = transcript.trim();
   const hasText = Boolean(displayText || interimText.trim());
+  const badgeState = getAudioBadgeState({
+    audioError,
+    isTranscribing,
+    isRecording,
+    hasSoundDetected,
+    hasText,
+  });
+  const placeholderText = getAudioPlaceholderText({
+    audioError,
+    isRecording,
+  });
 
   return (
     <Modal
@@ -711,21 +949,12 @@ export default function AudioRecognitionModal({
           </div>
 
           <div className="flex items-center gap-2">
-            {audioError ? (
-              <Badge tone="danger">{audioError.title}</Badge>
-            ) : isTranscribing ? (
-              <Badge tone="warn" className="animate-pulse">Transcribing…</Badge>
-            ) : isRecording ? (
-              hasSoundDetected ? (
-                <Badge tone="success" className="animate-pulse">Sound Detected</Badge>
-              ) : (
-                <Badge tone="accent">Listening…</Badge>
-              )
-            ) : hasText ? (
-              <Badge tone="neutral">Ready</Badge>
-            ) : (
-              <Badge tone="neutral">Paused</Badge>
-            )}
+            <Badge
+              tone={badgeState.tone}
+              className={badgeState.animatePulse ? 'animate-pulse' : undefined}
+            >
+              {badgeState.label}
+            </Badge>
 
             <IconButton
               onClick={handleClose}
@@ -745,7 +974,7 @@ export default function AudioRecognitionModal({
           {audioError ? (
             <div className="flex w-full flex-col items-center gap-3 rounded-2xl border border-danger/30 bg-bg-3/90 p-5 text-center shadow-panel">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-danger/40 bg-danger/10 text-danger shadow-[0_0_20px_rgba(248,113,113,0.2)]">
-                {audioError.type === 'permission-denied' || audioError.type === 'no-microphone' || audioError.type === 'disconnected' ? (
+                {shouldShowMicOffIcon(audioError.type) ? (
                   <MicOffIcon className="h-6 w-6 fill-none stroke-current" />
                 ) : (
                   <AlertCircleIcon className="h-6 w-6 fill-none stroke-current" />
@@ -897,11 +1126,7 @@ export default function AudioRecognitionModal({
               </div>
             ) : (
               <p className="select-none text-txt-3 italic">
-                {audioError
-                  ? 'Microphone is currently unavailable. Follow the suggestions above to enable recording.'
-                  : isRecording
-                  ? 'Speak clearly into your microphone… text will appear in real time.'
-                  : 'Microphone is paused. Click the button above to begin speaking.'}
+                {placeholderText}
               </p>
             )}
           </div>
