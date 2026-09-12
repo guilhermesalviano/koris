@@ -58,8 +58,11 @@ export default function ConfigModal({
         : 'Changes save automatically';
 
   useEffect(() => {
-    if (open && initialSectionId && SECTIONS.some((s) => s.id === initialSectionId)) {
-      setSectionId(initialSectionId);
+    if (open) {
+      const target = initialSectionId && SECTIONS.some((s) => s.id === initialSectionId)
+        ? initialSectionId
+        : 'general';
+      setSectionId(target);
     }
   }, [open, initialSectionId]);
 

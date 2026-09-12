@@ -65,8 +65,7 @@ plugins/tools/*
 !plugins/tools/runtime.test.ts
 
 plugins/skills/*
-!plugins/skills/.gitkeep
-
+!plugins/skills/koris-help
 
 plugins/mcps/*
 !plugins/mcps/contracts.ts

@@ -55,7 +55,7 @@ type SpeechRecognitionInstance = {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
 
-function getSpeechRecognitionClass(): SpeechRecognitionConstructor | null {
+export function getSpeechRecognitionClass(): SpeechRecognitionConstructor | null {
   if (typeof window === 'undefined') return null;
   const win = window as unknown as {
     SpeechRecognition?: SpeechRecognitionConstructor;
@@ -64,13 +64,13 @@ function getSpeechRecognitionClass(): SpeechRecognitionConstructor | null {
   return win.SpeechRecognition || win.webkitSpeechRecognition || null;
 }
 
-function formatDuration(seconds: number): string {
+export function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
+export async function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {

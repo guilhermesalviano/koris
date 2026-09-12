@@ -265,11 +265,11 @@ function DrawerHeader({ title, onClose }: { title: string; onClose: () => void }
 export default function AdminLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
-  const [configSection, setConfigSection] = useState<string | undefined>(undefined);
+  const [configSection, setConfigSection] = useState<string | undefined>('general');
   const [isDark, setIsDark] = useState(getInitialDark);
 
   function handleOpenConfig(sectionId?: string) {
-    if (sectionId) setConfigSection(sectionId);
+    setConfigSection(sectionId || 'general');
     setConfigOpen(true);
   }
 

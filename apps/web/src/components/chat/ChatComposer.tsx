@@ -22,6 +22,39 @@ export interface ChatComposerProps {
   className?: string;
 }
 
+export function computeCanSend(
+  canSend: boolean | undefined,
+  streaming: boolean,
+  input: string,
+  attachmentsCount: number,
+): boolean {
+  return canSend !== undefined
+    ? canSend
+    : !streaming && (input.trim().length > 0 || attachmentsCount > 0);
+}
+
+export function filterImageFiles(files: File[]): File[] {
+  return files.filter((f) => f.type.startsWith('image/'));
+}
+
+export function handleComposerKeyDown(
+  e: { key: string; shiftKey?: boolean; preventDefault: () => void },
+  effectiveCanSend: boolean,
+  streaming: boolean,
+  onSubmit: () => void | Promise<void>,
+  onCancelStreaming?: () => void,
+): void {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (effectiveCanSend) {
+      void onSubmit();
+    }
+  } else if (e.key === 'Escape' && streaming) {
+    e.preventDefault();
+    onCancelStreaming?.();
+  }
+}
+
 export const ChatComposer = forwardRef<HTMLTextAreaElement, ChatComposerProps>(function ChatComposer(
   {
     input,
@@ -54,27 +87,16 @@ export const ChatComposer = forwardRef<HTMLTextAreaElement, ChatComposerProps>(f
     el.style.height = `${Math.min(el.scrollHeight, 192)}px`;
   }, [input]);
 
-  const effectiveCanSend =
-    canSend !== undefined
-      ? canSend
-      : !streaming && (input.trim().length > 0 || attachments.length > 0);
+  const effectiveCanSend = computeCanSend(canSend, streaming, input, attachments.length);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (effectiveCanSend) {
-        void onSubmit();
-      }
-    } else if (e.key === 'Escape' && streaming) {
-      e.preventDefault();
-      onCancelStreaming?.();
-    }
+    handleComposerKeyDown(e, effectiveCanSend, streaming, onSubmit, onCancelStreaming);
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
     const files = Array.from(e.clipboardData?.files ?? []);
     if (files.length === 0) return;
-    const images = files.filter((f) => f.type.startsWith('image/'));
+    const images = filterImageFiles(files);
     if (images.length === 0) return;
     e.preventDefault();
     onAddFiles?.(images);
@@ -107,7 +129,7 @@ export const ChatComposer = forwardRef<HTMLTextAreaElement, ChatComposerProps>(f
   function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
-      const images = files.filter((f) => f.type.startsWith('image/'));
+      const images = filterImageFiles(files);
       if (images.length > 0) {
         onAddFiles?.(images);
       }
