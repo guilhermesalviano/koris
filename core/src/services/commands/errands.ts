@@ -10,9 +10,25 @@ import { formatCommandResult } from './format';
 import type { CommandContext, CommandResult } from '../../types/commands';
 import type { Errand } from '../../entities/errand';
 
-// Everything after "with <peer> on <channel>": goal may contain spaces, so
-// the keywords anchor from the end of the string.
-const CREATE_PATTERN = /^(.+?)\s+with\s+(\S+)\s+on\s+(\S+)$/i;
+interface CreateArgs {
+  goal: string;
+  peerId: string;
+  channel: string;
+}
+
+// "<goal> with <peer> on <channel>": goal may contain spaces (and the word
+// "with"), so the keywords anchor on the last four tokens. Tokenized instead
+// of a single regex to avoid polynomial backtracking on user input.
+function parseCreateArgs(rest: string): CreateArgs | null {
+  // Captured separators keep the goal's original spacing: [tok, sep, tok, ...]
+  const parts = rest.trim().split(/(\s+)/);
+  // goal + "with" + peer + "on" + channel, each followed by a separator
+  if (parts.length < 9) return null;
+  const n = parts.length;
+  const [withKeyword, peerId, onKeyword, channel] = [parts[n - 7], parts[n - 5], parts[n - 3], parts[n - 1]];
+  if (withKeyword.toLowerCase() !== 'with' || onKeyword.toLowerCase() !== 'on') return null;
+  return { goal: parts.slice(0, n - 8).join(''), peerId, channel };
+}
 
 interface ResolvedErrands {
   db: IDatabaseService;
@@ -63,12 +79,12 @@ function listErrands(context: CommandContext): CommandResult {
 }
 
 async function createErrand(rest: string, context: CommandContext): Promise<CommandResult> {
-  const match = rest.match(CREATE_PATTERN);
-  if (!match) {
+  const args = parseCreateArgs(rest);
+  if (!args) {
     return formatCommandResult('Usage: /errand <goal> with <contact> on <channel>', context.source);
   }
 
-  const [, goal, peerId, channel] = match;
+  const { goal, peerId, channel } = args;
   if (!(CHANNEL_TYPES as readonly string[]).includes(channel.toLowerCase())) {
     return formatCommandResult(`Unknown channel "${channel}". Must be one of: ${CHANNEL_TYPES.join(', ')}.`, context.source);
   }

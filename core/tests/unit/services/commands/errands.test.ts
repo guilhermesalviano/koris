@@ -109,6 +109,20 @@ describe('errand command', () => {
     expect(service.approve).not.toHaveBeenCalled();
   });
 
+  it('keeps "with" inside the goal and anchors on the trailing keywords', async () => {
+    await handleErrandCommand('/errand Ask about the meeting with Bob with 555 on whatsapp', context);
+    expect(composeOpener).toHaveBeenCalledExactlyOnceWith({
+      goal: 'Ask about the meeting with Bob', channel: 'whatsapp', peerId: '555', originSessionId: 'parent',
+    });
+  });
+
+  it('rejects malformed input with many spaces without backtracking blowup', async () => {
+    const started = Date.now();
+    const result = await handleErrandCommand(`/errand a${' '.repeat(50_000)}with`, context);
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(result.response).toContain('Usage: /errand <goal> with <contact> on <channel>');
+  });
+
   it('explains contention when the new errand is queued', async () => {
     service.create.mockReturnValueOnce(new Errand({ ...draft, state: 'queued' }));
     const result = await handleErrandCommand('/errand Book a haircut with 555 on whatsapp', context);
