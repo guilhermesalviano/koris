@@ -1,6 +1,6 @@
 import { apiRequest } from './api';
 import { agentMessagePresentation } from './agent-message';
-import type { BeatRunItem, BeatRunsResponse, ErrandItem, ErrandState, ErrandsResponse, ErrandTranscriptMessage, ErrandTranscriptResponse, HeartbeatItem, HeartbeatsResponse, NegotiatorNotice, NegotiatorNoticesResponse, NegotiatorPendingQuestion } from './types';
+import type { BeatRunItem, BeatRunsResponse, ErrandItem, ErrandState, ErrandsResponse, ErrandTranscriptMessage, ErrandTranscriptResponse, HeartbeatItem, ImageAttachment, HeartbeatsResponse, NegotiatorNotice, NegotiatorNoticesResponse, NegotiatorPendingQuestion } from './types';
 
 export interface ReadOnlyChatEntry {
   id: string;
@@ -9,6 +9,9 @@ export interface ReadOnlyChatEntry {
   author: string;
   context: string;
   content: string;
+  images?: ImageAttachment[];
+  /** Images this message carried that have since been deleted. */
+  missingImages?: number;
   error?: boolean;
   status?: string;
   details?: { label: string; content: string }[];
@@ -122,6 +125,8 @@ export function buildNegotiatorChat(conversations: readonly ErrandConversation[]
         author: assistant ? 'Negotiator' : user ? contact : `Recorded ${message.role} activity`,
         context: user ? errand.goal : `${errand.goal} · ${contact}`,
         content: message.content,
+        ...(message.images?.length ? { images: message.images } : {}),
+        ...(message.missingImages ? { missingImages: message.missingImages } : {}),
       });
     }
   }
@@ -160,7 +165,7 @@ export async function loadNegotiatorNotices(signal: AbortSignal): Promise<Negoti
   return { notices: messages, pending: [...pending].sort((a, b) => timestamp(b.askedAt) - timestamp(a.askedAt)) };
 }
 
-const BEAT_TYPE: Record<string, string> ={ reminder: 'Reminder', scheduled_beat: 'Scheduled task' };
+const BEAT_TYPE: Record<string, string> = { reminder: 'Reminder', scheduled_beat: 'Scheduled task' };
 
 /** One section per heartbeat run: the task that fired, then the Watcher's result (or failure). */
 export function buildWatcherChat({ runs }: WatcherHistory): ReadOnlyChatEntry[] {

@@ -1,7 +1,9 @@
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { AgentAvatar } from '../AgentAvatar';
+import { BrokenImageIcon } from '../Icons';
 import { Button } from '../ui';
 import { DateSeparator } from './DateSeparator';
+import { imageSrc, type PreviewImages } from './shared';
 import { chatSeparatorLabel, dayTimeLabel } from '../../lib/date';
 import { cn } from '../../lib/cn';
 import { renderMarkdown } from '../../lib/markdown';
@@ -23,6 +25,8 @@ interface ReadOnlyAgentChatProps {
   actions?: ReactNode;
   /** Per-entry controls (e.g. errand actions); the chat is no longer labelled read-only when set. */
   renderEntryActions?: (entry: ReadOnlyChatEntry) => ReactNode;
+  /** Opens a lightbox on an entry's image; without it thumbnails are not clickable. */
+  onPreviewImages?: PreviewImages;
   /** Moves the history into a right-hand aside and leaves the main conversation area blank. */
   historyAside?: boolean;
   /** Pinned above the history inside the aside. */
@@ -32,7 +36,38 @@ interface ReadOnlyAgentChatProps {
   children?: ReactNode;
 }
 
-export function ReadOnlyChatMessage({ entry, agentId, actions }: { entry: ReadOnlyChatEntry; agentId: AgentId; actions?: ReactNode }) {
+/** Thumbnails of the images an entry carried, plus placeholders for ones since deleted. */
+function EntryImages({ entry, onPreviewImages }: { entry: ReadOnlyChatEntry; onPreviewImages?: PreviewImages }) {
+  const images = entry.images ?? [];
+  const missing = entry.missingImages ?? 0;
+  if (images.length === 0 && missing === 0) return null;
+  const thumbnail = 'h-24 max-w-[160px] rounded-control object-cover';
+  return (
+    <div className="mb-2 flex flex-wrap gap-1.5">
+      {images.map((image, index) => onPreviewImages ? (
+        <button
+          key={index}
+          type="button"
+          onClick={() => onPreviewImages(images, index)}
+          title="View image"
+          aria-label={`View image ${index + 1}`}
+          className="overflow-hidden rounded-control outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <img src={imageSrc(image)} alt={`image ${index + 1}`} className={cn(thumbnail, 'cursor-zoom-in')} />
+        </button>
+      ) : (
+        <img key={index} src={imageSrc(image)} alt={`image ${index + 1}`} className={thumbnail} />
+      ))}
+      {Array.from({ length: missing }).map((_, index) => (
+        <div key={`missing-${index}`} title="This image was deleted and is no longer accessible" className="flex h-24 w-[120px] items-center justify-center rounded-control border border-dashed border-strong bg-bg-3">
+          <BrokenImageIcon className="h-6 w-6 fill-none stroke-txt-3" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ReadOnlyChatMessage({ entry, agentId, actions, onPreviewImages }: { entry: ReadOnlyChatEntry; agentId: AgentId; actions?: ReactNode; onPreviewImages?: PreviewImages }) {
   const contact = entry.kind === 'contact';
   const task = entry.kind === 'task';
   const notices = entry.details?.filter((detail) => ['Unsent draft', 'Question awaiting your answer', 'Delivery incomplete', 'Conversation unavailable'].includes(detail.label));
@@ -51,7 +86,10 @@ export function ReadOnlyChatMessage({ entry, agentId, actions }: { entry: ReadOn
           entry.error && 'border-danger bg-danger-muted text-txt',
         )}>
           {entry.status && <div className="mb-1 font-mono text-micro text-txt-3">{task ? 'Current status: ' : ''}{entry.status}</div>}
-          {entry.kind === 'assistant' ? <div dangerouslySetInnerHTML={{ __html: renderMarkdown(entry.content) }} /> : <div className="whitespace-pre-wrap">{entry.content}</div>}
+          <EntryImages entry={entry} onPreviewImages={onPreviewImages} />
+          {entry.kind === 'assistant'
+            ? <div dangerouslySetInnerHTML={{ __html: renderMarkdown(entry.content) }} />
+            : entry.content && <div className="whitespace-pre-wrap">{entry.content}</div>}
           {Boolean(entry.details?.length) && (
             <details className="mt-2 border-t border-subtle pt-2">
               <summary className="cursor-pointer text-caption text-txt-2">
@@ -78,7 +116,7 @@ export function ReadOnlyChatMessage({ entry, agentId, actions }: { entry: ReadOn
   );
 }
 
-export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, error, emptyText, historyLabel, onRefresh, actions, renderEntryActions, historyAside = false, asideHeader, main, children }: ReadOnlyAgentChatProps) {
+export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, error, emptyText, historyLabel, onRefresh, actions, renderEntryActions, onPreviewImages, historyAside = false, asideHeader, main, children }: ReadOnlyAgentChatProps) {
   usePageTitle(title, renderEntryActions ? 'Agent chat' : 'Read-only agent chat');
   const scrollRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
@@ -141,7 +179,7 @@ export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, er
             return (
               <Fragment key={entry.id}>
                 {separator && <DateSeparator label={separator} session={Boolean(entry.section)} />}
-                <ReadOnlyChatMessage entry={entry} agentId={agentId} actions={renderEntryActions?.(entry)} />
+                <ReadOnlyChatMessage entry={entry} agentId={agentId} actions={renderEntryActions?.(entry)} onPreviewImages={onPreviewImages} />
               </Fragment>
             );
           })}

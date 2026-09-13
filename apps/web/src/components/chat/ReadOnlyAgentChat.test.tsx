@@ -83,6 +83,19 @@ describe('read-only agent chat', () => {
     expect(html).toContain('Retry');
   });
 
+  it('shows an entry\'s images as thumbnails that open the preview, with placeholders for deleted ones', () => {
+    const image = { data: 'bWVudQ==', mimeType: 'image/jpeg' };
+    const contact: ReadOnlyChatEntry = { ...entry, kind: 'contact', content: '', images: [image], missingImages: 1 };
+    const clickable = renderToStaticMarkup(<ReadOnlyChatMessage agentId="negotiator" entry={contact} onPreviewImages={() => {}} />);
+    expect(clickable).toContain('src="data:image/jpeg;base64,bWVudQ=="');
+    expect(clickable).toContain('aria-label="View image 1"');
+    expect(clickable).toContain('This image was deleted');
+    expect(clickable).not.toContain('whitespace-pre-wrap');
+    const plain = renderToStaticMarkup(<ReadOnlyChatMessage agentId="negotiator" entry={contact} />);
+    expect(plain).toContain('src="data:image/jpeg;base64,bWVudQ=="');
+    expect(plain).not.toContain('<button');
+  });
+
   it('escapes contact content and renders agent Markdown safely', () => {
     const contact = renderToStaticMarkup(<ReadOnlyChatMessage agentId="negotiator" entry={{ ...entry, kind: 'contact', content: '<script>alert(1)</script> **Hello**' }} />);
     expect(contact).not.toContain('<script>');

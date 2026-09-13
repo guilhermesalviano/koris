@@ -335,6 +335,24 @@ describe('errand recovery and privacy', () => {
     expect(runtime.mainAgent.run).toHaveBeenCalledTimes(2);
   });
 
+  it('returns the images a contact sent in the errand transcript', async () => {
+    const { manager, service, parent } = setup();
+    const errand = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Can I see the menu?');
+    await service.approve(errand.id);
+    const runtime = gateway(manager, '{"action":"continue","reply":"Thanks, I will pick one."}');
+    const menu = { data: 'bWVudQ==', mimeType: 'image/jpeg' };
+    await runtime.gateway.handle({ text: 'Here it is', images: [menu] }, '555', { isTrustedSender: false });
+    expect(runtime.prompts.build.mock.calls[0][0]).toMatchObject({ images: [menu] });
+
+    const router = AdminRouterFactory.create(logger, db, {} as never, manager);
+    const layer = router.stack.find((item) => item.route?.path === '/errands/:id/transcript' && item.route.methods.get);
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    await layer!.route.stack[0].handle({ params: { id: errand.id }, query: {} }, res, vi.fn());
+    const { messages: transcript } = res.json.mock.calls[0][0];
+    expect(transcript.find((message: { content: string }) => message.content === 'Here it is')).toMatchObject({ role: 'user', images: [menu] });
+    expect(transcript.find((message: { content: string }) => message.content === 'Can I see the menu?')).not.toHaveProperty('images');
+  });
+
   it('exposes failure and retry through the admin API without exposing internal delivery instructions', async () => {
     const { manager, service, parent, channels } = setup();
     const errand = service.create('Book', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Can you book 10?');

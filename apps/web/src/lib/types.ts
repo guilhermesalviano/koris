@@ -105,6 +105,9 @@ export interface ErrandTranscriptMessage {
   sessionId: string;
   role: string;
   content: string;
+  images?: ImageAttachment[];
+  /** Attached images that have since been deleted. */
+  missingImages?: number;
   createdAt: string;
 }
 

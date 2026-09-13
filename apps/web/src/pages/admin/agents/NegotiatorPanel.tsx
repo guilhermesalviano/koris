@@ -1,5 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Toast, useToast } from '../../../components/AdminUI';
+import ImageLightbox from '../../../components/ImageLightbox';
+import { imageSrc } from '../../../components/chat/shared';
 import { DateSeparator } from '../../../components/chat/DateSeparator';
 import { ReadOnlyAgentChat, ReadOnlyChatMessage } from '../../../components/chat/ReadOnlyAgentChat';
 import { Button, Input, Select } from '../../../components/ui';
@@ -10,7 +12,7 @@ import { buildNegotiationCenter, buildNegotiatorChat, headerErrand, loadNegotiat
 import { isNearBottom } from '../../../lib/timeline';
 import { useAgentActivity } from '../../../lib/agent-activity-context';
 import { useReadOnlyData } from '../../../lib/use-read-only-data';
-import type { ErrandItem, ErrandState, NegotiatorPendingQuestion } from '../../../lib/types';
+import type { ErrandItem, ErrandState, ImageAttachment, NegotiatorPendingQuestion } from '../../../lib/types';
 
 type ErrandAction = 'approve' | 'cancel' | 'close' | 'retry';
 
@@ -243,6 +245,10 @@ export default function NegotiatorPanel() {
   const errands = useMemo(() => new Map((data ?? []).map(({ errand }) => [`errand:${errand.id}`, errand])), [data]);
   const followed = useMemo(() => headerErrand([...errands.values()]), [errands]);
   const [toastMsg, showToast, isError] = useToast();
+  const [preview, setPreview] = useState<{ images: ImageAttachment[]; index: number } | null>(null);
+  const cyclePreview = (step: number) => setPreview((current) => current && {
+    ...current, index: (current.index + step + current.images.length) % current.images.length,
+  });
   const notices = useReadOnlyData(loadNegotiatorNotices);
   const centerEntries = useMemo(() => buildNegotiationCenter(notices.data?.notices ?? [], [...errands.values()]), [notices.data, errands]);
 
@@ -298,11 +304,19 @@ export default function NegotiatorPanel() {
         emptyText="No errands yet. Start an errand from the Orchestrator to see its conversation here."
         historyLabel="Available conversations from the latest 50 errands · up to 100 messages per contact"
         historyAside
+        onPreviewImages={(images, index) => setPreview({ images, index })}
         asideHeader={followed && <NegotiationStepsHeader errand={followed} />}
         renderEntryActions={(entry) => {
           const errand = errands.get(entry.id);
           return errand && <ErrandActions key={errand.id} errand={errand} notify={showToast} onChanged={() => void refresh()} />;
         }}
+      />
+      <ImageLightbox
+        src={preview ? imageSrc(preview.images[preview.index]) : null}
+        caption={preview && preview.images.length > 1 ? `Image ${preview.index + 1} of ${preview.images.length}` : undefined}
+        onClose={() => setPreview(null)}
+        onPrev={preview && preview.images.length > 1 ? () => cyclePreview(-1) : undefined}
+        onNext={preview && preview.images.length > 1 ? () => cyclePreview(1) : undefined}
       />
       <Toast message={toastMsg} isError={isError} />
     </>

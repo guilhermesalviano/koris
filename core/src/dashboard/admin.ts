@@ -773,6 +773,8 @@ class AdminRouterFactory {
           sessionId,
           role: msg.role,
           content: msg.content,
+          ...(msg.images?.length ? { images: msg.images } : {}),
+          ...(msg.missingImages ? { missingImages: msg.missingImages } : {}),
           createdAt: msg.createdAt,
         }));
       }).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());

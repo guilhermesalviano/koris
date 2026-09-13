@@ -40,6 +40,14 @@ describe('subagent timelines', () => {
     expect(entries[3]).toMatchObject({ author: 'Bob · channel-b', kind: 'contact' });
   });
 
+  it('carries a transcript message\'s images into its chat entry', () => {
+    const image = { data: 'bWVudQ==', mimeType: 'image/jpeg' };
+    const [, withImage] = buildNegotiatorChat([{ errand, messages: [{ ...message, images: [image], missingImages: 1 }] }]);
+    expect(withImage).toMatchObject({ images: [image], missingImages: 1 });
+    const [, plain] = buildNegotiatorChat([{ errand, messages: [message] }]);
+    expect(plain).not.toHaveProperty('images');
+  });
+
   it('keeps current metadata separate from sent conversation and identifies missing transcripts', () => {
     const entries = buildNegotiatorChat([{ errand: { ...errand, state: 'draft', pendingMessage: 'Hello', result: 'Saved result', notes: 'A note' }, messages: [], error: 'Offline' }]);
     expect(entries).toHaveLength(1);
