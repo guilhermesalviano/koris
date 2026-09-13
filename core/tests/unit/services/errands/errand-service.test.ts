@@ -219,7 +219,7 @@ describe('ErrandService', () => {
       }));
     });
 
-    it('persists the question and reply command in the invoking web session', () => {
+    it('persists the plain question, without a reply command, in the invoking web session', () => {
       const { service, db, errandRepo, sessionRepo, sessionManager, outbound } = makeService();
       errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'buy milk', state: 'open', originSessionId: 'origin-1' }));
       sessionRepo.findById.mockReturnValue({ id: 'origin-1', channel: 'web', peerId: 'web', kind: 'user' });
@@ -230,7 +230,7 @@ describe('ErrandService', () => {
       expect(sessionManager.getSessionServiceById).toHaveBeenCalledWith('origin-1');
       expect(db.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO messages'), [
         expect.any(String), 'origin-1', 'assistant',
-        expect.stringContaining('what brand?\n\nReply with: `/errand reply e1 <your answer>`'),
+        '❓ Errand "buy milk" needs your input: what brand?',
         null, null, expect.any(String), 'negotiator',
       ]);
     });

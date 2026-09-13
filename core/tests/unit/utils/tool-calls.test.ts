@@ -348,3 +348,18 @@ describe('extractToolCalls', () => {
     });
   });
 });
+
+describe('extractToolCalls provider extra content', () => {
+  it('keeps a tool call\'s extra_content (Gemini thought_signature) so it can be echoed back', () => {
+    const extraContent = { google: { thought_signature: 'sig-abc' } };
+    const calls = extractToolCalls(JSON.stringify({
+      tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'start_errand', arguments: '{}' }, extra_content: extraContent }],
+    }));
+    expect(calls).toEqual([{ id: 'call_1', name: 'start_errand', arguments: {}, extraContent }]);
+  });
+
+  it('omits extraContent when the provider sends none', () => {
+    const [call] = extractToolCalls(JSON.stringify({ tool_calls: [{ id: 'call_1', function: { name: 'x', arguments: {} } }] }));
+    expect(call).not.toHaveProperty('extraContent');
+  });
+});

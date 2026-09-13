@@ -3,11 +3,13 @@ import { agentMessagePresentation } from './agent-message';
 import { mapMessages, mergeMessages, nextId, type ChatMessage } from './chat-history';
 
 describe('errand messages to the Orchestrator', () => {
-  it('presents a legacy escalation as a Negotiator message and preserves the reply command', () => {
-    const content = '❓ Errand "Book lunch" needs your input: Would noon work?\n\nReply with: `/errand reply e1 <your answer>`';
+  it.each([
+    '❓ Errand "Book lunch" needs your input: Would noon work?',
+    '❓ Errand "Book lunch" needs your input: Would noon work?\n\nReply with: `/errand reply e1 <your answer>`',
+  ])('presents an escalation as a plain Negotiator question, dropping the legacy reply command: %s', (content) => {
     expect(agentMessagePresentation({ role: 'assistant', content })).toEqual({
       senderAgentId: 'negotiator',
-      content: 'I need your input on “Book lunch”.\n\nWould noon work?\n\nReply with: `/errand reply e1 <your answer>`',
+      content: 'I need your input on “Book lunch”.\n\nWould noon work?',
     });
   });
 

@@ -77,6 +77,7 @@ class ExecutorWorker implements IWorker<ExecutorWorkerArgs, ProcessedMessage> {
         tool_calls: toolCalls.map((tc) => ({
           id: tc.id,
           function: { name: tc.name, arguments: tc.arguments },
+          ...(tc.extraContent ? { extraContent: tc.extraContent } : {}),
         })),
       },
       ...toolResults,

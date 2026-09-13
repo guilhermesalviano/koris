@@ -21,6 +21,7 @@ import { shouldAutoCompact } from './context-budget';
 import { IChannelService, ChannelServiceFactory } from '../channel-service';
 import type { InboundInput, IMessageGateway, StickerReference } from '../../../../plugins/channels/contracts';
 import { buildErrandService } from '../errands';
+import { formatOpenErrandsBlock } from '../errands/prompt';
 import { runErrandOperation } from '../errands/operations';
 import { Negotiator, NegotiatorFactory } from './sub-agents/negotiator/sub-agent';
 
@@ -150,7 +151,9 @@ class MessageGateway implements IMessageGateway {
     }
 
     const runId = options?.runId ?? generateId();
-    const turnOptions = { ...options, runId, ...(skillBlocks ? { skillBlocks } : {}) };
+    const errandBlock = options?.toolsEnabled ? this.openErrandsBlock(sessionService.getSession().id) : null;
+    const promptBlocks = [...(skillBlocks ?? []), ...(errandBlock ? [errandBlock] : [])];
+    const turnOptions = { ...options, runId, ...(promptBlocks.length ? { skillBlocks: promptBlocks } : {}) };
 
     // Manual-mode safety valve (proactive): if the session is near the manager's
     // context window, summarize it into memory and start fresh before this turn.
@@ -250,6 +253,20 @@ class MessageGateway implements IMessageGateway {
         error: err instanceof Error ? err.message : String(err),
       });
       return response;
+    }
+  }
+
+  // Lets the Orchestrator map a plain "yes" to the right errand tool. Errands
+  // only run with a channel manager, so there is nothing to list without one.
+  private openErrandsBlock(sessionId: string): string | null {
+    try {
+      const errands = buildErrandService(this.logger, this.db, this.sessionManager)?.listByOrigin(sessionId) ?? [];
+      return formatOpenErrandsBlock(errands);
+    } catch (err) {
+      this.logger.warn('Failed to list open errands for the prompt', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
     }
   }
 

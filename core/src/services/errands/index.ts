@@ -141,7 +141,7 @@ class ErrandService implements IErrandService {
     });
     this.pushToSession(
       errand.originSessionId,
-      `❓ Errand "${errand.goal}" needs your input: ${question}\n\nReply with: \`/errand reply ${errand.id} <your answer>\``,
+      `❓ Errand "${errand.goal}" needs your input: ${question}`,
     );
     return updated;
   }

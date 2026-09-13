@@ -175,7 +175,7 @@ describe('errand negotiation across contact and parent sessions', () => {
     const parentNotices = messages.getBySessionId(parent.id);
     expect(parentNotices).toHaveLength(1);
     expect(parentNotices[0].content).toContain(approvalQuestion);
-    expect(parentNotices[0].content).toContain(`/errand reply ${errand.id}`);
+    expect(parentNotices[0].content).not.toContain('/errand reply');
 
     const callsBeforePause = completion.complete.mock.calls.length;
     expect(await peer('14 is now taken, but 11 is still free.')).toBe('');

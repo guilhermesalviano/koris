@@ -11,7 +11,8 @@ export function agentMessagePresentation(message: AgentMessage): Pick<AgentMessa
   if (message.role !== 'assistant') return { content: message.content };
   if (message.senderAgentId && message.senderAgentId !== 'negotiator') return original;
 
-  const question = /^❓ Errand "([\s\S]+?)" needs your input: ([\s\S]+)$/.exec(message.content);
+  // Older escalations ended with a `/errand reply <id>` hint; the Orchestrator now answers for the user.
+  const question = /^❓ Errand "([\s\S]+?)" needs your input: ([\s\S]+?)(?:\n\nReply with: `\/errand reply \S+ <your answer>`)?$/.exec(message.content);
   if (question) {
     return { senderAgentId: 'negotiator', content: `I need your input on “${question[1]}”.\n\n${question[2]}` };
   }

@@ -35,6 +35,16 @@ describe('read-only agent chat', () => {
     expect(html).not.toContain('Read-only');
   });
 
+  it('opens each errand with its own separator instead of a plain time divider', () => {
+    const task: ReadOnlyChatEntry = { ...entry, id: 'errand:e1', kind: 'task', author: 'Errand', content: 'Arrange lunch' };
+    const reply: ReadOnlyChatEntry = { ...entry, id: 'm2', at: entry.at + 60_000 };
+    const html = renderState({ entries: [task, reply] });
+    const separators = [...html.matchAll(/role="separator" aria-label="([^"]*)"/g)].map((match) => match[1]);
+    expect(separators).toHaveLength(1);
+    expect(separators[0]).toMatch(/^New errand · /);
+    expect(html).toContain('border-accent-muted');
+  });
+
   it('distinguishes loading and empty history', () => {
     const loading = renderState({ entries: [], loaded: false, loading: true });
     expect(loading).toContain('Loading conversation…');

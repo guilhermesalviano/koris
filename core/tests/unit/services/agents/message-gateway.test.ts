@@ -5,6 +5,7 @@ import { config } from '../../../../src/config';
 import { applyTestConfigDefaults } from '../../../helpers/test-config';
 import type { ILogger } from '../../../../src/infrastructure/logger';
 import { buildErrandService } from '../../../../src/services/errands';
+import { Errand } from '../../../../src/entities/errand';
 
 vi.mock('../../../../src/services/errands', () => ({ buildErrandService: vi.fn() }));
 
@@ -71,7 +72,7 @@ describe('MessageGateway', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     applyTestConfigDefaults();
-    vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null) } as never);
+    vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), listByOrigin: vi.fn().mockReturnValue([]) } as never);
   });
 
   afterEach(() => {
@@ -603,6 +604,36 @@ describe('MessageGateway', () => {
         undefined,
       );
       expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
+    });
+
+    it('tells a trusted turn about the chat\'s pending errand questions so a plain reply can answer them', async () => {
+      const { gateway, deps } = makeGateway('whatsapp');
+      const listByOrigin = vi.fn().mockReturnValue([
+        new Errand({ id: 'e1', goal: 'Book a class', state: 'awaiting_principal', originSessionId: 'session-1', pendingMessage: 'Wednesday instead?' }),
+        new Errand({ id: 'e2', goal: 'Old errand', state: 'resolved', originSessionId: 'session-1' }),
+      ]);
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), listByOrigin } as never);
+
+      await gateway.handle('sim', 'origin-1', { toolsEnabled: true, isTrustedSender: true });
+
+      expect(listByOrigin).toHaveBeenCalledWith('session-1');
+      const [block] = deps.mainAgent.run.mock.calls[0][0].options.skillBlocks;
+      expect(block).toContain('# Errands In This Chat');
+      expect(block).toContain('[e1] waiting on the human\'s answer — Book a class');
+      expect(block).toContain('Pending question: Wednesday instead?');
+      expect(block).not.toContain('Old errand');
+    });
+
+    it('adds no errand block without open errands or without tools', async () => {
+      const { gateway, deps } = makeGateway('whatsapp');
+      await gateway.handle('hello', 'origin-1', { toolsEnabled: true, isTrustedSender: true });
+      expect(deps.mainAgent.run.mock.calls[0][0].options.skillBlocks).toBeUndefined();
+
+      const listByOrigin = vi.fn().mockReturnValue([new Errand({ id: 'e1', goal: 'Book', state: 'awaiting_principal', originSessionId: 'session-1' })]);
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), listByOrigin } as never);
+      await gateway.handle('hello', 'origin-1', { toolsEnabled: false, isTrustedSender: false });
+      expect(listByOrigin).not.toHaveBeenCalled();
+      expect(deps.mainAgent.run.mock.calls[1][0].options.skillBlocks).toBeUndefined();
     });
 
     it('an untrusted sender with no active errand gets today\'s behaviour: routed to the user session, tools disabled by the caller', async () => {

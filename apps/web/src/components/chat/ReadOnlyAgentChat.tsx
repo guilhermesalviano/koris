@@ -145,10 +145,12 @@ export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, er
           {loaded && entries.length === 0 && <p className="py-12 text-center text-body text-txt-3">{emptyText}</p>}
           {entries.length > 0 && <p className="text-center font-mono text-micro text-txt-3">{historyLabel}</p>}
           {entries.map((entry, index) => {
-            const separator = chatSeparatorLabel(entry.at, entries[index - 1]?.at);
+            // A new errand always opens its own section, labelled with when it started.
+            const task = entry.kind === 'task';
+            const separator = task ? `New errand · ${dayTimeLabel(entry.at)}` : chatSeparatorLabel(entry.at, entries[index - 1]?.at);
             return (
               <Fragment key={entry.id}>
-                {separator && <DateSeparator label={separator} />}
+                {separator && <DateSeparator label={separator} session={task} />}
                 <ReadOnlyChatMessage entry={entry} agentId={agentId} actions={renderEntryActions?.(entry)} />
               </Fragment>
             );

@@ -157,6 +157,43 @@ export interface IStickerRulesGateway {
   deleteById(id: string): boolean;
 }
 
+/** Plain view of a core `Errand` — same meaning, not imported, so tool plugins never depend on core/src. */
+export interface ErrandRecord {
+  id: string;
+  goal: string;
+  /** draft | queued | open | awaiting_peer | awaiting_principal | resolved | failed | cancelled | expired */
+  state: string;
+  originSessionId: string;
+  /** The staged opener (draft/queued) or the question waiting on the human (awaiting_principal). */
+  pendingMessage?: string;
+  /** Set while a staged message has not reached every contact yet. */
+  deliveryError?: string;
+  deliveryIncomplete: boolean;
+  notes?: string;
+  result?: string;
+  createdAt: string;
+}
+
+export interface StartErrandInput {
+  goal: string;
+  channel: string;
+  peerId: string;
+  originSessionId: string;
+}
+
+/** Every method throws when errands are unavailable (no channel manager running) or the operation is refused. */
+export interface IErrandsGateway {
+  listForSession(sessionId: string): ErrandRecord[];
+  /** Has the Negotiator draft the opener and stages the errand; nothing is sent yet. */
+  start(input: StartErrandInput): Promise<{ errand: ErrandRecord; openingMessage: string }>;
+  approve(id: string): Promise<ErrandRecord>;
+  retry(id: string): Promise<ErrandRecord>;
+  /** Resumes an errand waiting on the human; `reply` is what the Negotiator sent the contact. */
+  answer(id: string, answer: string): Promise<{ errand: ErrandRecord; reply: string }>;
+  close(id: string, result: string): Promise<ErrandRecord>;
+  cancel(id: string): Promise<ErrandRecord>;
+}
+
 export interface ToolPluginConfigValues {
   searxngUrl: string;
   allowedDomains: string[];
@@ -174,6 +211,7 @@ export interface ToolPluginContext {
   heartbeats: IHeartbeatGateway;
   channels: IChannelsGateway;
   stickerRules: IStickerRulesGateway;
+  errands: IErrandsGateway;
   security: {
     /** gateErrorForUrl — returns an error message when the URL's host isn't allowlisted, or null when it's OK. */
     gateUrl: (url: string) => string | null;

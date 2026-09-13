@@ -17,7 +17,8 @@ export default defineConfig({
       'build-resources/**',
       'dist-desktop-out/**',
       'plugins/channels/*/**',
-      'plugins/tools/*/**',
+      // plugins/tools/errands is core-owned and tracked (see .gitignore), so its tests run.
+      'plugins/tools/!(errands|*.ts)/**',
     ],
     coverage: {
       provider: 'v8',
@@ -38,7 +39,7 @@ export default defineConfig({
         // keep them out of coverage too, or their bundled size swamps the
         // global thresholds.
         'plugins/channels/*/**',
-        'plugins/tools/*/**',
+        'plugins/tools/!(errands|*.ts)/**',
       ],
     },
     onConsoleLog(log: string, type: 'stdout' | 'stderr'): boolean | void {

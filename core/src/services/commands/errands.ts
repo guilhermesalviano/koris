@@ -1,9 +1,9 @@
 import { DatabaseServiceFactory, IDatabaseService } from '../../infrastructure/db-sqlite';
 import { LoggerFactory } from '../../infrastructure/logger';
 import { ISessionManager, SessionManager } from '../session-manager';
-import { NegotiatorFactory } from '../agents/sub-agents/negotiator/sub-agent';
 import type { ILogger } from '../../infrastructure/logger';
 import { buildErrandService, IErrandService } from '../errands';
+import { startErrand } from '../errands/start';
 import { ErrandRepositoryFactory } from '../../repositories/errand';
 import { CHANNEL_TYPES } from '../../entities/channel';
 import { formatCommandResult } from './format';
@@ -101,20 +101,11 @@ async function createErrand(rest: string, context: CommandContext): Promise<Comm
   const target = { channel: channel.toLowerCase(), peerId };
 
   try {
-    const negotiator = NegotiatorFactory.create(resolved.logger, resolved.db, resolved.sessionManager);
-    const openingMessage = await negotiator.composeOpener({
-      goal: goal.trim(),
-      channel: target.channel,
-      peerId: target.peerId,
+    const { errand, openingMessage } = await startErrand(resolved.logger, resolved.db, resolved.sessionManager, resolved.errandService, {
+      goal,
+      ...target,
       originSessionId: context.sessionId,
     });
-
-    const errand = resolved.errandService.create(
-      goal.trim(),
-      [target],
-      context.sessionId,
-      openingMessage,
-    );
     const staged = errand.state === 'draft'
       ? `Draft message to ${target.peerId}:\n"${openingMessage}"\n\nApprove with \`/errand approve ${errand.id}\` to send it.`
       : `Queued behind an existing errand with that contact — it will start once the other one closes.`;
