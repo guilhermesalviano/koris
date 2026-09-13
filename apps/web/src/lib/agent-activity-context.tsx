@@ -44,7 +44,7 @@ function useAgentActivityState() {
       Date.parse(errand.createdAt), Date.parse(errand.lastProgressAt ?? ''), Date.parse(errand.closedAt ?? ''),
       ...transcript.map((message) => Date.parse(message.createdAt)),
     ])),
-    watcher: latestActivity((watcher.data?.runs ?? []).map((run) => Date.parse(run.createdAt))),
+    watcher: latestActivity((watcher.data?.runs ?? []).map((run) => Date.parse(run.finishedAt))),
   }), [messages, negotiator.data, watcher.data]);
 
   useEffect(() => {

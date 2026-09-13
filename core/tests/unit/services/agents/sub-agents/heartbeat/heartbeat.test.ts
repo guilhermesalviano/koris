@@ -37,7 +37,6 @@ describe('Heartbeat Lifecycle Integration', () => {
     const logger = makeLogger();
     const tasks = [{ id: 't1', cronExpression: '*/5 * * * *', lastRun: undefined, createdAt: new Date() }];
     const repo = { getAll: vi.fn().mockReturnValue(tasks), updateLastRun: vi.fn() };
-    const channelsManager = { sendMessage: vi.fn().mockResolvedValue(undefined) };
     const runRepo = { recordRun: vi.fn(), getLastRun: vi.fn() };
     handlerMock.mockImplementation(async (date) => {
       repo.updateLastRun(tasks[0].id, date);
@@ -46,7 +45,7 @@ describe('Heartbeat Lifecycle Integration', () => {
     // 1. Initial Schedule (at time 0)
     console.log('nextCronFire is:', nextCronFire);
     (nextCronFire as any).mockReturnValue(new Date(Date.now() + 5000));
-    const runner = HeartbeatSingleton.getInstance(logger, repo as any, channelsManager as any, runRepo as any);
+    const runner = HeartbeatSingleton.getInstance(logger, repo as any, runRepo as any);
     runner.start();
 
     expect(nextCronFire).toHaveBeenCalledTimes(1);

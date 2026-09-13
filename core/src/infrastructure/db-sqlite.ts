@@ -112,6 +112,25 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_heartbeat_runs_run_at ON heartbeat_runs(run_at);
       `);
 
+      /**
+       * One row per executed beat (heartbeat_runs only logs the scheduler tick),
+       * kept after a run-once beat is deleted so the Watcher chat can show it.
+       */
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS beat_runs (
+          id TEXT PRIMARY KEY,
+          beat_id TEXT NOT NULL,
+          beat TEXT NOT NULL,
+          beat_type TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('success', 'error')),
+          result TEXT,
+          error_message TEXT,
+          started_at DATETIME NOT NULL,
+          finished_at DATETIME NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_beat_runs_started_at ON beat_runs(started_at);
+      `);
+
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS channels (
           id TEXT PRIMARY KEY,

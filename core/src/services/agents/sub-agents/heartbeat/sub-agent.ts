@@ -12,24 +12,23 @@ import type { ILogger } from "../../../../infrastructure/logger";
 import { IToolsQueue, ToolsQueue } from "../../../tools-queue";
 import { ISubAgent } from "../../../../types/agents";
 import { AgnosticExecutionToolFactory } from "../../../tools";
-import { IChannelsManager } from "../../../../channels";
-import { IChannelService, ChannelServiceFactory } from "../../../channel-service";
 import { IToolCallPipeline, ToolCallPipelineFactory } from "../../tool-call-pipeline";
 import { TaskQueue, sharedSubAgentQueue } from "../queue/task-queue";
 import { subAgentQueuesRegistry } from "../queue/sub-agent-queue-registry";
 import { IImageRepository, ImageRepositoryFactory } from "../../../../repositories/image";
+import { BeatRun, BeatRunRepositoryFactory, IBeatRunRepository } from "../../../../repositories/beat-run";
+import { generateId } from "../../../../utils/generate-id";
 
 class Heartbeat implements ISubAgent<Date> {
   constructor(
     private logger: ILogger,
     private promptRepository: IPromptRepository,
     private heartbeatRepository: IHeartbeatRepository,
-    private toolsQueue: IToolsQueue, 
-    private channelsManager: IChannelsManager,
+    private toolsQueue: IToolsQueue,
     private completionService: IAICompletionService,
     private pipeline: IToolCallPipeline,
-    private channelService: IChannelService,
     private imageRepository: IImageRepository,
+    private beatRunRepository: IBeatRunRepository,
   ) {
     this.queue = config.AI.SUBAGENTS_PARALLEL ? new TaskQueue(1) : sharedSubAgentQueue;
     subAgentQueuesRegistry.register('heartbeat', this.queue);
@@ -94,6 +93,10 @@ class Heartbeat implements ISubAgent<Date> {
 
     const instructions = replacePlaceholders(HEARTBEAT_INSTRUCTIONS, { v1: `${beat.type}` });
     const data = replacePlaceholders(HEARTBEAT_DATA, { v2: `beat: ${beat.beat}` });
+    // Each run gets its own id so its audited LLM and tool calls can be told
+    // apart from the same beat's earlier runs.
+    const runId = generateId();
+    const startedAt = new Date();
 
     try {
       const payload = await this.promptRepository
@@ -108,7 +111,7 @@ class Heartbeat implements ISubAgent<Date> {
 
       const response = await this.completionService.complete(
         payload,
-        { audit: { channel: 'background', runId: beat.id } },
+        { audit: { channel: 'background', runId } },
       );
       let result: string;
       if (response.kind === 'message') {
@@ -123,31 +126,50 @@ class Heartbeat implements ISubAgent<Date> {
             toolsQueue: this.toolsQueue,
             signal: new AbortController().signal,
             onProgress: (progress: string) => this.logger.info(progress),
-            options: { toolsEnabled: true, runId: beat.id },
+            options: { toolsEnabled: true, runId },
             initiatedBy: 'heartbeat',
           },
         );
       }
       this.logger.info(`Heartbeat: Beat "${beat.id}" executed. Result: ${result}`);
-
-      const destination = this.channelService.resolveDelivery(beat);
-      if (destination) {
-        this.channelsManager.sendMessage(destination.channel, destination.target, result).catch(err => {
-          this.logger.error(`Failed to send heartbeat result to ${destination.channel} (${destination.target}) for beat "${beat.id}".`, { err });
-        });
-      } else {
-        this.logger.info(`Heartbeat: No delivery channel recorded for beat "${beat.id}". Result not sent.`);
-      }
+      // Results are only stored for the Watcher chat; beats no longer message a channel.
+      this.recordRun({ id: runId, beat, startedAt, status: 'success', result });
 
       this.logger.info(`Heartbeat: Beat "${beat.id}" completed successfully.`);
     } catch (err) {
       this.logger.error(`Heartbeat: Beat "${beat.id}" failed.`, { err });
+      this.recordRun({ id: runId, beat, startedAt, status: 'error', errorMessage: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  private recordRun(input: {
+    id: string;
+    beat: HeartbeatEntity;
+    startedAt: Date;
+    status: BeatRun['status'];
+    result?: string;
+    errorMessage?: string;
+  }): void {
+    try {
+      this.beatRunRepository.save({
+        id: input.id,
+        beatId: input.beat.id,
+        beat: input.beat.beat,
+        beatType: input.beat.type,
+        status: input.status,
+        result: input.result,
+        errorMessage: input.errorMessage,
+        startedAt: input.startedAt,
+        finishedAt: new Date(),
+      });
+    } catch (err) {
+      this.logger.error(`Heartbeat: Could not record the run of beat "${input.beat.id}".`, { err });
     }
   }
 }
 
 class HeartbeatFactory {
-  static create(logger: ILogger, channelsManager: IChannelsManager): Heartbeat {
+  static create(logger: ILogger): Heartbeat {
     const db = DatabaseServiceFactory.create();
     const promptRepository = PromptRepositoryFactory.create(db, logger, getAIProvider(logger, 'embed'));
     const heartbeatRepository = HeartbeatRepositoryFactory.create(db);
@@ -156,9 +178,9 @@ class HeartbeatFactory {
 
     const completionService = new AICompletionService(() => getAIProvider(logger, 'worker', { background: true }), logger, { role: 'worker', agentName: 'heartbeat' });
     const pipeline = ToolCallPipelineFactory.create(logger);
-    const channelService = ChannelServiceFactory.create(db);
     const imageRepository = ImageRepositoryFactory.create(db);
-    return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, channelsManager, completionService, pipeline, channelService, imageRepository);
+    const beatRunRepository = BeatRunRepositoryFactory.create(db);
+    return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, completionService, pipeline, imageRepository, beatRunRepository);
   }
 }
 

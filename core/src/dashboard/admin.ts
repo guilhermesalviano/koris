@@ -30,6 +30,7 @@ import { MessageRepositoryFactory, type TimelineCursor } from '../repositories/m
 import type { Message } from '../entities/message';
 import { MemoryRepositoryFactory } from '../repositories/memory';
 import { HeartbeatRepositoryFactory } from '../repositories/heartbeat';
+import { BeatRunRepositoryFactory } from '../repositories/beat-run';
 import { ChannelRepositoryFactory } from '../repositories/channel';
 import { CHANNEL_TYPES, ChannelType } from '../entities/channel';
 import { LearnedSkillsRepositoryFactory } from '../repositories/learned-skills';
@@ -389,6 +390,7 @@ class AdminRouterFactory {
     const messageRepo = MessageRepositoryFactory.create(db);
     const memoryRepo = MemoryRepositoryFactory.create(db);
     const heartbeatRepo = HeartbeatRepositoryFactory.create(db);
+    const beatRunRepo = BeatRunRepositoryFactory.create(db);
     const channelRepo = ChannelRepositoryFactory.create(db);
     const outboundRepo = OutboundMessageRepositoryFactory.create(db);
     const learnedSkillsRepo = LearnedSkillsRepositoryFactory.create(db);
@@ -978,6 +980,28 @@ class AdminRouterFactory {
             next_run: next ? formatISO(next) : null,
           };
         }),
+      });
+    });
+
+    // Latest executed beats, newest first, with the tools each run called.
+    router.get('/heartbeats/runs', (req: Request, res: Response) => {
+      const requested = Number(req.query.limit);
+      const limit = Number.isInteger(requested) && requested > 0 ? Math.min(requested, 100) : 20;
+      res.json({
+        items: beatRunRepo.findRecent(limit).map((run) => ({
+          id: run.id,
+          beatId: run.beatId,
+          beat: run.beat,
+          type: run.beatType,
+          status: run.status,
+          result: run.result ?? null,
+          errorMessage: run.errorMessage ?? null,
+          startedAt: formatISO(run.startedAt),
+          finishedAt: formatISO(run.finishedAt),
+          tools: auditRepo.findAll({ limit: 50, offset: 0, filters: { type: 'tool', runId: run.id } })
+            .reverse()
+            .map((row) => ({ name: row.tool_name ?? 'unknown', status: row.status })),
+        })),
       });
     });
 

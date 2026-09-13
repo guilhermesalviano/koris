@@ -191,12 +191,12 @@ export default function HeartbeatsPage() {
                 <p className="text-xs text-txt-3">
                   Format: <code className="font-mono">minute hour day month weekday</code>.{' '}
                   <a
-                    href="https://crontab.guru"
+                    href="https://koaris.com/cron-generator"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-accent-2 underline-offset-2 hover:underline"
                   >
-                    crontab.guru
+                    koaris.com/cron-generator
                   </a>{' '}
                   can help you build one.
                 </p>

@@ -49,7 +49,7 @@ export function ReadOnlyChatMessage({ entry, agentId, actions }: { entry: ReadOn
           {Boolean(entry.details?.length) && (
             <details className="mt-2 border-t border-subtle pt-2">
               <summary className="cursor-pointer text-caption text-txt-2">
-                {task ? 'Current errand details' : 'Activity details'}
+                {entry.detailsLabel ?? (task ? 'Current errand details' : 'Activity details')}
                 {notices?.map((notice) => ` · ${notice.label}`).join('')}
               </summary>
               <dl className="mt-2 space-y-3">
@@ -145,12 +145,11 @@ export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, er
           {loaded && entries.length === 0 && <p className="py-12 text-center text-body text-txt-3">{emptyText}</p>}
           {entries.length > 0 && <p className="text-center font-mono text-micro text-txt-3">{historyLabel}</p>}
           {entries.map((entry, index) => {
-            // A new errand always opens its own section, labelled with when it started.
-            const task = entry.kind === 'task';
-            const separator = task ? `New errand · ${dayTimeLabel(entry.at)}` : chatSeparatorLabel(entry.at, entries[index - 1]?.at);
+            // A new errand or run always opens its own section, labelled with when it started.
+            const separator = entry.section ? `${entry.section} · ${dayTimeLabel(entry.at)}` : chatSeparatorLabel(entry.at, entries[index - 1]?.at);
             return (
               <Fragment key={entry.id}>
-                {separator && <DateSeparator label={separator} session={task} />}
+                {separator && <DateSeparator label={separator} session={Boolean(entry.section)} />}
                 <ReadOnlyChatMessage entry={entry} agentId={agentId} actions={renderEntryActions?.(entry)} />
               </Fragment>
             );

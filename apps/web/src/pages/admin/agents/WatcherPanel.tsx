@@ -48,8 +48,8 @@ export default function WatcherPanel() {
       loaded={data !== null}
       error={error}
       onRefresh={() => void refresh()}
-      emptyText="No runs recorded yet. Scheduled task activity will appear here."
-      historyLabel="Latest 20 recorded Watcher activities"
+      emptyText="No runs recorded yet. Each time a scheduled beat runs, it will appear here."
+      historyLabel="Latest 20 heartbeat runs"
       actions={<Button size="sm" variant="ghost" onClick={() => openConfig('beats')}>Manage beats</Button>}
     >
       {data && (

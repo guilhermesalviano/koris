@@ -296,7 +296,6 @@ class Application implements IApplication {
     const heartbeat = HeartbeatSingleton.getInstance(
       this.logger,
       HeartbeatRepositoryFactory.create(db),
-      channels,
       HeartbeatRunRepositoryFactory.create(db),
     );
     const skillSync = SkillSyncSingleton.getInstance(

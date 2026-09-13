@@ -172,6 +172,24 @@ export interface HeartbeatsResponse {
   items: HeartbeatItem[];
 }
 
+/** One executed beat (`GET /heartbeats/runs`), kept even after a run-once beat is deleted. */
+export interface BeatRunItem {
+  id: string;
+  beatId: string;
+  beat: string;
+  type: string;
+  status: 'success' | 'error';
+  result: string | null;
+  errorMessage: string | null;
+  startedAt: string;
+  finishedAt: string;
+  tools: { name: string; status: string }[];
+}
+
+export interface BeatRunsResponse {
+  items: BeatRunItem[];
+}
+
 export interface ChannelItem {
   id: string;
   channel: string;

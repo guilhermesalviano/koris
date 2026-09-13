@@ -1,5 +1,5 @@
 import { apiRequest } from './api';
-import type { AuditItem, AuditResponse, ErrandItem, ErrandState, ErrandsResponse, ErrandTranscriptMessage, ErrandTranscriptResponse, HeartbeatItem, HeartbeatsResponse } from './types';
+import type { BeatRunItem, BeatRunsResponse, ErrandItem, ErrandState, ErrandsResponse, ErrandTranscriptMessage, ErrandTranscriptResponse, HeartbeatItem, HeartbeatsResponse } from './types';
 
 export interface ReadOnlyChatEntry {
   id: string;
@@ -11,6 +11,10 @@ export interface ReadOnlyChatEntry {
   error?: boolean;
   status?: string;
   details?: { label: string; content: string }[];
+  /** Title of the collapsed details on this entry; task entries default to the errand wording. */
+  detailsLabel?: string;
+  /** Opens a new chat section (e.g. "New errand"), shown with the entry's time in an accented divider. */
+  section?: string;
 }
 
 export interface ErrandConversation {
@@ -21,7 +25,7 @@ export interface ErrandConversation {
 
 export interface WatcherHistory {
   beats: HeartbeatItem[];
-  runs: AuditItem[];
+  runs: BeatRunItem[];
 }
 
 const ERRAND_STATUS: Record<ErrandState, string> = {
@@ -69,6 +73,7 @@ export function buildNegotiatorChat(conversations: readonly ErrandConversation[]
       id: `errand:${errand.id}`,
       at: timestamp(errand.createdAt),
       kind: 'task',
+      section: 'New errand',
       author: 'Errand',
       context: errand.id,
       content: errand.goal,
@@ -95,24 +100,39 @@ export function buildNegotiatorChat(conversations: readonly ErrandConversation[]
   return ordered(entries);
 }
 
-export function buildWatcherChat({ beats, runs }: WatcherHistory): ReadOnlyChatEntry[] {
-  const beatsById = new Map(beats.map((beat) => [beat.id, beat]));
-  return ordered(runs.map((run) => {
-    const beat = run.runId ? beatsById.get(run.runId) : undefined;
+const BEAT_TYPE: Record<string, string> = { reminder: 'Reminder', scheduled_beat: 'Scheduled task' };
+
+/** One section per heartbeat run: the task that fired, then the Watcher's result (or failure). */
+export function buildWatcherChat({ runs }: WatcherHistory): ReadOnlyChatEntry[] {
+  return ordered(runs.flatMap((run) => {
     const failed = run.status === 'error';
-    const activity = run.type === 'tool' || (run.toolCalls ?? 0) > 0;
-    const response = run.response || run.responsePreview || 'No response recorded.';
-    return {
-      id: `audit:${run.id}`,
-      at: timestamp(run.createdAt),
-      kind: activity ? 'activity' : 'assistant',
-      author: 'Watcher',
-      context: beat?.beat ?? (run.runId ? `Scheduled task · ${run.runId}` : 'Scheduled task'),
-      content: failed ? run.errorMessage || run.errorCode || 'Run failed.' : activity ? run.toolName ? `Tool activity · ${run.toolName}` : 'Tool activity' : response,
+    const details: NonNullable<ReadOnlyChatEntry['details']> = run.tools.length > 0
+      ? [{ label: 'Tools used', content: run.tools.map((tool) => tool.status === 'error' ? `${tool.name} (failed)` : tool.name).join('\n') }]
+      : [];
+    const task: ReadOnlyChatEntry = {
+      id: `run:${run.id}`,
+      at: timestamp(run.startedAt),
+      kind: 'task',
+      section: 'Run',
+      author: BEAT_TYPE[run.type] ?? 'Scheduled task',
+      context: '',
+      content: run.beat,
+      status: failed ? 'Failed' : 'Completed',
       error: failed,
-      status: failed ? 'Error' : activity ? 'Recorded activity' : 'Recorded response',
-      details: activity ? [{ label: 'Recorded tool activity', content: response }] : undefined,
+      details,
+      detailsLabel: 'Run details',
     };
+    const reply: ReadOnlyChatEntry = {
+      id: `run:${run.id}:result`,
+      at: Math.max(timestamp(run.finishedAt), task.at),
+      kind: 'assistant',
+      author: 'Watcher',
+      context: run.beat,
+      content: failed ? run.errorMessage || 'Run failed.' : run.result || 'No response recorded.',
+      error: failed,
+      ...(failed ? { status: 'Error' } : {}),
+    };
+    return [task, reply];
   }));
 }
 
@@ -145,7 +165,7 @@ export async function loadNegotiatorChat(signal: AbortSignal, previous: ErrandCo
 export async function loadWatcherChat(signal: AbortSignal): Promise<WatcherHistory> {
   const [beats, runs] = await Promise.all([
     apiRequest<HeartbeatsResponse>('/heartbeats', { signal }),
-    apiRequest<AuditResponse>('/audit?agentName=heartbeat&limit=20', { signal }),
+    apiRequest<BeatRunsResponse>('/heartbeats/runs?limit=20', { signal }),
   ]);
   return { beats: beats.items, runs: runs.items };
 }

@@ -11,6 +11,7 @@ const {
   messageRepo,
   memoryRepo,
   heartbeatRepo,
+  beatRunRepo,
   channelRepo,
   outboundRepo,
   learnedSkillsRepo,
@@ -55,6 +56,7 @@ const {
   },
   messageRepo: { count: vi.fn(), getBySessionId: vi.fn(() => []), getPreviewBySessionId: vi.fn(() => null) },
   memoryRepo: { count: vi.fn(), getBySessionId: vi.fn(() => []) },
+  beatRunRepo: { findRecent: vi.fn(() => []) },
   heartbeatRepo: {
     getAll: vi.fn(() => []),
     getById: vi.fn(),
@@ -125,6 +127,10 @@ vi.mock('../../../src/repositories/memory', () => ({
 
 vi.mock('../../../src/repositories/heartbeat', () => ({
   HeartbeatRepositoryFactory: { create: () => heartbeatRepo },
+}));
+
+vi.mock('../../../src/repositories/beat-run', () => ({
+  BeatRunRepositoryFactory: { create: () => beatRunRepo },
 }));
 
 vi.mock('../../../src/repositories/channel', () => ({
@@ -1665,7 +1671,30 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
     expect(typeof payload.items[0].next_run).toBe('string');
   });
 
-  it('GET /channels returns the stored channel rows', () => {
+  it('GET /heartbeats/runs returns the latest runs with the tools each one called', () => {
+    beatRunRepo.findRecent.mockReturnValue([{
+      id: 'run-1', beatId: 'b1', beat: 'daily digest', beatType: 'scheduled_beat',
+      status: 'success', result: 'Sunny', startedAt: new Date('2026-01-01T09:00:00.000Z'), finishedAt: new Date('2026-01-01T09:00:05.000Z'),
+    }]);
+    auditRepo.findAll.mockReturnValue([
+      { tool_name: 'read_url', status: 'error' },
+      { tool_name: 'search_engine', status: 'success' },
+    ]);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/heartbeats/runs', { limit: '500' }), res);
+
+    expect(beatRunRepo.findRecent).toHaveBeenCalledWith(100);
+    expect(auditRepo.findAll).toHaveBeenCalledWith({ limit: 50, offset: 0, filters: { type: 'tool', runId: 'run-1' } });
+    const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(payload.items).toEqual([expect.objectContaining({
+      id: 'run-1', beatId: 'b1', beat: 'daily digest', type: 'scheduled_beat', status: 'success',
+      result: 'Sunny', errorMessage: null, startedAt: expect.any(String), finishedAt: expect.any(String),
+      tools: [{ name: 'search_engine', status: 'success' }, { name: 'read_url', status: 'error' }],
+    })]);
+  });
+
+    it('GET /channels returns the stored channel rows', () => {
     channelRepo.getAll.mockReturnValue([{ id: 'c1', type: 'telegram', principal: true }]);
     const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();

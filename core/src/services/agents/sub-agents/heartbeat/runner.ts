@@ -1,5 +1,4 @@
 import { config } from '../../../../config';
-import { IChannelsManager } from '../../../../channels';
 import type { ILogger } from '../../../../infrastructure/logger';
 import { HeartbeatFactory } from './sub-agent';
 import { beginFooterActivity } from '../../../../utils/footer-activity';
@@ -21,7 +20,6 @@ class HeartbeatRunner implements IHeartbeatRunner {
   constructor(
     private logger: ILogger,
     private heartbeatRepository: IHeartbeatRepository,
-    private channelsManager: IChannelsManager,
     private heartbeatRunRepository: IHeartbeatRunRepository,
   ) {}
 
@@ -108,7 +106,7 @@ class HeartbeatRunner implements IHeartbeatRunner {
     let errorMessage: string | undefined;
 
     try {
-      const agent = HeartbeatFactory.create(this.logger, this.channelsManager);
+      const agent = HeartbeatFactory.create(this.logger);
       await agent.handler(date);
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error);
@@ -132,14 +130,12 @@ class HeartbeatSingleton {
   static getInstance(
     logger: ILogger,
     heartbeatRepository: IHeartbeatRepository,
-    channelsManager: IChannelsManager,
     heartbeatRunRepository: IHeartbeatRunRepository,
   ): HeartbeatRunner {
     if (!HeartbeatSingleton.instance) {
       HeartbeatSingleton.instance = new HeartbeatRunner(
         logger,
         heartbeatRepository,
-        channelsManager,
         heartbeatRunRepository,
       );
     }

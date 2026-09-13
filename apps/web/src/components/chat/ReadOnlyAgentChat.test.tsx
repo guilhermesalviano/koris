@@ -36,7 +36,7 @@ describe('read-only agent chat', () => {
   });
 
   it('opens each errand with its own separator instead of a plain time divider', () => {
-    const task: ReadOnlyChatEntry = { ...entry, id: 'errand:e1', kind: 'task', author: 'Errand', content: 'Arrange lunch' };
+    const task: ReadOnlyChatEntry = { ...entry, id: 'errand:e1', kind: 'task', section: 'New errand', author: 'Errand', content: 'Arrange lunch' };
     const reply: ReadOnlyChatEntry = { ...entry, id: 'm2', at: entry.at + 60_000 };
     const html = renderState({ entries: [task, reply] });
     const separators = [...html.matchAll(/role="separator" aria-label="([^"]*)"/g)].map((match) => match[1]);

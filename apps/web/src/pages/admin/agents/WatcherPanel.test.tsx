@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { BeatCard } from './WatcherPanel';
 import { ReadOnlyChatMessage } from '../../../components/chat/ReadOnlyAgentChat';
 import { buildWatcherChat } from '../../../lib/subagent-chat';
-import type { AuditItem, HeartbeatItem } from '../../../lib/types';
+import type { BeatRunItem, HeartbeatItem } from '../../../lib/types';
 
 const NOW = new Date('2026-09-13T12:00:00.000Z');
 
@@ -20,18 +20,18 @@ const beat: HeartbeatItem = {
   created_at: '2026-09-01T00:00:00.000Z',
 };
 
-function run(props: Partial<AuditItem> = {}): AuditItem {
+function run(props: Partial<BeatRunItem> = {}): BeatRunItem {
   return {
-    id: 'a1',
-    runId: 'beat-1',
-    type: 'llm',
-    role: 'worker',
-    agentName: 'heartbeat',
-    model: 'gemma',
-    durationMs: 1200,
+    id: 'run-1',
+    beatId: 'beat-1',
+    beat: 'Send me the weather forecast',
+    type: 'scheduled_beat',
     status: 'success',
-    responsePreview: 'Sunny, 24°C',
-    createdAt: '2026-09-13T11:30:00.000Z',
+    result: 'Sunny, 24°C',
+    errorMessage: null,
+    startedAt: '2026-09-13T11:30:00.000Z',
+    finishedAt: '2026-09-13T11:30:04.000Z',
+    tools: [],
     ...props,
   };
 }
@@ -50,21 +50,27 @@ describe('BeatCard', () => {
 });
 
 describe('Watcher chat messages', () => {
-  it('shows the scheduled task and full response with the Watcher avatar', () => {
-    const entry = buildWatcherChat({ beats: [beat], runs: [run({ response: '**Sunny**, 24°C with clear skies all day.' })] })[0];
-    const html = renderToStaticMarkup(<ReadOnlyChatMessage entry={entry} agentId="watcher" />);
-    expect(html).toContain('Send me the weather forecast');
+  it('shows the task that ran and the full response with the Watcher avatar', () => {
+    const [task, reply] = buildWatcherChat({ beats: [beat], runs: [run({ result: '**Sunny**, 24°C with clear skies all day.', tools: [{ name: 'search_engine', status: 'success' }] })] });
+    const taskHtml = renderToStaticMarkup(<ReadOnlyChatMessage entry={task} agentId="watcher" />);
+    expect(taskHtml).toContain('Send me the weather forecast');
+    expect(taskHtml).toContain('Current status: Completed');
+    expect(taskHtml).toContain('Run details');
+    expect(taskHtml).toContain('search_engine');
+    expect(taskHtml).not.toContain('/agents/watcher.jpg');
+
+    const html = renderToStaticMarkup(<ReadOnlyChatMessage entry={reply} agentId="watcher" />);
     expect(html).toContain('<strong>Sunny</strong>');
     expect(html).toContain('clear skies all day.');
     expect(html).toContain('/agents/watcher.jpg');
   });
 
-  it('shows failed activity for a deleted beat without offering resend', () => {
-    const entry = buildWatcherChat({ beats: [], runs: [run({ status: 'error', type: 'tool', toolName: 'web_search', errorMessage: 'timeout', runId: 'deleted-beat-xyz' })] })[0];
-    const html = renderToStaticMarkup(<ReadOnlyChatMessage entry={entry} agentId="watcher" />);
+  it('shows a failed run of a deleted beat without offering resend', () => {
+    const entries = buildWatcherChat({ beats: [], runs: [run({ status: 'error', result: null, errorMessage: 'timeout', beat: 'Old one-time reminder', type: 'reminder' })] });
+    const html = entries.map((entry) => renderToStaticMarkup(<ReadOnlyChatMessage entry={entry} agentId="watcher" />)).join('');
+    expect(html).toContain('Old one-time reminder');
     expect(html).toContain('timeout');
-    expect(html).toContain('deleted-beat-xyz');
-    expect(html).toContain('Activity details');
+    expect(html).toContain('Current status: Failed');
     expect(html).not.toContain('<button');
     expect(html).not.toContain('<details open');
   });
