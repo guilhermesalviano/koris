@@ -12,6 +12,7 @@ import { AIServiceError } from '../services/ai-completion-service';
 import { IMessageGateway } from '../services/agents/message-gateway';
 import type { ImageAttachment } from '../types/messages';
 import { stripInternalStreamMarkers } from '../utils/stream-markers';
+import { serverUrls } from '../utils/network';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { SessionRepositoryFactory } from '../repositories/session';
 import { ISessionManager } from '../services/session-manager';
@@ -476,7 +477,11 @@ class DashboardServer implements WebServerHandle {
       const onListening = (): void => {
         const address = server.address();
         this.boundPort = typeof address === 'object' && address ? address.port : requestedPort;
-        this.logger.info(`Server running at http://localhost:${this.boundPort}`);
+        const urls = serverUrls(this.boundPort, host);
+        this.logger.info(`Server running at ${urls.local}`);
+        if (urls.lan.length > 0) {
+          this.logger.info(`On your network: ${urls.lan.join(', ')}`);
+        }
         this.logSetupInstructionsIfUnconfigured();
         resolve();
       };
