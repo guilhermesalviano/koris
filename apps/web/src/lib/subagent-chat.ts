@@ -176,6 +176,19 @@ export interface NegotiationCenterData {
   errandsVersion: string;
 }
 
+/**
+ * Changes whenever the negotiation center has something new: the errand list
+ * fingerprint, the notices, or the pending questions. Null before the first load.
+ */
+export function negotiationCenterVersion(data: NegotiationCenterData | null): string | null {
+  if (!data) return null;
+  return JSON.stringify([
+    data.errandsVersion,
+    data.notices.length, data.notices[data.notices.length - 1]?.id ?? null,
+    data.pending.map((question) => [question.errandId, question.kind, question.askedAt]),
+  ]);
+}
+
 export async function loadNegotiatorNotices(signal: AbortSignal): Promise<NegotiationCenterData> {
   const { messages, pending, errandsVersion } = await apiRequest<NegotiatorNoticesResponse>('/agents/negotiator/notices?limit=200', { signal });
   return { notices: messages, pending: [...pending].sort((a, b) => timestamp(b.askedAt) - timestamp(a.askedAt)), errandsVersion };

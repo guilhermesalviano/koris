@@ -178,6 +178,16 @@ describe('ErrandService', () => {
       expect(errandRepo.update).toHaveBeenCalledWith('e1', expect.objectContaining({ state: 'awaiting_peer', pendingMessage: undefined }));
     });
 
+    it('logs instead of failing when a notice cannot be delivered to a WhatsApp principal', async () => {
+      const { service, errandRepo, sessionRepo, outbound, logger } = makeService();
+      errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'buy milk', state: 'awaiting_peer', originSessionId: 'origin-1' }));
+      sessionRepo.findById.mockReturnValue({ id: 'origin-1', channel: 'whatsapp', peerId: '999', kind: 'user' });
+      outbound.send.mockRejectedValue(new Error('offline'));
+
+      expect(service.escalate('e1', 'which brand?').state).toBe('awaiting_principal');
+      await vi.waitFor(() => expect(logger.warn).toHaveBeenCalledWith('Could not deliver errand notice.'));
+    });
+
     it('does not post the sent opener in the origin chat', async () => {
       const { service, db, errandRepo, sessionRepo } = makeService();
       errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'Pedir um lanche', state: 'draft', originSessionId: 'origin-1', pendingMessage: 'Oi! Um lanche?' }));

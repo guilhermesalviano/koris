@@ -22,6 +22,16 @@ function makeMemory() {
 }
 
 describe('MemoryRepository', () => {
+  it('counts memories other than reminders', () => {
+    const db = makeDb();
+    const repository = new MemoryRepository(db as never);
+    db.get.mockReturnValue({ total: 7 });
+    expect(repository.count()).toBe(7);
+    expect(db.get.mock.calls[0][0]).toContain("type != 'reminder'");
+    db.get.mockReturnValue(undefined);
+    expect(repository.count()).toBe(0);
+  });
+
   it('save inserts the memory with JSON-encoded embedding', () => {
     const db = makeDb();
     const repository = new MemoryRepository(db as never);

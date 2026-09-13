@@ -366,6 +366,35 @@ describe('errand recovery and privacy', () => {
     expect(await version()).not.toBe(contacted);
   });
 
+  it('lists, closes and cancels errands through the admin API, and fingerprints a partial delivery', async () => {
+    const { manager, service, parent, channels } = setup();
+    const first = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Can I order a sandwich?');
+    const second = service.create('Book a haircut', [{ channel: 'whatsapp', peerId: '777' }], parent.id, 'Is 10 free?');
+    const router = AdminRouterFactory.create(logger, db, {} as never, manager);
+    const call = async (path: string, method: 'get' | 'post', params: Record<string, string> = {}, body: unknown = undefined) => {
+      const layer = router.stack.find((item) => item.route?.path === path && item.route.methods[method]);
+      const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      await layer!.route.stack[0].handle({ params, query: {}, body }, res, vi.fn());
+      return res;
+    };
+    const fingerprint = async () => (await call('/agents/negotiator/notices', 'get')).json.mock.calls[0][0].errandsVersion as string;
+
+    const listed = (await call('/errands', 'get')).json.mock.calls[0][0];
+    expect(listed.items.map((item: { id: string }) => item.id).sort()).toEqual([first.id, second.id].sort());
+    expect(listed.items[0].targets).toEqual([expect.objectContaining({ channel: 'whatsapp', kind: 'delegated' })]);
+
+    const beforeDelivery = await fingerprint();
+    channels.sendMessage.mockRejectedValueOnce(new Error('offline'));
+    await expect(service.approve(first.id)).rejects.toThrow('Message delivery failed');
+    expect(await fingerprint()).not.toBe(beforeDelivery);
+
+    const closed = await call('/errands/:id/close', 'post', { id: first.id }, { result: 'Ordered by phone' });
+    expect(closed.json.mock.calls[0][0]).toMatchObject({ state: 'resolved', result: 'Ordered by phone' });
+    const cancelled = await call('/errands/:id/cancel', 'post', { id: second.id });
+    expect(cancelled.json.mock.calls[0][0]).toMatchObject({ state: 'cancelled' });
+    expect((await call('/errands/:id/cancel', 'post', { id: 'missing' })).status).toHaveBeenCalledWith(400);
+  });
+
   it('confirms a proposed result through the admin API and lists it as a pending confirmation', async () => {
     const { manager, service, parent, channels } = setup();
     const errand = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Can I order a sandwich?');

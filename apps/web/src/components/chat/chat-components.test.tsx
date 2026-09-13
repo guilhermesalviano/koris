@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { DateSeparator } from './DateSeparator';
 import { MessageBubble } from './MessageBubble';
+import { cycleIndex } from './shared';
 import type { ChatMessage } from '../../lib/chat-context';
 
 describe('DateSeparator', () => {
@@ -220,5 +221,14 @@ describe('MessageBubble', () => {
       />,
     );
     expect(htmlLoading).toContain('Loading…');
+  });
+});
+
+describe('cycleIndex', () => {
+  it('steps through a set and wraps at both ends', () => {
+    expect(cycleIndex(0, 1, 3)).toBe(1);
+    expect(cycleIndex(2, 1, 3)).toBe(0);
+    expect(cycleIndex(0, -1, 3)).toBe(2);
+    expect(cycleIndex(0, 1, 0)).toBe(0);
   });
 });

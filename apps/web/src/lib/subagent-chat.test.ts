@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildNegotiationCenter, buildNegotiatorChat, buildWatcherChat, headerErrand, loadNegotiatorChat, loadNegotiatorNotices, loadWatcherChat, negotiationSteps } from './subagent-chat';
+import { buildNegotiationCenter, buildNegotiatorChat, buildWatcherChat, headerErrand, loadNegotiatorChat, loadNegotiatorNotices, loadWatcherChat, negotiationCenterVersion, negotiationSteps } from './subagent-chat';
 import type { BeatRunItem, ErrandItem, ErrandTranscriptMessage } from './types';
 
 const errand: ErrandItem = {
@@ -142,6 +142,18 @@ describe('read-only history loading', () => {
     expect(fetched.map((url) => url.split('/')[4]).sort()).toEqual(['brand-new', 'failed', 'new-message', 'progressed']);
     expect(conversations[0]).toEqual({ errand: items[0], messages: [message] });
     expect(conversations[1].messages[0].id).toContain('/progressed/');
+  });
+
+  it('versions the negotiation center by errand fingerprint, notices and pending questions', () => {
+    const question = { errandId: 'a', goal: 'Lunch', kind: 'question' as const, question: 'Noon?', askedAt: '2026-09-13T10:00:00Z' };
+    const notice = { id: 'n1', role: 'assistant', content: 'Noon?', createdAt: '2026-09-13T10:00:00Z', errandId: 'a' };
+    const base = { notices: [notice], pending: [question], errandsVersion: 'v1' };
+    expect(negotiationCenterVersion(null)).toBeNull();
+    const version = negotiationCenterVersion(base);
+    expect(negotiationCenterVersion({ ...base })).toBe(version);
+    expect(negotiationCenterVersion({ ...base, errandsVersion: 'v2' })).not.toBe(version);
+    expect(negotiationCenterVersion({ ...base, notices: [notice, { ...notice, id: 'n2' }] })).not.toBe(version);
+    expect(negotiationCenterVersion({ ...base, pending: [{ ...question, kind: 'confirmation' }] })).not.toBe(version);
   });
 
   it('loads the notices and the pending questions in one request, newest question first', async () => {

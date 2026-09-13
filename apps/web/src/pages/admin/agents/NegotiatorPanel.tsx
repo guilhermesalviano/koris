@@ -1,20 +1,19 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Toast, useToast } from '../../../components/AdminUI';
 import ImageLightbox from '../../../components/ImageLightbox';
-import { imageSrc } from '../../../components/chat/shared';
+import { cycleIndex, imageSrc } from '../../../components/chat/shared';
 import { DateSeparator } from '../../../components/chat/DateSeparator';
 import { ReadOnlyAgentChat, ReadOnlyChatMessage } from '../../../components/chat/ReadOnlyAgentChat';
 import { Button, Input, Select } from '../../../components/ui';
-import { apiRequest } from '../../../lib/api';
+import { answerErrand, runErrandAction, type ErrandAction } from '../../../lib/errand-api';
 import { cn } from '../../../lib/cn';
 import { chatSeparatorLabel, dayTimeLabel } from '../../../lib/date';
-import { buildNegotiationCenter, buildNegotiatorChat, headerErrand, loadNegotiatorNotices, negotiationSteps, type ReadOnlyChatEntry } from '../../../lib/subagent-chat';
+import { buildNegotiationCenter, buildNegotiatorChat, headerErrand, loadNegotiatorNotices, negotiationCenterVersion, negotiationSteps, type ReadOnlyChatEntry } from '../../../lib/subagent-chat';
 import { isNearBottom } from '../../../lib/timeline';
 import { useAgentActivity } from '../../../lib/agent-activity-context';
 import { useReadOnlyData } from '../../../lib/use-read-only-data';
 import type { ErrandItem, ErrandState, ImageAttachment, NegotiatorPendingQuestion } from '../../../lib/types';
 
-type ErrandAction = 'approve' | 'cancel' | 'close' | 'confirm' | 'retry';
 
 const CLOSED_STATES: ErrandState[] = ['resolved', 'failed', 'cancelled', 'expired'];
 
@@ -59,7 +58,7 @@ export function ErrandActions({ errand, onChanged, notify, initialAnswering = fa
   }
 
   const act = (action: ErrandAction) => run(
-    () => apiRequest(`/errands/${encodeURIComponent(errand.id)}/${action}`, { method: 'POST' }),
+    () => runErrandAction(errand.id, action),
     DONE_MESSAGE[action],
     `Failed to ${action} errand`,
   );
@@ -68,7 +67,7 @@ export function ErrandActions({ errand, onChanged, notify, initialAnswering = fa
     const text = answer.trim();
     if (!text || busy) return;
     const sent = await run(
-      () => apiRequest(`/errands/${encodeURIComponent(errand.id)}/reply`, { method: 'POST', body: JSON.stringify({ answer: text }) }),
+      () => answerErrand(errand.id, text),
       'Answer sent to contact, errand resumed',
       'Failed to send answer',
     );
@@ -191,7 +190,7 @@ export function NegotiationCenter({ entries, pending, loading, loaded, error, no
     const text = answer.trim();
     if (!target || !text || sending) return;
     const sent = await send(
-      () => apiRequest(`/errands/${encodeURIComponent(target.errandId)}/reply`, { method: 'POST', body: JSON.stringify({ answer: text }) }),
+      () => answerErrand(target.errandId, text),
       confirming ? 'Requirement sent to contact, errand resumed' : 'Answer sent to contact, errand resumed',
       'Failed to send answer',
     );
@@ -201,7 +200,7 @@ export function NegotiationCenter({ entries, pending, loading, loaded, error, no
   function resolve() {
     if (!target || sending) return;
     void send(
-      () => apiRequest(`/errands/${encodeURIComponent(target.errandId)}/confirm`, { method: 'POST' }),
+      () => runErrandAction(target.errandId, 'confirm'),
       'Closing message sent, errand resolved',
       'Failed to resolve errand',
     );
@@ -275,7 +274,7 @@ export default function NegotiatorPanel() {
   const [toastMsg, showToast, isError] = useToast();
   const [preview, setPreview] = useState<{ images: ImageAttachment[]; index: number } | null>(null);
   const cyclePreview = (step: number) => setPreview((current) => current && {
-    ...current, index: (current.index + step + current.images.length) % current.images.length,
+    ...current, index: cycleIndex(current.index, step, current.images.length),
   });
   const notices = useReadOnlyData(loadNegotiatorNotices);
   const centerEntries = useMemo(() => buildNegotiationCenter(notices.data?.notices ?? [], [...errands.values()]), [notices.data, errands]);
@@ -301,11 +300,7 @@ export default function NegotiatorPanel() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refreshNotices]);
 
-  const noticesVersion = notices.data && JSON.stringify([
-    notices.data.errandsVersion,
-    notices.data.notices.length, notices.data.notices[notices.data.notices.length - 1]?.id ?? null,
-    notices.data.pending.map((question) => [question.errandId, question.askedAt]),
-  ]);
+  const noticesVersion = negotiationCenterVersion(notices.data);
   const seenVersion = useRef<string | null>(null);
   useEffect(() => {
     if (!noticesVersion) return;
