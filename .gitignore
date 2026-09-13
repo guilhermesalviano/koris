@@ -62,6 +62,10 @@ plugins/tools/*
 !plugins/tools/define-tool.test.ts
 !plugins/tools/errands
 !plugins/tools/send-message
+!plugins/tools/delete-beat
+!plugins/tools/list-beats
+!plugins/tools/set-beat
+!plugins/tools/update-beat
 !plugins/tools/index.ts
 !plugins/tools/runtime.ts
 !plugins/tools/runtime.test.ts
