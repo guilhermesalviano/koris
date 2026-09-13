@@ -20,23 +20,25 @@ describe('parseNegotiatorResponse', () => {
   it('unwraps a fenced JSON code block', () => {
     const verdict = parseNegotiatorResponse('```json\n{"action":"resolved","reply":"Great, see you then!","detail":"scheduled for 3pm"}\n```');
 
-    expect(verdict.action).toBe('resolved');
-    expect(verdict.detail).toBe('scheduled for 3pm');
+    expect(verdict?.action).toBe('resolved');
+    expect(verdict?.detail).toBe('scheduled for 3pm');
   });
 
-  it('defaults to "continue" for an unrecognised action', () => {
-    const verdict = parseNegotiatorResponse(JSON.stringify({ action: 'bogus', reply: 'hi' }));
-    expect(verdict.action).toBe('continue');
-  });
-
-  it('treats unparsable text as a plain "continue" reply rather than dropping it', () => {
-    const verdict = parseNegotiatorResponse('Sure, I can do that for you.');
-    expect(verdict).toEqual({ action: 'continue', reply: 'Sure, I can do that for you.' });
+  it.each([
+    'Sure, I can do that for you.',
+    '{"action":"bogus","reply":"hi"}',
+    '{"action":"continue","reply":"Offer 80?","notes":"Private ceiling is 100"',
+    '{"action":"continue","reply":42}',
+    '{"action":"continue","notes":[]}',
+    '{"action":"escalate","detail":null}',
+    '[]', 'null', '{}',
+  ])('rejects unsafe or invalid verdict %s', (response) => {
+    expect(parseNegotiatorResponse(response)).toBeNull();
   });
 
   it('defaults reply to an empty string when absent from valid JSON', () => {
     const verdict = parseNegotiatorResponse(JSON.stringify({ action: 'escalate', detail: 'need your ok' }));
-    expect(verdict.reply).toBe('');
-    expect(verdict.detail).toBe('need your ok');
+    expect(verdict?.reply).toBe('');
+    expect(verdict?.detail).toBe('need your ok');
   });
 });

@@ -9,6 +9,7 @@ interface ErrandRow {
   state: ErrandState;
   origin_session_id: string;
   pending_message?: string;
+  pending_delivery?: string;
   notes?: string;
   result?: string;
   created_at: string;
@@ -44,6 +45,7 @@ function mapRowToErrand(row: ErrandRow): Errand {
     state: row.state,
     originSessionId: row.origin_session_id,
     pendingMessage: row.pending_message ?? undefined,
+    pendingDelivery: row.pending_delivery ? JSON.parse(row.pending_delivery) : undefined,
     notes: row.notes ?? undefined,
     result: row.result ?? undefined,
     createdAt: row.created_at,
@@ -57,8 +59,8 @@ class ErrandRepository implements IErrandRepository {
 
   save(errand: Errand): void {
     this.db.run(
-      `INSERT INTO errands (id, goal, state, origin_session_id, pending_message, notes, result, created_at, last_progress_at, closed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO errands (id, goal, state, origin_session_id, pending_message, notes, result, created_at, last_progress_at, closed_at, pending_delivery)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         errand.id,
         errand.goal,
@@ -70,6 +72,7 @@ class ErrandRepository implements IErrandRepository {
         errand.createdAt,
         errand.lastProgressAt ?? null,
         errand.closedAt ?? null,
+        errand.pendingDelivery ? JSON.stringify(errand.pendingDelivery) : null,
       ],
     );
   }
@@ -80,7 +83,7 @@ class ErrandRepository implements IErrandRepository {
 
     for (const [key, value] of Object.entries(updates)) {
       fields.push(`${camelToSnakeCase(key)} = ?`);
-      values.push(value === undefined ? null : value);
+      values.push(value === undefined ? null : key === 'pendingDelivery' ? JSON.stringify(value) : value);
     }
 
     if (fields.length === 0) return;

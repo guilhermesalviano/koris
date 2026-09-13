@@ -25,20 +25,21 @@ function tryParseJson(text: string): unknown {
   }
 }
 
-// A negotiator response that fails to parse is treated as a plain reply that
-// keeps the negotiation going, rather than silently dropped — the LLM still
-// said *something* useful to the peer even if it missed the JSON contract.
-export function parseNegotiatorResponse(text: string): NegotiatorVerdict {
+export function parseNegotiatorResponse(text: string): NegotiatorVerdict | null {
   const parsed = tryParseJson(text);
 
-  if (parsed && typeof parsed === 'object') {
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
     const record = parsed as Record<string, unknown>;
-    const action = typeof record.action === 'string' && isNegotiatorAction(record.action) ? record.action : 'continue';
+    if (typeof record.action !== 'string' || !isNegotiatorAction(record.action)) return null;
+    for (const field of ['reply', 'notes', 'detail']) {
+      if (record[field] !== undefined && typeof record[field] !== 'string') return null;
+    }
+    const action = record.action;
     const reply = typeof record.reply === 'string' ? record.reply.trim() : '';
     const notes = typeof record.notes === 'string' ? record.notes.trim() : undefined;
     const detail = typeof record.detail === 'string' ? record.detail.trim() : undefined;
     return { action, reply, notes, detail };
   }
 
-  return { action: 'continue', reply: text.trim() };
+  return null;
 }

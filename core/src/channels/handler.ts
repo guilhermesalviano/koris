@@ -78,6 +78,7 @@ class ChannelHandler implements IChannelHandler {
         },
       );
       const resolved = await resolveResponse(response);
+      if (!resolved.trim()) return true;
       const mode = this.readResponseMode(target);
       const canSendAudio = typeof this.reply.sendAudio === 'function';
       handlerLogger?.info(

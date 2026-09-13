@@ -137,7 +137,7 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
   {
     name: '/errand',
     summary: 'Start or manage a delegated conversation with someone else',
-    usage: '/errand [<goal> with <contact> on <channel>|approve <id>|close <id>|cancel <id>]',
+    usage: '/errand [<goal> with <contact> on <channel>|approve <id>|reply <id> <answer>|retry <id>|close <id>|cancel <id>]',
     trusted: true,
     details:
       'Without arguments, lists errands started from this session. ' +
@@ -145,7 +145,7 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
       'it does nothing until approved. `/errand approve <id>` sends the opening message ' +
       'and starts the negotiation; koris then drives it autonomously, escalating back to ' +
       'you when it needs your input, until it resolves. `/errand close <id>` marks it ' +
-      'resolved manually; `/errand cancel <id>` cancels it.',
+      'resolved manually; `/errand cancel <id>` cancels it. `/errand retry <id>` retries a saved pending message only to targets that have not received it.',
   },
   {
     name: '/exit',

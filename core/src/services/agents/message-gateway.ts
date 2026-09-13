@@ -20,6 +20,7 @@ import { shouldAutoCompact } from './context-budget';
 import { IChannelService, ChannelServiceFactory } from '../channel-service';
 import type { InboundInput, IMessageGateway, StickerReference } from '../../../../plugins/channels/contracts';
 import { buildErrandService } from '../errands';
+import { runErrandOperation } from '../errands/operations';
 import { Negotiator, NegotiatorFactory } from './sub-agents/negotiator/sub-agent';
 
 export type { InboundInput, IMessageGateway };
@@ -56,19 +57,6 @@ function normalizeInput(input: InboundInput): { text: string; images?: ImageAtta
 }
 
 class MessageGateway implements IMessageGateway {
-  private readonly delegatedTurns = new Map<string, Promise<ProcessedMessage>>();
-
-  private async runDelegatedTurn(errandId: string, run: () => Promise<ProcessedMessage>): Promise<ProcessedMessage> {
-    const previous = this.delegatedTurns.get(errandId) ?? Promise.resolve();
-    const turn = previous.catch(() => undefined).then(run);
-    this.delegatedTurns.set(errandId, turn);
-    try {
-      return await turn;
-    } finally {
-      if (this.delegatedTurns.get(errandId) === turn) this.delegatedTurns.delete(errandId);
-    }
-  }
-
   constructor(
     private logger: ILogger,
     private channel: string,
@@ -110,7 +98,7 @@ class MessageGateway implements IMessageGateway {
       // Delegated turn: the negotiator drives it end to end — commands and
       // tools are never dispatched for a contact's delegated message. Read and
       // persist within the queue so the next turn sees the preceding exchange.
-      return this.runDelegatedTurn(activeErrand.errand.id, async () => {
+      return runErrandOperation(activeErrand.errand.id, async () => {
         const messageHistory = messageService.getHistory();
         messageService.save({ role: 'user', content: safeMessage, images });
         const result = await this.negotiator.run({

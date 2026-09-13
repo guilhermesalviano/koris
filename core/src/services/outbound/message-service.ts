@@ -50,9 +50,17 @@ class OutboundMessageService implements IOutboundMessageService {
     });
     this.outboundMessageRepository.save(message);
 
-    // Record what koris said in the target's own transcript so the session
-    // isn't half-deaf from turn two: without this, the session holds the
-    // contact's replies but never what was sent to them.
+    try {
+      await this.channelsManager.sendMessage(delivery.channel, delivery.target, input.content);
+      this.outboundMessageRepository.markSent(message.id);
+      this.logger.info('Outbound message sent', { id: message.id, channel: delivery.channel, target: delivery.target });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      this.outboundMessageRepository.markFailed(message.id, errorMessage);
+      this.logger.error('Outbound message failed', { id: message.id, error: errorMessage });
+      return this.outboundMessageRepository.getById(message.id) ?? new OutboundMessage({ ...message, status: 'failed', errorMessage });
+    }
+
     try {
       const sessionService = input.sessionId
         ? this.sessionManager.getSessionServiceById(input.sessionId)
@@ -68,16 +76,6 @@ class OutboundMessageService implements IOutboundMessageService {
         target: delivery.target,
         error: err instanceof Error ? err.message : String(err),
       });
-    }
-
-    try {
-      await this.channelsManager.sendMessage(delivery.channel, delivery.target, input.content);
-      this.outboundMessageRepository.markSent(message.id);
-      this.logger.info('Outbound message sent', { id: message.id, channel: delivery.channel, target: delivery.target });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      this.outboundMessageRepository.markFailed(message.id, errorMessage);
-      this.logger.error('Outbound message failed', { id: message.id, error: errorMessage });
     }
 
     return this.outboundMessageRepository.getById(message.id) ?? message;

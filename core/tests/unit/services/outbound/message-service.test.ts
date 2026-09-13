@@ -60,7 +60,7 @@ describe('OutboundMessageService', () => {
     expect(result.target).toBe('987654321');
   });
 
-  it('records what was sent into the target session transcript before delivering', async () => {
+  it('records what was sent into the target session transcript after successful delivery', async () => {
     const { service, sessionManager, db } = makeService();
 
     await service.send({ content: 'Olá!', channel: 'telegram', target: '987654321' });
@@ -109,13 +109,15 @@ describe('OutboundMessageService', () => {
         }),
       ),
     });
-    const { service } = makeService(channels, outboundRepo);
+    const { service, db, sessionManager } = makeService(channels, outboundRepo);
 
     const result = await service.send({ content: 'Olá', channel: 'telegram', target: '111' });
 
     expect(outboundRepo.markFailed).toHaveBeenCalledWith(expect.any(String), 'channel down');
     expect(result.status).toBe('failed');
     expect(result.errorMessage).toBe('channel down');
+    expect(db.run).not.toHaveBeenCalled();
+    expect(sessionManager.getSessionService).not.toHaveBeenCalled();
   });
 
   it('throws for an invalid channel', async () => {

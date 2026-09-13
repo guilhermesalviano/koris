@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Errand resume failures no longer forward private principal instructions, and invalid negotiator output cannot leak internal JSON notes to contacts.
+- Errand approval/resume now awaits delivery. Failed messages remain pending for manual retry through `/errand retry <id>` or the dashboard; durable per-target receipts prevent resending to successful targets after restart. Existing errand databases automatically gain the nullable `pending_delivery` column.
+- Late errand notices stay in their original transcript after session rotation. Stale errands release capacity and eligible queued work before new errands are admitted.
+- The Errands page displays staged messages, escalation questions, and delivery failures with a Retry Send action.
+
 - Session metadata/message-count updates now write a sparse patch instead of the whole session row, which previously reopened a just-closed session (`ended_at` resurrected to null) on the next message after `/clear`.
 - Ending a session and starting its replacement (`/clear`, `/compact`, idle-TTL rotation) is now atomic — a failed insert can no longer leave a channel with zero open sessions.
 - The admin API's session delete/create routes now invalidate the in-process session cache, instead of leaving it holding a stale or deleted session.

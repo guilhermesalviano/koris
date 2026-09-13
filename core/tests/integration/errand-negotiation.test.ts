@@ -62,7 +62,7 @@ describe('errand negotiation across contact and parent sessions', () => {
     expect(SessionRepositoryFactory.create(db).findById(parent.id)?.endedAt).toBeFalsy();
     expect(manager.getSessionService({ channel: 'web', peerId: 'web' }).getSession().id).toBe(parent.id);
 
-    service.approve(first.id);
+    await service.approve(first.id);
     expect(messageRepo.getBySessionId(firstId).map((m) => m.content)).toEqual(['First opener']);
     expect(messageRepo.getBySessionId(secondId)).toEqual([]);
     expect(messageRepo.getBySessionId(oldContact.id).map((m) => m.content)).toEqual(['Unrelated previous errand']);
@@ -89,7 +89,7 @@ describe('errand negotiation across contact and parent sessions', () => {
 
     restarted.resolve(first.id, 'Booked');
     expect(restarted.get(second.id)?.state).toBe('draft');
-    restarted.approve(second.id);
+    await restarted.approve(second.id);
     expect(restarted.findActiveForPeer('whatsapp', '555')?.sessionId).toBe(secondId);
     expect(MessageRepositoryFactory.create(db).getBySessionId(secondId).map((m) => m.content)).toEqual(['Second opener']);
     expect(SessionRepositoryFactory.create(db).findById(parent.id)?.endedAt).toBeFalsy();
@@ -147,7 +147,7 @@ describe('errand negotiation across contact and parent sessions', () => {
 
     const draft = await negotiator.composeOpener({ goal, channel: 'whatsapp', peerId: '555', originSessionId: parent.id });
     const errand = errands.create(goal, [{ channel: 'whatsapp', peerId: '555' }], parent.id, draft);
-    errands.approve(errand.id);
+    await errands.approve(errand.id);
     const [delegatedId] = ErrandRepositoryFactory.create(db).findTargets(errand.id);
     expect(channels.sendMessage).toHaveBeenCalledWith('whatsapp', '555', opener);
     expect(messages.getBySessionId(delegatedId).map((m) => m.content)).toEqual([opener]);

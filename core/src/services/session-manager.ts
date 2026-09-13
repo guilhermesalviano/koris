@@ -57,8 +57,10 @@ export class SessionManager implements ISessionManager {
       // Refresh recency for the LRU eviction order.
       const cached = this.byIdCache.get(sessionId)!;
       this.byIdCache.delete(sessionId);
-      this.byIdCache.set(sessionId, cached);
-      return cached;
+      if (cached.getSession().id === sessionId) {
+        this.byIdCache.set(sessionId, cached);
+        return cached;
+      }
     }
 
     const session = this.sessionRepository.findById(sessionId);
@@ -83,6 +85,9 @@ export class SessionManager implements ISessionManager {
 
   invalidate(sessionId: string): void {
     this.byIdCache.delete(sessionId);
+    for (const [id, service] of this.byIdCache.entries()) {
+      if (service.getSession().id === sessionId) this.byIdCache.delete(id);
+    }
     for (const [composite, service] of this.cache.entries()) {
       if (service.getSession().id === sessionId) {
         this.cache.delete(composite);

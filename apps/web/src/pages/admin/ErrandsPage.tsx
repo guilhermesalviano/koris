@@ -47,6 +47,23 @@ function sortErrands(items: ErrandItem[]): ErrandItem[] {
   });
 }
 
+export function ErrandPendingMessage({ errand }: { errand: Pick<ErrandItem, 'state' | 'pendingMessage' | 'delivery'> }) {
+  return <>
+    {errand.pendingMessage && ['draft', 'queued', 'awaiting_principal'].includes(errand.state) && (
+      <div className="mt-3 rounded-md border border-subtle p-3 text-xs">
+        <div className="font-semibold text-txt-2">{errand.state === 'awaiting_principal' ? 'Question awaiting your answer' : 'Message to send'}</div>
+        <div className="mt-1 whitespace-pre-wrap text-txt">{errand.pendingMessage}</div>
+      </div>
+    )}
+    {errand.delivery && (
+      <div role="status" className="mt-2 text-xs text-amber-400">
+        {errand.delivery.error ?? 'Message delivery pending.'} {errand.delivery.sent}/{errand.delivery.total} contacts received the message.
+        {' '}Retry sends the saved message only to the remaining contacts.
+      </div>
+    )}
+  </>;
+}
+
 export default function ErrandsPage() {
   const [data, setData] = useState<ErrandsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +110,7 @@ export default function ErrandsPage() {
   };
 
   const submitAnswer = async (id: string) => {
-    if (!answerText.trim()) return;
+    if (!answerText.trim() || busyId === id) return;
     setBusyId(id);
     try {
       await apiRequest<{ errand: ErrandItem; reply: string }>(`/errands/${id}/reply`, {
@@ -103,7 +120,6 @@ export default function ErrandsPage() {
       showToast('Answer sent to contact, errand resumed');
       setAnsweringId(null);
       setAnswerText('');
-      load();
       if (expandedErrandId === id) {
         void toggleTranscript(id);
       }
@@ -111,19 +127,20 @@ export default function ErrandsPage() {
       showToast(err instanceof Error ? err.message : 'Failed to send answer', true);
     } finally {
       setBusyId(null);
+      void load();
     }
   };
 
-  async function act(id: string, action: 'approve' | 'cancel' | 'close') {
+  async function act(id: string, action: 'approve' | 'cancel' | 'close' | 'retry') {
     setBusyId(id);
     try {
       await apiRequest(`/errands/${id}/${action}`, { method: 'POST' });
-      showToast(`Errand ${action === 'approve' ? 'approved' : action === 'cancel' ? 'cancelled' : 'closed'}`);
-      load();
+      showToast(`Errand ${action === 'approve' ? 'approved' : action === 'retry' ? 'message delivered' : action === 'cancel' ? 'cancelled' : 'closed'}`);
     } catch (err) {
       showToast(err instanceof Error ? err.message : `Failed to ${action} errand`, true);
     } finally {
       setBusyId(null);
+      void load();
     }
   }
 
@@ -150,6 +167,7 @@ export default function ErrandsPage() {
                     <span className="font-mono text-[10px] text-txt-3">· mother session: {errand.originSessionId.slice(0, 10)}…</span>
                   </div>
                   <div className="mt-1.5 text-sm text-txt">{errand.goal}</div>
+                  <ErrandPendingMessage errand={errand} />
                   {errand.notes && (
                     <div className="mt-1 text-xs text-txt-2">
                       <span className="text-txt-3">notes: </span>{errand.notes}
@@ -166,7 +184,13 @@ export default function ErrandsPage() {
                   </div>
                 </div>
                 <div className="flex flex-shrink-0 gap-2">
-                  {errand.state === 'draft' && (
+                  {errand.delivery && (
+                    <button disabled={busyId === errand.id} onClick={() => act(errand.id, 'retry')}
+                      className="rounded-md border border-amber-500/40 px-2 py-1 text-xs text-amber-400 disabled:opacity-50">
+                      Retry Send
+                    </button>
+                  )}
+                  {errand.state === 'draft' && !errand.delivery && (
                     <button
                       disabled={busyId === errand.id}
                       onClick={() => act(errand.id, 'approve')}
@@ -175,7 +199,7 @@ export default function ErrandsPage() {
                       Approve
                     </button>
                   )}
-                  {errand.state === 'awaiting_principal' && (
+                  {errand.state === 'awaiting_principal' && !errand.delivery && (
                     <button
                       disabled={busyId === errand.id}
                       onClick={() => {
@@ -208,7 +232,7 @@ export default function ErrandsPage() {
                 </div>
               </div>
 
-              {answeringId === errand.id && (
+              {answeringId === errand.id && !errand.delivery && errand.state === 'awaiting_principal' && (
                 <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
                   <div className="text-xs font-semibold text-amber-400">
                     Reply to Escalation

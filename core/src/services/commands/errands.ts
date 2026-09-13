@@ -36,6 +36,11 @@ function formatErrand(errand: Errand, db: IDatabaseService): string {
   ];
   if (errand.notes) lines.push(`  notes: ${errand.notes}`);
   if (errand.result) lines.push(`  result: ${errand.result}`);
+  if (errand.pendingDelivery) {
+    const sent = errand.pendingDelivery.targets.filter((target) => target.sentAt).length;
+    lines.push(`  delivery: ${sent}/${errand.pendingDelivery.targets.length} sent`,
+      `  ${errand.pendingDelivery.error ?? 'Delivery pending'}. Retry with /errand retry ${errand.id}`);
+  }
   return lines.join('\n');
 }
 
@@ -103,12 +108,12 @@ async function createErrand(rest: string, context: CommandContext): Promise<Comm
   }
 }
 
-function runAction(
+async function runAction(
   context: CommandContext,
   id: string,
   verb: string,
-  apply: (errandService: IErrandService, id: string) => Errand,
-): CommandResult {
+  apply: (errandService: IErrandService, id: string) => Errand | Promise<Errand>,
+): Promise<CommandResult> {
   if (!id) {
     return formatCommandResult(`Usage: /errand ${verb} <id>`, context.source);
   }
@@ -119,7 +124,7 @@ function runAction(
   }
 
   try {
-    const errand = apply(resolved.errandService, id);
+    const errand = await apply(resolved.errandService, id);
     return formatCommandResult(`Errand [${errand.id}] is now "${errand.state}".`, context.source);
   } catch (err) {
     return formatCommandResult(err instanceof Error ? err.message : String(err), context.source);
@@ -151,6 +156,9 @@ export async function handleErrandCommand(command: string, context: CommandConte
 
   if (sub === 'approve') {
     return runAction(context, arg, 'approve', (svc, id) => svc.approve(id));
+  }
+  if (sub === 'retry') {
+    return runAction(context, arg, 'retry', (svc, id) => svc.retryDelivery(id));
   }
   if (sub === 'reply' || sub === 'answer') {
     const [id, ...ansParts] = arg.split(/\s+/);

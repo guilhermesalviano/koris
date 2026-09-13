@@ -1,6 +1,6 @@
 import { generateId } from "../utils/generate-id";
 import { nowISO } from "../utils/date";
-import { ErrandState } from "../types/errand";
+import { ErrandDelivery, ErrandState } from "../types/errand";
 
 export interface ErrandProps {
   id?: string;
@@ -8,6 +8,7 @@ export interface ErrandProps {
   state?: ErrandState;
   originSessionId: string;
   pendingMessage?: string;
+  pendingDelivery?: ErrandDelivery;
   notes?: string;
   result?: string;
   createdAt?: string;
@@ -21,6 +22,7 @@ export class Errand {
   public readonly state: ErrandState;
   public readonly originSessionId: string;
   public readonly pendingMessage?: string;
+  public readonly pendingDelivery?: ErrandDelivery;
   public readonly notes?: string;
   public readonly result?: string;
   public readonly createdAt: string;
@@ -33,6 +35,7 @@ export class Errand {
     this.state = props.state ?? 'draft';
     this.originSessionId = props.originSessionId;
     this.pendingMessage = props.pendingMessage;
+    this.pendingDelivery = props.pendingDelivery;
     this.notes = props.notes;
     this.result = props.result;
     this.createdAt = props.createdAt ?? nowISO();

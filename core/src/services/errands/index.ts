@@ -13,7 +13,9 @@ import { MessageServiceFactory } from '../message-service';
 import { ChannelsSingleton } from '../../channels';
 import { CHANNEL_TYPES } from '../../entities/channel';
 import { nowISO } from '../../utils/date';
-import { ErrandState, ERRAND_OPEN_STATES } from '../../types/errand';
+import { ErrandDelivery, ErrandState, ERRAND_OPEN_STATES } from '../../types/errand';
+import { generateId } from '../../utils/generate-id';
+import { runErrandOperation } from './operations';
 
 const NEGOTIATING_STATES: ErrandState[] = ['open', 'awaiting_peer', 'awaiting_principal'];
 const NON_TERMINAL_STATES: ErrandState[] = ['draft', 'queued', 'open', 'awaiting_peer', 'awaiting_principal'];
@@ -38,7 +40,8 @@ function peerAliases(channel: string, peerId: string): string[] {
 
 interface IErrandService {
   create(goal: string, targets: ErrandTargetRef[], originSessionId: string, openingMessage: string): Errand;
-  approve(id: string): Errand;
+  approve(id: string): Promise<Errand>;
+  retryDelivery(id: string): Promise<Errand>;
   recordPeerReply(id: string, notes?: string): Errand;
   escalate(id: string, question: string, notes?: string): Errand;
   resolve(id: string, result: string, notes?: string): Errand;
@@ -69,6 +72,7 @@ class ErrandService implements IErrandService {
       throw new Error('An errand needs at least one target.');
     }
 
+    this.expireStale();
     const openCount = NON_TERMINAL_STATES.reduce((sum, state) => sum + this.errandRepository.countByState(state), 0);
     if (openCount >= config.ERRANDS.MAX_CONCURRENT) {
       throw new Error(`Too many errands in flight (max ${config.ERRANDS.MAX_CONCURRENT}). Close one before starting another.`);
@@ -102,18 +106,20 @@ class ErrandService implements IErrandService {
     });
   }
 
-  approve(id: string): Errand {
-    const errand = this.mustFind(id);
-    if (errand.state !== 'draft') {
-      throw new Error(`Errand ${id} is not awaiting approval (state=${errand.state}).`);
-    }
+  approve(id: string): Promise<Errand> {
+    return runErrandOperation(id, async () => {
+      const errand = this.mustFind(id);
+      if (errand.state !== 'draft') {
+        throw new Error(`Errand ${id} is not awaiting approval (state=${errand.state}).`);
+      }
+      this.ensureNoDelivery(errand);
+      const prepared = this.prepareDelivery(errand, 'opener', errand.pendingMessage ?? '');
+      return this.deliverPrepared(prepared);
+    }, true);
+  }
 
-    const message = errand.pendingMessage ?? '';
-    for (const sessionId of this.errandRepository.findTargets(id)) {
-      this.pushToSession(sessionId, message);
-    }
-
-    return this.transition(errand, { state: 'awaiting_peer', pendingMessage: undefined, lastProgressAt: nowISO() });
+  retryDelivery(id: string): Promise<Errand> {
+    return runErrandOperation(id, async () => this.deliverPrepared(this.mustFind(id)), true);
   }
 
   recordPeerReply(id: string, notes?: string): Errand {
@@ -192,9 +198,7 @@ class ErrandService implements IErrandService {
       return errand;
     }
 
-    const closedAt = nowISO();
-    this.errandRepository.update(errand.id, { state: 'expired', closedAt });
-    return new Errand({ ...errand, state: 'expired', closedAt });
+    return this.close(errand, 'expired', undefined, undefined);
   }
 
   get(id: string): Errand | null {
@@ -203,18 +207,25 @@ class ErrandService implements IErrandService {
   }
 
   listByOrigin(originSessionId: string): Errand[] {
+    this.expireStale();
     return this.errandRepository.findByOriginSessionId(originSessionId).map((errand) => this.hydrate(errand));
   }
 
   listAll(state?: ErrandState, limit?: number, offset?: number): Errand[] {
+    this.expireStale();
     return this.errandRepository.findAll(state, limit, offset).map((errand) => this.hydrate(errand));
   }
 
-  async resumeWithPrincipalAnswer(id: string, answer: string): Promise<{ errand: Errand; reply: string }> {
+  resumeWithPrincipalAnswer(id: string, answer: string): Promise<{ errand: Errand; reply: string }> {
+    return runErrandOperation(id, () => this.prepareResume(id, answer), true);
+  }
+
+  private async prepareResume(id: string, answer: string): Promise<{ errand: Errand; reply: string }> {
     const errand = this.mustFind(id);
     if (errand.state !== 'awaiting_principal') {
       throw new Error(`Errand ${id} is not awaiting your input (state=${errand.state}).`);
     }
+    this.ensureNoDelivery(errand);
 
     const targetSessionIds = this.errandRepository.findTargets(id);
     if (targetSessionIds.length === 0) {
@@ -243,32 +254,85 @@ class ErrandService implements IErrandService {
       throw new Error(`Errand ${id} changed while composing the reply. Review its current state before answering again.`);
     }
 
-    for (const sessionId of targetSessionIds) {
-      this.pushToSession(sessionId, reply);
-    }
-
-    const updatedNotes = (errand.notes ? errand.notes + '\n' : '') + `Principal answer: "${answer}"`;
-    const updated = this.transition(errand, {
-      state: 'awaiting_peer',
-      notes: updatedNotes,
-      pendingMessage: undefined,
-      lastProgressAt: nowISO(),
-    });
-
-    this.pushToSession(
-      errand.originSessionId,
-      `📤 Errand "${errand.goal}" resumed. Sent to contact: "${reply}"`,
-    );
-
+    const updated = await this.deliverPrepared(this.prepareDelivery(latest, 'resume', reply, answer));
     return { errand: updated, reply };
   }
 
+  private ensureNoDelivery(errand: Errand): void {
+    if (errand.pendingDelivery) {
+      throw new Error(`A prepared message is pending delivery. Use /errand retry ${errand.id} or cancel the errand.`);
+    }
+  }
+
+  private prepareDelivery(errand: Errand, type: ErrandDelivery['type'], content: string, answer?: string): Errand {
+    const targets = this.errandRepository.findTargets(errand.id).map((sessionId) => ({ sessionId }));
+    if (!targets.length || !content.trim()) throw new Error('Cannot deliver an empty message or an errand without targets.');
+    return this.transition(errand, { pendingDelivery: { id: generateId(), type, content, answer, targets } });
+  }
+
+  private async deliverPrepared(errand: Errand): Promise<Errand> {
+    const batch = errand.pendingDelivery;
+    if (!batch || errand.state !== (batch.type === 'opener' ? 'draft' : 'awaiting_principal')) {
+      throw new Error('This errand has no retryable delivery.');
+    }
+    const current = () => {
+      const latest = this.mustFind(errand.id);
+      if (latest.state !== errand.state || latest.pendingDelivery?.id !== batch.id) {
+        throw new Error('The errand changed during delivery. No further messages will be sent.');
+      }
+      return latest;
+    };
+    for (const target of batch.targets) {
+      current();
+      if (target.sentAt) continue;
+      let failure: string | undefined;
+      try {
+        const session = this.sessionRepository.findById(target.sessionId);
+        if (!session) throw new Error('Target session no longer exists.');
+        const delivery = await this.outboundMessageService.send({
+          channel: session.channel, target: session.peerId, kind: session.kind,
+          sessionId: session.id, content: batch.content,
+        });
+        if (delivery.status !== 'sent') throw new Error(delivery.errorMessage || 'Channel delivery failed.');
+      } catch (error) {
+        failure = error instanceof Error ? error.message : 'Channel delivery failed.';
+      }
+      const latest = current();
+      target.error = failure;
+      if (!failure) target.sentAt = nowISO();
+      batch.error = batch.targets.find((item) => item.error)?.error;
+      this.transition(latest, { pendingDelivery: batch });
+    }
+    const latest = current();
+    if (batch.targets.some((target) => !target.sentAt)) {
+      throw new Error(`Message delivery failed. The prepared message is saved; use /errand retry ${errand.id}.`);
+    }
+    const notes = batch.type === 'resume'
+      ? (latest.notes ? latest.notes + '\n' : '') + `Principal answer: "${batch.answer}"`
+      : latest.notes;
+    const updated = this.transition(latest, {
+      state: 'awaiting_peer', pendingMessage: undefined, pendingDelivery: undefined,
+      notes, lastProgressAt: nowISO(),
+    });
+    if (batch.type === 'resume') {
+      this.pushToSession(errand.originSessionId, `📤 Errand "${errand.goal}" resumed. Sent to contact: "${batch.content}"`);
+    }
+    return updated;
+  }
+
+  private expireStale(): void {
+    for (const state of ERRAND_OPEN_STATES) {
+      for (const errand of this.errandRepository.findAll(state, -1)) this.hydrate(errand);
+    }
+  }
+
   findActiveForPeer(channel: string, peerId: string): { errand: Errand; sessionId: string } | null {
+    this.expireStale();
     const active = this.errandRepository.findActiveByPeer(channel, peerAliases(channel, peerId));
     if (!active) return null;
 
     const hydrated = this.hydrate(active.errand);
-    if (!NEGOTIATING_STATES.includes(hydrated.state)) return null;
+    if (!NEGOTIATING_STATES.includes(hydrated.state) && !(hydrated.state === 'draft' && hydrated.pendingDelivery)) return null;
 
     return { errand: hydrated, sessionId: active.sessionId };
   }
@@ -277,6 +341,7 @@ class ErrandService implements IErrandService {
     const closedAt = nowISO();
     const updated = this.transition(errand, {
       state,
+      pendingDelivery: undefined,
       result,
       notes: notes ?? errand.notes,
       closedAt,
@@ -329,7 +394,7 @@ class ErrandService implements IErrandService {
         content,
         kind: session.kind,
         sessionId: session.id,
-      });
+      }).catch(() => this.logger.warn('Could not deliver errand notice.'));
       return;
     }
 

@@ -519,6 +519,12 @@ class AdminRouterFactory {
         state: errand.state,
         originSessionId: errand.originSessionId,
         pendingMessage: errand.pendingMessage ?? null,
+        delivery: errand.pendingDelivery ? {
+          type: errand.pendingDelivery.type,
+          sent: errand.pendingDelivery.targets.filter((target) => target.sentAt).length,
+          total: errand.pendingDelivery.targets.length,
+          error: errand.pendingDelivery.error ?? null,
+        } : null,
         notes: errand.notes ?? null,
         result: errand.result ?? null,
         createdAt: errand.createdAt,
@@ -617,7 +623,7 @@ class AdminRouterFactory {
       });
     });
 
-    router.post('/errands/:id/approve', (req: Request, res: Response) => {
+    router.post('/errands/:id/approve', async (req: Request, res: Response) => {
       const errandService = buildErrandService(logger, db, sessionManager);
       if (!errandService) {
         res.status(503).json({ error: 'Errands are not available: no channel manager is running.' });
@@ -625,7 +631,7 @@ class AdminRouterFactory {
       }
 
       try {
-        res.json(toErrandJson(errandService.approve(String(req.params.id))));
+        res.json(toErrandJson(await errandService.approve(String(req.params.id))));
       } catch (err) {
         res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
       }
@@ -650,6 +656,19 @@ class AdminRouterFactory {
           errand: toErrandJson(result.errand),
           reply: result.reply,
         });
+      } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    router.post('/errands/:id/retry', async (req: Request, res: Response) => {
+      const errandService = buildErrandService(logger, db, sessionManager);
+      if (!errandService) {
+        res.status(503).json({ error: 'Errands are not available: no channel manager is running.' });
+        return;
+      }
+      try {
+        res.json(toErrandJson(await errandService.retryDelivery(String(req.params.id))));
       } catch (err) {
         res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
       }

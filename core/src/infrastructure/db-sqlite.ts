@@ -176,6 +176,7 @@ class DatabaseService implements IDatabaseService {
             'resolved','failed','cancelled','expired')),
           origin_session_id TEXT NOT NULL,
           pending_message TEXT,
+          pending_delivery TEXT,
           notes TEXT,
           result TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -189,6 +190,11 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_errands_state ON errands(state, last_progress_at);
         CREATE INDEX IF NOT EXISTS idx_errands_origin ON errands(origin_session_id);
       `);
+
+      const errandColumns = this.db.prepare('PRAGMA table_info(errands)').all() as { name: string }[];
+      if (!errandColumns.some((column) => column.name === 'pending_delivery')) {
+        this.db.exec('ALTER TABLE errands ADD COLUMN pending_delivery TEXT;');
+      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS errand_targets (

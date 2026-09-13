@@ -77,6 +77,7 @@ export interface ErrandItem {
   state: ErrandState;
   originSessionId: string;
   pendingMessage: string | null;
+  delivery: { type: 'opener' | 'resume'; sent: number; total: number; error: string | null } | null;
   notes: string | null;
   result: string | null;
   createdAt: string;

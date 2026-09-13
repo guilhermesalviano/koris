@@ -121,12 +121,11 @@ class Negotiator {
 
       const text = response.kind === 'message' ? response.text.trim() : '';
       if (text) return text;
-      this.logger.warn('Negotiator: resume composition returned no text, falling back to the principal answer');
-    } catch (err) {
-      this.logger.warn(`Negotiator: resume composition failed, falling back to the principal answer: ${err instanceof Error ? err.message : String(err)}`);
+    } catch {
+      this.logger.warn('Negotiator: resume composition failed');
     }
 
-    return props.answer;
+    throw new Error('Could not prepare the reply. Nothing was sent; the errand is still awaiting your input. Please try again.');
   }
 
   async run(props: NegotiatorTurnProps): Promise<NegotiatorTurnResult> {
@@ -145,7 +144,7 @@ class Negotiator {
     // A further message from the contact is not principal approval. Keep it in
     // the transcript (the gateway persists it), but do not restart a paused or
     // closed negotiation, or send anything before the opener is approved.
-    if (errand.state !== 'open' && errand.state !== 'awaiting_peer') {
+    if (errand.pendingDelivery || (errand.state !== 'open' && errand.state !== 'awaiting_peer')) {
       return { reply: '', applied: 'skipped' };
     }
 
@@ -180,7 +179,11 @@ class Negotiator {
 
     const verdict = response.kind === 'message'
       ? parseNegotiatorResponse(response.text)
-      : { action: 'continue' as const, reply: '' };
+      : null;
+    if (!verdict) {
+      this.logger.warn('Negotiator: invalid verdict; no reply sent or state changed');
+      return { reply: '', applied: 'skipped' };
+    }
 
     // The principal may have cancelled/closed the errand during this LLM call.
     const latest = errandService.get(props.errandId);

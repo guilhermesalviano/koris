@@ -54,7 +54,7 @@ function makeSessionManager() {
 }
 
 function makeOutbound() {
-  return { send: vi.fn().mockResolvedValue({}) };
+  return { send: vi.fn().mockResolvedValue({ status: 'sent' }) };
 }
 
 function makeLogger() {
@@ -131,32 +131,35 @@ describe('ErrandService', () => {
   });
 
   describe('approve', () => {
-    it('sends the pending message to every target and moves to awaiting_peer', () => {
+    it('sends the pending message to every target and moves to awaiting_peer', async () => {
       const { service, errandRepo, sessionRepo, outbound } = makeService();
       const draft = new Errand({ id: 'e1', goal: 'buy milk', state: 'draft', originSessionId: 'origin-1', pendingMessage: 'hi there' });
       errandRepo.findById.mockReturnValue(draft);
       errandRepo.findTargets.mockReturnValue(['target-session']);
       sessionRepo.findById.mockReturnValue({ id: 'target-session', channel: 'whatsapp', peerId: '555', kind: 'delegated' });
 
-      const result = service.approve('e1');
+      errandRepo.update.mockImplementation((_id, patch) => {
+        errandRepo.findById.mockReturnValue(new Errand({ ...errandRepo.findById('e1'), ...patch }));
+      });
+      const result = await service.approve('e1');
 
       expect(outbound.send).toHaveBeenCalledWith({ channel: 'whatsapp', target: '555', content: 'hi there', kind: 'delegated', sessionId: 'target-session' });
       expect(result.state).toBe('awaiting_peer');
       expect(errandRepo.update).toHaveBeenCalledWith('e1', expect.objectContaining({ state: 'awaiting_peer', pendingMessage: undefined }));
     });
 
-    it('refuses to approve an errand that is not a draft', () => {
+    it('refuses to approve an errand that is not a draft', async () => {
       const { service, errandRepo } = makeService();
       errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'g', state: 'awaiting_peer', originSessionId: 'o1' }));
 
-      expect(() => service.approve('e1')).toThrow(/not awaiting approval/);
+      await expect(service.approve('e1')).rejects.toThrow(/not awaiting approval/);
     });
 
-    it('throws when the errand does not exist', () => {
+    it('throws when the errand does not exist', async () => {
       const { service, errandRepo } = makeService();
       errandRepo.findById.mockReturnValue(null);
 
-      expect(() => service.approve('missing')).toThrow(/not found/);
+      await expect(service.approve('missing')).rejects.toThrow(/not found/);
     });
   });
 
@@ -436,6 +439,9 @@ describe('ErrandService', () => {
         return null;
       });
 
+      errandRepo.update.mockImplementation((_id, patch) => {
+        errandRepo.findById.mockReturnValue(new Errand({ ...errandRepo.findById('e1'), ...patch }));
+      });
       const result = await service.resumeWithPrincipalAnswer('e1', 'Saturday 10am is good');
 
       expect(result.errand.state).toBe('awaiting_peer');

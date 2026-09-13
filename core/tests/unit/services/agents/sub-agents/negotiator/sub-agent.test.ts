@@ -183,19 +183,17 @@ describe('Negotiator', () => {
       expect(call.extraSystemBlocks[1]).toContain('Saturday 10am is good');
     });
 
-    it('falls back to the raw answer when the model returns nothing', async () => {
+    it('rejects an empty resume response without forwarding the principal answer', async () => {
       const { negotiator } = makeNegotiator({ completionText: '   ' });
 
-      const reply = await negotiator.composeResume({
+      await expect(negotiator.composeResume({
         errandId: 'e1',
         goal: 'haircut',
         answer: 'Confirm Saturday',
         channel: 'whatsapp',
         sessionId: 's1',
         messageHistory: [],
-      });
-
-      expect(reply).toBe('Confirm Saturday');
+      })).rejects.toThrow('Nothing was sent');
     });
   });
 
@@ -301,7 +299,7 @@ describe('Negotiator', () => {
     expect(completionService.complete).not.toHaveBeenCalled();
   });
 
-  it('treats a non-message (tool-call) completion as "continue" with an empty reply', async () => {
+  it('skips non-message completions without changing state', async () => {
     const errandService = makeErrandService();
     vi.mocked(buildErrandService).mockReturnValue(errandService as never);
     const completionService = { complete: vi.fn().mockResolvedValue({ kind: 'tool_calls', calls: [] }) };
@@ -310,7 +308,7 @@ describe('Negotiator', () => {
 
     const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'hi', messageHistory: [] });
 
-    expect(errandService.recordPeerReply).toHaveBeenCalledWith('errand-1', undefined);
-    expect(result).toEqual({ reply: '', applied: 'continue' });
+    expect(errandService.recordPeerReply).not.toHaveBeenCalled();
+    expect(result).toEqual({ reply: '', applied: 'skipped' });
   });
 });

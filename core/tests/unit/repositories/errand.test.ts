@@ -20,7 +20,7 @@ describe('ErrandRepository', () => {
 
     const [sql, params] = db.run.mock.calls[0];
     expect(sql).toContain('INSERT INTO errands');
-    expect(params).toEqual(['e1', 'buy milk', 'draft', 's1', null, null, null, errand.createdAt, null, null]);
+    expect(params).toEqual(['e1', 'buy milk', 'draft', 's1', null, null, null, errand.createdAt, null, null, null]);
   });
 
   it('update maps camelCase keys to snake_case', () => {
