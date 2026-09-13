@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card, EmptyState, PageShell, formatDate, useToast, Toast } from '../../../components/AdminUI';
+import { AgentAvatar } from '../../../components/AgentAvatar';
 import { apiRequest } from '../../../lib/api';
 import type { ErrandsResponse, ErrandItem, ErrandState, ErrandTranscriptMessage, ErrandTranscriptResponse } from '../../../lib/types';
 
@@ -151,7 +152,12 @@ export default function NegotiatorPanel() {
   const items = data ? sortErrands(data.items) : [];
 
   return (
-    <PageShell title="Negotiator" description="Errands it runs with your contacts on your behalf" onRefresh={load}>
+    <PageShell
+      title="Negotiator"
+      description="Errands it runs with your contacts on your behalf"
+      onRefresh={load}
+      leading={<AgentAvatar id="negotiator" className="h-9 w-9" />}
+    >
       {error && <EmptyState text={error} />}
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data && items.length === 0 && (

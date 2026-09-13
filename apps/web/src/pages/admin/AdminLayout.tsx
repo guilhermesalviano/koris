@@ -173,7 +173,7 @@ function SidebarContent({ onNavigate, onOpenConfig }: { onNavigate?: () => void;
 function Sidebar() {
   const { openConfig } = useUi();
   return (
-    <aside className="relative hidden w-60 flex-shrink-0 flex-col border-r border-subtle bg-bg-2 md:flex">
+    <aside className="relative hidden w-72 flex-shrink-0 flex-col border-r border-subtle bg-bg-2 md:flex">
       <SidebarContent onOpenConfig={() => openConfig()} />
     </aside>
   );

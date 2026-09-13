@@ -11,6 +11,11 @@ export function agentPath(id: AgentId): string {
   return `/admin/agents/${id}`;
 }
 
+/** Portrait served from `apps/web/public/agents/`. */
+export function agentAvatarUrl(id: AgentId): string {
+  return `/agents/${id}.jpg`;
+}
+
 /**
  * Nests the flat roster by `parentId`, keeping the server's order. An agent
  * whose parent is missing from the list is promoted to the top level rather

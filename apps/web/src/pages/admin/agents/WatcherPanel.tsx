@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, EmptyState, PageShell, formatDate } from '../../../components/AdminUI';
 import { Badge, Button } from '../../../components/ui';
+import { AgentAvatar } from '../../../components/AgentAvatar';
 import { apiRequest } from '../../../lib/api';
 import { useUi } from '../../../lib/ui-context';
 import type { AuditItem, AuditResponse, HeartbeatItem, HeartbeatsResponse } from '../../../lib/types';
@@ -99,6 +100,7 @@ export default function WatcherPanel() {
       title="Watcher (Heartbeat)"
       description="Scheduled beats and what their recent runs did"
       onRefresh={() => void load()}
+      leading={<AgentAvatar id="watcher" className="h-9 w-9" />}
       actions={<Button size="sm" variant="ghost" onClick={() => openConfig('beats')}>Manage beats</Button>}
     >
       {error && <EmptyState text={error} action={<Button size="sm" onClick={() => void load()}>Retry</Button>} />}

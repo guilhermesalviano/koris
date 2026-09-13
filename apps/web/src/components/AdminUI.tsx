@@ -9,15 +9,18 @@ interface PageShellProps {
   onRefresh?: () => void;
   /** Extra controls rendered in the header, before the refresh button. */
   actions?: ReactNode;
+  /** Rendered before the title, e.g. an agent portrait. */
+  leading?: ReactNode;
   children: ReactNode;
 }
 
-export function PageShell({ title, description, onRefresh, actions, children }: PageShellProps) {
+export function PageShell({ title, description, onRefresh, actions, leading, children }: PageShellProps) {
   usePageTitle(title, description);
 
   return (
     <>
       <header className="sticky top-0 z-10 flex flex-shrink-0 items-center gap-3 border-b border-subtle bg-bg/80 px-6 py-3.5 backdrop-blur-md">
+        {leading}
         <div className="min-w-0">
           <h1 className="text-lead font-semibold text-txt">{title}</h1>
           {description && <p className="mt-0.5 truncate font-mono text-mini text-txt-3">{description}</p>}

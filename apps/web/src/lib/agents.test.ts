@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agentPath, buildAgentTree } from './agents';
+import { agentAvatarUrl, agentPath, buildAgentTree } from './agents';
 import type { AgentSummary } from './types';
 
 const agent = (id: AgentSummary['id'], parentId: AgentSummary['parentId']): AgentSummary => ({
@@ -40,5 +40,9 @@ describe('buildAgentTree', () => {
 describe('agentPath', () => {
   it('builds the admin route for an agent', () => {
     expect(agentPath('watcher')).toBe('/admin/agents/watcher');
+  });
+
+  it('points at the agent portrait in the public folder', () => {
+    expect(agentAvatarUrl('negotiator')).toBe('/agents/negotiator.jpg');
   });
 });

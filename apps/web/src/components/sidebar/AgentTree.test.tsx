@@ -31,10 +31,21 @@ describe('AgentTree', () => {
     expect(html.match(/<ul/g)).toHaveLength(2);
   });
 
-  it('marks only sub-agents as read-only', () => {
+  it('shows each agent portrait as a decorative image beside its name', () => {
     const html = render('/admin/agents/orchestrator');
 
-    expect(html.match(/aria-label="Read-only"/g)).toHaveLength(2);
+    for (const agent of ROSTER) {
+      expect(html).toContain(`src="/agents/${agent.id}.jpg"`);
+    }
+    expect(html.match(/<img[^>]*alt=""[^>]*aria-hidden="true"/g)).toHaveLength(ROSTER.length);
+  });
+
+  it('tags only sub-agents, and renders every row at the same size', () => {
+    const html = render('/admin/agents/orchestrator');
+
+    expect(html.match(/sub agent</g)).toHaveLength(2);
+    expect(html.match(/<img[^>]*class="[^"]*h-7 w-7/g)).toHaveLength(ROSTER.length);
+    expect(html).not.toContain('pl-8');
   });
 
   it('highlights the agent matching the current route', () => {
