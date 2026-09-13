@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { join, normalize } from 'path';
 import { getPluginConfigValue, loadPluginConfigFile, resolvePluginDir } from './loader';
 
@@ -101,6 +103,16 @@ describe('loadPluginConfigFile', () => {
     });
     expect(result).toEqual({});
     expect(onParseError).toHaveBeenCalledWith('Warning: Failed to parse custom.yml, ignoring file.');
+  });
+
+  it('uses the default file IO to read a real config file from disk', () => {
+    const pluginDir = mkdtempSync(join(tmpdir(), 'koris-loader-test-'));
+    try {
+      writeFileSync(join(pluginDir, 'config.yml'), 'token: abc\nport: 8080\n');
+      expect(loadPluginConfigFile({ pluginDir })).toEqual({ token: 'abc', port: 8080 });
+    } finally {
+      rmSync(pluginDir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, normalize } from 'path';
 import { parse } from 'yaml';
@@ -110,5 +110,13 @@ describe('writePluginConfigPatch', () => {
       { pluginDir, exists: () => true, readFile: () => '"just a string"', writeFile },
     );
     expect(parse(writeFile.mock.calls[0][1])).toEqual({ fresh: true });
+  });
+
+  it('uses the real filesystem when no file IO is injected', () => {
+    writeFileSync(join(pluginDir, 'config.yml'), 'top: old\nnested:\n  kept: 2\n');
+    const path = writePluginConfigPatch({ nested: { added: 1 }, top: 'new' }, { pluginDir });
+
+    expect(path).toBe(normalize(join(pluginDir, 'config.yml')));
+    expect(parse(readFileSync(path, 'utf-8'))).toEqual({ top: 'new', nested: { kept: 2, added: 1 } });
   });
 });
