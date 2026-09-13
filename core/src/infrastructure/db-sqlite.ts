@@ -37,6 +37,27 @@ interface IDatabaseService {
   backup(targetPath: string): void;
 }
 
+
+const ERRANDS_TABLE_BODY = `(
+  id TEXT PRIMARY KEY,
+  goal TEXT NOT NULL,
+  state TEXT NOT NULL CHECK(state IN (
+    'draft','queued','open','awaiting_peer','awaiting_principal','awaiting_confirmation',
+    'resolved','failed','cancelled','expired')),
+  origin_session_id TEXT NOT NULL,
+  pending_message TEXT,
+  pending_delivery TEXT,
+  closing_reply TEXT,
+  notes TEXT,
+  result TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_progress_at DATETIME,
+  closed_at DATETIME,
+  FOREIGN KEY (origin_session_id) REFERENCES sessions(id) ON DELETE CASCADE
+)`;
+
+const ERRAND_COLUMNS = 'id, goal, state, origin_session_id, pending_message, pending_delivery, closing_reply, notes, result, created_at, last_progress_at, closed_at';
+
 class DatabaseService implements IDatabaseService {
   private db: Database.Database;
   private filepath: string;
@@ -187,33 +208,45 @@ class DatabaseService implements IDatabaseService {
       `);
 
       this.db.exec(`
-        CREATE TABLE IF NOT EXISTS errands (
-          id TEXT PRIMARY KEY,
-          goal TEXT NOT NULL,
-          state TEXT NOT NULL CHECK(state IN (
-            'draft','queued','open','awaiting_peer','awaiting_principal',
-            'resolved','failed','cancelled','expired')),
-          origin_session_id TEXT NOT NULL,
-          pending_message TEXT,
-          pending_delivery TEXT,
-          notes TEXT,
-          result TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          last_progress_at DATETIME,
-          closed_at DATETIME,
-          FOREIGN KEY (origin_session_id) REFERENCES sessions(id) ON DELETE CASCADE
-        );
-      `);
-
-      this.db.exec(`
-        CREATE INDEX IF NOT EXISTS idx_errands_state ON errands(state, last_progress_at);
-        CREATE INDEX IF NOT EXISTS idx_errands_origin ON errands(origin_session_id);
+        CREATE TABLE IF NOT EXISTS errands ${ERRANDS_TABLE_BODY};
       `);
 
       const errandColumns = this.db.prepare('PRAGMA table_info(errands)').all() as { name: string }[];
       if (!errandColumns.some((column) => column.name === 'pending_delivery')) {
         this.db.exec('ALTER TABLE errands ADD COLUMN pending_delivery TEXT;');
       }
+      if (!errandColumns.some((column) => column.name === 'closing_reply')) {
+        this.db.exec('ALTER TABLE errands ADD COLUMN closing_reply TEXT;');
+      }
+
+      const errandsSchema = this.db
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'errands'")
+        .get() as { sql?: string } | undefined;
+      if (errandsSchema?.sql && !errandsSchema.sql.includes("'awaiting_confirmation'")) {
+        // SQLite cannot alter a CHECK constraint in place: rebuild the table.
+        // `errand_targets` cascades on delete from `errands`, so foreign keys stay
+        // off while the old table is dropped (the pragma is a no-op inside a
+        // transaction), and the copy runs atomically.
+        this.db.pragma('foreign_keys = OFF');
+        try {
+          this.db.transaction(() => this.db.exec(`
+            CREATE TABLE errands_rebuilt ${ERRANDS_TABLE_BODY};
+            INSERT INTO errands_rebuilt (${ERRAND_COLUMNS})
+              SELECT ${ERRAND_COLUMNS} FROM errands;
+            DROP TABLE errands;
+            ALTER TABLE errands_rebuilt RENAME TO errands;
+          `))();
+          const violations = this.db.pragma('foreign_key_check') as unknown[];
+          if (violations.length) throw new Error(`errands rebuild left ${violations.length} foreign key violation(s)`);
+        } finally {
+          this.db.pragma('foreign_keys = ON');
+        }
+      }
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_errands_state ON errands(state, last_progress_at);
+        CREATE INDEX IF NOT EXISTS idx_errands_origin ON errands(origin_session_id);
+      `);
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS errand_targets (

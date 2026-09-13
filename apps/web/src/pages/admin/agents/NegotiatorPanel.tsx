@@ -7,19 +7,20 @@ import { ReadOnlyAgentChat, ReadOnlyChatMessage } from '../../../components/chat
 import { Button, Input, Select } from '../../../components/ui';
 import { apiRequest } from '../../../lib/api';
 import { cn } from '../../../lib/cn';
-import { chatSeparatorLabel } from '../../../lib/date';
+import { chatSeparatorLabel, dayTimeLabel } from '../../../lib/date';
 import { buildNegotiationCenter, buildNegotiatorChat, headerErrand, loadNegotiatorNotices, negotiationSteps, type ReadOnlyChatEntry } from '../../../lib/subagent-chat';
 import { isNearBottom } from '../../../lib/timeline';
 import { useAgentActivity } from '../../../lib/agent-activity-context';
 import { useReadOnlyData } from '../../../lib/use-read-only-data';
 import type { ErrandItem, ErrandState, ImageAttachment, NegotiatorPendingQuestion } from '../../../lib/types';
 
-type ErrandAction = 'approve' | 'cancel' | 'close' | 'retry';
+type ErrandAction = 'approve' | 'cancel' | 'close' | 'confirm' | 'retry';
 
 const CLOSED_STATES: ErrandState[] = ['resolved', 'failed', 'cancelled', 'expired'];
 
 const DONE_MESSAGE: Record<ErrandAction, string> = {
   approve: 'Errand approved',
+  confirm: 'Closing message sent, errand resolved',
   retry: 'Errand message delivered',
   cancel: 'Errand cancelled',
   close: 'Errand closed',
@@ -38,7 +39,8 @@ export function ErrandActions({ errand, onChanged, notify, initialAnswering = fa
   const [busy, setBusy] = useState(false);
   const [answering, setAnswering] = useState(initialAnswering);
   const [answer, setAnswer] = useState('');
-  const canAnswer = errand.state === 'awaiting_principal' && !errand.delivery;
+  const confirming = errand.state === 'awaiting_confirmation';
+  const canAnswer = (errand.state === 'awaiting_principal' || confirming) && !errand.delivery;
   const open = !CLOSED_STATES.includes(errand.state);
 
   async function run(request: () => Promise<unknown>, done: string, failed: string) {
@@ -83,9 +85,10 @@ export function ErrandActions({ errand, onChanged, notify, initialAnswering = fa
       <div className="flex flex-wrap gap-2">
         {errand.delivery && <Button size="sm" variant="danger" disabled={busy} onClick={() => void act('retry')}>Retry Send</Button>}
         {errand.state === 'draft' && !errand.delivery && <Button size="sm" variant="subtle" disabled={busy} onClick={() => void act('approve')}>Approve</Button>}
+        {confirming && !errand.delivery && <Button size="sm" variant="primary" disabled={busy} onClick={() => void act('confirm')}>Resolve</Button>}
         {canAnswer && (
           <Button size="sm" variant="subtle" disabled={busy} aria-expanded={answering} onClick={() => { setAnswering(!answering); setAnswer(''); }}>
-            {answering ? 'Close Reply' : 'Answer'}
+            {answering ? 'Close Reply' : confirming ? 'Add requirement' : 'Answer'}
           </Button>
         )}
         {open && (
@@ -101,7 +104,7 @@ export function ErrandActions({ errand, onChanged, notify, initialAnswering = fa
             aria-label="Answer to send to the contact"
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
-            placeholder="e.g. Yes, confirm for Saturday at 10am…"
+            placeholder={confirming ? 'e.g. Also ask for a juice…' : 'e.g. Yes, confirm for Saturday at 10am…'}
             className="h-8 min-w-0 flex-1 text-caption"
           />
           <Button type="submit" size="sm" variant="primary" loading={busy} disabled={!answer.trim()}>Send Answer</Button>
@@ -166,21 +169,42 @@ export function NegotiationCenter({ entries, pending, loading, loaded, error, no
     if (element && following.current) element.scrollTop = element.scrollHeight;
   }, [entries]);
 
-  async function submit() {
-    const text = answer.trim();
-    if (!target || !text || sending) return;
+  const confirming = target?.kind === 'confirmation';
+
+  async function send(request: () => Promise<unknown>, done: string, failed: string) {
     setSending(true);
     try {
-      await apiRequest(`/errands/${encodeURIComponent(target.errandId)}/reply`, { method: 'POST', body: JSON.stringify({ answer: text }) });
-      setAnswer('');
+      await request();
       following.current = true;
-      notify('Answer sent to contact, errand resumed');
+      notify(done);
+      return true;
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Failed to send answer', true);
+      notify(err instanceof Error ? err.message : failed, true);
+      return false;
     } finally {
       setSending(false);
       onAnswered();
     }
+  }
+
+  async function submit() {
+    const text = answer.trim();
+    if (!target || !text || sending) return;
+    const sent = await send(
+      () => apiRequest(`/errands/${encodeURIComponent(target.errandId)}/reply`, { method: 'POST', body: JSON.stringify({ answer: text }) }),
+      confirming ? 'Requirement sent to contact, errand resumed' : 'Answer sent to contact, errand resumed',
+      'Failed to send answer',
+    );
+    if (sent) setAnswer('');
+  }
+
+  function resolve() {
+    if (!target || sending) return;
+    void send(
+      () => apiRequest(`/errands/${encodeURIComponent(target.errandId)}/confirm`, { method: 'POST' }),
+      'Closing message sent, errand resolved',
+      'Failed to resolve errand',
+    );
   }
 
   return (
@@ -199,10 +223,12 @@ export function NegotiationCenter({ entries, pending, loading, loaded, error, no
             <p className="py-12 text-center text-body text-txt-3">No negotiation updates yet. Questions and results from the Negotiator appear here.</p>
           )}
           {entries.map((entry, index) => {
-            const separator = chatSeparatorLabel(entry.at, entries[index - 1]?.at);
+            const separator = entry.section
+              ? `${entry.section} · ${dayTimeLabel(entry.sectionAt ?? entry.at)}`
+              : chatSeparatorLabel(entry.at, entries[index - 1]?.at);
             return (
               <Fragment key={entry.id}>
-                {separator && <DateSeparator label={separator} />}
+                {separator && <DateSeparator label={separator} session={Boolean(entry.section)} />}
                 <ReadOnlyChatMessage entry={entry} agentId="negotiator" />
               </Fragment>
             );
@@ -228,10 +254,12 @@ export function NegotiationCenter({ entries, pending, loading, loaded, error, no
           value={answer}
           onChange={(event) => setAnswer(event.target.value)}
           disabled={!target}
-          placeholder={target ? `Answer: ${target.question ?? target.goal}` : 'No question is waiting for your answer'}
+          placeholder={!target ? 'No question is waiting for your answer'
+            : confirming ? 'Add a requirement…' : `Answer: ${target.question ?? target.goal}`}
           className="min-w-0 flex-1"
         />
-        <Button type="submit" variant="primary" loading={sending} disabled={!target || !answer.trim()}>Send</Button>
+        {confirming && <Button type="button" variant="primary" disabled={sending} onClick={resolve}>Resolve</Button>}
+        <Button type="submit" variant={confirming ? 'subtle' : 'primary'} loading={sending} disabled={!target || !answer.trim()}>Send</Button>
       </form>
     </>
   );

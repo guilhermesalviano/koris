@@ -17,8 +17,10 @@ import { ErrandDelivery, ErrandState, ERRAND_OPEN_STATES } from '../../types/err
 import { generateId } from '../../utils/generate-id';
 import { runErrandOperation } from './operations';
 
-const NEGOTIATING_STATES: ErrandState[] = ['open', 'awaiting_peer', 'awaiting_principal'];
-const NON_TERMINAL_STATES: ErrandState[] = ['draft', 'queued', 'open', 'awaiting_peer', 'awaiting_principal'];
+const NEGOTIATING_STATES: ErrandState[] = ['open', 'awaiting_peer', 'awaiting_principal', 'awaiting_confirmation'];
+const NON_TERMINAL_STATES: ErrandState[] = ['draft', 'queued', 'open', 'awaiting_peer', 'awaiting_principal', 'awaiting_confirmation'];
+/** States the principal's answer can resume: a pending question, or extra requirements for a proposed result. */
+const ANSWERABLE_STATES: ErrandState[] = ['awaiting_principal', 'awaiting_confirmation'];
 
 export interface ErrandTargetRef {
   channel: string;
@@ -50,7 +52,8 @@ interface IErrandService {
   recordPeerReply(id: string, notes?: string): Errand;
   escalate(id: string, question: string, notes?: string): Errand;
   resolve(id: string, result: string, notes?: string): Errand;
-  resolveWithClosingReply(id: string, sessionId: string, reply: string, result: string, notes?: string): Promise<Errand>;
+  proposeResolution(id: string, result: string, closingReply: string, notes?: string): Errand;
+  confirmResolution(id: string): Promise<Errand>;
   fail(id: string, reason: string, notes?: string): Errand;
   cancel(id: string): Errand;
   hydrate(errand: Errand): Errand;
@@ -131,7 +134,8 @@ class ErrandService implements IErrandService {
   recordPeerReply(id: string, notes?: string): Errand {
     const errand = this.mustFind(id);
     return this.transition(errand, {
-      state: 'awaiting_peer',
+      // Small talk while a proposed result waits for confirmation keeps it waiting.
+      state: errand.state === 'awaiting_confirmation' ? 'awaiting_confirmation' : 'awaiting_peer',
       notes: notes ?? errand.notes,
       lastProgressAt: nowISO(),
     });
@@ -142,6 +146,7 @@ class ErrandService implements IErrandService {
     const updated = this.transition(errand, {
       state: 'awaiting_principal',
       pendingMessage: question,
+      closingReply: undefined,
       notes: notes ?? errand.notes,
       lastProgressAt: nowISO(),
     });
@@ -154,27 +159,46 @@ class ErrandService implements IErrandService {
     return this.close(errand, 'resolved', result, notes, `✅ Errand "${errand.goal}" resolved: ${result}`);
   }
 
-  async resolveWithClosingReply(id: string, sessionId: string, reply: string, result: string, notes?: string): Promise<Errand> {
+  // The Negotiator believes the goal is achieved: hold its closing message and
+  // ask the principal to confirm before anything more is sent to the contact.
+  proposeResolution(id: string, result: string, closingReply: string, notes?: string): Errand {
     const errand = this.mustFind(id);
-    if (errand.state !== 'open' && errand.state !== 'awaiting_peer') return errand;
-    if (!this.errandRepository.findTargets(id).includes(sessionId)) {
-      throw new Error(`Session ${sessionId} is not a target of errand ${id}.`);
-    }
-    const session = this.sessionRepository.findById(sessionId);
-    if (!session) throw new Error(`Errand target session not found: ${sessionId}`);
-    const delivery = await this.outboundMessageService.send({
-      channel: session.channel,
-      target: session.peerId,
-      kind: session.kind,
-      sessionId,
-      content: reply,
+    const updated = this.transition(errand, {
+      state: 'awaiting_confirmation',
+      pendingMessage: result,
+      closingReply,
+      notes: notes ?? errand.notes,
+      lastProgressAt: nowISO(),
     });
-    if (delivery.status !== 'sent') {
-      throw new Error(`Could not deliver the closing reply for errand ${id}.`);
-    }
-    const latest = this.mustFind(id);
-    if (latest.state !== errand.state) return latest;
-    return this.resolve(id, result, notes);
+    this.pushToSession(errand, `🏁 Errand "${errand.goal}" looks done: ${result}`);
+    return updated;
+  }
+
+  // The principal confirmed the proposed result: send the held closing message
+  // to every contact, then resolve. A failed delivery leaves it waiting.
+  confirmResolution(id: string): Promise<Errand> {
+    return runErrandOperation(id, async () => {
+      const errand = this.mustFind(id);
+      if (errand.state !== 'awaiting_confirmation') {
+        throw new Error(`Errand ${id} is not waiting for your confirmation (state=${errand.state}).`);
+      }
+      const reply = errand.closingReply?.trim();
+      if (reply) {
+        for (const sessionId of this.errandRepository.findTargets(id)) {
+          const session = this.sessionRepository.findById(sessionId);
+          if (!session) throw new Error(`Errand target session not found: ${sessionId}`);
+          const delivery = await this.outboundMessageService.send({
+            channel: session.channel, target: session.peerId, kind: session.kind, sessionId, content: reply,
+          });
+          if (delivery.status !== 'sent') {
+            throw new Error(`Could not deliver the closing message for errand ${id}. It is still waiting for your confirmation.`);
+          }
+        }
+      }
+      const latest = this.mustFind(id);
+      if (latest.state !== 'awaiting_confirmation') return latest;
+      return this.resolve(id, latest.pendingMessage || 'Resolved.');
+    }, true);
   }
 
   fail(id: string, reason: string, notes?: string): Errand {
@@ -225,7 +249,7 @@ class ErrandService implements IErrandService {
 
   private async prepareResume(id: string, answer: string): Promise<{ errand: Errand; reply: string }> {
     const errand = this.mustFind(id);
-    if (errand.state !== 'awaiting_principal') {
+    if (!ANSWERABLE_STATES.includes(errand.state)) {
       throw new Error(`Errand ${id} is not awaiting your input (state=${errand.state}).`);
     }
     this.ensureNoDelivery(errand);
@@ -246,14 +270,16 @@ class ErrandService implements IErrandService {
       goal: errand.goal,
       notes: errand.notes,
       answer,
-      question: errand.pendingMessage,
+      question: errand.state === 'awaiting_confirmation'
+        ? `The goal looked achieved (${errand.pendingMessage ?? 'no summary'}). Did the human confirm it, or add something it still needs?`
+        : errand.pendingMessage,
       channel: targetSession?.channel ?? 'unknown',
       sessionId: targetSessionIds[0],
       messageHistory,
     });
 
     const latest = this.mustFind(id);
-    if (latest.state !== 'awaiting_principal' || latest.pendingMessage !== errand.pendingMessage) {
+    if (latest.state !== errand.state || latest.pendingMessage !== errand.pendingMessage) {
       throw new Error(`Errand ${id} changed while composing the reply. Review its current state before answering again.`);
     }
 
@@ -275,7 +301,7 @@ class ErrandService implements IErrandService {
 
   private async deliverPrepared(errand: Errand): Promise<Errand> {
     const batch = errand.pendingDelivery;
-    if (!batch || errand.state !== (batch.type === 'opener' ? 'draft' : 'awaiting_principal')) {
+    if (!batch || (batch.type === 'opener' ? errand.state !== 'draft' : !ANSWERABLE_STATES.includes(errand.state))) {
       throw new Error('This errand has no retryable delivery.');
     }
     const current = () => {
@@ -314,7 +340,7 @@ class ErrandService implements IErrandService {
       ? (latest.notes ? latest.notes + '\n' : '') + `Principal answer: "${batch.answer}"`
       : latest.notes;
     const updated = this.transition(latest, {
-      state: 'awaiting_peer', pendingMessage: undefined, pendingDelivery: undefined,
+      state: 'awaiting_peer', pendingMessage: undefined, pendingDelivery: undefined, closingReply: undefined,
       notes, lastProgressAt: nowISO(),
     });
     // The negotiation gets its own session once it is open; the principal's
@@ -372,6 +398,7 @@ class ErrandService implements IErrandService {
     const updated = this.transition(errand, {
       state,
       pendingDelivery: undefined,
+      closingReply: undefined,
       result,
       notes: notes ?? errand.notes,
       closedAt,

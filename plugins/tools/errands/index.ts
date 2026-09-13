@@ -7,6 +7,7 @@ export const TOOL_NAMES = {
   start: 'start_errand',
   approve: 'approve_errand',
   answer: 'answer_errand',
+  resolve: 'resolve_errand',
   list: 'list_errands',
   close: 'close_errand',
   cancel: 'cancel_errand',
@@ -19,6 +20,8 @@ const CHANNEL_TYPES = ['telegram', 'whatsapp'] as const;
 /** Fixed lead-in before the Negotiator page URL; a plain URL is clickable on the web chat and on WhatsApp/Telegram alike. */
 const FOLLOW_TEXT = 'follow details on ';
 const CLOSED_STATES = ['resolved', 'failed', 'cancelled', 'expired'];
+/** A pending question, or extra requirements for a proposed result. */
+const ANSWERABLE = ['awaiting_principal', 'awaiting_confirmation'];
 
 const STATUS: Record<string, string> = {
   draft: 'draft awaiting approval',
@@ -26,6 +29,7 @@ const STATUS: Record<string, string> = {
   open: 'in progress',
   awaiting_peer: 'waiting on the contact',
   awaiting_principal: 'waiting on the human\'s answer',
+  awaiting_confirmation: 'goal looks achieved, waiting for the human to confirm',
   resolved: 'resolved',
   failed: 'failed',
   cancelled: 'cancelled',
@@ -38,6 +42,7 @@ function describe(errand: ErrandRecord): string {
   const lines = [`- [${errand.id}] ${status(errand)} — ${errand.goal}`];
   if (errand.deliveryIncomplete) lines.push(`  Delivery incomplete: ${errand.deliveryError ?? 'not every contact received the message yet'}`);
   else if (errand.pendingMessage && errand.state === 'awaiting_principal') lines.push(`  Pending question: ${errand.pendingMessage}`);
+  else if (errand.pendingMessage && errand.state === 'awaiting_confirmation') lines.push(`  Proposed result: ${errand.pendingMessage}`);
   else if (errand.pendingMessage && ['draft', 'queued'].includes(errand.state)) lines.push(`  Draft opener: ${errand.pendingMessage}`);
   if (errand.notes) lines.push(`  Notes: ${errand.notes}`);
   if (errand.result) lines.push(`  Result: ${errand.result}`);
@@ -137,12 +142,18 @@ export const approveErrand = withErrands(TOOL_NAMES.approve, async (args, sessio
 
 export const answerErrand = withErrands(TOOL_NAMES.answer, async (args, sessionId, errands) => {
   const answer = requireArg(args, 'answer');
-  const errand = choose(errands.listForSession(sessionId), args, (item) => item.state === 'awaiting_principal', 'waiting on the human\'s answer');
+  const errand = choose(errands.listForSession(sessionId), args, (item) => ANSWERABLE.includes(item.state), 'waiting on the human\'s answer');
   if (errand.deliveryIncomplete) {
     throw new Error(`Errand "${errand.goal}" still has a message that did not reach every contact. Call ${TOOL_NAMES.approve} to retry it before answering.`);
   }
   const { errand: updated, reply } = await errands.answer(errand.id, answer);
   return `Errand "${errand.goal}": the Negotiator sent the contact "${reply}". Status: ${status(updated)}.`;
+});
+
+export const resolveErrand = withErrands(TOOL_NAMES.resolve, async (args, sessionId, errands) => {
+  const errand = choose(errands.listForSession(sessionId), args, (item) => item.state === 'awaiting_confirmation', 'waiting for the human to confirm its result');
+  const updated = await errands.confirm(errand.id);
+  return `Errand "${errand.goal}": the Negotiator sent its closing message to the contact. Status: ${status(updated)}.`;
 });
 
 export const listErrands = withErrands(TOOL_NAMES.list, async (_args, sessionId, errands) => {
@@ -200,13 +211,22 @@ export function create(context: ToolPluginContext): Plugin {
         defineTool({
           name: TOOL_NAMES.answer,
           description:
-            'Answer a question an errand escalated to the human. Call it when the human\'s message answers that pending question — ' +
-            'even a short "yes", "no" or "sim". Pass their answer as written; the Negotiator turns it into the reply to the contact and carries on.',
+            'Answer a question an errand escalated to the human — even a short "yes", "no" or "sim" — or pass on something more an errand ' +
+            'with a proposed result still needs. Pass their answer as written; the Negotiator turns it into the reply to the contact and carries on.',
           parameters: {
             answer: { type: 'string', required: true, description: 'The human\'s answer, as written.' },
             errandId: ERRAND_ID,
           },
           handler: handler(answerErrand),
+          enabled,
+        }),
+        defineTool({
+          name: TOOL_NAMES.resolve,
+          description:
+            'Confirm the result of an errand whose goal looks achieved and is waiting for the human\'s confirmation ("pode fechar", "ok", "yes"). ' +
+            `Sends the Negotiator's closing message to the contact and resolves the errand. If the human wants something more instead, call ${TOOL_NAMES.answer}.`,
+          parameters: { errandId: ERRAND_ID },
+          handler: handler(resolveErrand),
           enabled,
         }),
         defineTool({

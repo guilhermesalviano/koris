@@ -20,7 +20,18 @@ describe('ErrandRepository', () => {
 
     const [sql, params] = db.run.mock.calls[0];
     expect(sql).toContain('INSERT INTO errands');
-    expect(params).toEqual(['e1', 'buy milk', 'draft', 's1', null, null, null, errand.createdAt, null, null, null]);
+    expect(params).toEqual(['e1', 'buy milk', 'draft', 's1', null, null, null, errand.createdAt, null, null, null, null]);
+  });
+
+  it('saves and reads back the held closing reply', () => {
+    const db = makeDb();
+    const repository = new ErrandRepository(db as never);
+    repository.save(new Errand({ id: 'e1', goal: 'buy milk', state: 'awaiting_confirmation', originSessionId: 's1', closingReply: 'Obrigado!' }));
+    expect(db.run.mock.calls[0][0]).toContain('closing_reply');
+    expect(db.run.mock.calls[0][1].at(-1)).toBe('Obrigado!');
+
+    db.get.mockReturnValue({ id: 'e1', goal: 'g', state: 'awaiting_confirmation', origin_session_id: 's1', created_at: 'x', closing_reply: 'Obrigado!' });
+    expect(repository.findById('e1')).toMatchObject({ state: 'awaiting_confirmation', closingReply: 'Obrigado!' });
   });
 
   it('update maps camelCase keys to snake_case', () => {
@@ -88,9 +99,9 @@ describe('ErrandRepository', () => {
 
     const [sql, params] = db.get.mock.calls[0];
     expect(sql).toContain('JOIN errand_targets');
-    expect(sql).toContain("IN (?, ?, ?, ?)");
+    expect(sql).toContain("IN (?, ?, ?, ?, ?)");
     expect(params[0]).toBe('target-session');
-    expect(params.slice(1)).toEqual(['draft', 'open', 'awaiting_peer', 'awaiting_principal']);
+    expect(params.slice(1)).toEqual(['draft', 'open', 'awaiting_peer', 'awaiting_principal', 'awaiting_confirmation']);
     expect(errand?.id).toBe('e1');
   });
 

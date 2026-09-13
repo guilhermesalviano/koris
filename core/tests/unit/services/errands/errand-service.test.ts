@@ -257,63 +257,100 @@ describe('ErrandService', () => {
   });
 
   describe('resolve / fail / cancel', () => {
-    it('does not send a closing reply for an already cancelled errand', async () => {
-      const { service, errandRepo, outbound } = makeService();
-      const errand = new Errand({ id: 'e1', goal: 'Book', state: 'cancelled', originSessionId: 'parent' });
-      errandRepo.findById.mockReturnValue(errand);
+    const proposed = (patch: Partial<ConstructorParameters<typeof Errand>[0]> = {}) => new Errand({
+      id: 'e1', goal: 'Book a haircut', state: 'awaiting_confirmation', originSessionId: 'parent',
+      pendingMessage: 'Booked Saturday at 11', closingReply: 'Thank you!', ...patch,
+    });
+    const tracking = (errandRepo: ReturnType<typeof makeErrandRepo>, initial: Errand) => {
+      errandRepo.findById.mockReturnValue(initial);
+      errandRepo.update.mockImplementation((_id, patch) => {
+        errandRepo.findById.mockReturnValue(new Errand({ ...errandRepo.findById('e1'), ...patch }));
+      });
+    };
 
-      await expect(service.resolveWithClosingReply('e1', 'contact', 'Thank you!', 'Booked')).resolves.toEqual(errand);
+    it('proposes a result: holds the closing reply, asks the principal, and sends nothing to the contact', () => {
+      const { service, db, errandRepo, sessionRepo, outbound } = makeService();
+      errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'Book a haircut', state: 'awaiting_peer', originSessionId: 'origin-1' }));
+      sessionRepo.findById.mockReturnValue({ id: 'origin-1', channel: 'web', peerId: 'web', kind: 'user' });
+      sessionRepo.findLatestOpen.mockReturnValue({ id: 'negotiation-1', channel: 'negotiator', peerId: 'e1', kind: 'user' });
+
+      const result = service.proposeResolution('e1', 'Booked Saturday at 11', 'Thank you!', 'contact confirmed');
+
+      expect(result).toMatchObject({ state: 'awaiting_confirmation', pendingMessage: 'Booked Saturday at 11', closingReply: 'Thank you!', notes: 'contact confirmed' });
       expect(outbound.send).not.toHaveBeenCalled();
-      expect(errandRepo.update).not.toHaveBeenCalled();
+      expect(db.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO messages'), [
+        expect.any(String), 'negotiation-1', 'assistant', '🏁 Errand "Book a haircut" looks done: Booked Saturday at 11',
+        null, null, expect.any(String), 'negotiator',
+      ]);
     });
 
-    it('rejects closing replies addressed to a session outside the errand', async () => {
-      const { service, errandRepo, outbound } = makeService();
-      errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'Book', state: 'awaiting_peer', originSessionId: 'parent' }));
-      errandRepo.findTargets.mockReturnValue(['contact']);
-
-      await expect(service.resolveWithClosingReply('e1', 'unrelated', 'Thank you!', 'Booked')).rejects.toThrow('not a target');
-      expect(outbound.send).not.toHaveBeenCalled();
-      expect(errandRepo.update).not.toHaveBeenCalled();
-    });
-
-    it('rejects a closing reply if the target session was removed', async () => {
+    it('confirming sends the held closing reply to every contact, then resolves with the proposed result', async () => {
       const { service, errandRepo, sessionRepo, outbound } = makeService();
-      errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'Book', state: 'awaiting_peer', originSessionId: 'parent' }));
+      tracking(errandRepo, proposed());
       errandRepo.findTargets.mockReturnValue(['contact']);
-      sessionRepo.findById.mockReturnValue(null as never);
+      sessionRepo.findById.mockImplementation((id: string) => (id === 'contact'
+        ? { id, channel: 'whatsapp', peerId: '555', kind: 'delegated' }
+        : { id, channel: 'web', peerId: 'web', kind: 'user' }));
 
-      await expect(service.resolveWithClosingReply('e1', 'contact', 'Thank you!', 'Booked')).rejects.toThrow('target session not found');
-      expect(outbound.send).not.toHaveBeenCalled();
-      expect(errandRepo.update).not.toHaveBeenCalled();
+      const result = await service.confirmResolution('e1');
+
+      expect(outbound.send).toHaveBeenCalledWith({ channel: 'whatsapp', target: '555', kind: 'delegated', sessionId: 'contact', content: 'Thank you!' });
+      expect(result).toMatchObject({ state: 'resolved', result: 'Booked Saturday at 11', closingReply: undefined });
     });
 
-    it('does not resolve or notify the parent when the closing reply fails delivery', async () => {
+    it('refuses to confirm an errand that is not waiting for confirmation', async () => {
       const { service, errandRepo, outbound } = makeService();
-      errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'Book a haircut', state: 'awaiting_peer', originSessionId: 'parent' }));
+      errandRepo.findById.mockReturnValue(proposed({ state: 'awaiting_peer' }));
+      await expect(service.confirmResolution('e1')).rejects.toThrow('not waiting for your confirmation');
+      expect(outbound.send).not.toHaveBeenCalled();
+    });
+
+    it('keeps waiting for confirmation when the closing reply fails delivery or a target is gone', async () => {
+      const { service, errandRepo, outbound, sessionRepo } = makeService();
+      errandRepo.findById.mockReturnValue(proposed());
       errandRepo.findTargets.mockReturnValue(['contact']);
       outbound.send.mockResolvedValue({ status: 'failed' });
+      await expect(service.confirmResolution('e1')).rejects.toThrow('still waiting for your confirmation');
+      expect(errandRepo.update).not.toHaveBeenCalled();
 
-      await expect(service.resolveWithClosingReply('e1', 'contact', 'Thank you!', 'Booked')).rejects.toThrow('Could not deliver the closing reply');
-
-      expect(outbound.send).toHaveBeenCalledTimes(1);
-      expect(outbound.send).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'contact', content: 'Thank you!' }));
+      sessionRepo.findById.mockReturnValue(null as never);
+      await expect(service.confirmResolution('e1')).rejects.toThrow('target session not found');
       expect(errandRepo.update).not.toHaveBeenCalled();
     });
 
-    it('preserves cancellation while a closing reply is being delivered', async () => {
+    it('does not resolve an errand cancelled while its closing reply was being delivered', async () => {
       const { service, errandRepo, outbound } = makeService();
-      const errand = new Errand({ id: 'e1', goal: 'Book a haircut', state: 'awaiting_peer', originSessionId: 'parent' });
-      errandRepo.findById.mockReturnValue(errand);
+      errandRepo.findById.mockReturnValue(proposed());
       errandRepo.findTargets.mockReturnValue(['contact']);
       outbound.send.mockImplementationOnce(async () => {
-        errandRepo.findById.mockReturnValue(new Errand({ ...errand, state: 'cancelled' }));
+        errandRepo.findById.mockReturnValue(proposed({ state: 'cancelled' }));
         return { status: 'sent' };
       });
 
-      expect((await service.resolveWithClosingReply('e1', 'contact', 'Thank you!', 'Booked')).state).toBe('cancelled');
+      expect((await service.confirmResolution('e1')).state).toBe('cancelled');
       expect(errandRepo.update).not.toHaveBeenCalled();
-      expect(outbound.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a proposed result waiting through small talk, and drops it when the Negotiator escalates', () => {
+      const { service, errandRepo } = makeService();
+      tracking(errandRepo, proposed());
+      expect(service.recordPeerReply('e1', 'said thanks')).toMatchObject({ state: 'awaiting_confirmation', closingReply: 'Thank you!' });
+      expect(service.escalate('e1', 'They now ask for a deposit. OK?')).toMatchObject({ state: 'awaiting_principal', closingReply: undefined });
+    });
+
+    it('resumes a proposed result with an extra requirement: sends it to the contact and waits on them again', async () => {
+      const { service, errandRepo, sessionRepo, outbound } = makeService();
+      tracking(errandRepo, proposed());
+      errandRepo.findTargets.mockReturnValue(['contact']);
+      sessionRepo.findById.mockImplementation((id: string) => ({ id, channel: 'whatsapp', peerId: '555', kind: 'delegated' }));
+
+      const { errand } = await service.resumeWithPrincipalAnswer('e1', 'also a beard trim');
+
+      expect(mockComposeResume).toHaveBeenCalledWith(expect.objectContaining({
+        answer: 'also a beard trim', question: expect.stringContaining('Booked Saturday at 11'),
+      }));
+      expect(outbound.send).toHaveBeenCalledWith(expect.objectContaining({ target: '555', content: 'resumed reply' }));
+      expect(errand).toMatchObject({ state: 'awaiting_peer', pendingMessage: undefined, closingReply: undefined });
     });
 
     it('resolve closes the errand, sets result and closedAt, and notifies the negotiation session', () => {

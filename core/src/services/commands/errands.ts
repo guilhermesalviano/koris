@@ -143,6 +143,7 @@ async function runAction(
  * - `/errand` — list errands originating from this session
  * - `/errand <goal> with <contact> on <channel>` — create one (staged as a draft)
  * - `/errand approve <id>` — send the staged opener
+ * - `/errand resolve <id>` — confirm a proposed result: send the closing message and resolve
  * - `/errand close <id>` — mark it resolved
  * - `/errand cancel <id>` — cancel it
  */
@@ -183,6 +184,9 @@ export async function handleErrandCommand(command: string, context: CommandConte
     } catch (err) {
       return formatCommandResult(err instanceof Error ? err.message : String(err), context.source);
     }
+  }
+  if (sub === 'resolve') {
+    return runAction(context, arg, 'resolve', (svc, id) => svc.confirmResolution(id));
   }
   if (sub === 'close') {
     return runAction(context, arg, 'close', (svc, id) => svc.resolve(id, 'Closed by the principal.'));

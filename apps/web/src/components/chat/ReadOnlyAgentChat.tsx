@@ -70,7 +70,7 @@ function EntryImages({ entry, onPreviewImages }: { entry: ReadOnlyChatEntry; onP
 export function ReadOnlyChatMessage({ entry, agentId, actions, onPreviewImages }: { entry: ReadOnlyChatEntry; agentId: AgentId; actions?: ReactNode; onPreviewImages?: PreviewImages }) {
   const contact = entry.kind === 'contact';
   const task = entry.kind === 'task';
-  const notices = entry.details?.filter((detail) => ['Unsent draft', 'Question awaiting your answer', 'Delivery incomplete', 'Conversation unavailable'].includes(detail.label));
+  const notices = entry.details?.filter((detail) => ['Unsent draft', 'Question awaiting your answer', 'Result awaiting your confirmation', 'Delivery incomplete', 'Conversation unavailable'].includes(detail.label));
   return (
     <article data-entry-id={entry.id} className={cn('flex min-w-0 gap-2.5', contact && 'flex-row-reverse')}>
       {!contact && !task && <AgentAvatar id={agentId} className="mt-1 h-10 w-10" />}
@@ -175,7 +175,7 @@ export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, er
           {entries.length > 0 && <p className="text-center font-mono text-micro text-txt-3">{historyLabel}</p>}
           {entries.map((entry, index) => {
             // A new errand or run always opens its own section, labelled with when it started.
-            const separator = entry.section ? `${entry.section} · ${dayTimeLabel(entry.at)}` : chatSeparatorLabel(entry.at, entries[index - 1]?.at);
+            const separator = entry.section ? `${entry.section} · ${dayTimeLabel(entry.sectionAt ?? entry.at)}` : chatSeparatorLabel(entry.at, entries[index - 1]?.at);
             return (
               <Fragment key={entry.id}>
                 {separator && <DateSeparator label={separator} session={Boolean(entry.section)} />}

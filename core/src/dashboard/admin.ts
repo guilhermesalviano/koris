@@ -450,7 +450,7 @@ class AdminRouterFactory {
       res.json({
         sessions: sessionRepo.count(),
         openSessions: sessionRepo.countOpen(),
-        openErrands: (['draft', 'queued', 'open', 'awaiting_peer', 'awaiting_principal'] as ErrandState[])
+        openErrands: (['draft', 'queued', 'open', 'awaiting_peer', 'awaiting_principal', 'awaiting_confirmation'] as ErrandState[])
           .reduce((sum, state) => sum + ErrandRepositoryFactory.create(db).countByState(state), 0),
         messages: messageRepo.count(),
         memories: memoryRepo.count(),
@@ -541,13 +541,16 @@ class AdminRouterFactory {
       const page = messageRepo.getTimeline({ key: { channel: NEGOTIATION_CHANNEL, kind: 'user' }, before, limit });
       const errandIds = new Map([...new Set(page.messages.map((m) => m.sessionId))]
         .map((id) => [id, sessionRepo.findById(id)?.peerId ?? null]));
-      // Questions still waiting on the principal, read in the same request as the
-      // notices so the page never shows a question it cannot answer yet.
-      const pending = (buildErrandService(logger, db, sessionManager)?.listAll('awaiting_principal', 50) ?? [])
+      // Questions and proposed results still waiting on the principal, read in the
+      // same request as the notices so the page never shows one it cannot answer yet.
+      const errandService = buildErrandService(logger, db, sessionManager);
+      const pending = (['awaiting_principal', 'awaiting_confirmation'] as const)
+        .flatMap((state) => errandService?.listAll(state, 50) ?? [])
         .filter((errand) => !errand.pendingDelivery)
         .map((errand) => ({
           errandId: errand.id,
           goal: errand.goal,
+          kind: errand.state === 'awaiting_confirmation' ? 'confirmation' : 'question',
           question: errand.pendingMessage ?? null,
           askedAt: errand.lastProgressAt ?? errand.createdAt,
         }));
@@ -845,6 +848,19 @@ class AdminRouterFactory {
 
       try {
         res.json(toErrandJson(errandService.cancel(String(req.params.id))));
+      } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    router.post('/errands/:id/confirm', async (req: Request, res: Response) => {
+      const errandService = buildErrandService(logger, db, sessionManager);
+      if (!errandService) {
+        res.status(503).json({ error: 'Errands are not available: no channel manager is running.' });
+        return;
+      }
+      try {
+        res.json(toErrandJson(await errandService.confirmResolution(String(req.params.id))));
       } catch (err) {
         res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
       }

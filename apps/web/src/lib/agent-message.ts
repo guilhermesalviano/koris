@@ -16,6 +16,10 @@ export function agentMessagePresentation(message: AgentMessage): Pick<AgentMessa
   if (question) {
     return { senderAgentId: 'negotiator', content: `I need your input on “${question[1]}”.\n\n${question[2]}` };
   }
+  const proposed = /^🏁 Errand "([\s\S]+?)" looks done: ([\s\S]+)$/.exec(message.content);
+  if (proposed) {
+    return { senderAgentId: 'negotiator', content: `I think “${proposed[1]}” is done.\n\n${proposed[2]}\n\nCan I resolve it, or does it need something else?` };
+  }
   const resolved = /^✅ Errand "([\s\S]+?)" resolved: ([\s\S]+)$/.exec(message.content);
   if (resolved) {
     return { senderAgentId: 'negotiator', content: `I've completed “${resolved[1]}”.\n\n${resolved[2]}` };

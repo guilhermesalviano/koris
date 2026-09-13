@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ErrandRecord, IErrandsGateway, ILogger, ToolDefinition, ToolPluginContext } from '../contracts';
 import type { PluginRegistry } from '../../registry';
 import {
-  TOOL_NAMES, answerErrand, approveErrand, cancelErrand, closeErrand, create, listErrands, normalizeContact, pickErrand, startErrand,
+  TOOL_NAMES, answerErrand, approveErrand, cancelErrand, closeErrand, create, listErrands, normalizeContact, pickErrand, resolveErrand, startErrand,
 } from './index';
 
 const logger: ILogger = { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
@@ -22,6 +22,7 @@ function gateway(errands: ErrandRecord[] = [errand()]): { [K in keyof IErrandsGa
     approve: vi.fn().mockResolvedValue(errand({ state: 'awaiting_peer' })),
     retry: vi.fn().mockResolvedValue(errand({ state: 'awaiting_peer' })),
     answer: vi.fn().mockResolvedValue({ errand: errand({ state: 'awaiting_peer' }), reply: 'Perfeito, quarta então!' }),
+    confirm: vi.fn().mockResolvedValue(errand({ state: 'resolved' })),
     close: vi.fn().mockResolvedValue(errand({ state: 'resolved' })),
     cancel: vi.fn().mockResolvedValue(errand({ state: 'cancelled' })),
     followUrl: vi.fn().mockReturnValue('http://koris.local:3000/admin/agents/negotiator'),
@@ -148,6 +149,25 @@ describe('errand tools', () => {
     await cancelErrand(logger, {}, chat, errands);
     expect(errands.cancel).toHaveBeenCalledWith('e1');
     expect(await cancelErrand(logger, { errandId: 'e2' }, chat, errands)).toMatchObject({ success: false });
+  });
+
+  it('confirms the only proposed result, and passes extra requirements for it through answer_errand', async () => {
+    const proposed = errand({ id: 'p1', state: 'awaiting_confirmation', pendingMessage: 'Booked Saturday at 11' });
+    const errands = gateway([proposed, errand({ id: 'e2', state: 'awaiting_peer' })]);
+
+    const resolved = await resolveErrand(logger, {}, chat, errands);
+    expect(errands.confirm).toHaveBeenCalledExactlyOnceWith('p1');
+    expect(resolved).toMatchObject({ success: true, result: expect.stringContaining('closing message') });
+
+    await answerErrand(logger, { answer: 'also a beard trim' }, chat, errands);
+    expect(errands.answer).toHaveBeenCalledWith('p1', 'also a beard trim');
+
+    const list = await listErrands(logger, {}, chat, errands);
+    expect(list.result).toContain('Proposed result: Booked Saturday at 11');
+
+    const none = gateway([errand({ state: 'awaiting_peer' })]);
+    expect(await resolveErrand(logger, {}, chat, none)).toMatchObject({ success: false });
+    expect(none.confirm).not.toHaveBeenCalled();
   });
 
   it('keeps JIDs and Telegram ids as given', () => {

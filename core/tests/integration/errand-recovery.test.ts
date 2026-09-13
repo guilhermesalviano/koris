@@ -258,7 +258,7 @@ describe('errand recovery and privacy', () => {
     const waiting = { status: vi.fn().mockReturnThis(), json: vi.fn() };
     await noticesLayer!.route.stack[0].handle({ params: {}, query: {} }, waiting, vi.fn());
     expect(waiting.json.mock.calls[0][0].pending).toEqual([
-      { errandId: errand.id, goal: 'Book a haircut', question: 'Would 11 work?', askedAt: expect.any(String) },
+      { errandId: errand.id, goal: 'Book a haircut', kind: 'question', question: 'Would 11 work?', askedAt: expect.any(String) },
     ]);
     expect(channels.sendMessage).toHaveBeenLastCalledWith('whatsapp', '999', expect.stringContaining('Would 11 work?'));
     await vi.waitFor(() => expect(messages.getBySessionId(negotiation.id)).toHaveLength(1));
@@ -333,6 +333,32 @@ describe('errand recovery and privacy', () => {
     await runtime.gateway.handle('hello again', '555', { isTrustedSender: false });
     expect(service.get(errand.id)?.state).toBe('resolved');
     expect(runtime.mainAgent.run).toHaveBeenCalledTimes(2);
+  });
+
+  it('confirms a proposed result through the admin API and lists it as a pending confirmation', async () => {
+    const { manager, service, parent, channels } = setup();
+    const errand = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Can I order a sandwich?');
+    await service.approve(errand.id);
+    service.proposeResolution(errand.id, 'Sandwich ordered for noon', 'Obrigado!');
+    const router = AdminRouterFactory.create(logger, db, {} as never, manager);
+    const call = async (path: string, method: 'get' | 'post') => {
+      const layer = router.stack.find((item) => item.route?.path === path && item.route.methods[method]);
+      const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      await layer!.route.stack[0].handle({ params: { id: errand.id }, query: {} }, res, vi.fn());
+      return res;
+    };
+
+    const notices = await call('/agents/negotiator/notices', 'get');
+    expect(notices.json.mock.calls[0][0].pending).toEqual([
+      { errandId: errand.id, goal: 'Order lunch', kind: 'confirmation', question: 'Sandwich ordered for noon', askedAt: expect.any(String) },
+    ]);
+    channels.sendMessage.mockClear();
+
+    const confirmed = await call('/errands/:id/confirm', 'post');
+    expect(confirmed.status).not.toHaveBeenCalled();
+    expect(confirmed.json.mock.calls[0][0]).toMatchObject({ state: 'resolved', result: 'Sandwich ordered for noon' });
+    expect(channels.sendMessage).toHaveBeenCalledExactlyOnceWith('whatsapp', '555', 'Obrigado!');
+    expect((await call('/errands/:id/confirm', 'post')).status).toHaveBeenCalledWith(400);
   });
 
   it('returns the images a contact sent in the errand transcript', async () => {

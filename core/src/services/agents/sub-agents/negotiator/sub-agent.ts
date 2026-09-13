@@ -147,7 +147,7 @@ class Negotiator {
     // A further message from the contact is not principal approval. Keep it in
     // the transcript (the gateway persists it), but do not restart a paused or
     // closed negotiation, or send anything before the opener is approved.
-    if (errand.pendingDelivery || (errand.state !== 'open' && errand.state !== 'awaiting_peer')) {
+    if (errand.pendingDelivery || !['open', 'awaiting_peer', 'awaiting_confirmation'].includes(errand.state)) {
       return { reply: '', applied: 'skipped' };
     }
 
@@ -201,10 +201,8 @@ class Negotiator {
         errandService.escalate(errand.id, verdict.detail || 'The negotiator needs your input.', verdict.notes);
         break;
       case 'resolved':
-        await errandService.resolveWithClosingReply(
-          errand.id, props.sessionId, reply,
-          verdict.detail || verdict.reply || 'Resolved.', verdict.notes,
-        );
+        // The closing message is held until the principal confirms the result.
+        errandService.proposeResolution(errand.id, verdict.detail || verdict.reply || 'Resolved.', reply, verdict.notes);
         return { reply: '', applied: 'resolved' };
       case 'failed':
         errandService.fail(errand.id, verdict.detail || verdict.reply || 'Failed.', verdict.notes);

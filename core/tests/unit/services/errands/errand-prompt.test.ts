@@ -33,6 +33,14 @@ describe('formatOpenErrandsBlock', () => {
     expect(block).not.toContain('Wednesday instead?');
   });
 
+  it('lists a proposed result with the tools to confirm it or add requirements, and hides it on web', () => {
+    const proposed = [errand({ state: 'awaiting_confirmation', pendingMessage: 'Booked Saturday at 11' })];
+    const block = formatOpenErrandsBlock(proposed)!;
+    expect(block).toContain('- [e1] goal looks achieved, waiting for the human to confirm — Book a class\n  Proposed result: Booked Saturday at 11');
+    expect(block).toContain('`resolve_errand`');
+    expect(formatOpenErrandsBlock(proposed, { includeQuestions: false })).toBeNull();
+  });
+
   it('reports an incomplete delivery instead of the staged message', () => {
     const block = formatOpenErrandsBlock([errand({
       state: 'draft',

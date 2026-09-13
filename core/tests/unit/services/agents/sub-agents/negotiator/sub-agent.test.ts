@@ -15,7 +15,7 @@ function makeErrandService(overrides: Record<string, unknown> = {}) {
     recordPeerReply: vi.fn(),
     escalate: vi.fn(),
     resolve: vi.fn(),
-    resolveWithClosingReply: vi.fn().mockResolvedValue({ state: 'resolved' }),
+    proposeResolution: vi.fn().mockReturnValue({ state: 'awaiting_confirmation' }),
     fail: vi.fn(),
     ...overrides,
   };
@@ -267,16 +267,28 @@ describe('Negotiator', () => {
     expect(result.reply).toBe('Let me check with them.');
   });
 
-  it('"resolved": sends the thank-you before closing without returning a duplicate channel reply', async () => {
+  it('"resolved": proposes the result for the principal to confirm, holding the thank-you instead of sending it', async () => {
     const { negotiator, errandService } = makeNegotiator({
-      completionText: JSON.stringify({ action: 'resolved', reply: 'Thanks, see you then!', detail: 'agreed on $10' }),
+      completionText: JSON.stringify({ action: 'resolved', reply: 'Thanks, see you then!', detail: 'agreed on $10', notes: 'deal at $10' }),
     });
 
     const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'deal', messageHistory: [] });
 
-    expect(errandService.resolveWithClosingReply).toHaveBeenCalledExactlyOnceWith('errand-1', 's1', 'Thanks, see you then!', 'agreed on $10', undefined);
+    expect(errandService.proposeResolution).toHaveBeenCalledExactlyOnceWith('errand-1', 'agreed on $10', 'Thanks, see you then!', 'deal at $10');
     expect(errandService.resolve).not.toHaveBeenCalled();
     expect(result).toEqual({ reply: '', applied: 'resolved' });
+  });
+
+  it('keeps talking to the contact while a proposed result waits for confirmation', async () => {
+    const errandService = makeErrandService({
+      get: vi.fn().mockReturnValue({ id: 'errand-1', state: 'awaiting_confirmation', goal: 'buy milk', notes: 'deal at $10' }),
+    });
+    const { negotiator } = makeNegotiator({ errandService, completionText: JSON.stringify({ action: 'continue', reply: 'De nada!' }) });
+
+    const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'Obrigado!', messageHistory: [] });
+
+    expect(errandService.recordPeerReply).toHaveBeenCalledWith('errand-1', undefined);
+    expect(result).toEqual({ reply: 'De nada!', applied: 'continue' });
   });
 
   it.each([undefined, '', '   '])('uses a thank-you fallback when the resolved reply is %s', async (reply) => {
@@ -284,7 +296,7 @@ describe('Negotiator', () => {
       completionText: JSON.stringify({ action: 'resolved', reply, detail: 'Booking confirmed' }),
     });
     const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'Confirmed', messageHistory: [] });
-    expect(errandService.resolveWithClosingReply).toHaveBeenCalledExactlyOnceWith('errand-1', 's1', 'Thank you for your help!', 'Booking confirmed', undefined);
+    expect(errandService.proposeResolution).toHaveBeenCalledExactlyOnceWith('errand-1', 'Booking confirmed', 'Thank you for your help!', undefined);
     expect(result).toEqual({ reply: '', applied: 'resolved' });
   });
 
@@ -319,7 +331,7 @@ describe('Negotiator', () => {
     const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'Done', messageHistory: [] });
 
     if (action === 'resolved') {
-      expect(errandService.resolveWithClosingReply).toHaveBeenCalledExactlyOnceWith('errand-1', 's1', reply || 'Thank you for your help!', summary, undefined);
+      expect(errandService.proposeResolution).toHaveBeenCalledExactlyOnceWith('errand-1', summary, reply || 'Thank you for your help!', undefined);
       expect(result).toEqual({ reply: '', applied: 'resolved' });
     } else {
       expect(errandService.fail).toHaveBeenCalledExactlyOnceWith('errand-1', summary, undefined);
@@ -336,7 +348,7 @@ describe('Negotiator', () => {
       const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'No thanks', messageHistory: [] });
 
       expect(result).toEqual({ reply: '', applied: action });
-      expect(errandService.resolveWithClosingReply).not.toHaveBeenCalled();
+      expect(errandService.proposeResolution).not.toHaveBeenCalled();
     });
   });
 

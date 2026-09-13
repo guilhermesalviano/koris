@@ -184,18 +184,26 @@ describe('negotiation steps header', () => {
     expect(headerErrand([])).toBeNull();
   });
 
-  it('places the errand on Approval, Contacted or Done, keeping a question for the human on Contacted', () => {
-    expect(negotiationSteps('draft').map((step) => step.label)).toEqual(['Approval', 'Contacted', 'Done']);
-    expect(statuses('queued')).toEqual(['current', 'upcoming', 'upcoming']);
-    expect(statuses('awaiting_peer')).toEqual(['done', 'current', 'upcoming']);
-    expect(statuses('awaiting_principal')).toEqual(['done', 'current', 'upcoming']);
+  it('places the errand on Approval, Contacted, Confirm or Done, keeping a question for the human on Contacted', () => {
+    expect(negotiationSteps('draft').map((step) => step.label)).toEqual(['Approval', 'Contacted', 'Confirm', 'Done']);
+    expect(statuses('queued')).toEqual(['current', 'upcoming', 'upcoming', 'upcoming']);
+    expect(statuses('awaiting_peer')).toEqual(['done', 'current', 'upcoming', 'upcoming']);
+    expect(statuses('awaiting_principal')).toEqual(['done', 'current', 'upcoming', 'upcoming']);
+    expect(statuses('awaiting_confirmation')).toEqual(['done', 'done', 'current', 'upcoming']);
+  });
+
+  it('shows a proposed result waiting for confirmation on the errand entry', () => {
+    const [task] = buildNegotiatorChat([{ errand: { ...errand, state: 'awaiting_confirmation', pendingMessage: 'Lunch booked at noon' }, messages: [] }]);
+    expect(task).toMatchObject({ status: 'Waiting for your confirmation' });
+    expect(task.details).toContainEqual({ label: 'Result awaiting your confirmation', content: 'Lunch booked at noon' });
   });
 
   it('completes every step once closed, naming the outcome and flagging an unsuccessful one', () => {
     expect(negotiationSteps('resolved')).toEqual([
-      { label: 'Approval', status: 'done' }, { label: 'Contacted', status: 'done' }, { label: 'Resolved', status: 'done' },
+      { label: 'Approval', status: 'done' }, { label: 'Contacted', status: 'done' },
+      { label: 'Confirm', status: 'done' }, { label: 'Resolved', status: 'done' },
     ]);
-    expect(negotiationSteps('cancelled')[2]).toEqual({ label: 'Cancelled', status: 'done', unsuccessful: true });
+    expect(negotiationSteps('cancelled')[3]).toEqual({ label: 'Cancelled', status: 'done', unsuccessful: true });
   });
 });
 
@@ -207,9 +215,9 @@ describe('negotiation center', () => {
       { id: 'n3', role: 'assistant', content: '✅ Errand "Old" resolved: Done.', createdAt: '2026-09-13T10:06:00Z', errandId: 'gone' },
     ], [errand]);
     expect(entries).toEqual([
-      { id: 'notice:n1', at: Date.parse('2026-09-13T10:04:00Z'), kind: 'assistant', author: 'Negotiator', context: 'Arrange lunch', content: 'I need your input on “Arrange lunch”.\n\nWould 11 work?' },
+      { id: 'notice:n1', at: Date.parse('2026-09-13T10:04:00Z'), kind: 'assistant', author: 'Negotiator', context: 'Arrange lunch', content: 'I need your input on “Arrange lunch”.\n\nWould 11 work?', section: 'New errand', sectionAt: Date.parse('2026-09-13T10:00:00Z') },
       { id: 'notice:n2', at: Date.parse('2026-09-13T10:05:00Z'), kind: 'contact', author: 'You', context: 'Arrange lunch', content: '11 works' },
-      { id: 'notice:n3', at: Date.parse('2026-09-13T10:06:00Z'), kind: 'assistant', author: 'Negotiator', context: 'gone', content: "I've completed “Old”.\n\nDone." },
+      { id: 'notice:n3', at: Date.parse('2026-09-13T10:06:00Z'), kind: 'assistant', author: 'Negotiator', context: 'gone', content: "I've completed “Old”.\n\nDone.", section: 'New errand' },
     ]);
   });
 });

@@ -161,10 +161,10 @@ export interface IStickerRulesGateway {
 export interface ErrandRecord {
   id: string;
   goal: string;
-  /** draft | queued | open | awaiting_peer | awaiting_principal | resolved | failed | cancelled | expired */
+  /** draft | queued | open | awaiting_peer | awaiting_principal | awaiting_confirmation | resolved | failed | cancelled | expired */
   state: string;
   originSessionId: string;
-  /** The staged opener (draft/queued) or the question waiting on the human (awaiting_principal). */
+  /** The staged opener (draft/queued), the question waiting on the human (awaiting_principal), or the result waiting for their confirmation (awaiting_confirmation). */
   pendingMessage?: string;
   /** Set while a staged message has not reached every contact yet. */
   deliveryError?: string;
@@ -190,6 +190,8 @@ export interface IErrandsGateway {
   retry(id: string): Promise<ErrandRecord>;
   /** Resumes an errand waiting on the human; `reply` is what the Negotiator sent the contact. */
   answer(id: string, answer: string): Promise<{ errand: ErrandRecord; reply: string }>;
+  /** Confirms a proposed result: sends the Negotiator's closing message and resolves the errand. */
+  confirm(id: string): Promise<ErrandRecord>;
   close(id: string, result: string): Promise<ErrandRecord>;
   cancel(id: string): Promise<ErrandRecord>;
   /** Dashboard page where the human follows the Negotiator's conversations. */

@@ -102,6 +102,7 @@ function createErrandsGateway(logger: ILogger, db: IDatabaseService): IErrandsGa
       const { errand, reply } = await resolve().errandService.resumeWithPrincipalAnswer(id, answer);
       return { errand: toErrandRecord(errand), reply };
     },
+    confirm: async (id) => toErrandRecord(await resolve().errandService.confirmResolution(id)),
     close: async (id, result) => toErrandRecord(resolve().errandService.resolve(id, result)),
     cancel: async (id) => toErrandRecord(resolve().errandService.cancel(id)),
     followUrl: () => `${config.GATEWAY_HOST.replace(/\/+$/, '')}/admin/agents/negotiator`,

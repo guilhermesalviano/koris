@@ -119,7 +119,7 @@ You are handling one message turn of a delegated errand, negotiating directly wi
 Read the other party's latest message (given as the user turn) in light of the conversation history, then decide the outcome of THIS turn:
 - "continue": answer their latest question or ask for the next missing detail. You may exchange as many turns as needed to understand the available options; one counteroffer does not end the negotiation. Update notes with anything worth remembering.
 - "escalate": you need the human's input before continuing (a decision, approval, or information only they have). Ask them a specific question.
-- "resolved": the goal has been achieved. Include a brief, warm thank-you to the other party in "reply", matching their language and tone, and summarize the confirmed result in "detail" for the human. Never leave "reply" empty: it is sent before reporting completion to the parent session. Do not ask another question or reopen the negotiation.
+- "resolved": the goal appears achieved. Summarize the confirmed result in "detail" for the human, and put a brief, warm closing thank-you to the other party in "reply", matching their language and tone. The human reviews the result first: your "reply" is held and only sent once they confirm, and they may instead ask for something more. Never leave "reply" empty. Do not ask another question or reopen the negotiation.
 - "failed": the goal cannot be achieved (refused, dead end, out of options). Explain why.
 
 ### Continuity and approval
@@ -168,6 +168,8 @@ This is a follow-up in an existing errand, not a new opening request. The assist
 ### Most recent message you sent to the contact
 {v2}
 
+When the state is "awaiting_confirmation", you already reported the goal as achieved and the human has not confirmed yet; your closing thank-you has not been sent. Answer the contact briefly without reopening the deal or thanking them for closing it ("continue"). Use "resolved" again only if the result you reported has changed, and "escalate" if the contact raises something the human must decide.
+
 Use the goal and cumulative notes above to tailor the next step to this errand. Respond to the latest contact message at the end of the transcript. Keep proposals provisional until the principal approves any change to their instructions. An escalation is delivered by the runtime to the original requesting (parent) session; only your "reply" field goes to the contact.
 `.trim();
 
@@ -192,7 +194,7 @@ export const ERRAND_RESUME_INSTRUCTIONS = `
 ## Errand Negotiation Resumption
 
 You previously paused this negotiation to ask the human for a decision. The human has now responded with instructions. Write the next message to send to the other party to continue the negotiation, applying the human's guidance as your own decision.
-State that decision in the first person ("Pode ser às 11, então"), never as something relayed ("John disse que prefere…", "John confirmou…"). Do not restart the request or repeat the introduction. Refer to the offer being discussed, apply only the choice or change the human authorized, and ask for the contact's confirmation if needed. If the answer is a question or rejection, continue negotiating rather than claiming a booking. This message does not itself mean the goal is resolved.
+State that decision in the first person ("Pode ser às 11, então"), never as something relayed ("John disse que prefere…", "John confirmou…"). If you had reported the goal as achieved and the human answers with something more it needs, ask the contact for that addition as your own follow-up request. Do not restart the request or repeat the introduction. Refer to the offer being discussed, apply only the choice or change the human authorized, and ask for the contact's confirmation if needed. If the answer is a question or rejection, continue negotiating rather than claiming a booking. This message does not itself mean the goal is resolved.
 
 ### Errand goal
 {v1}

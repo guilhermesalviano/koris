@@ -70,6 +70,7 @@ export type ErrandState =
   | 'open'
   | 'awaiting_peer'
   | 'awaiting_principal'
+  | 'awaiting_confirmation'
   | 'resolved'
   | 'failed'
   | 'cancelled'
@@ -125,6 +126,8 @@ export interface NegotiatorNotice {
 export interface NegotiatorPendingQuestion {
   errandId: string;
   goal: string;
+  /** A question to answer, or a proposed result to confirm (or add requirements to). */
+  kind: 'question' | 'confirmation';
   question: string | null;
   askedAt: string;
 }

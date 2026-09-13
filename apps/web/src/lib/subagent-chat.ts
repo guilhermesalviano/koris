@@ -19,6 +19,8 @@ export interface ReadOnlyChatEntry {
   detailsLabel?: string;
   /** Opens a new chat section (e.g. "New errand"), shown with the entry's time in an accented divider. */
   section?: string;
+  /** Time shown in the section divider when it differs from the entry's own (e.g. when the errand started). */
+  sectionAt?: number;
 }
 
 export interface ErrandConversation {
@@ -38,6 +40,7 @@ const ERRAND_STATUS: Record<ErrandState, string> = {
   open: 'In progress',
   awaiting_peer: 'Waiting on contact',
   awaiting_principal: 'Waiting on you',
+  awaiting_confirmation: 'Waiting for your confirmation',
   resolved: 'Resolved',
   failed: 'Failed',
   cancelled: 'Cancelled',
@@ -59,15 +62,15 @@ export function headerErrand(errands: readonly ErrandItem[]): ErrandItem | null 
   return newest.find((errand) => !CLOSED_ERRAND_STATES.includes(errand.state)) ?? newest[0] ?? null;
 }
 
-/** Approval → Contacted → Done, positioned at the errand's current state; waiting on the human stays on Contacted. */
+/** Approval → Contacted → Confirm → Done, positioned at the errand's current state; a question for the human stays on Contacted. */
 export function negotiationSteps(state: ErrandState): NegotiationStep[] {
   const closed = CLOSED_ERRAND_STATES.includes(state);
-  const current = closed ? 2 : state === 'draft' || state === 'queued' ? 0 : 1;
-  const labels = ['Approval', 'Contacted', closed ? ERRAND_STATUS[state] : 'Done'];
+  const current = closed ? 3 : state === 'awaiting_confirmation' ? 2 : state === 'draft' || state === 'queued' ? 0 : 1;
+  const labels = ['Approval', 'Contacted', 'Confirm', closed ? ERRAND_STATUS[state] : 'Done'];
   return labels.map((label, index) => ({
     label,
     status: index < current || closed ? 'done' : index === current ? 'current' : 'upcoming',
-    ...(closed && index === 2 && state !== 'resolved' ? { unsuccessful: true } : {}),
+    ...(closed && index === 3 && state !== 'resolved' ? { unsuccessful: true } : {}),
   }));
 }
 
@@ -85,9 +88,10 @@ export function buildNegotiatorChat(conversations: readonly ErrandConversation[]
   const entries: ReadOnlyChatEntry[] = [];
   for (const { errand, messages, error } of conversations) {
     const details: NonNullable<ReadOnlyChatEntry['details']> = [];
-    if (errand.pendingMessage && ['draft', 'queued', 'awaiting_principal'].includes(errand.state)) {
+    if (errand.pendingMessage && ['draft', 'queued', 'awaiting_principal', 'awaiting_confirmation'].includes(errand.state)) {
       details.push({
-        label: errand.state === 'awaiting_principal' ? 'Question awaiting your answer' : 'Unsent draft',
+        label: errand.state === 'awaiting_principal' ? 'Question awaiting your answer'
+          : errand.state === 'awaiting_confirmation' ? 'Result awaiting your confirmation' : 'Unsent draft',
         content: errand.pendingMessage,
       });
     }
@@ -139,8 +143,9 @@ export function buildNegotiatorChat(conversations: readonly ErrandConversation[]
  * each labelled with the errand it belongs to.
  */
 export function buildNegotiationCenter(notices: readonly NegotiatorNotice[], errands: readonly ErrandItem[]): ReadOnlyChatEntry[] {
-  const goals = new Map(errands.map((errand) => [errand.id, errand.goal]));
-  return ordered(notices.map((notice) => {
+  const known = new Map(errands.map((errand) => [errand.id, errand]));
+  const errandOf = new Map(notices.map((notice) => [`notice:${notice.id}`, notice.errandId]));
+  const entries = ordered(notices.map((notice) => {
     const answer = notice.role === 'user';
     const { content } = agentMessagePresentation({ role: notice.role, content: notice.content, senderAgentId: notice.senderAgentId });
     return {
@@ -148,10 +153,19 @@ export function buildNegotiationCenter(notices: readonly NegotiatorNotice[], err
       at: timestamp(notice.createdAt),
       kind: answer ? 'contact' : 'assistant',
       author: answer ? 'You' : 'Negotiator',
-      context: (notice.errandId && goals.get(notice.errandId)) ?? notice.errandId ?? '',
+      context: (notice.errandId && known.get(notice.errandId)?.goal) ?? notice.errandId ?? '',
       content,
     };
   }));
+  // Each errand opens its own section at its first message, dated when the errand started.
+  const seen = new Set<string>();
+  return entries.map((entry) => {
+    const errandId = errandOf.get(entry.id);
+    if (!errandId || seen.has(errandId)) return entry;
+    seen.add(errandId);
+    const errand = known.get(errandId);
+    return { ...entry, section: 'New errand', ...(errand ? { sectionAt: timestamp(errand.createdAt) } : {}) };
+  });
 }
 
 export interface NegotiationCenterData {
