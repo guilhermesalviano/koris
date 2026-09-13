@@ -57,6 +57,16 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
     summary: 'Show what earlier context I have summarised into this session',
   },
   {
+    name: '/memories',
+    summary: 'List the newest long-term memories the Summarizer has written',
+    usage: '/memories [summary|fact|lesson|reminder] [count]',
+    trusted: true,
+    details:
+      'Newest first, across every session. Filter by type and choose how many to show ' +
+      '(default 10, at most 50), in either order: `/memories lesson 5`. ' +
+      'Unlike /memory, which shows only the summary carried into this session.',
+  },
+  {
     name: '/clear',
     aliases: ['/reset'],
     summary: 'End this session and start a fresh, empty one (no summary kept)',

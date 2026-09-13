@@ -11,6 +11,7 @@ import { IMainAgent, MainAgentFactory } from './main-agent';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import { ImageAttachment } from '../../types/messages';
 import { generateId } from '../../utils/generate-id';
+import { carryForwardMetadata } from '../../utils/session';
 import { replacePlaceholders } from '../../utils/prompt';
 import { SKILL_INVOCATION_PROMPT } from '../../constants';
 import { ISessionContextFactory, SessionContextFactory, SessionContext } from './session-context';
@@ -28,16 +29,6 @@ export type { InboundInput, IMessageGateway };
 function metadataString(metadata: Record<string, unknown> | undefined, key: string): string | undefined {
   const value = metadata?.[key];
   return typeof value === 'string' && value ? value : undefined;
-}
-
-// Session metadata keys that are a conversation preference rather than a
-// property of one thread, so they must survive `/clear` and `/compact`
-// rotation. `lastActivityAt` / `compactSummary` deliberately do not.
-function carryForwardMetadata(
-  metadata: Record<string, unknown> | undefined,
-): Record<string, unknown> | undefined {
-  const responseMode = metadataString(metadata, 'responseMode');
-  return responseMode ? { responseMode } : undefined;
 }
 
 // User-facing explanation shown when a manual-mode session is auto-compacted.
@@ -305,12 +296,7 @@ class MessageGateway implements IMessageGateway {
       channel,
     });
 
-    const carried = carryForwardMetadata(ctx.sessionService.getSession().metadata);
-    if (carried) {
-      ctx.sessionService.forceRotate(carried);
-    } else {
-      ctx.sessionService.forceRotate();
-    }
+    ctx.sessionService.forceRotate('clear', carryForwardMetadata(ctx.sessionService.getSession().metadata));
     const freshSessionId = ctx.sessionService.getSession().id;
     options?.onSessionRotated?.(freshSessionId);
     this.logger.info(`Cleared session ${clearedSessionId} → ${freshSessionId} (${channel})`);
@@ -403,7 +389,7 @@ class MessageGateway implements IMessageGateway {
       ...carried,
       ...(result ? { compactSummary: result.content } : {}),
     };
-    sessionService.forceRotate(Object.keys(rotateMetadata).length > 0 ? rotateMetadata : undefined);
+    sessionService.forceRotate('compact', rotateMetadata);
     options?.onSessionRotated?.(sessionService.getSession().id);
     this.logger.info(`Compacted session ${compactedSessionId} → ${sessionService.getSession().id} (${channel})`);
     return { compactedSessionId, rotated: true };

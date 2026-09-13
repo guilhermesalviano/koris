@@ -97,7 +97,7 @@ describe('errand recovery and privacy', () => {
   it.each([undefined, { compactSummary: 'Earlier conversation' }])('pins late notices to the origin after rotation with %j', (metadata) => {
     const { manager, service, parent, messages } = setup();
     const errand = service.create('Book a haircut', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Hello');
-    const fresh = manager.getSessionServiceById(parent.id).forceRotate(metadata);
+    const fresh = manager.getSessionServiceById(parent.id).forceRotate('clear', metadata);
     service.escalate(errand.id, 'Is 11 okay?');
     expect(manager.getSessionServiceById(parent.id).getSession().id).toBe(parent.id);
     expect(messages.getBySessionId(parent.id).map((message) => message.content)).toEqual([expect.stringContaining('Is 11 okay?')]);
@@ -225,7 +225,7 @@ describe('errand recovery and privacy', () => {
 
   it('invalidates all aliases to a deleted rotated session', () => {
     const { manager, parent } = setup();
-    const rotated = manager.getSessionServiceById(parent.id).forceRotate();
+    const rotated = manager.getSessionServiceById(parent.id).forceRotate('clear');
     manager.getSessionServiceById(rotated.id);
     SessionRepositoryFactory.create(db).deleteById(rotated.id);
     manager.invalidate(rotated.id);

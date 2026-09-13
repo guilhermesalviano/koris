@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ErrandPendingMessage } from './ErrandsPage';
+import { ErrandPendingMessage } from './NegotiatorPanel';
 
 describe('errand pending information', () => {
   it('shows the exact draft before approval', () => {

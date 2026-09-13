@@ -4,6 +4,8 @@ export interface ChatMessage {
   id: number;
   /** Persisted identity; local optimistic messages acquire it during reconciliation. */
   serverId?: string;
+  /** Session the message belongs to, when known; drives session dividers in the thread. */
+  sessionId?: string;
   role: 'user' | 'assistant';
   content: string;
   images?: ImageAttachment[];
@@ -26,6 +28,7 @@ export type HistoryMessage = {
   missingImages?: number;
   errorCode?: string;
   createdAt: string;
+  sessionId?: string;
 };
 
 let idCounter = 0;
@@ -41,6 +44,7 @@ export function mapMessages(messages: HistoryMessage[]): ChatMessage[] {
   return messages.map((m) => ({
     id: nextId(),
     serverId: m.id,
+    sessionId: m.sessionId,
     role: m.role === 'user' ? 'user' : 'assistant',
     content: m.content,
     images: m.images,

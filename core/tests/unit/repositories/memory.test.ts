@@ -239,3 +239,44 @@ describe('MemoryRepository', () => {
     expect(db.run).toHaveBeenCalledWith('DELETE FROM memories WHERE id = ?', ['m1']);
   });
 });
+
+describe('MemoryRepository feed', () => {
+  it('findRecent pages every type newest first and skips the embedding column', () => {
+    const db = makeDb([
+      { id: 'r1', session_id: 's1', source: 'web', type: 'reminder', content: 'call', tags: null, importance: null, created_at: '2026-01-02T00:00:00.000Z' },
+    ]);
+    const repository = new MemoryRepository(db as never);
+
+    const memories = repository.findRecent(20, 40);
+
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('ORDER BY created_at DESC');
+    expect(sql).not.toContain('embedding');
+    expect(sql).not.toContain("type != 'reminder'");
+    expect(params).toEqual([20, 40]);
+    expect(memories[0]).toMatchObject({ id: 'r1', type: 'reminder', embedding: undefined });
+  });
+
+  it('findRecent and countAll can narrow to one type', () => {
+    const db = makeDb([]);
+    db.get.mockReturnValue({ total: 2 });
+    const repository = new MemoryRepository(db as never);
+
+    repository.findRecent(10, 0, 'lesson');
+    expect(repository.countAll('lesson')).toBe(2);
+
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('WHERE type = ?');
+    expect(params).toEqual(['lesson', 10, 0]);
+    expect(db.get.mock.calls[0]).toEqual([expect.stringContaining('WHERE type = ?'), ['lesson']]);
+  });
+
+  it('countAll counts reminders too', () => {
+    const db = makeDb();
+    db.get.mockReturnValue({ total: 5 });
+    const repository = new MemoryRepository(db as never);
+
+    expect(repository.countAll()).toBe(5);
+    expect(db.get.mock.calls[0][0]).not.toContain('reminder');
+  });
+});

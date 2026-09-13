@@ -44,7 +44,13 @@ export class SessionManager implements ISessionManager {
     if (existing && (existing.kind === 'delegated' || !isExpired(existing, config.SESSION.TTL_MS))) {
       sessionService = new SessionService(this.sessionRepository, existing, { persistOnConstruct: false });
     } else {
-      const session = new Session({ channel: key.channel, peerId: key.peerId, kind: key.kind });
+      const session = new Session({
+        channel: key.channel,
+        peerId: key.peerId,
+        kind: key.kind,
+        // Replacing an open session that went idle; a brand-new thread has no reason.
+        metadata: existing ? { startReason: 'idle' } : undefined,
+      });
       sessionService = new SessionService(this.sessionRepository, session);
     }
 

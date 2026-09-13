@@ -1,14 +1,18 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
-import type { SessionSummary } from '../../lib/types';
-import { CloseIcon, MenuIcon, OverviewIcon, PlusIcon, SettingsIcon } from '../../components/Icons';
-import { IconButton, Input } from '../../components/ui';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { CloseIcon, MenuIcon, OverviewIcon, SettingsIcon } from '../../components/Icons';
+import { IconButton } from '../../components/ui';
+import { AgentTree } from '../../components/sidebar/AgentTree';
+import { agentPath, buildAgentTree, ORCHESTRATOR_ID } from '../../lib/agents';
+import { useAgents } from '../../lib/use-agents';
 import { cn } from '../../lib/cn';
 import ConfigModal from './ConfigModal';
 import { useSaveStates } from '../../lib/config-save-context';
-import ChatPage from './ChatPage';
+import OrchestratorPage from './agents/OrchestratorPage';
+import NegotiatorPanel from './agents/NegotiatorPanel';
+import WatcherPanel from './agents/WatcherPanel';
 import ActivityPage, { DEFAULT_ACTIVITY_TAB } from './ActivityPage';
-import { ChatProvider, useChat } from '../../lib/chat-context';
+import { ChatProvider } from '../../lib/chat-context';
 import { UiProvider, useUi } from '../../lib/ui-context';
 import { ProvidersProvider } from '../../lib/use-providers';
 
@@ -25,6 +29,8 @@ function navItemClass({ isActive }: { isActive: boolean }): string {
 }
 
 const NAV_ICON_CLASS = 'h-4 w-4 flex-shrink-0 fill-none stroke-current';
+
+const ORCHESTRATOR_PATH = agentPath(ORCHESTRATOR_ID);
 
 function PrimaryNav({ onNavigate }: { onNavigate?: () => void }) {
   return (
@@ -109,91 +115,22 @@ function Header({ onOpenNav }: { onOpenNav: () => void }) {
   );
 }
 
-function formatShortDate(value?: string): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const sameDay = date.toDateString() === new Date().toDateString();
-  return sameDay
-    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
-function ChatItem({ session, live, onNavigate }: { session: SessionSummary; live: boolean; onNavigate?: () => void }) {
-  const { activeSessionId } = useChat();
-  const navigate = useNavigate();
-  const isActive = session.id === activeSessionId;
-  const title = session.preview?.trim() || `Chat ${session.id.slice(0, 8)}`;
-
-  function handleClick() {
-    onNavigate?.();
-    navigate(`/admin/chat/${session.id}`);
-  }
-
-  return (
-    <button
-      onClick={handleClick}
-      className={cn(
-        'w-full rounded-control border px-3 py-2 text-left transition-colors duration-150 outline-none',
-        'focus-visible:ring-2 focus-visible:ring-accent/40',
-        isActive ? 'border-accent-muted bg-accent-muted' : 'border-transparent hover:bg-bg-3',
-      )}
-    >
-      <div className={cn('truncate text-body', isActive ? 'text-accent-2' : 'text-txt')}>{title}</div>
-      <div className="mt-0.5 flex items-center gap-1.5 font-mono text-micro text-txt-3">
-        <span>{formatShortDate(session.startedAt)}</span>
-        <span aria-hidden="true">·</span>
-        {live ? <span className="text-success">live</span> : <span>{session.channel}</span>}
-      </div>
-    </button>
-  );
-}
-
-function ChatsPanel({ onNavigate }: { onNavigate?: () => void }) {
-  const { sessions, newChat } = useChat();
-  const navigate = useNavigate();
-  const liveWebId = sessions.find((s) => s.channel === 'web' && !s.endedAt)?.id;
-  const [query, setQuery] = useState('');
-
-  async function handleNewChat() {
-    await newChat();
-    onNavigate?.();
-    navigate('/admin/chat');
-  }
-
-  const trimmed = query.trim().toLowerCase();
-  const filtered = trimmed
-    ? sessions.filter((s) => (s.preview?.trim() || `Chat ${s.id.slice(0, 8)}`).toLowerCase().includes(trimmed))
-    : sessions;
+function AgentsPanel({ onNavigate }: { onNavigate?: () => void }) {
+  const { agents, loading, error } = useAgents();
+  const tree = useMemo(() => buildAgentTree(agents), [agents]);
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
-        <div className="font-mono text-micro uppercase text-txt-3">Chats</div>
-        <IconButton aria-label="New chat" title="New chat" variant="secondary" size="sm" onClick={handleNewChat}>
-          <PlusIcon className="h-3.5 w-3.5 fill-none stroke-current" />
-        </IconButton>
-      </div>
-      <div className="px-3 pb-2">
-        <Input
-          type="search"
-          aria-label="Search chats"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search chats"
-          className="h-8 text-caption"
-        />
-      </div>
-      <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
-        {filtered.length === 0 && (
-          <div className="px-3 py-8 text-center font-mono text-mini text-txt-3">
-            {trimmed ? 'No matching chats.' : 'No chats yet.'}
-          </div>
+      <div className="px-3 pt-3 pb-2 font-mono text-micro uppercase text-txt-3">Agents</div>
+      <nav aria-label="Agents" className="flex-1 overflow-y-auto px-2 pb-3">
+        {error ? (
+          <div className="px-3 py-8 text-center font-mono text-mini text-danger">{error}</div>
+        ) : loading ? (
+          <div className="px-3 py-8 text-center font-mono text-mini text-txt-3">Loading agents…</div>
+        ) : (
+          <AgentTree nodes={tree} onNavigate={onNavigate} />
         )}
-        {filtered.map((session) => (
-          <ChatItem key={session.id} session={session} live={session.id === liveWebId} onNavigate={onNavigate} />
-        ))}
-      </div>
+      </nav>
     </div>
   );
 }
@@ -224,7 +161,7 @@ function SidebarContent({ onNavigate, onOpenConfig }: { onNavigate?: () => void;
     <>
       <PrimaryNav onNavigate={onNavigate} />
       <div className="min-h-0 flex-1">
-        <ChatsPanel onNavigate={onNavigate} />
+        <AgentsPanel onNavigate={onNavigate} />
       </div>
       <div className="flex-shrink-0 border-t border-subtle p-2">
         <ConfigButton onOpen={onOpenConfig} />
@@ -248,7 +185,7 @@ function ConfigSectionRedirect({ sectionId }: { sectionId: string }) {
   useEffect(() => {
     openConfig(sectionId);
   }, [openConfig, sectionId]);
-  return <Navigate to="/admin/chat" replace />;
+  return <Navigate to={ORCHESTRATOR_PATH} replace />;
 }
 
 function DrawerHeader({ title, onClose }: { title: string; onClose: () => void }) {
@@ -293,9 +230,15 @@ export default function AdminLayout() {
                 <Header onOpenNav={() => setNavOpen(true)} />
                 <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
                   <Routes>
-                    <Route index element={<Navigate to="/admin/chat" replace />} />
-                    <Route path="chat" element={<ChatPage />} />
-                    <Route path="chat/:sessionId" element={<ChatPage />} />
+                    <Route index element={<Navigate to={ORCHESTRATOR_PATH} replace />} />
+                    <Route path="agents" element={<Navigate to={ORCHESTRATOR_PATH} replace />} />
+                    <Route path="agents/orchestrator" element={<OrchestratorPage />} />
+                    <Route path="agents/negotiator" element={<NegotiatorPanel />} />
+                    <Route path="agents/watcher" element={<WatcherPanel />} />
+                    <Route path="agents/*" element={<Navigate to={ORCHESTRATOR_PATH} replace />} />
+                    {/* The session list is gone; old chat links open the Orchestrator thread. */}
+                    <Route path="chat" element={<Navigate to={ORCHESTRATOR_PATH} replace />} />
+                    <Route path="chat/:sessionId" element={<Navigate to={ORCHESTRATOR_PATH} replace />} />
                     <Route
                       path="activity"
                       element={<Navigate to={`/admin/activity/${DEFAULT_ACTIVITY_TAB}`} replace />}
@@ -307,7 +250,8 @@ export default function AdminLayout() {
                     <Route path="audit" element={<Navigate to="/admin/activity/audit" replace />} />
                     <Route path="memories" element={<ConfigSectionRedirect sectionId="memories" />} />
                     <Route path="heartbeats" element={<ConfigSectionRedirect sectionId="beats" />} />
-                    <Route path="*" element={<Navigate to="/admin/chat" replace />} />
+                    <Route path="errands" element={<Navigate to={agentPath('negotiator')} replace />} />
+                    <Route path="*" element={<Navigate to={ORCHESTRATOR_PATH} replace />} />
                   </Routes>
                 </main>
               </div>

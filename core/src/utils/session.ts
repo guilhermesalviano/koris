@@ -31,3 +31,13 @@ export function isExpired(
 ): boolean {
   return isSessionExpired(getLastActivityAt(session), ttlMs, now);
 }
+
+// Session metadata keys that are a conversation preference rather than a
+// property of one thread, so they must survive `/clear` and `/compact`
+// rotation. `lastActivityAt` / `compactSummary` / `startReason` deliberately do not.
+export function carryForwardMetadata(
+  metadata: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  const responseMode = metadata?.responseMode;
+  return typeof responseMode === 'string' && responseMode ? { responseMode } : undefined;
+}

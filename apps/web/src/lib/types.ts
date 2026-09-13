@@ -29,6 +29,20 @@ export interface OverviewResponse {
   recentErrors: AuditItem[];
 }
 
+export type AgentId = 'orchestrator' | 'negotiator' | 'watcher';
+
+export interface AgentSummary {
+  id: AgentId;
+  name: string;
+  description: string;
+  parentId: AgentId | null;
+  messageable: boolean;
+}
+
+export interface AgentsResponse {
+  items: AgentSummary[];
+}
+
 export type SessionKind = 'user' | 'delegated';
 
 export interface SessionSummary {

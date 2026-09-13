@@ -1,8 +1,7 @@
-import { SettingsSection } from '../../components/SettingsUI';
 import { useCallback, useEffect, useState } from 'react';
-import { Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
-import { apiRequest } from '../../lib/api';
-import type { ErrandsResponse, ErrandItem, ErrandState, ErrandTranscriptMessage, ErrandTranscriptResponse } from '../../lib/types';
+import { Card, EmptyState, PageShell, formatDate, useToast, Toast } from '../../../components/AdminUI';
+import { apiRequest } from '../../../lib/api';
+import type { ErrandsResponse, ErrandItem, ErrandState, ErrandTranscriptMessage, ErrandTranscriptResponse } from '../../../lib/types';
 
 const STALE_STATES: ErrandState[] = ['open', 'awaiting_peer', 'awaiting_principal', 'expired'];
 
@@ -64,7 +63,12 @@ export function ErrandPendingMessage({ errand }: { errand: Pick<ErrandItem, 'sta
   </>;
 }
 
-export default function ErrandsPage() {
+/**
+ * The Negotiator's panel: the errands it runs with your contacts. It can't be
+ * messaged directly, but you steer its errands here — approve the opener,
+ * answer its escalations, retry delivery, close or cancel.
+ */
+export default function NegotiatorPanel() {
   const [data, setData] = useState<ErrandsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toastMsg, showToast, isError] = useToast();
@@ -147,7 +151,7 @@ export default function ErrandsPage() {
   const items = data ? sortErrands(data.items) : [];
 
   return (
-    <SettingsSection title="Errands" description="Delegated conversations koris is running on your behalf" onRefresh={load}>
+    <PageShell title="Negotiator" description="Errands it runs with your contacts on your behalf" onRefresh={load}>
       {error && <EmptyState text={error} />}
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data && items.length === 0 && (
@@ -327,6 +331,6 @@ export default function ErrandsPage() {
         </div>
       )}
       <Toast message={toastMsg} isError={isError} />
-    </SettingsSection>
+    </PageShell>
   );
 }

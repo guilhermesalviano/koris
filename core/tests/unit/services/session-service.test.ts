@@ -157,6 +157,7 @@ describe('SessionService', () => {
       expect(endedAt).toBe(expected);
       expect(newSession.channel).toBe('tui');
       expect(newSession.peerId).toBe('tui');
+      expect(newSession.metadata.startReason).toBe('idle');
       expect(result.id).not.toBe('old-session');
       expect(result.channel).toBe('tui');
     });
@@ -235,7 +236,7 @@ describe('SessionService', () => {
       const session = new Session({ id: 'old-session', channel: 'tui', peerId: 'tui' });
       const svc = new SessionService(repo as any, session, { persistOnConstruct: false });
 
-      const result = svc.forceRotate();
+      const result = svc.forceRotate('clear');
 
       expect(repo.rotate).toHaveBeenCalledTimes(1);
       const [endingId, endedAt, newSession] = repo.rotate.mock.calls[0];
@@ -260,7 +261,7 @@ describe('SessionService', () => {
       });
       const svc = new SessionService(repo as any, session, { persistOnConstruct: false });
 
-      const result = svc.forceRotate();
+      const result = svc.forceRotate('clear');
 
       expect(result.id).not.toBe('fresh-session');
     });
@@ -270,9 +271,18 @@ describe('SessionService', () => {
       const session = new Session({ id: 'old-session', channel: 'tui', peerId: 'tui' });
       const svc = new SessionService(repo as any, session, { persistOnConstruct: false });
 
-      const result = svc.forceRotate({ compactSummary: 'we discussed the roadmap' });
+      const result = svc.forceRotate('compact', { compactSummary: 'we discussed the roadmap' });
 
       expect(result.metadata.compactSummary).toBe('we discussed the roadmap');
+    });
+
+    it('records why the new session was started', () => {
+      const repo = makeRepo();
+      const session = new Session({ id: 'old-session', channel: 'tui', peerId: 'tui' });
+      const svc = new SessionService(repo as any, session, { persistOnConstruct: false });
+
+      expect(svc.forceRotate('clear').metadata.startReason).toBe('clear');
+      expect(svc.forceRotate('compact', { compactSummary: 's' }).metadata).toEqual({ compactSummary: 's', startReason: 'compact' });
     });
   });
 });

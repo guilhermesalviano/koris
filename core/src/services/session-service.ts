@@ -3,14 +3,14 @@ import { config } from "../config";
 import { ISessionRepository } from "../repositories/session";
 import { isExpired } from "../utils/session";
 import { nowISO } from "../utils/date";
-import { SessionKey } from "../types/session";
+import { SessionKey, SessionStartReason } from "../types/session";
 
 interface ISessionService {
   getSession(): Session;
   ensureActiveSession(): Session;
   updateCount(): void;
   updateMetadata(patch: Record<string, unknown>): void;
-  forceRotate(newMetadata?: Record<string, unknown>): Session;
+  forceRotate(reason: SessionStartReason, newMetadata?: Record<string, unknown>): Session;
 }
 
 class SessionService implements ISessionService {
@@ -53,7 +53,7 @@ class SessionService implements ISessionService {
       return this.session;
     }
 
-    this.session = this.rotate();
+    this.session = this.rotate('idle');
     return this.session;
   }
 
@@ -70,14 +70,14 @@ class SessionService implements ISessionService {
     this.session = new Session({ ...this.session, metadata });
   }
 
-  forceRotate(newMetadata?: Record<string, unknown>): Session {
-    this.session = this.rotate(newMetadata);
+  forceRotate(reason: SessionStartReason, newMetadata?: Record<string, unknown>): Session {
+    this.session = this.rotate(reason, newMetadata);
     return this.session;
   }
 
-  private rotate(metadata?: Record<string, unknown>): Session {
+  private rotate(reason: SessionStartReason, metadata?: Record<string, unknown>): Session {
     const endedAt = nowISO();
-    const newSession = new Session({ ...this.key, metadata });
+    const newSession = new Session({ ...this.key, metadata: { ...metadata, startReason: reason } });
     this.sessionRepository.rotate(this.session.id, endedAt, newSession);
     return newSession;
   }

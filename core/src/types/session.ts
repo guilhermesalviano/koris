@@ -1,6 +1,12 @@
 export const SESSION_KINDS = ['user', 'delegated'] as const;
 export type SessionKind = typeof SESSION_KINDS[number];
 
+/** Why a session was opened in place of the previous one on the same thread,
+ * stored as `metadata.startReason`: idle TTL expiry, `/clear` (or the web
+ * "New session" button), or `/compact` / auto-compaction. */
+export const SESSION_START_REASONS = ['idle', 'clear', 'compact'] as const;
+export type SessionStartReason = typeof SESSION_START_REASONS[number];
+
 /** Stored on each errand's own child session, independently of its transcript. */
 export interface ErrandSessionMetadata extends Record<string, unknown> {
   parentSessionId: string;

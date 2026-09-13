@@ -1,24 +1,38 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { renderMarkdown, stripMarkdown } from '../../lib/markdown';
-import { useChat, type ChatMessage } from '../../lib/chat-context';
-import { usePageTitle } from '../../lib/use-page-title';
-import { chatSeparatorLabel } from '../../lib/date';
-import ImageLightbox from '../../components/ImageLightbox';
-import AudioRecognitionModal from '../../components/chat/AudioRecognitionModal';
-import ChatComposer from '../../components/chat/ChatComposer';
-import { imageSrc, readFileAsAttachment } from '../../components/chat/shared';
-import { BrokenImageIcon, RetryIcon, SpeakerIcon, SquareIcon } from '../../components/Icons';
-import type { ImageAttachment } from '../../lib/types';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { renderMarkdown, stripMarkdown } from '../../../lib/markdown';
+import { useChat, type ChatMessage } from '../../../lib/chat-context';
+import { usePageTitle } from '../../../lib/use-page-title';
+import { anchoredScrollTop, buildThread, isNearBottom } from '../../../lib/timeline';
+import ImageLightbox from '../../../components/ImageLightbox';
+import AudioRecognitionModal from '../../../components/chat/AudioRecognitionModal';
+import ChatComposer from '../../../components/chat/ChatComposer';
+import { DateSeparator } from '../../../components/chat/DateSeparator';
+import { imageSrc, readFileAsAttachment } from '../../../components/chat/shared';
+import { BrokenImageIcon, PlusIcon, RetryIcon, SpeakerIcon, SquareIcon } from '../../../components/Icons';
+import { Button } from '../../../components/ui';
+import type { ImageAttachment } from '../../../lib/types';
 
-export default function ChatPage() {
-  const { sessionId } = useParams();
-  const { messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, setToast, submit, resendLast, cancel, openSession, sessions, activeSessionId, gateBlocks, allowDomain, dismissGateBlock, responseMode } = useChat();
+/** Prepend in progress: the scroll height before it, and the first message then on screen. */
+interface ScrollAnchor {
+  scrollHeight: number;
+  firstId: number | undefined;
+}
+
+/**
+ * The Orchestrator thread: every web chat session as one conversation, loading
+ * older pages as you scroll up, with a divider wherever a new session started.
+ */
+export default function OrchestratorPage() {
+  const {
+    messages, input, setInput, attachments, setAttachments, streaming, historyLoaded, toast, setToast, submit, resendLast, cancel,
+    activeSessionId, threadSessions, hasOlder, loadingOlder, loadOlder, startNewSession, startingSession,
+    gateBlocks, allowDomain, dismissGateBlock, responseMode,
+  } = useChat();
   const chatRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [preview, setPreview] = useState<{ images: ImageAttachment[]; index: number } | null>(null);
   const [localToast, setLocalToast] = useState<string | null>(null);
-  const activeTitle = activeSessionId ? sessions.find((s) => s.id === activeSessionId)?.preview?.trim() : undefined;
 
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
 
@@ -114,34 +128,109 @@ export default function ChatPage() {
     };
   }, []);
 
-  usePageTitle(activeTitle || 'Chat', 'Chat with the koris agent');
+  usePageTitle('Orchestrator', 'Chat with the koris agent');
 
-  // Sync the viewed session with the URL. `null` targets the live chat (latest
-  // open web session, without creating one).
-  useEffect(() => {
-    openSession(sessionId ?? null);
-  }, [sessionId, openSession]);
+  const thread = useMemo(
+    () => buildThread(messages, threadSessions, activeSessionId),
+    [messages, threadSessions, activeSessionId],
+  );
+  const activeHasMessages = !!activeSessionId && messages.some((m) => m.sessionId === activeSessionId);
 
-  // Auto-scroll to the latest message whenever the conversation changes
-  // (new message, streaming delta, or returning to this page with history).
-  //
-  // Opening a chat must *start* at the newest message. The container is
-  // `scroll-smooth`, so a plain scrollTop assignment animates all the way down
-  // from the top — which reads as the chat opening on its oldest messages. The
-  // first positioning of a session is therefore an instant jump, in a layout
-  // effect so it lands before the browser paints; later updates within the same
-  // session keep the smooth follow.
-  const positionedFor = useRef<string | null | undefined>(undefined);
+  // Scroll model:
+  // - opening the thread starts at the newest message (an instant jump, before paint);
+  // - while the reader is at the bottom, new content keeps it there;
+  // - scrolled up, new messages leave the view alone and raise the "New messages" pill;
+  // - loading an older page above keeps the visible messages in place.
+  // The container sets `overflow-anchor: none` so the browser's own scroll
+  // anchoring doesn't also shift the view on prepend.
+  const stickToBottomRef = useRef(true);
+  const positionedRef = useRef(false);
+  const lastMessageIdRef = useRef<number | undefined>(undefined);
+  const firstMessageIdRef = useRef<number | undefined>(undefined);
+  const anchorRef = useRef<ScrollAnchor | null>(null);
+  const [showNewMessages, setShowNewMessages] = useState(false);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior) => {
+    const el = chatRef.current;
+    if (!el) return;
+    stickToBottomRef.current = true;
+    setShowNewMessages(false);
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+
+  function handleScroll() {
+    const el = chatRef.current;
+    if (!el) return;
+    stickToBottomRef.current = isNearBottom(el);
+    if (stickToBottomRef.current) setShowNewMessages(false);
+  }
 
   useLayoutEffect(() => {
     const el = chatRef.current;
-    if (!el) return;
+    const first = messages[0]?.id;
+    const last = messages[messages.length - 1]?.id;
+    const appended = last !== lastMessageIdRef.current;
+    lastMessageIdRef.current = last;
+    firstMessageIdRef.current = first;
 
-    const isFirstPositioning = positionedFor.current !== activeSessionId;
-    el.scrollTo({ top: el.scrollHeight, behavior: isFirstPositioning ? 'instant' : 'smooth' });
+    if (!el) {
+      positionedRef.current = false;
+      return;
+    }
 
-    if (messages.length > 0) positionedFor.current = activeSessionId;
-  }, [messages, activeSessionId]);
+    const anchor = anchorRef.current;
+    if (anchor && first !== anchor.firstId) {
+      anchorRef.current = null;
+      el.scrollTo({ top: anchoredScrollTop(anchor.scrollHeight, el.scrollTop, el.scrollHeight), behavior: 'instant' });
+      return;
+    }
+    if (anchor && !loadingOlder) anchorRef.current = null;
+
+    if (!positionedRef.current) {
+      if (messages.length > 0) {
+        positionedRef.current = true;
+        scrollToBottom('instant');
+      }
+      return;
+    }
+
+    if (stickToBottomRef.current) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'instant' });
+    } else if (appended && last !== undefined) {
+      setShowNewMessages(true);
+    }
+  }, [messages, thread.trailing, loadingOlder, scrollToBottom]);
+
+  // Load the previous page when the top of the thread comes into view. The
+  // observer is recreated after each page, and reports straight away if the
+  // sentinel is still visible (a short thread), so pages keep loading until the
+  // view is filled or the history runs out.
+  const showEmptyState = historyLoaded && messages.length === 0;
+
+  useEffect(() => {
+    const root = chatRef.current;
+    const target = topSentinelRef.current;
+    if (!root || !target || !hasOlder || loadingOlder || showEmptyState) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting) || anchorRef.current) return;
+      anchorRef.current = { scrollHeight: root.scrollHeight, firstId: firstMessageIdRef.current };
+      void loadOlder();
+    }, { root, rootMargin: '300px 0px 0px 0px' });
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasOlder, loadingOlder, loadOlder, showEmptyState]);
+
+  function send(text?: string) {
+    stickToBottomRef.current = true;
+    return submit(text);
+  }
+
+  function handleResend() {
+    stickToBottomRef.current = true;
+    return resendLast();
+  }
 
   const canSend = !streaming && (input.trim().length > 0 || attachments.length > 0);
 
@@ -160,7 +249,6 @@ export default function ChatPage() {
     setPreview((p) => (p ? { ...p, index: (p.index + direction + p.images.length) % p.images.length } : p));
   }
 
-  const showEmptyState = historyLoaded && messages.length === 0;
   const lastMessageId = messages.length ? messages[messages.length - 1].id : -1;
 
   // A fresh chat centers the composer — put the cursor in it straight away.
@@ -173,7 +261,7 @@ export default function ChatPage() {
       ref={textareaRef}
       input={input}
       onInputChange={setInput}
-      onSubmit={() => void submit()}
+      onSubmit={() => void send()}
       onCancelStreaming={cancel}
       streaming={streaming}
       canSend={canSend}
@@ -187,6 +275,20 @@ export default function ChatPage() {
 
   return (
     <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col w-full">
+      <header className="flex h-12 flex-shrink-0 items-center gap-3 border-b border-subtle bg-bg/80 px-4 backdrop-blur-md">
+        <h1 className="text-body font-medium text-txt">Orchestrator</h1>
+        <Button
+          size="sm"
+          className="ml-auto"
+          onClick={() => void startNewSession()}
+          disabled={streaming || !activeHasMessages}
+          loading={startingSession}
+          iconLeft={<PlusIcon className="h-3.5 w-3.5 fill-none stroke-current" />}
+          title={activeHasMessages ? 'End this session and start a fresh one' : 'The current session is still empty'}
+        >
+          New session
+        </Button>
+      </header>
       {showEmptyState ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 px-4">
           <h2 className="text-center text-xl font-medium">What can I help with?</h2>
@@ -194,17 +296,29 @@ export default function ChatPage() {
         </div>
       ) : (
         <>
-      <div ref={chatRef} className="flex flex-1 flex-col gap-5 overflow-y-auto scroll-smooth px-5 py-6">
-        {messages.map((m, i) => {
-          const separator = chatSeparatorLabel(m.at, messages[i - 1]?.at);
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={chatRef}
+        onScroll={handleScroll}
+        className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-6 [overflow-anchor:none]"
+      >
+        <div ref={topSentinelRef} aria-hidden="true" />
+        {hasOlder ? (
+          <div className="text-center font-mono text-micro text-txt-3" aria-live="polite">
+            {loadingOlder ? 'Loading earlier messages…' : '\u00a0'}
+          </div>
+        ) : messages.length > 0 ? (
+          <div className="text-center font-mono text-micro text-txt-3">Beginning of history</div>
+        ) : null}
+        {thread.items.map(({ message: m, divider }) => {
           return (
           <Fragment key={m.id}>
-          {separator && (
-            <div className="flex items-center gap-3 px-1">
-              <div className="h-px flex-1 bg-[#1c1c21]" />
-              <span className="font-mono text-[11px] text-txt-3">{separator}</span>
-              <div className="h-px flex-1 bg-[#1c1c21]" />
-            </div>
+          {divider && (
+            <DateSeparator
+              label={divider.label}
+              session={divider.kind === 'session'}
+              summary={divider.kind === 'session' ? divider.summary : null}
+            />
           )}
           <div className={`flex gap-2.5 animate-msg-in ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
             {m.role === 'assistant' && (
@@ -260,7 +374,7 @@ export default function ChatPage() {
               )}
               {m.role === 'assistant' && m.error && m.id === lastMessageId && !streaming && (
                 <button
-                  onClick={resendLast}
+                  onClick={() => void handleResend()}
                   title="Send the last message again"
                   className="mt-0.5 flex items-center gap-1 self-start rounded-lg border border-strong bg-bg-3 px-2 py-1 font-mono text-[11px] text-txt-2 transition-colors duration-150 hover:border-accent hover:text-accent-2"
                 >
@@ -299,6 +413,17 @@ export default function ChatPage() {
           </Fragment>
           );
         })}
+        {thread.trailing && <DateSeparator label={thread.trailing.label} session summary={thread.trailing.summary} />}
+      </div>
+      {showNewMessages && (
+        <button
+          type="button"
+          onClick={() => scrollToBottom('smooth')}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-subtle bg-bg-2 px-3 py-1 font-mono text-micro text-txt-2 shadow-pop transition-colors hover:text-txt"
+        >
+          ↓ New messages
+        </button>
+      )}
       </div>
 
       {gateBlocks.length > 0 && (
@@ -357,7 +482,7 @@ export default function ChatPage() {
         onClose={() => setIsAudioModalOpen(false)}
         streaming={streaming}
         onSend={async (text) => {
-          await submit(text);
+          await send(text);
         }}
         onInsert={(text) => {
           const fullText = input.trim() ? `${input.trim()} ${text}` : text;

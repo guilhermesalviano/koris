@@ -5,6 +5,7 @@ import { handleToolsCommand } from './tools';
 import { handleChannelsCommand } from './channels';
 import { handleMcpsCommand } from './mcps';
 import { handleErrandCommand } from './errands';
+import { handleMemoriesCommand } from './memories';
 import { formatCommandResult, formatMessage } from './format';
 import { addAllowedDomain } from '../security/allowed-domains';
 import {
@@ -22,6 +23,7 @@ export { handleToolsCommand, listTools } from './tools';
 export { handleChannelsCommand, listChannels, listInstalledChannelNames } from './channels';
 export { handleMcpsCommand, listInstalledMcpNames } from './mcps';
 export { handleErrandCommand } from './errands';
+export { handleMemoriesCommand } from './memories';
 export { formatCommandResult, formatMessage } from './format';
 
 export async function handleCommand(command: string, context: CommandContext): Promise<CommandResult> {
@@ -40,6 +42,9 @@ export async function handleCommand(command: string, context: CommandContext): P
 
     case '/memory':
       return { action: 'memory', handled: true };
+
+    case '/memories':
+      return handleMemoriesCommand(command, context);
 
     case '/clear':
     case '/reset':

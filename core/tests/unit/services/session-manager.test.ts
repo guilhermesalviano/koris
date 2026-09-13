@@ -100,6 +100,7 @@ describe('SessionManager', () => {
 
       expect(repo.save).toHaveBeenCalledTimes(1);
       expect(service.getSession().id).not.toBe('expired');
+      expect(service.getSession().metadata.startReason).toBe('idle');
     });
 
     it('caches by the composite key: same channel+peerId+kind returns the same service', () => {

@@ -14,13 +14,13 @@ const CRON_PRESETS: { label: string; cron: string }[] = [
   { label: 'Custom…',              cron: '__custom__'   },
 ];
 
-function cronToLabel(cron: string): string {
+export function cronToLabel(cron: string): string {
   const preset = CRON_PRESETS.find((p) => p.cron === cron && p.cron !== '__custom__');
   if (preset) return preset.label;
   return cron; // fall back to raw cron if no preset matches
 }
 
-const TYPE_META: Record<'reminder' | 'scheduled_beat', { label: string; hint: string }> = {
+export const TYPE_META: Record<'reminder' | 'scheduled_beat', { label: string; hint: string }> = {
   reminder: {
     label: 'Reminder',
     hint: 'The agent sends a one-shot message to a channel at the scheduled time.',
@@ -31,11 +31,10 @@ const TYPE_META: Record<'reminder' | 'scheduled_beat', { label: string; hint: st
   },
 };
 
-function friendlyDate(value?: string | null): string {
+export function friendlyDate(value?: string | null, now: Date = new Date()): string {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
-  const now = new Date();
   const diffMs = d.getTime() - now.getTime();
   const absDiff = Math.abs(diffMs);
   const minutes = Math.round(absDiff / 60_000);

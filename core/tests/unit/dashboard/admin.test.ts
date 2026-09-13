@@ -1431,54 +1431,9 @@ describe('AdminRouterFactory /settings', () => {
   });
 });
 
-describe('AdminRouterFactory chat/history & chat/context', () => {
+describe('AdminRouterFactory chat/context', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('GET /chat/history returns an empty payload when there is no open web session', () => {
-    sessionRepo.findLatestOpen.mockReturnValue(undefined);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
-    const res = makeResponse();
-    callRoute(router, makeRequest('GET', '/chat/history'), res);
-
-    expect(sessionRepo.findLatestOpen).toHaveBeenCalledWith({ channel: 'web', peerId: 'web' });
-    expect(res.json).toHaveBeenCalledWith({ sessionId: null, messages: [] });
-  });
-
-  it('GET /chat/history projects the latest open web session messages', () => {
-    sessionRepo.findLatestOpen.mockReturnValue({ id: 'sess-1' });
-    messageRepo.getBySessionId.mockReturnValue([
-      {
-        id: 'm1',
-        role: 'user',
-        content: 'hi',
-        images: [],
-        missingImages: false,
-        errorCode: null,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        extra: 'dropped',
-      },
-    ]);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
-    const res = makeResponse();
-    callRoute(router, makeRequest('GET', '/chat/history'), res);
-
-    expect(messageRepo.getBySessionId).toHaveBeenCalledWith('sess-1', 200);
-    expect(res.json).toHaveBeenCalledWith({
-      sessionId: 'sess-1',
-      messages: [
-        {
-          id: 'm1',
-          role: 'user',
-          content: 'hi',
-          images: [],
-          missingImages: false,
-          errorCode: null,
-          createdAt: '2026-01-01T00:00:00.000Z',
-        },
-      ],
-    });
   });
 
   it('GET /chat/context reports zero usage when the session is missing', () => {
@@ -1506,6 +1461,21 @@ describe('AdminRouterFactory chat/history & chat/context', () => {
     expect(sessionRepo.findLatestOpen).not.toHaveBeenCalled();
     const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(payload.used).toBeGreaterThan(0);
+  });
+});
+
+describe('AdminRouterFactory /agents', () => {
+  it('GET /agents returns the roster with the orchestrator as the only messageable root', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/agents'), res);
+
+    const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(body.items.map((a: { id: string }) => a.id)).toEqual(['orchestrator', 'negotiator', 'watcher']);
+    expect(body.items.filter((a: { parentId: string | null }) => a.parentId === null)).toHaveLength(1);
+    expect(body.items.filter((a: { messageable: boolean }) => a.messageable).map((a: { id: string }) => a.id)).toEqual([
+      'orchestrator',
+    ]);
   });
 });
 

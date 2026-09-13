@@ -328,7 +328,7 @@ describe('MessageGateway', () => {
         channel: 'tui',
         memoryService: deps.memoryService,
       });
-      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith({ compactSummary: 'we covered X' });
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith('compact', { compactSummary: 'we covered X' });
       expect(deps.messageService.save).toHaveBeenCalledWith({
         role: 'assistant',
         content: 'Compacting session — starting a fresh one with a summary of what we covered.',
@@ -356,7 +356,7 @@ describe('MessageGateway', () => {
 
       await gateway.handle('/compact', 'origin-1');
 
-      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith(undefined);
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith('compact', {});
       expect(deps.messageService.save).toHaveBeenCalledWith({
         role: 'assistant',
         content: 'Compacting session — starting a fresh one with a summary of what we covered.',
@@ -394,7 +394,7 @@ describe('MessageGateway', () => {
 
       expect(deps.mainAgent.run).not.toHaveBeenCalled();
       expect(deps.backgroundDispatcher.compactConversation).not.toHaveBeenCalled();
-      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith();
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith('clear', undefined);
       expect(onSessionRotated).toHaveBeenCalledWith('session-2');
       expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
         expect.objectContaining({ sessionId: 'session-1', ask: '/clear' }),
@@ -420,7 +420,7 @@ describe('MessageGateway', () => {
 
       await gateway.handle('/clear', 'origin-1', { onSessionRotated: vi.fn() });
 
-      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith({ responseMode: 'voice' });
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith('clear', { responseMode: 'voice' });
     });
   });
 
@@ -513,7 +513,7 @@ describe('MessageGateway', () => {
       expect(deps.backgroundDispatcher.compactConversation).toHaveBeenCalledWith(
         expect.objectContaining({ sessionId: 'session-1' }),
       );
-      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith({ compactSummary: 'we covered X' });
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith('compact', { compactSummary: 'we covered X' });
       expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
       expect(result).toBe('assistant reply');
       expect(onProgress).toHaveBeenCalledWith(expect.stringContaining('summarized'));

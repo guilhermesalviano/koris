@@ -2,12 +2,35 @@ import { Message } from '../entities/message';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { generateId } from '../utils/generate-id';
 import { IImageRepository, ImageRepositoryFactory } from './image';
+import { SessionKey } from '../types/session';
+
+/** Position just past the oldest message of a timeline page. `rowid` breaks
+ * ties between messages persisted with the same `created_at`. */
+interface TimelineCursor {
+  createdAt: string;
+  rowid: number;
+}
+
+interface TimelineQuery {
+  key: Required<SessionKey>;
+  before?: TimelineCursor;
+  limit: number;
+}
+
+interface TimelinePage {
+  /** Chronological (oldest first), like `getBySessionId`. */
+  messages: Message[];
+  /** Cursor for the next older page, or `null` when this page reaches the start. */
+  nextCursor: TimelineCursor | null;
+}
 
 interface IMessageRepository {
   save(message: Message): void;
   deleteById(id: string): void;
   getBySessionId(sessionId: string, limit?: number): Message[];
   getPreviewBySessionId(sessionId: string): string | null;
+  /** Messages of every session on one thread (e.g. all web chats), newest page first. */
+  getTimeline(query: TimelineQuery): TimelinePage;
   count(): number;
 }
 
@@ -55,21 +78,50 @@ class MessageRepository implements IMessageRepository {
       [sessionId, limit]
     );
 
-    return rows.map((row: any) => {
-      const imageIds = this.parseImageIds(row.image_ids);
-      const images = this.imageRepository.getByIds(imageIds).map(({ data, mimeType }) => ({ data, mimeType }));
-      const missingImages = imageIds.length - images.length;
+    return rows.map((row: any) => this.mapRow(row));
+  }
 
-      return new Message({
-        id: row.id,
-        sessionId: row.session_id,
-        role: row.role,
-        content: row.content,
-        images: images.length ? images : undefined,
-        missingImages: missingImages > 0 ? missingImages : undefined,
-        errorCode: row.error_code ?? undefined,
-        createdAt: row.created_at
-      });
+  getTimeline({ key, before, limit }: TimelineQuery): TimelinePage {
+    const cursorClause = before
+      ? 'AND (m.created_at < ? OR (m.created_at = ? AND m.rowid < ?))'
+      : '';
+    const cursorParams = before ? [before.createdAt, before.createdAt, before.rowid] : [];
+
+    // One extra row tells whether an older page exists without a COUNT query.
+    const rows = this.db.query<any>(
+      `SELECT m.rowid AS row_order, m.id, m.session_id, m.role, m.content, m.image_ids, m.error_code, m.created_at
+       FROM messages m
+       JOIN sessions s ON s.id = m.session_id
+       WHERE s.channel = ? AND s.peer_id = ? AND s.kind = ? ${cursorClause}
+       ORDER BY m.created_at DESC, m.rowid DESC
+       LIMIT ?`,
+      [key.channel, key.peerId, key.kind, ...cursorParams, limit + 1],
+    );
+
+    const hasMore = rows.length > limit;
+    const page = rows.slice(0, limit);
+    const oldest = page[page.length - 1];
+
+    return {
+      messages: page.reverse().map((row: any) => this.mapRow(row)),
+      nextCursor: hasMore && oldest ? { createdAt: oldest.created_at, rowid: oldest.row_order } : null,
+    };
+  }
+
+  private mapRow(row: any): Message {
+    const imageIds = this.parseImageIds(row.image_ids);
+    const images = this.imageRepository.getByIds(imageIds).map(({ data, mimeType }) => ({ data, mimeType }));
+    const missingImages = imageIds.length - images.length;
+
+    return new Message({
+      id: row.id,
+      sessionId: row.session_id,
+      role: row.role,
+      content: row.content,
+      images: images.length ? images : undefined,
+      missingImages: missingImages > 0 ? missingImages : undefined,
+      errorCode: row.error_code ?? undefined,
+      createdAt: row.created_at
     });
   }
 
@@ -110,4 +162,4 @@ class MessageRepositoryFactory {
   }
 }
 
-export { IMessageRepository, MessageRepository, MessageRepositoryFactory };
+export { IMessageRepository, MessageRepository, MessageRepositoryFactory, TimelineCursor, TimelinePage, TimelineQuery };
