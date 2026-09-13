@@ -679,6 +679,19 @@ describe('MessageGateway', () => {
       expect(deps.mainAgent.run).not.toHaveBeenCalled();
     });
 
+    it('hands the contact\'s images to the negotiator and keeps them in the contact session', async () => {
+      const { gateway, deps, negotiator } = makeGateway('whatsapp');
+      vi.mocked(buildErrandService).mockReturnValue({
+        findActiveForPeer: vi.fn().mockReturnValue({ errand: { id: 'errand-1' }, sessionId: 'delegated-session' }),
+      } as never);
+      const images = [{ data: 'bWVudQ==', mimeType: 'image/jpeg' }];
+
+      await gateway.handle({ text: 'Segue o cardápio', images }, 'origin-1', { isTrustedSender: false });
+
+      expect(deps.messageService.save).toHaveBeenCalledWith({ role: 'user', content: 'Segue o cardápio', images });
+      expect(negotiator.run).toHaveBeenCalledWith(expect.objectContaining({ peerMessage: 'Segue o cardápio', peerImages: images }));
+    });
+
     it('a trusted sender never reopens a resolved errand', async () => {
       const { gateway, deps } = makeGateway('whatsapp');
       const reopenForPeer = vi.fn();

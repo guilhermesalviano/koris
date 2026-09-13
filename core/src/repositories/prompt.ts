@@ -47,6 +47,8 @@ interface BuildPromptParams {
   includeMemory?: boolean;
   /** Situation-specific contract/instruction blocks appended to the system prompt. */
   extraSystemBlocks?: string[];
+  /** Replaces the default image-analysis block added when `images` are attached. */
+  imageInstruction?: string;
   /** Tool execution results sent to the provider under the `tool` role. */
   toolResults?: Message[];
 }
@@ -89,6 +91,7 @@ class PromptRepository implements IPromptRepository {
     messageHistory,
     sessionId,
     extraSystemBlocks,
+    imageInstruction = IMAGE_ANALYSIS_INSTRUCTION,
     toolResults,
     learnedSkillsEnabled,
     toolsEnabled,
@@ -104,7 +107,7 @@ class PromptRepository implements IPromptRepository {
     }
 
     if (images?.length) {
-      systemBlocks.push(IMAGE_ANALYSIS_INSTRUCTION);
+      systemBlocks.push(imageInstruction);
     }
 
     const injectedContent = includeGlobalContext ? InjectManager.getInjectedContent() : '';

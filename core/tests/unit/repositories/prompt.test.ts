@@ -223,6 +223,21 @@ describe('PromptRepository tool results', () => {
     expect(systemContent).toContain('do NOT call search_engine or curl_request');
   });
 
+  it('uses a caller-provided image instruction in place of the default one', async () => {
+    const repository = makeRepository();
+
+    const { messages } = await repository.build({
+      userMessage: 'here is the menu',
+      channel: 'whatsapp',
+      images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }],
+      imageInstruction: '## Images From The Contact',
+    });
+
+    const systemContent = messages[0].content as string;
+    expect(systemContent).toContain('## Images From The Contact');
+    expect(systemContent).not.toContain('# Image Analysis Instructions');
+  });
+
   it('omits the image analysis instruction when no images are provided', async () => {
     const repository = makeRepository();
 

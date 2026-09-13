@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Negotiator } from '../../../../../../src/services/agents/sub-agents/negotiator/sub-agent';
 import { buildErrandService } from '../../../../../../src/services/errands';
-import { THIRD_PARTY_CONVERSATION_CONTEXT } from '../../../../../../src/constants';
+import { NEGOTIATOR_IMAGE_INSTRUCTION, THIRD_PARTY_CONVERSATION_CONTEXT } from '../../../../../../src/constants';
 
 vi.mock('../../../../../../src/services/errands', () => ({ buildErrandService: vi.fn() }));
 
@@ -50,6 +50,18 @@ function makeNegotiator(opts: { errandService?: ReturnType<typeof makeErrandServ
 describe('Negotiator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('lets the negotiator see the images the contact sent, with its own image instruction', async () => {
+    const { negotiator, promptRepository } = makeNegotiator();
+    const images = [{ data: 'bWVudQ==', mimeType: 'image/jpeg' }];
+
+    await negotiator.run({ errandId: 'errand-1', sessionId: 'session-1', channel: 'whatsapp', peerMessage: 'Segue o cardápio', peerImages: images, messageHistory: [] });
+
+    expect(promptRepository.build).toHaveBeenCalledWith(expect.objectContaining({
+      userMessage: 'Segue o cardápio', images, imageInstruction: NEGOTIATOR_IMAGE_INSTRUCTION,
+    }));
+    expect(NEGOTIATOR_IMAGE_INSTRUCTION).toContain('Your output format does not change.');
   });
 
   it('builds the prompt with no tools, no learned skills, and no memory', async () => {

@@ -115,6 +115,7 @@ class MessageGateway implements IMessageGateway {
           sessionId: sessionService.getSession().id,
           channel,
           peerMessage: safeMessage,
+          peerImages: images,
           messageHistory,
         });
         if (result.reply) messageService.save({ role: 'assistant', content: result.reply });

@@ -3,19 +3,22 @@ import type { ILogger } from "../../../../infrastructure/logger";
 import { IPromptRepository, PromptRepositoryFactory } from "../../../../repositories/prompt";
 import { getAIProvider } from "../../../providers";
 import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
-import { NEGOTIATOR_INSTRUCTIONS, ERRAND_ACTION_FOLLOWUPS, ERRAND_FOLLOWUP_CONTEXT, ERRAND_OPENER_INSTRUCTIONS, ERRAND_RESUME_INSTRUCTIONS, THIRD_PARTY_CONVERSATION_CONTEXT } from "../../../../constants";
+import { NEGOTIATOR_INSTRUCTIONS, NEGOTIATOR_IMAGE_INSTRUCTION, ERRAND_ACTION_FOLLOWUPS, ERRAND_FOLLOWUP_CONTEXT, ERRAND_OPENER_INSTRUCTIONS, ERRAND_RESUME_INSTRUCTIONS, THIRD_PARTY_CONVERSATION_CONTEXT } from "../../../../constants";
 import { config } from "../../../../config";
 import { replacePlaceholders } from "../../../../utils/prompt";
 import { parseNegotiatorResponse } from "../../../../utils/negotiator-response";
 import { ISessionManager } from "../../../session-manager";
 import { buildErrandService } from "../../../errands";
 import type { Message } from "../../../../entities/message";
+import type { ImageAttachment } from "../../../../types/messages";
 
 export interface NegotiatorTurnProps {
   errandId: string;
   sessionId: string;
   channel: string;
   peerMessage: string;
+  /** Images attached to (or quoted by) the contact's latest message. */
+  peerImages?: ImageAttachment[];
   messageHistory: Message[];
 }
 
@@ -161,6 +164,8 @@ class Negotiator {
 
     const payload = await this.promptRepository.build({
       userMessage: props.peerMessage,
+      images: props.peerImages,
+      imageInstruction: NEGOTIATOR_IMAGE_INSTRUCTION,
       channel: props.channel,
       messageHistory: props.messageHistory,
       historyLimit: config.ERRANDS.HISTORY_LIMIT,
