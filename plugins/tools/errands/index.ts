@@ -117,18 +117,10 @@ export const startErrand = withErrands(TOOL_NAMES.start, async (args, sessionId,
   if (!peerId) throw new Error(`"${contact}" is not a valid ${channel} contact.`);
 
   const { errand, openingMessage } = await errands.start({ goal, channel, peerId, originSessionId: sessionId });
-  const follow = `${FOLLOW_TEXT}${errands.followUrl()}`;
   if (errand.state === 'queued') {
-    return `Errand ${errand.id} is queued: another errand with ${peerId} is still running, so it starts once that one closes. Its draft opener is: "${openingMessage}". Tell the human, and end your reply with this exact line, untranslated: ${follow}`;
+    return `Errand ${errand.id} is queued: another errand with ${peerId} is still running, so it starts once that one closes. Its draft opener is: "${openingMessage}"`;
   }
-  try {
-    await errands.approve(errand.id);
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    return `Errand ${errand.id} was created but its opener did not reach ${peerId} (${reason}). Tell the human and offer to retry with ${TOOL_NAMES.approve}.`;
-  }
-  // The Negotiator already posted the opener in this chat; do not repeat it.
-  return `Errand ${errand.id} started: the Negotiator sent the opener to ${peerId} on ${channel}. Reply with exactly this line and nothing else — untranslated, with the URL as plain text: ${follow}`;
+  return `Errand ${errand.id} staged; nothing has been sent yet. Show the human this draft opener exactly and ask whether to send it. Do not call ${TOOL_NAMES.approve} until they agree in a later message: "${openingMessage}"`;
 });
 
 export const approveErrand = withErrands(TOOL_NAMES.approve, async (args, sessionId, errands) => {
@@ -136,6 +128,10 @@ export const approveErrand = withErrands(TOOL_NAMES.approve, async (args, sessio
   const updated = errand.deliveryIncomplete ? await errands.retry(errand.id) : await errands.approve(errand.id);
   if (updated.deliveryIncomplete) {
     return `Errand "${errand.goal}": the message still did not reach every contact (${updated.deliveryError ?? 'delivery pending'}). It can be retried later.`;
+  }
+  if (errand.state === 'draft') {
+    // The Negotiator already posted the sent opener in this chat; do not repeat it.
+    return `Errand "${errand.goal}": the Negotiator sent the opener to the contact. Reply with exactly this line and nothing else — untranslated, with the URL as plain text: ${FOLLOW_TEXT}${errands.followUrl()}`;
   }
   return `Errand "${errand.goal}": message sent to the contact. Status: ${status(updated)}.`;
 });
@@ -183,8 +179,8 @@ export function create(context: ToolPluginContext): Plugin {
           name: TOOL_NAMES.start,
           description:
             'Start an errand: the Negotiator talks to a contact on WhatsApp or Telegram on the human\'s behalf until the goal is done ' +
-            '(book, ask, confirm, negotiate…). The Negotiator writes and sends the opening message right away — do not ask the human ' +
-            'to approve a draft. After calling, reply with the "follow details on" line from the result.',
+            '(book, ask, confirm, negotiate…). Stages a draft opener only — nothing is sent until the human approves it with ' +
+            `${TOOL_NAMES.approve}. After calling, show the draft to the human and ask whether to send it.`,
           parameters: {
             goal: { type: 'string', required: true, description: 'What the errand must achieve, with every constraint the human gave (dates, limits, preferences), in the human\'s language.' },
             contact: { type: 'string', required: true, description: 'Who to talk to: a WhatsApp phone number with country code (e.g. "5511999998888") or JID, or a Telegram chat id.' },
@@ -196,8 +192,8 @@ export function create(context: ToolPluginContext): Plugin {
         defineTool({
           name: TOOL_NAMES.approve,
           description:
-            'Send an errand\'s staged message to the contact: a draft opener the human agrees to send (e.g. a queued errand that is ' +
-            'now ready), or a message whose delivery did not finish.',
+            'Send an errand\'s staged message to the contact: the draft opener the human just approved ("send it", "yes", "sim", "ok"), ' +
+            `or a message whose delivery did not finish. Never call it in the same turn as ${TOOL_NAMES.start}.`,
           parameters: { errandId: ERRAND_ID },
           handler: handler(approveErrand),
           enabled,

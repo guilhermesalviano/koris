@@ -81,7 +81,7 @@ describe('errand tools', () => {
 
   it('approves a draft, and retries an incomplete delivery instead of approving it', async () => {
     const draft = gateway([errand({ state: 'draft', pendingMessage: 'Hi!' })]);
-    expect(await approveErrand(logger, {}, chat, draft)).toMatchObject({ success: true, result: expect.stringContaining('message sent') });
+    expect(await approveErrand(logger, {}, chat, draft)).toMatchObject({ success: true, result: expect.stringContaining('sent the opener') });
     expect(draft.approve).toHaveBeenCalledWith('e1');
     expect(draft.retry).not.toHaveBeenCalled();
 
@@ -98,29 +98,32 @@ describe('errand tools', () => {
     expect(result).toMatchObject({ success: true });
   });
 
-  it('sends the opener right away and hands the Orchestrator the link to follow the negotiation', async () => {
+  it('only stages the opener and has the Orchestrator ask the human to approve it', async () => {
     const errands = gateway();
     const result = await startErrand(logger, { goal: 'Pedir um lanche', contact: '5511948449969', channel: 'whatsapp' }, chat, errands);
-    expect(errands.approve).toHaveBeenCalledExactlyOnceWith('new');
-    expect(result).toMatchObject({ success: true, result: expect.stringMatching(/follow details on http:\/\/koris\.local:3000\/admin\/agents\/negotiator$/) });
-    expect(result.result).not.toContain('Hi! Is Friday free?');
-  });
-
-  it('does not send a queued errand, but still shares the link', async () => {
-    const errands = gateway();
-    errands.start.mockResolvedValue({ errand: errand({ id: 'new', state: 'queued' }), openingMessage: 'Hi!' });
-    const result = await startErrand(logger, { goal: 'Book', contact: '555', channel: 'whatsapp' }, chat, errands);
     expect(errands.approve).not.toHaveBeenCalled();
-    expect(result.result).toContain('queued');
-    expect(result.result).toContain('follow details on http://koris.local:3000/admin/agents/negotiator');
+    expect(result).toMatchObject({ success: true, result: expect.stringContaining('ask whether to send it') });
+    expect(result.result).toContain('"Hi! Is Friday free?"');
+    expect(result.result).not.toContain('follow details on');
   });
 
-  it('reports an opener that failed to send and offers a retry', async () => {
-    const errands = gateway();
+  it('shares the follow link once the approved opener is sent', async () => {
+    const errands = gateway([errand({ state: 'draft', pendingMessage: 'Hi!' })]);
+    const result = await approveErrand(logger, {}, chat, errands);
+    expect(result).toMatchObject({ success: true, result: expect.stringMatching(/follow details on http:\/\/koris\.local:3000\/admin\/agents\/negotiator$/) });
+  });
+
+  it('does not share the follow link when retrying a reply to the contact', async () => {
+    const errands = gateway([errand({ state: 'awaiting_principal', deliveryIncomplete: true })]);
+    const result = await approveErrand(logger, {}, chat, errands);
+    expect(errands.retry).toHaveBeenCalledWith('e1');
+    expect(result.result).not.toContain('follow details on');
+  });
+
+  it('reports an approved opener that failed to send', async () => {
+    const errands = gateway([errand({ state: 'draft', pendingMessage: 'Hi!' })]);
     errands.approve.mockRejectedValue(new Error('WhatsApp is disconnected'));
-    const result = await startErrand(logger, { goal: 'Book', contact: '555', channel: 'whatsapp' }, chat, errands);
-    expect(result).toMatchObject({ success: true, result: expect.stringContaining('WhatsApp is disconnected') });
-    expect(result.result).toContain(TOOL_NAMES.approve);
+    expect(await approveErrand(logger, {}, chat, errands)).toMatchObject({ success: false, error: 'WhatsApp is disconnected' });
   });
 
   it('needs an explicit, known channel outside WhatsApp and Telegram chats', async () => {

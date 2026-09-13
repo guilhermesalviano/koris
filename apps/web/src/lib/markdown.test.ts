@@ -39,6 +39,13 @@ describe('renderMarkdown', () => {
     expect(renderMarkdown('a https://x.test?a=1&b=2 b')).toBe(`<p>a ${link('https://x.test?a=1&amp;b=2')} b</p>`);
   });
 
+  it('opens links back into this app in the same tab', () => {
+    const origin = 'http://localhost:3000';
+    expect(renderMarkdown('follow details on http://localhost:3000/admin/agents/negotiator', origin))
+      .toBe('<p>follow details on <a href="http://localhost:3000/admin/agents/negotiator">http://localhost:3000/admin/agents/negotiator</a></p>');
+    expect(renderMarkdown('http://localhost:30001/x', origin)).toContain('target="_blank"');
+  });
+
   it('does not link URLs inside code or let a quote escape the href', () => {
     expect(renderMarkdown('`https://x.test`')).toBe('<p><code>https://x.test</code></p>');
     expect(renderMarkdown('https://x.test/"onmouseover="alert(1)'))
