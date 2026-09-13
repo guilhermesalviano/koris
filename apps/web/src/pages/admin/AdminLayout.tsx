@@ -13,6 +13,7 @@ import NegotiatorPanel from './agents/NegotiatorPanel';
 import WatcherPanel from './agents/WatcherPanel';
 import ActivityPage, { DEFAULT_ACTIVITY_TAB } from './ActivityPage';
 import { ChatProvider } from '../../lib/chat-context';
+import { AgentActivityProvider, useAgentActivity } from '../../lib/agent-activity-context';
 import { UiProvider, useUi } from '../../lib/ui-context';
 import { ProvidersProvider } from '../../lib/use-providers';
 
@@ -117,6 +118,7 @@ function Header({ onOpenNav }: { onOpenNav: () => void }) {
 
 function AgentsPanel({ onNavigate }: { onNavigate?: () => void }) {
   const { agents, loading, error } = useAgents();
+  const { unread } = useAgentActivity();
   const tree = useMemo(() => buildAgentTree(agents), [agents]);
 
   return (
@@ -128,7 +130,7 @@ function AgentsPanel({ onNavigate }: { onNavigate?: () => void }) {
         ) : loading ? (
           <div className="px-3 py-8 text-center font-mono text-mini text-txt-3">Loading agents…</div>
         ) : (
-          <AgentTree nodes={tree} onNavigate={onNavigate} />
+          <AgentTree nodes={tree} onNavigate={onNavigate} unread={unread} />
         )}
       </nav>
     </div>
@@ -222,6 +224,7 @@ export default function AdminLayout() {
   return (
     <ProvidersProvider>
       <ChatProvider>
+        <AgentActivityProvider>
         <UiProvider value={{ openConfig: handleOpenConfig, isDark, toggleTheme: () => setIsDark((d) => !d) }}>
           <div className="relative z-10 flex h-screen w-full flex-col supports-[height:100dvh]:h-dvh">
             <div className="flex min-h-0 min-w-0 flex-1">
@@ -273,6 +276,7 @@ export default function AdminLayout() {
             <ConfigModal open={configOpen} initialSectionId={configSection} onClose={() => setConfigOpen(false)} />
           </div>
         </UiProvider>
+        </AgentActivityProvider>
       </ChatProvider>
     </ProvidersProvider>
   );

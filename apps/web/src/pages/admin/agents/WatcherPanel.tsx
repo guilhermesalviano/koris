@@ -2,8 +2,8 @@ import { useMemo } from 'react';
 import { Card } from '../../../components/AdminUI';
 import { Badge, Button } from '../../../components/ui';
 import { ReadOnlyAgentChat } from '../../../components/chat/ReadOnlyAgentChat';
-import { buildWatcherChat, loadWatcherChat } from '../../../lib/subagent-chat';
-import { useReadOnlyData } from '../../../lib/use-read-only-data';
+import { buildWatcherChat } from '../../../lib/subagent-chat';
+import { useAgentActivity } from '../../../lib/agent-activity-context';
 import { useUi } from '../../../lib/ui-context';
 import type { HeartbeatItem } from '../../../lib/types';
 import { TYPE_META, cronToLabel, friendlyDate } from '../HeartbeatsPage';
@@ -36,7 +36,7 @@ export function BeatCard({ beat, now }: { beat: HeartbeatItem; now?: Date }) {
 
 export default function WatcherPanel() {
   const { openConfig } = useUi();
-  const { data, loading, error, refresh } = useReadOnlyData(loadWatcherChat);
+  const { watcher: { data, loading, error, refresh } } = useAgentActivity();
   const entries = useMemo(() => buildWatcherChat(data ?? { beats: [], runs: [] }), [data]);
 
   return (

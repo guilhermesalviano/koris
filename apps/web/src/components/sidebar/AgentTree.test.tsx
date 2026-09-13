@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { AgentTree } from './AgentTree';
 import { buildAgentTree } from '../../lib/agents';
-import type { AgentSummary } from '../../lib/types';
+import type { AgentId, AgentSummary } from '../../lib/types';
 
 const ROSTER: AgentSummary[] = [
   { id: 'orchestrator', name: 'Orchestrator', description: 'Main', parentId: null, messageable: true },
@@ -11,10 +11,10 @@ const ROSTER: AgentSummary[] = [
   { id: 'watcher', name: 'Watcher (Heartbeat)', description: '', parentId: 'orchestrator', messageable: false },
 ];
 
-function render(path: string): string {
+function render(path: string, unread: Partial<Record<AgentId, boolean>> = {}): string {
   return renderToStaticMarkup(
     <MemoryRouter initialEntries={[path]}>
-      <AgentTree nodes={buildAgentTree(ROSTER)} />
+      <AgentTree nodes={buildAgentTree(ROSTER)} unread={unread} />
     </MemoryRouter>,
   );
 }
@@ -44,7 +44,7 @@ describe('AgentTree', () => {
     const html = render('/admin/agents/orchestrator');
 
     expect(html.match(/sub agent</g)).toHaveLength(2);
-    expect(html.match(/<img[^>]*class="[^"]*h-7 w-7/g)).toHaveLength(ROSTER.length);
+    expect(html.match(/<span[^>]*class="[^"]*h-10 w-10/g)).toHaveLength(ROSTER.length);
     expect(html).not.toContain('pl-8');
   });
 
@@ -54,5 +54,15 @@ describe('AgentTree', () => {
     const active = html.match(/<a[^>]*aria-current="page"[^>]*>/g) ?? [];
     expect(active).toHaveLength(1);
     expect(active[0]).toContain('href="/admin/agents/watcher"');
+  });
+
+  it('marks only unread avatars and removes the effect once read', () => {
+    const unread = render('/admin/agents/orchestrator', { watcher: true });
+    expect(unread.match(/Unread activity/g)).toHaveLength(1);
+    expect(unread).toContain('ring-2 ring-accent');
+    expect(unread).toContain('motion-safe:animate-ping');
+    const read = render('/admin/agents/orchestrator', { watcher: false });
+    expect(read).not.toContain('Unread activity');
+    expect(read).not.toContain('motion-safe:animate-ping');
   });
 });

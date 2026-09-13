@@ -278,7 +278,7 @@ export default function OrchestratorPage() {
   return (
     <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col w-full">
       <header className="flex h-12 flex-shrink-0 items-center gap-3 border-b border-subtle bg-bg/80 px-4 backdrop-blur-md">
-        <AgentAvatar id="orchestrator" className="h-8 w-8" />
+        <AgentAvatar id="orchestrator" className="h-10 w-10" />
         <h1 className="text-body font-medium text-txt">Orchestrator</h1>
         <Button
           size="sm"
@@ -325,7 +325,7 @@ export default function OrchestratorPage() {
           )}
           <div className={`flex gap-2.5 animate-msg-in ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
             {m.role === 'assistant' && (
-              <AgentAvatar id={m.senderAgentId ?? 'orchestrator'} className="mt-1 h-7 w-7" />
+              <AgentAvatar id={m.senderAgentId ?? 'orchestrator'} className="mt-1 h-10 w-10" />
             )}
             <div className={`bubble-col flex max-w-[calc(100%-44px)] flex-col gap-1 ${m.role === 'user' ? 'items-end' : ''}`}>
               {m.role === 'assistant' && m.senderAgentId && m.senderAgentId !== 'orchestrator' && <AgentMessageLabel senderAgentId={m.senderAgentId} />}

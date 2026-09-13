@@ -3,8 +3,8 @@ import { Toast, useToast } from '../../../components/AdminUI';
 import { ReadOnlyAgentChat } from '../../../components/chat/ReadOnlyAgentChat';
 import { Button, Input } from '../../../components/ui';
 import { apiRequest } from '../../../lib/api';
-import { buildNegotiatorChat, loadNegotiatorChat } from '../../../lib/subagent-chat';
-import { useReadOnlyData } from '../../../lib/use-read-only-data';
+import { buildNegotiatorChat } from '../../../lib/subagent-chat';
+import { useAgentActivity } from '../../../lib/agent-activity-context';
 import type { ErrandItem, ErrandState } from '../../../lib/types';
 
 type ErrandAction = 'approve' | 'cancel' | 'close' | 'retry';
@@ -105,7 +105,7 @@ export function ErrandActions({ errand, onChanged, notify, initialAnswering = fa
 }
 
 export default function NegotiatorPanel() {
-  const { data, loading, error, refresh } = useReadOnlyData(loadNegotiatorChat);
+  const { negotiator: { data, loading, error, refresh } } = useAgentActivity();
   const entries = useMemo(() => buildNegotiatorChat(data ?? []), [data]);
   const errands = useMemo(() => new Map((data ?? []).map(({ errand }) => [`errand:${errand.id}`, errand])), [data]);
   const [toastMsg, showToast, isError] = useToast();

@@ -32,7 +32,7 @@ export function ReadOnlyChatMessage({ entry, agentId, actions }: { entry: ReadOn
   const notices = entry.details?.filter((detail) => ['Unsent draft', 'Question awaiting your answer', 'Delivery incomplete', 'Conversation unavailable'].includes(detail.label));
   return (
     <article data-entry-id={entry.id} className={cn('flex min-w-0 gap-2.5', contact && 'flex-row-reverse')}>
-      {!contact && !task && <AgentAvatar id={agentId} className="mt-1 h-7 w-7" />}
+      {!contact && !task && <AgentAvatar id={agentId} className="mt-1 h-10 w-10" />}
       <div className={cn('flex min-w-0 max-w-[calc(100%-44px)] flex-col gap-1', contact && 'items-end', task && 'mx-auto w-full max-w-2xl')}>
         <div className={cn('flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 text-caption', contact && 'justify-end')}>
           <span className="font-medium text-txt">{entry.author}</span>
@@ -124,7 +124,7 @@ export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, er
   return (
     <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <header className="flex min-h-12 flex-shrink-0 flex-wrap items-center gap-2 border-b border-subtle bg-bg/80 px-4 py-2 backdrop-blur-md">
-        <AgentAvatar id={agentId} className="h-8 w-8" />
+        <AgentAvatar id={agentId} className="h-10 w-10" />
         <h1 className="text-body font-medium text-txt">{title}</h1>
         {!renderEntryActions && <span className="font-mono text-micro text-txt-3">Read-only</span>}
         <div className="ml-auto flex items-center gap-2">
