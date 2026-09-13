@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildNegotiatorChat, buildWatcherChat, headerErrand, loadNegotiatorChat, loadWatcherChat, negotiationSteps } from './subagent-chat';
+import { buildNegotiationCenter, buildNegotiatorChat, buildWatcherChat, headerErrand, loadNegotiatorChat, loadWatcherChat, negotiationSteps } from './subagent-chat';
 import type { BeatRunItem, ErrandItem, ErrandTranscriptMessage } from './types';
 
 const errand: ErrandItem = {
@@ -153,5 +153,20 @@ describe('negotiation steps header', () => {
       { label: 'Your input', status: 'done' }, { label: 'Resolved', status: 'done' },
     ]);
     expect(negotiationSteps('cancelled')[3]).toEqual({ label: 'Cancelled', status: 'done', unsuccessful: true });
+  });
+});
+
+describe('negotiation center', () => {
+  it('lists Negotiator notices and the principal\'s answers in order, labelled with their errand', () => {
+    const entries = buildNegotiationCenter([
+      { id: 'n2', role: 'user', content: '11 works', createdAt: '2026-09-13T10:05:00Z', errandId: 'e1' },
+      { id: 'n1', role: 'assistant', senderAgentId: 'negotiator', content: '❓ Errand "Arrange lunch" needs your input: Would 11 work?', createdAt: '2026-09-13T10:04:00Z', errandId: 'e1' },
+      { id: 'n3', role: 'assistant', content: '✅ Errand "Old" resolved: Done.', createdAt: '2026-09-13T10:06:00Z', errandId: 'gone' },
+    ], [errand]);
+    expect(entries).toEqual([
+      { id: 'notice:n1', at: Date.parse('2026-09-13T10:04:00Z'), kind: 'assistant', author: 'Negotiator', context: 'Arrange lunch', content: 'I need your input on “Arrange lunch”.\n\nWould 11 work?' },
+      { id: 'notice:n2', at: Date.parse('2026-09-13T10:05:00Z'), kind: 'contact', author: 'You', context: 'Arrange lunch', content: '11 works' },
+      { id: 'notice:n3', at: Date.parse('2026-09-13T10:06:00Z'), kind: 'assistant', author: 'Negotiator', context: 'gone', content: "I've completed “Old”.\n\nDone." },
+    ]);
   });
 });

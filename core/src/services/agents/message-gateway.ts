@@ -23,6 +23,7 @@ import type { InboundInput, IMessageGateway, StickerReference } from '../../../.
 import { buildErrandService } from '../errands';
 import { formatOpenErrandsBlock } from '../errands/prompt';
 import { runErrandOperation } from '../errands/operations';
+import { CHANNEL_TYPES } from '../../entities/channel';
 import { Negotiator, NegotiatorFactory } from './sub-agents/negotiator/sub-agent';
 
 export type { InboundInput, IMessageGateway };
@@ -151,7 +152,7 @@ class MessageGateway implements IMessageGateway {
     }
 
     const runId = options?.runId ?? generateId();
-    const errandBlock = options?.toolsEnabled ? this.openErrandsBlock(sessionService.getSession().id) : null;
+    const errandBlock = options?.toolsEnabled ? this.openErrandsBlock(sessionService.getSession().id, channel) : null;
     const promptBlocks = [...(skillBlocks ?? []), ...(errandBlock ? [errandBlock] : [])];
     const turnOptions = { ...options, runId, ...(promptBlocks.length ? { skillBlocks: promptBlocks } : {}) };
 
@@ -258,10 +259,12 @@ class MessageGateway implements IMessageGateway {
 
   // Lets the Orchestrator map a plain "yes" to the right errand tool. Errands
   // only run with a channel manager, so there is nothing to list without one.
-  private openErrandsBlock(sessionId: string): string | null {
+  // Questions only reach a WhatsApp/Telegram principal in this chat; on web they
+  // are answered from the Negotiator page, so the Orchestrator does not see them.
+  private openErrandsBlock(sessionId: string, channel: string): string | null {
     try {
       const errands = buildErrandService(this.logger, this.db, this.sessionManager)?.listByOrigin(sessionId) ?? [];
-      return formatOpenErrandsBlock(errands);
+      return formatOpenErrandsBlock(errands, { includeQuestions: (CHANNEL_TYPES as readonly string[]).includes(channel) });
     } catch (err) {
       this.logger.warn('Failed to list open errands for the prompt', {
         error: err instanceof Error ? err.message : String(err),

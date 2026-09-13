@@ -624,6 +624,21 @@ describe('MessageGateway', () => {
       expect(block).not.toContain('Old errand');
     });
 
+    it('keeps pending questions out of a web Orchestrator turn, since they are answered on the Negotiator page', async () => {
+      const { gateway, deps } = makeGateway('web');
+      const listByOrigin = vi.fn().mockReturnValue([
+        new Errand({ id: 'e1', goal: 'Book a class', state: 'awaiting_principal', originSessionId: 'session-1', pendingMessage: 'Wednesday instead?' }),
+        new Errand({ id: 'e2', goal: 'Buy milk', state: 'draft', originSessionId: 'session-1', pendingMessage: 'Hi!' }),
+      ]);
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), listByOrigin } as never);
+
+      await gateway.handle('sim', 'web', { toolsEnabled: true });
+
+      const [block] = deps.mainAgent.run.mock.calls[0][0].options.skillBlocks;
+      expect(block).toContain('Draft opener: Hi!');
+      expect(block).not.toContain('Wednesday instead?');
+    });
+
     it('adds no errand block without open errands or without tools', async () => {
       const { gateway, deps } = makeGateway('whatsapp');
       await gateway.handle('hello', 'origin-1', { toolsEnabled: true, isTrustedSender: true });

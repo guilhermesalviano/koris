@@ -44,7 +44,7 @@ import { buildUsageReport, usageFrom } from '../services/usage/usage';
 import { Heartbeat } from '../entities/heartbeat';
 import { AuditStatus, AuditType } from '../entities/audit-log';
 import { Session } from '../entities/session';
-import { SESSION_START_REASONS, type SessionKey, type SessionStartReason } from '../types/session';
+import { NEGOTIATION_CHANNEL, SESSION_START_REASONS, type SessionKey, type SessionStartReason } from '../types/session';
 import { carryForwardMetadata } from '../utils/session';
 import { BEAT_TYPES, BeatType } from '../types/beat';
 import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
@@ -523,6 +523,27 @@ class AdminRouterFactory {
         messages: page.messages.map((m) => ({ ...toMessageJson(m), sessionId: m.sessionId })),
         sessions,
         activeSessionId: active?.id ?? null,
+        nextCursor: page.nextCursor ? encodeTimelineCursor(page.nextCursor) : null,
+      });
+    });
+
+    // The negotiation center: every errand's negotiation session (Negotiator
+    // notices and the principal's answers) as one feed, paged from the newest
+    // backwards. Each message names the errand its session belongs to.
+    router.get('/agents/negotiator/notices', (req: Request, res: Response) => {
+      const before = decodeTimelineCursor(req.query.before);
+      if (before === null) {
+        res.status(400).json({ error: 'Invalid cursor' });
+        return;
+      }
+      const limit = Math.min(Math.max(Number(req.query.limit) || TIMELINE_DEFAULT_LIMIT, 1), 200);
+
+      const page = messageRepo.getTimeline({ key: { channel: NEGOTIATION_CHANNEL, kind: 'user' }, before, limit });
+      const errandIds = new Map([...new Set(page.messages.map((m) => m.sessionId))]
+        .map((id) => [id, sessionRepo.findById(id)?.peerId ?? null]));
+
+      res.json({
+        messages: page.messages.map((m) => ({ ...toMessageJson(m), errandId: errandIds.get(m.sessionId) ?? null })),
         nextCursor: page.nextCursor ? encodeTimelineCursor(page.nextCursor) : null,
       });
     });

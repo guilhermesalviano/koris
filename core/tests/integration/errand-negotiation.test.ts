@@ -172,7 +172,9 @@ describe('errand negotiation across contact and parent sessions', () => {
     expect(requests[3].messages.map((m) => m.content)).toContain(clarification);
     expect(errands.get(errand.id)?.state).toBe('awaiting_principal');
     expect(errands.get(errand.id)?.pendingMessage).toBe(approvalQuestion);
-    const parentNotices = messages.getBySessionId(parent.id);
+    expect(messages.getBySessionId(parent.id)).toEqual([]);
+    const negotiation = SessionRepositoryFactory.create(db).findLatestOpen({ channel: 'negotiator', peerId: errand.id, kind: 'user' });
+    const parentNotices = messages.getBySessionId(negotiation!.id);
     expect(parentNotices).toHaveLength(1);
     expect(parentNotices[0].content).toContain(approvalQuestion);
     expect(parentNotices[0].content).not.toContain('/errand reply');
@@ -201,7 +203,7 @@ describe('errand negotiation across contact and parent sessions', () => {
     await deliveryStarted;
     expect(channels.sendMessage).toHaveBeenLastCalledWith('whatsapp', '555', 'Thank you, see you then!');
     expect(errands.get(errand.id)?.state).toBe('awaiting_peer');
-    expect(messages.getBySessionId(parent.id).some((m) => m.content.includes('Haircut confirmed Saturday at 11'))).toBe(false);
+    expect(messages.getBySessionId(negotiation!.id).some((m) => m.content.includes('Haircut confirmed Saturday at 11'))).toBe(false);
     finishDelivery();
     expect(await finalTurn).toBe('');
     expect(messages.getBySessionId(delegatedId).slice(-2).map((m) => m.content)).toEqual([
@@ -211,7 +213,9 @@ describe('errand negotiation across contact and parent sessions', () => {
     expect(requests[5].messages[0].content).toContain('Principal answer: "11 works for me; please book it."');
     expect(requests[5].messages.map((m) => m.content)).toContain('Alex approved Saturday at 11 for $25. Could you confirm that booking?');
     expect(errands.get(errand.id)?.state).toBe('resolved');
-    expect(messages.getBySessionId(parent.id).some((m) => m.content.includes('Haircut confirmed Saturday at 11'))).toBe(true);
+    expect(messages.getBySessionId(negotiation!.id).some((m) => m.content.includes('Haircut confirmed Saturday at 11'))).toBe(true);
+    expect(messages.getBySessionId(negotiation!.id).map((m) => m.role)).toEqual(['assistant', 'user', 'assistant']);
+    expect(messages.getBySessionId(parent.id)).toEqual([]);
     expect(db.get<{ total: number }>("SELECT COUNT(*) AS total FROM sessions WHERE kind = 'delegated'")?.total).toBe(1);
     expect(mainAgent.run).not.toHaveBeenCalled();
     expect(responses).toHaveLength(0);

@@ -12,7 +12,8 @@ interface TimelineCursor {
 }
 
 interface TimelineQuery {
-  key: Required<SessionKey>;
+  /** Without `peerId`, the timeline spans every peer on the channel (e.g. all negotiation sessions). */
+  key: Omit<Required<SessionKey>, 'peerId'> & { peerId?: string };
   before?: TimelineCursor;
   limit: number;
 }
@@ -87,16 +88,18 @@ class MessageRepository implements IMessageRepository {
       ? 'AND (m.created_at < ? OR (m.created_at = ? AND m.rowid < ?))'
       : '';
     const cursorParams = before ? [before.createdAt, before.createdAt, before.rowid] : [];
+    const peerClause = key.peerId === undefined ? '' : 'AND s.peer_id = ?';
+    const peerParams = key.peerId === undefined ? [] : [key.peerId];
 
     // One extra row tells whether an older page exists without a COUNT query.
     const rows = this.db.query<any>(
       `SELECT m.rowid AS row_order, m.id, m.session_id, m.role, m.content, m.image_ids, m.error_code, m.created_at, m.sender_agent_id
        FROM messages m
        JOIN sessions s ON s.id = m.session_id
-       WHERE s.channel = ? AND s.peer_id = ? AND s.kind = ? ${cursorClause}
+       WHERE s.channel = ? ${peerClause} AND s.kind = ? ${cursorClause}
        ORDER BY m.created_at DESC, m.rowid DESC
        LIMIT ?`,
-      [key.channel, key.peerId, key.kind, ...cursorParams, limit + 1],
+      [key.channel, ...peerParams, key.kind, ...cursorParams, limit + 1],
     );
 
     const hasMore = rows.length > limit;

@@ -1,5 +1,6 @@
 import { apiRequest } from './api';
-import type { BeatRunItem, BeatRunsResponse, ErrandItem, ErrandState, ErrandsResponse, ErrandTranscriptMessage, ErrandTranscriptResponse, HeartbeatItem, HeartbeatsResponse } from './types';
+import { agentMessagePresentation } from './agent-message';
+import type { BeatRunItem, BeatRunsResponse, ErrandItem, ErrandState, ErrandsResponse, ErrandTranscriptMessage, ErrandTranscriptResponse, HeartbeatItem, HeartbeatsResponse, NegotiatorNotice, NegotiatorNoticesResponse } from './types';
 
 export interface ReadOnlyChatEntry {
   id: string;
@@ -127,7 +128,33 @@ export function buildNegotiatorChat(conversations: readonly ErrandConversation[]
   return ordered(entries);
 }
 
-const BEAT_TYPE: Record<string, string> = { reminder: 'Reminder', scheduled_beat: 'Scheduled task' };
+/**
+ * The negotiation center: every negotiation session's messages as one history —
+ * the Negotiator's notices on the left, the principal's answers on the right,
+ * each labelled with the errand it belongs to.
+ */
+export function buildNegotiationCenter(notices: readonly NegotiatorNotice[], errands: readonly ErrandItem[]): ReadOnlyChatEntry[] {
+  const goals = new Map(errands.map((errand) => [errand.id, errand.goal]));
+  return ordered(notices.map((notice) => {
+    const answer = notice.role === 'user';
+    const { content } = agentMessagePresentation({ role: notice.role, content: notice.content, senderAgentId: notice.senderAgentId });
+    return {
+      id: `notice:${notice.id}`,
+      at: timestamp(notice.createdAt),
+      kind: answer ? 'contact' : 'assistant',
+      author: answer ? 'You' : 'Negotiator',
+      context: (notice.errandId && goals.get(notice.errandId)) ?? notice.errandId ?? '',
+      content,
+    };
+  }));
+}
+
+export async function loadNegotiatorNotices(signal: AbortSignal): Promise<NegotiatorNotice[]> {
+  const { messages } = await apiRequest<NegotiatorNoticesResponse>('/agents/negotiator/notices?limit=200', { signal });
+  return messages;
+}
+
+const BEAT_TYPE: Record<string, string> ={ reminder: 'Reminder', scheduled_beat: 'Scheduled task' };
 
 /** One section per heartbeat run: the task that fired, then the Watcher's result (or failure). */
 export function buildWatcherChat({ runs }: WatcherHistory): ReadOnlyChatEntry[] {

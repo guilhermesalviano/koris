@@ -1,11 +1,15 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Toast, useToast } from '../../../components/AdminUI';
-import { ReadOnlyAgentChat } from '../../../components/chat/ReadOnlyAgentChat';
-import { Button, Input } from '../../../components/ui';
+import { DateSeparator } from '../../../components/chat/DateSeparator';
+import { ReadOnlyAgentChat, ReadOnlyChatMessage } from '../../../components/chat/ReadOnlyAgentChat';
+import { Button, Input, Select } from '../../../components/ui';
 import { apiRequest } from '../../../lib/api';
 import { cn } from '../../../lib/cn';
-import { buildNegotiatorChat, headerErrand, negotiationSteps } from '../../../lib/subagent-chat';
+import { chatSeparatorLabel } from '../../../lib/date';
+import { buildNegotiationCenter, buildNegotiatorChat, headerErrand, loadNegotiatorNotices, negotiationSteps, type ReadOnlyChatEntry } from '../../../lib/subagent-chat';
+import { isNearBottom } from '../../../lib/timeline';
 import { useAgentActivity } from '../../../lib/agent-activity-context';
+import { useReadOnlyData } from '../../../lib/use-read-only-data';
 import type { ErrandItem, ErrandState } from '../../../lib/types';
 
 type ErrandAction = 'approve' | 'cancel' | 'close' | 'retry';
@@ -135,12 +139,132 @@ export function NegotiationStepsHeader({ errand }: { errand: Pick<ErrandItem, 'g
   );
 }
 
+interface NegotiationCenterProps {
+  entries: readonly ReadOnlyChatEntry[];
+  errands: readonly ErrandItem[];
+  loading: boolean;
+  loaded: boolean;
+  error: string | null;
+  notify: (message: string, isError?: boolean) => void;
+  onAnswered: () => void;
+}
+
+/** Errands whose question the composer can answer, newest question first. */
+export function answerableErrands(errands: readonly ErrandItem[]): ErrandItem[] {
+  return errands
+    .filter((errand) => errand.state === 'awaiting_principal' && !errand.delivery)
+    .sort((a, b) => Date.parse(b.lastProgressAt ?? b.createdAt) - Date.parse(a.lastProgressAt ?? a.createdAt));
+}
+
+/** Main area of the Negotiator page: every negotiation's notices as one history, plus a composer that answers a pending question. */
+export function NegotiationCenter({ entries, errands, loading, loaded, error, notify, onAnswered }: NegotiationCenterProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const following = useRef(true);
+  const pending = useMemo(() => answerableErrands(errands), [errands]);
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  const target = pending.find((errand) => errand.id === chosenId) ?? pending[0] ?? null;
+  const [answer, setAnswer] = useState('');
+  const [sending, setSending] = useState(false);
+
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    if (element && following.current) element.scrollTop = element.scrollHeight;
+  }, [entries]);
+
+  async function submit() {
+    const text = answer.trim();
+    if (!target || !text || sending) return;
+    setSending(true);
+    try {
+      await apiRequest(`/errands/${encodeURIComponent(target.id)}/reply`, { method: 'POST', body: JSON.stringify({ answer: text }) });
+      setAnswer('');
+      following.current = true;
+      notify('Answer sent to contact, errand resumed');
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Failed to send answer', true);
+    } finally {
+      setSending(false);
+      onAnswered();
+    }
+  }
+
+  return (
+    <>
+      <div
+        ref={scrollRef}
+        onScroll={(event) => { following.current = isNearBottom(event.currentTarget); }}
+        aria-label="Negotiation center"
+        aria-busy={loading}
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-5"
+      >
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
+          {error && <p role="alert" className="text-center text-caption text-danger">{error}</p>}
+          {!loaded && loading && <p role="status" className="py-12 text-center text-caption text-txt-3">Loading negotiations…</p>}
+          {loaded && entries.length === 0 && (
+            <p className="py-12 text-center text-body text-txt-3">No negotiation updates yet. Questions and results from the Negotiator appear here.</p>
+          )}
+          {entries.map((entry, index) => {
+            const separator = chatSeparatorLabel(entry.at, entries[index - 1]?.at);
+            return (
+              <Fragment key={entry.id}>
+                {separator && <DateSeparator label={separator} />}
+                <ReadOnlyChatMessage entry={entry} agentId="negotiator" />
+              </Fragment>
+            );
+          })}
+        </div>
+      </div>
+      <form
+        className="flex flex-shrink-0 flex-wrap items-center gap-2 border-t border-subtle px-4 py-3"
+        onSubmit={(event) => { event.preventDefault(); void submit(); }}
+      >
+        {pending.length > 1 && (
+          <Select
+            aria-label="Question to answer"
+            value={target?.id ?? ''}
+            onChange={(event) => setChosenId(event.target.value)}
+            className="h-9 w-full sm:w-56"
+          >
+            {pending.map((errand) => <option key={errand.id} value={errand.id}>{errand.goal}</option>)}
+          </Select>
+        )}
+        <Input
+          aria-label="Answer to the Negotiator"
+          value={answer}
+          onChange={(event) => setAnswer(event.target.value)}
+          disabled={!target}
+          placeholder={target ? `Answer: ${target.pendingMessage ?? target.goal}` : 'No question is waiting for your answer'}
+          className="min-w-0 flex-1"
+        />
+        <Button type="submit" variant="primary" loading={sending} disabled={!target || !answer.trim()}>Send</Button>
+      </form>
+    </>
+  );
+}
+
 export default function NegotiatorPanel() {
   const { negotiator: { data, loading, error, refresh } } = useAgentActivity();
   const entries = useMemo(() => buildNegotiatorChat(data ?? []), [data]);
   const errands = useMemo(() => new Map((data ?? []).map(({ errand }) => [`errand:${errand.id}`, errand])), [data]);
   const followed = useMemo(() => headerErrand([...errands.values()]), [errands]);
   const [toastMsg, showToast, isError] = useToast();
+  const notices = useReadOnlyData(loadNegotiatorNotices);
+  const centerEntries = useMemo(() => buildNegotiationCenter(notices.data ?? [], [...errands.values()]), [notices.data, errands]);
+
+  // Notices only change alongside an errand's progress, which the shared errand
+  // polling already picks up; reload them whenever that data changes.
+  const polled = useRef(data);
+  const refreshNotices = notices.refresh;
+  useEffect(() => {
+    if (polled.current === data) return;
+    polled.current = data;
+    void refreshNotices();
+  }, [data, refreshNotices]);
+
+  const refreshAll = () => {
+    void refresh();
+    void notices.refresh();
+  };
 
   return (
     <>
@@ -151,7 +275,18 @@ export default function NegotiatorPanel() {
         loading={loading}
         loaded={data !== null}
         error={error}
-        onRefresh={() => void refresh()}
+        onRefresh={refreshAll}
+        main={(
+          <NegotiationCenter
+            entries={centerEntries}
+            errands={[...errands.values()]}
+            loading={notices.loading}
+            loaded={notices.data !== null}
+            error={notices.error}
+            notify={showToast}
+            onAnswered={refreshAll}
+          />
+        )}
         emptyText="No errands yet. Start an errand from the Orchestrator to see its conversation here."
         historyLabel="Available conversations from the latest 50 errands · up to 100 messages per contact"
         historyAside

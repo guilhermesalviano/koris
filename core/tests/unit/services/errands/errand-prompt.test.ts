@@ -25,6 +25,14 @@ describe('formatOpenErrandsBlock', () => {
     expect(block).not.toContain('stale text');
   });
 
+  it('can leave out errands waiting on the human\'s answer', () => {
+    const questionOnly = [errand({ state: 'awaiting_principal', pendingMessage: 'Wednesday instead?' })];
+    expect(formatOpenErrandsBlock(questionOnly, { includeQuestions: false })).toBeNull();
+    const block = formatOpenErrandsBlock([...questionOnly, errand({ id: 'e2', state: 'awaiting_peer' })], { includeQuestions: false })!;
+    expect(block).toContain('[e2]');
+    expect(block).not.toContain('Wednesday instead?');
+  });
+
   it('reports an incomplete delivery instead of the staged message', () => {
     const block = formatOpenErrandsBlock([errand({
       state: 'draft',

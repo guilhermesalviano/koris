@@ -108,6 +108,21 @@ export interface ErrandTranscriptMessage {
   createdAt: string;
 }
 
+/** A message of an errand's negotiation session: a Negotiator notice or the principal's answer. */
+export interface NegotiatorNotice {
+  id: string;
+  role: string;
+  content: string;
+  senderAgentId?: AgentId;
+  createdAt: string;
+  errandId: string | null;
+}
+
+export interface NegotiatorNoticesResponse {
+  messages: NegotiatorNotice[];
+  nextCursor: string | null;
+}
+
 export interface ErrandTranscriptResponse {
   errandId: string;
   messages: ErrandTranscriptMessage[];

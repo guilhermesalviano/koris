@@ -94,14 +94,17 @@ describe('errand recovery and privacy', () => {
     expect(runtime.mainAgent.run).not.toHaveBeenCalled();
   });
 
-  it.each([undefined, { compactSummary: 'Earlier conversation' }])('pins late notices to the origin after rotation with %j', (metadata) => {
+  it.each([undefined, { compactSummary: 'Earlier conversation' }])('keeps late notices in the negotiation session, out of the Orchestrator, after rotation with %j', (metadata) => {
     const { manager, service, parent, messages } = setup();
     const errand = service.create('Book a haircut', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Hello');
     const fresh = manager.getSessionServiceById(parent.id).forceRotate('clear', metadata);
     service.escalate(errand.id, 'Is 11 okay?');
     expect(manager.getSessionServiceById(parent.id).getSession().id).toBe(parent.id);
-    expect(messages.getBySessionId(parent.id).map((message) => message.content)).toEqual([expect.stringContaining('Is 11 okay?')]);
+    expect(messages.getBySessionId(parent.id)).toEqual([]);
     expect(messages.getBySessionId(fresh.id)).toEqual([]);
+    const negotiation = SessionRepositoryFactory.create(db).findLatestOpen({ channel: 'negotiator', peerId: errand.id, kind: 'user' });
+    expect(negotiation?.metadata).toMatchObject({ errandId: errand.id, parentSessionId: parent.id });
+    expect(messages.getBySessionId(negotiation!.id).map((message) => message.content)).toEqual([expect.stringContaining('Is 11 okay?')]);
     manager.getSessionServiceById(fresh.id);
     SessionRepositoryFactory.create(db).deleteById(fresh.id);
     manager.invalidate(fresh.id);
@@ -233,6 +236,44 @@ describe('errand recovery and privacy', () => {
     MessageServiceFactory.create(db, original).save({ role: 'assistant', content: 'Original notice' });
     expect(original.getSession().id).toBe(parent.id);
     expect(() => manager.getSessionServiceById(rotated.id)).toThrow('Session not found');
+  });
+
+  it('opens a negotiation session on approval that collects notices and answers, sent to a WhatsApp principal and listed by the admin API', async () => {
+    const { manager, service, channels, messages } = setup();
+    const principal = manager.getSessionService({ channel: 'whatsapp', peerId: '999' }).getSession();
+    const errand = service.create('Book a haircut', [{ channel: 'whatsapp', peerId: '555' }], principal.id, 'Is 10 available?');
+    const sessions = SessionRepositoryFactory.create(db);
+    const key = { channel: 'negotiator', peerId: errand.id, kind: 'user' as const };
+    expect(sessions.findLatestOpen(key)).toBeNull();
+
+    await service.approve(errand.id);
+    const negotiation = sessions.findLatestOpen(key)!;
+    expect(negotiation.metadata).toEqual({ errandId: errand.id, parentSessionId: principal.id });
+    expect(messages.getBySessionId(negotiation.id)).toEqual([]);
+
+    service.escalate(errand.id, 'Would 11 work?');
+    await Promise.resolve();
+    expect(channels.sendMessage).toHaveBeenLastCalledWith('whatsapp', '999', expect.stringContaining('Would 11 work?'));
+    await vi.waitFor(() => expect(messages.getBySessionId(negotiation.id)).toHaveLength(1));
+    vi.spyOn(NegotiatorFactory, 'create').mockReturnValue({ composeResume: vi.fn().mockResolvedValue('Please book 11.') } as never);
+    await service.resumeWithPrincipalAnswer(errand.id, '11 works');
+    expect(messages.getBySessionId(principal.id)).toEqual([]);
+    expect(messages.getBySessionId(negotiation.id).map((message) => [message.role, message.content])).toEqual([
+      ['assistant', expect.stringContaining('Would 11 work?')],
+      ['user', '11 works'],
+    ]);
+
+    const router = AdminRouterFactory.create(logger, db, {} as never, manager);
+    const layer = router.stack.find((item) => item.route?.path === '/agents/negotiator/notices' && item.route.methods.get);
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    await layer!.route.stack[0].handle({ params: {}, query: {} }, res, vi.fn());
+    expect(res.json.mock.calls[0][0]).toMatchObject({
+      messages: [
+        { role: 'assistant', content: expect.stringContaining('Would 11 work?'), errandId: errand.id },
+        { role: 'user', content: '11 works', errandId: errand.id },
+      ],
+      nextCursor: null,
+    });
   });
 
   it('exposes failure and retry through the admin API without exposing internal delivery instructions', async () => {

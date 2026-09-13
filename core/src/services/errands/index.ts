@@ -3,7 +3,7 @@ import { IDatabaseService } from '../../infrastructure/db-sqlite';
 import { config } from '../../config';
 import { Errand, ErrandProps } from '../../entities/errand';
 import { Session } from '../../entities/session';
-import { ErrandSessionMetadata } from '../../types/session';
+import { ErrandSessionMetadata, NEGOTIATION_CHANNEL, NegotiationSessionMetadata, SessionKey } from '../../types/session';
 import { THIRD_PARTY_CONVERSATION_CONTEXT } from '../../constants';
 import { IErrandRepository, ErrandRepositoryFactory } from '../../repositories/errand';
 import { ISessionRepository, SessionRepositoryFactory } from '../../repositories/session';
@@ -23,6 +23,11 @@ const NON_TERMINAL_STATES: ErrandState[] = ['draft', 'queued', 'open', 'awaiting
 export interface ErrandTargetRef {
   channel: string;
   peerId: string;
+}
+
+/** Session key of an errand's own principal-facing session. */
+function negotiationSessionKey(errandId: string): Required<SessionKey> {
+  return { channel: NEGOTIATION_CHANNEL, peerId: errandId, kind: 'user' };
 }
 
 function isDeliverableChannel(channel: string): boolean {
@@ -139,10 +144,7 @@ class ErrandService implements IErrandService {
       notes: notes ?? errand.notes,
       lastProgressAt: nowISO(),
     });
-    this.pushToSession(
-      errand.originSessionId,
-      `❓ Errand "${errand.goal}" needs your input: ${question}`,
-    );
+    this.pushToSession(errand, `❓ Errand "${errand.goal}" needs your input: ${question}`);
     return updated;
   }
 
@@ -314,6 +316,12 @@ class ErrandService implements IErrandService {
       state: 'awaiting_peer', pendingMessage: undefined, pendingDelivery: undefined,
       notes, lastProgressAt: nowISO(),
     });
+    // The negotiation gets its own session once it is open; the principal's
+    // answers are kept there next to the questions they answer.
+    const negotiation = this.negotiationSession(updated);
+    if (batch.type === 'resume' && batch.answer) {
+      this.saveToSession(negotiation.id, { role: 'user', content: batch.answer });
+    }
     return updated;
   }
 
@@ -350,7 +358,7 @@ class ErrandService implements IErrandService {
     });
     this.promoteQueued(this.errandRepository.findTargets(errand.id));
     if (notice) {
-      this.pushToSession(errand.originSessionId, notice);
+      this.pushToSession(errand, notice);
     }
     return updated;
   }
@@ -381,27 +389,41 @@ class ErrandService implements IErrandService {
     }
   }
 
-  private pushToSession(sessionId: string, content: string): void {
-    const session = this.sessionRepository.findById(sessionId);
-    if (!session) {
-      this.logger.warn(`Errand push target session not found: ${sessionId}`);
-      return;
-    }
+  // Notices are recorded in the errand's negotiation session, never in the
+  // Orchestrator conversation. A principal on WhatsApp/Telegram still receives
+  // them in that chat; the outbound record lands in the negotiation session.
+  private pushToSession(errand: Errand, content: string): void {
+    const negotiation = this.negotiationSession(errand);
+    const origin = this.sessionRepository.findById(errand.originSessionId);
 
-    if (isDeliverableChannel(session.channel)) {
+    if (origin && isDeliverableChannel(origin.channel)) {
       void this.outboundMessageService.send({
-        channel: session.channel,
-        target: session.peerId,
+        channel: origin.channel,
+        target: origin.peerId,
         content,
-        kind: session.kind,
-        sessionId: session.id,
+        kind: origin.kind,
+        sessionId: negotiation.id,
       }).catch(() => this.logger.warn('Could not deliver errand notice.'));
       return;
     }
 
     // web/tui: nothing to deliver to, just record it in the transcript.
-    const sessionService = this.sessionManager.getSessionServiceById(session.id);
-    MessageServiceFactory.create(this.db, sessionService).save({ role: 'assistant', content, senderAgentId: 'negotiator' });
+    this.saveToSession(negotiation.id, { role: 'assistant', content, senderAgentId: 'negotiator' });
+  }
+
+  private negotiationSession(errand: Errand): Session {
+    const key = negotiationSessionKey(errand.id);
+    const existing = this.sessionRepository.findLatestOpen(key);
+    if (existing) return existing;
+    const metadata: NegotiationSessionMetadata = { errandId: errand.id, parentSessionId: errand.originSessionId };
+    const session = new Session({ ...key, metadata });
+    this.sessionRepository.save(session);
+    return session;
+  }
+
+  private saveToSession(sessionId: string, message: { role: 'user' | 'assistant'; content: string; senderAgentId?: 'negotiator' }): void {
+    const sessionService = this.sessionManager.getSessionServiceById(sessionId);
+    MessageServiceFactory.create(this.db, sessionService).save(message);
   }
 
   private transition(errand: Errand, patch: Partial<ErrandProps>): Errand {
@@ -455,4 +477,4 @@ function buildErrandService(
   return ErrandServiceFactory.create(logger, db, sessionManager, outboundMessageService);
 }
 
-export { IErrandService, ErrandService, ErrandServiceFactory, buildErrandService };
+export { IErrandService, ErrandService, ErrandServiceFactory, buildErrandService, negotiationSessionKey };

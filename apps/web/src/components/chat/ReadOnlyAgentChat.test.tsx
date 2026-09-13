@@ -58,6 +58,12 @@ describe('read-only agent chat', () => {
     const aside = html.slice(html.indexOf('<aside aria-label="Negotiator history"'));
     expect(aside).toContain('Lunch confirmed.');
     expect(aside).toContain('Recent history');
+
+    const withMain = renderToStaticMarkup(<ReadOnlyAgentChat
+      agentId="negotiator" title="Negotiator" entries={[entry]} loading={false} loaded error={null}
+      onRefresh={() => {}} emptyText="No errands yet." historyLabel="Recent history" historyAside main={<p>Center content</p>}
+    />);
+    expect(withMain).toMatch(/<section aria-label="Negotiator main"[^>]*><p>Center content<\/p><\/section>/);
   });
 
   it('distinguishes loading and empty history', () => {

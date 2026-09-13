@@ -14,6 +14,17 @@ export interface ErrandSessionMetadata extends Record<string, unknown> {
   instructions: string;
 }
 
+/** Channel of the principal-facing session each errand gets once its opener is
+ * sent: the Negotiator's notices and the principal's answers live there, apart
+ * from the Orchestrator conversation that started the errand. */
+export const NEGOTIATION_CHANNEL = 'negotiator';
+
+/** Stored on an errand's negotiation session. */
+export interface NegotiationSessionMetadata extends Record<string, unknown> {
+  errandId: string;
+  parentSessionId: string;
+}
+
 /** Identifies a conversation thread: the channel it lives on, the peer it's
  * with, and whether it's the principal's own conversation or one koris is
  * running on their behalf. Replaces the old opaque `entryChannel` string,

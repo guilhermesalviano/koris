@@ -27,6 +27,8 @@ interface ReadOnlyAgentChatProps {
   historyAside?: boolean;
   /** Pinned above the history inside the aside. */
   asideHeader?: ReactNode;
+  /** Content of the main area beside the history aside; blank when omitted. */
+  main?: ReactNode;
   children?: ReactNode;
 }
 
@@ -76,7 +78,7 @@ export function ReadOnlyChatMessage({ entry, agentId, actions }: { entry: ReadOn
   );
 }
 
-export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, error, emptyText, historyLabel, onRefresh, actions, renderEntryActions, historyAside = false, asideHeader, children }: ReadOnlyAgentChatProps) {
+export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, error, emptyText, historyLabel, onRefresh, actions, renderEntryActions, historyAside = false, asideHeader, main, children }: ReadOnlyAgentChatProps) {
   usePageTitle(title, renderEntryActions ? 'Agent chat' : 'Read-only agent chat');
   const scrollRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
@@ -174,10 +176,14 @@ export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, er
         </div>
       )}
       {historyAside ? (
-        <div className="flex min-h-0 flex-1">
-          {/* Blank main area, reserved for what comes next; on narrow screens only the history shows. */}
-          <section aria-label={`${title} main`} className="hidden min-h-0 min-w-0 flex-1 lg:block" />
-          <aside aria-label={`${title} history`} className="flex min-h-0 w-full flex-col bg-bg-2 lg:w-[420px] lg:flex-shrink-0 lg:border-l lg:border-subtle">
+        <div className={cn('flex min-h-0 flex-1', main && 'flex-col lg:flex-row')}>
+          {/* Without content the main area stays blank, and narrow screens show only the history.
+              With content, narrow screens stack it above the history. */}
+          <section aria-label={`${title} main`} className={cn('min-h-0 min-w-0 flex-1', main ? 'flex flex-col' : 'hidden lg:block')}>{main}</section>
+          <aside aria-label={`${title} history`} className={cn(
+            'flex min-h-0 w-full flex-col bg-bg-2 lg:w-[420px] lg:flex-shrink-0 lg:border-l lg:border-subtle',
+            main && 'h-[45%] flex-shrink-0 border-t border-subtle lg:h-auto lg:border-t-0',
+          )}>
             {asideHeader}
             {history}
           </aside>

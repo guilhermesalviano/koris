@@ -30,8 +30,9 @@ function describeErrand(errand: Errand): string {
  * so the Orchestrator can map a plain reply ("yes", "send it") to the errand
  * tools without the human quoting an errand id. Null when nothing is in flight.
  */
-export function formatOpenErrandsBlock(errands: readonly Errand[]): string | null {
-  const open = errands.filter((errand) => !ERRAND_CLOSED_STATES.includes(errand.state));
+export function formatOpenErrandsBlock(errands: readonly Errand[], { includeQuestions = true }: { includeQuestions?: boolean } = {}): string | null {
+  const open = errands.filter((errand) => !ERRAND_CLOSED_STATES.includes(errand.state)
+    && (includeQuestions || errand.state !== 'awaiting_principal'));
   if (open.length === 0) return null;
   return [
     '# Errands In This Chat',

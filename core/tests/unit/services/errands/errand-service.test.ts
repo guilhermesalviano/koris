@@ -235,17 +235,19 @@ describe('ErrandService', () => {
       }));
     });
 
-    it('persists the plain question, without a reply command, in the invoking web session', () => {
+    it('persists the plain question, without a reply command, in the errand\'s own negotiation session', () => {
       const { service, db, errandRepo, sessionRepo, sessionManager, outbound } = makeService();
       errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'buy milk', state: 'open', originSessionId: 'origin-1' }));
       sessionRepo.findById.mockReturnValue({ id: 'origin-1', channel: 'web', peerId: 'web', kind: 'user' });
 
       service.escalate('e1', 'what brand?');
 
+      const negotiation = sessionRepo.save.mock.calls[0][0];
+      expect(negotiation).toMatchObject({ channel: 'negotiator', peerId: 'e1', kind: 'user', metadata: { errandId: 'e1', parentSessionId: 'origin-1' } });
       expect(outbound.send).not.toHaveBeenCalled();
-      expect(sessionManager.getSessionServiceById).toHaveBeenCalledWith('origin-1');
+      expect(sessionManager.getSessionServiceById).not.toHaveBeenCalledWith('origin-1');
       expect(db.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO messages'), [
-        expect.any(String), 'origin-1', 'assistant',
+        expect.any(String), negotiation.id, 'assistant',
         '❓ Errand "buy milk" needs your input: what brand?',
         null, null, expect.any(String), 'negotiator',
       ]);
@@ -312,18 +314,20 @@ describe('ErrandService', () => {
       expect(outbound.send).toHaveBeenCalledTimes(1);
     });
 
-    it('resolve closes the errand, sets result and closedAt, and notifies the origin', () => {
+    it('resolve closes the errand, sets result and closedAt, and notifies the negotiation session', () => {
       const { service, db, errandRepo, sessionRepo } = makeService();
       errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'buy milk', state: 'awaiting_peer', originSessionId: 'origin-1' }));
       sessionRepo.findById.mockReturnValue({ id: 'origin-1', channel: 'web', peerId: 'web', kind: 'user' });
+      sessionRepo.findLatestOpen.mockReturnValue({ id: 'negotiation-1', channel: 'negotiator', peerId: 'e1', kind: 'user' });
 
       const result = service.resolve('e1', 'they said yes, on the way');
 
       expect(result.state).toBe('resolved');
       expect(result.result).toBe('they said yes, on the way');
       expect(result.closedAt).toBeDefined();
+      expect(sessionRepo.save).not.toHaveBeenCalled();
       expect(db.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO messages'), [
-        expect.any(String), 'origin-1', 'assistant',
+        expect.any(String), 'negotiation-1', 'assistant',
         expect.stringContaining('resolved: they said yes, on the way'),
         null, null, expect.any(String), 'negotiator',
       ]);
