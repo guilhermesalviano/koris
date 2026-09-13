@@ -117,6 +117,15 @@ describe('Negotiator', () => {
     expect(call.extraSystemBlocks[0]).toBe(THIRD_PARTY_CONVERSATION_CONTEXT);
   });
 
+  it.each(['', '   '])('uses default third-party instructions when saved instructions are %j', async (instructions) => {
+    const { negotiator, sessionManager, promptRepository } = makeNegotiator();
+    sessionManager.getSessionServiceById.mockImplementation(() => ({ getSession: () => ({ metadata: { instructions } }) }));
+
+    await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'Hello', messageHistory: [] });
+
+    expect(promptRepository.build.mock.calls[0][0].extraSystemBlocks[0]).toBe(THIRD_PARTY_CONVERSATION_CONTEXT);
+  });
+
   describe('composeOpener', () => {
     it('generates a friendly opening message from the goal, fronted by the third-party context', async () => {
       const { negotiator, promptRepository } = makeNegotiator({
@@ -148,9 +157,9 @@ describe('Negotiator', () => {
       expect(opener).toBe('buy milk');
     });
 
-    it('falls back to the raw goal when composition throws', async () => {
+    it.each([new Error('provider down'), 'provider down'])('falls back to the raw goal when composition throws %s', async (error) => {
       const { negotiator, completionService } = makeNegotiator();
-      completionService.complete.mockRejectedValueOnce(new Error('provider down'));
+      completionService.complete.mockRejectedValueOnce(error);
 
       const opener = await negotiator.composeOpener({
         goal: 'buy milk', channel: 'whatsapp', peerId: 'ana', originSessionId: 'origin-1',
@@ -158,9 +167,23 @@ describe('Negotiator', () => {
 
       expect(opener).toBe('buy milk');
     });
+
+    it('falls back to the goal when the provider returns tool calls instead of an opener', async () => {
+      const { negotiator, completionService } = makeNegotiator();
+      completionService.complete.mockResolvedValueOnce({ kind: 'tool_calls', calls: [] } as never);
+
+      expect(await negotiator.composeOpener({ goal: 'buy milk', channel: 'whatsapp', peerId: 'ana', originSessionId: 'origin-1' })).toBe('buy milk');
+    });
   });
 
   describe('composeResume', () => {
+    it('rejects tool calls without forwarding private principal instructions', async () => {
+      const { negotiator, completionService } = makeNegotiator();
+      completionService.complete.mockResolvedValueOnce({ kind: 'tool_calls', calls: [] } as never);
+
+      await expect(negotiator.composeResume({ errandId: 'e1', goal: 'Negotiate price', answer: 'Private limit is 100', channel: 'whatsapp', sessionId: 's1', messageHistory: [] })).rejects.toThrow('Nothing was sent');
+    });
+
     it('generates a message incorporating the principal answer', async () => {
       const { negotiator, promptRepository } = makeNegotiator({
         completionText: 'Saturday at 10am works for Guilherme, let us lock that in.',
@@ -262,6 +285,34 @@ describe('Negotiator', () => {
 
     expect(errandService.fail).toHaveBeenCalledWith('errand-1', 'they are not interested', undefined);
     expect(result).toEqual({ reply: 'Okay, no problem.', applied: 'failed' });
+  });
+
+  it('asks the principal for input when an escalation omits its question', async () => {
+    const { negotiator, errandService } = makeNegotiator({ completionText: '{"action":"escalate"}' });
+
+    const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'Which price?', messageHistory: [] });
+
+    expect(errandService.escalate).toHaveBeenCalledExactlyOnceWith('errand-1', 'The negotiator needs your input.', undefined);
+    expect(result).toEqual({ reply: 'I’m checking on this.', applied: 'escalate' });
+  });
+
+  it.each([
+    ['resolved', 'Thanks, confirmed.', 'Thanks, confirmed.'],
+    ['resolved', '', 'Resolved.'],
+    ['failed', 'Sorry, unavailable.', 'Sorry, unavailable.'],
+    ['failed', '', 'Failed.'],
+  ])('reports %s without detail using reply %j', async (action, reply, summary) => {
+    const { negotiator, errandService } = makeNegotiator({ completionText: JSON.stringify({ action, reply }) });
+
+    const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'Done', messageHistory: [] });
+
+    if (action === 'resolved') {
+      expect(errandService.resolveWithClosingReply).toHaveBeenCalledExactlyOnceWith('errand-1', 's1', reply || 'Thank you for your help!', summary, undefined);
+      expect(result).toEqual({ reply: '', applied: 'resolved' });
+    } else {
+      expect(errandService.fail).toHaveBeenCalledExactlyOnceWith('errand-1', summary, undefined);
+      expect(result).toEqual({ reply, applied: 'failed' });
+    }
   });
 
   describe.each(['continue', 'failed'])('"%s" without a supplied reply', (action) => {

@@ -88,6 +88,24 @@ describe('ErrandService', () => {
   });
 
   describe('create', () => {
+    it('rejects a missing parent before saving the errand or creating child sessions', () => {
+      const { service, sessionRepo, errandRepo } = makeService();
+      sessionRepo.findById.mockReturnValue(null as never);
+
+      expect(() => service.create('Book', [{ channel: 'telegram', peerId: '555' }], 'missing', 'Hello')).toThrow('Parent session not found');
+      expect(errandRepo.save).not.toHaveBeenCalled();
+      expect(sessionRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('deduplicates equivalent contact addresses into one child session', () => {
+      const { service, sessionRepo, errandRepo } = makeService();
+
+      service.create('Book', [{ channel: 'whatsapp', peerId: '555' }, { channel: 'whatsapp', peerId: '555@s.whatsapp.net' }], 'parent', 'Hello');
+
+      expect(sessionRepo.save).toHaveBeenCalledTimes(1);
+      expect(errandRepo.addTarget).toHaveBeenCalledTimes(1);
+    });
+
     it('creates a fresh child session with the parent link and persisted instructions', () => {
       const { service, db, errandRepo, sessionRepo, sessionManager } = makeService();
 
@@ -131,6 +149,16 @@ describe('ErrandService', () => {
   });
 
   describe('approve', () => {
+    it.each([undefined, '   '])('rejects an empty opener %j before preparing delivery', async (pendingMessage) => {
+      const { service, errandRepo, outbound } = makeService();
+      errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'Book', originSessionId: 'parent', pendingMessage }));
+      errandRepo.findTargets.mockReturnValue(['contact']);
+
+      await expect(service.approve('e1')).rejects.toThrow('Cannot deliver an empty message');
+      expect(outbound.send).not.toHaveBeenCalled();
+      expect(errandRepo.update).not.toHaveBeenCalled();
+    });
+
     it('sends the pending message to every target and moves to awaiting_peer', async () => {
       const { service, errandRepo, sessionRepo, outbound } = makeService();
       const draft = new Errand({ id: 'e1', goal: 'buy milk', state: 'draft', originSessionId: 'origin-1', pendingMessage: 'hi there' });
@@ -209,6 +237,37 @@ describe('ErrandService', () => {
   });
 
   describe('resolve / fail / cancel', () => {
+    it('does not send a closing reply for an already cancelled errand', async () => {
+      const { service, errandRepo, outbound } = makeService();
+      const errand = new Errand({ id: 'e1', goal: 'Book', state: 'cancelled', originSessionId: 'parent' });
+      errandRepo.findById.mockReturnValue(errand);
+
+      await expect(service.resolveWithClosingReply('e1', 'contact', 'Thank you!', 'Booked')).resolves.toEqual(errand);
+      expect(outbound.send).not.toHaveBeenCalled();
+      expect(errandRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects closing replies addressed to a session outside the errand', async () => {
+      const { service, errandRepo, outbound } = makeService();
+      errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'Book', state: 'awaiting_peer', originSessionId: 'parent' }));
+      errandRepo.findTargets.mockReturnValue(['contact']);
+
+      await expect(service.resolveWithClosingReply('e1', 'unrelated', 'Thank you!', 'Booked')).rejects.toThrow('not a target');
+      expect(outbound.send).not.toHaveBeenCalled();
+      expect(errandRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a closing reply if the target session was removed', async () => {
+      const { service, errandRepo, sessionRepo, outbound } = makeService();
+      errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'Book', state: 'awaiting_peer', originSessionId: 'parent' }));
+      errandRepo.findTargets.mockReturnValue(['contact']);
+      sessionRepo.findById.mockReturnValue(null as never);
+
+      await expect(service.resolveWithClosingReply('e1', 'contact', 'Thank you!', 'Booked')).rejects.toThrow('target session not found');
+      expect(outbound.send).not.toHaveBeenCalled();
+      expect(errandRepo.update).not.toHaveBeenCalled();
+    });
+
     it('does not resolve or notify the parent when the closing reply fails delivery', async () => {
       const { service, errandRepo, outbound } = makeService();
       errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'Book a haircut', state: 'awaiting_peer', originSessionId: 'parent' }));
