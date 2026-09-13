@@ -7,9 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ⚠ BREAKING
+
+- `sessions` is re-keyed from a single opaque `entry_channel` string to `channel` + `peer_id` + `kind` (`user`|`delegated`), and two new tables (`errands`, `errand_targets`) are added. There is no migration — run `pnpm clear:memory` before starting after this update.
+
 ### Added
 
+- **Errands**: `/errand <goal> with <contact> on <channel>` starts a delegated conversation koris runs on your behalf with someone else, negotiating autonomously (via a dedicated negotiator sub-agent, no tools, no memory of your personal facts) and escalating back to you when it needs input, until it resolves. `/errand` lists errands, `/errand approve <id>` sends a staged opener, `/errand close <id>` / `/errand cancel <id>` end one manually. New admin API routes (`GET/POST /api/admin/errands*`) and an Errands tab in the dashboard alongside Sessions.
+- Sessions are now addressed by `(channel, peer_id, kind)` instead of an opaque `entry_channel`, so a delegated (errand) conversation and the principal's own session with the same channel/contact are distinct and independently addressable. Delegated sessions never rotate on idle TTL and get a wider history window (`errands.history_limit`, default 100 vs. the normal 15).
+- Outbound sends (`OutboundMessageService`) now record what koris said into the target session's own transcript, not just the delivery receipt log — a session no longer goes half-deaf after the first outbound message.
+- New `errands.*` config block (`hard_expiry_ms`, `history_limit`, `max_concurrent`); `session.ttl_ms` is now validated by `pnpm validate`.
 - Beats: `heartbeat.run_once` column (auto-migrated; existing beats stay recurring) and `isOneTimeCron` in the tool SDK (`plugins/tools/cron.ts`). The admin API exposes `run_once` and accepts `runOnce` on create/update; the Beats page marks one-time beats.
+
+### Fixed
+
+- Errand resume failures no longer forward private principal instructions, and invalid negotiator output cannot leak internal JSON notes to contacts.
+- Errand approval/resume now awaits delivery. Failed messages remain pending for manual retry through `/errand retry <id>` or the dashboard; durable per-target receipts prevent resending to successful targets after restart. Existing errand databases automatically gain the nullable `pending_delivery` column.
+- Late errand notices stay in their original transcript after session rotation. Stale errands release capacity and eligible queued work before new errands are admitted.
+- The Errands page displays staged messages, escalation questions, and delivery failures with a Retry Send action.
+
+- Session metadata/message-count updates now write a sparse patch instead of the whole session row, which previously reopened a just-closed session (`ended_at` resurrected to null) on the next message after `/clear`.
+- Ending a session and starting its replacement (`/clear`, `/compact`, idle-TTL rotation) is now atomic — a failed insert can no longer leave a channel with zero open sessions.
+- The admin API's session delete/create routes now invalidate the in-process session cache, instead of leaving it holding a stale or deleted session.
 
 ### Changed
 

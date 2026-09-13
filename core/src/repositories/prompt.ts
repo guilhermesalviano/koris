@@ -34,8 +34,17 @@ interface BuildPromptParams {
   toolsEnabled?: boolean;
   learnedSkillsEnabled?: boolean;
   messageHistory?: Message[];
+  /** Override the normal chat window for conversations such as delegated errands. */
+  historyLimit?: number;
+  /** Replace the main chat policy for a specialized agent. */
+  systemPrompt?: string;
+  /** Omit global personality/personal context when only task-local context applies. */
+  includeGlobalContext?: boolean;
   includeBeatTools?: boolean;
   sessionId?: string;
+  /** False for a delegated (errand) session: an untrusted peer must never be
+   * able to probe the principal's personal facts via long-term memory. */
+  includeMemory?: boolean;
   /** Situation-specific contract/instruction blocks appended to the system prompt. */
   extraSystemBlocks?: string[];
   /** Tool execution results sent to the provider under the `tool` role. */
@@ -83,8 +92,12 @@ class PromptRepository implements IPromptRepository {
     toolResults,
     learnedSkillsEnabled,
     toolsEnabled,
+    includeMemory,
+    historyLimit = CHAT_HISTORY_LIMIT,
+    systemPrompt = SYSTEM_PROMPT,
+    includeGlobalContext = true,
   }: BuildPromptParams): Promise<Message[]> {
-    const systemBlocks: string[] = [SYSTEM_PROMPT];
+    const systemBlocks: string[] = systemPrompt ? [systemPrompt] : [];
 
     for (const block of extraSystemBlocks ?? []) {
       systemBlocks.push(block);
@@ -94,7 +107,7 @@ class PromptRepository implements IPromptRepository {
       systemBlocks.push(IMAGE_ANALYSIS_INSTRUCTION);
     }
 
-    const injectedContent = InjectManager.getInjectedContent();
+    const injectedContent = includeGlobalContext ? InjectManager.getInjectedContent() : '';
     if (injectedContent) systemBlocks.push(`# Personality\n${injectedContent}`);
 
     const learnedSkills = this.buildLearnedSkills({ learnedSkillsEnabled });
@@ -106,13 +119,14 @@ class PromptRepository implements IPromptRepository {
     const stickerRules = (toolsEnabled ?? true) ? this.buildStickerRules(channel) : '';
     if (stickerRules) systemBlocks.push(`# Learned Stickers\n${stickerRules}`);
 
-    const memory = await this.buildMemoryContext(userMessage, sessionId);
+    const memory = (includeMemory ?? true) ? await this.buildMemoryContext(userMessage, sessionId) : '';
     if (memory) systemBlocks.push(`# Long-term Memory Context\n${memory}`);
 
-    const context = this.contextRepository.get({ channel });
+    const context = includeGlobalContext ? this.contextRepository.get({ channel }) : '';
     if (context) systemBlocks.push(`# Session Context\n${context}`);
 
-    const limitedHistory = messageHistory?.slice(-CHAT_HISTORY_LIMIT) ?? [];
+    const limit = Number.isFinite(historyLimit) && historyLimit > 0 ? Math.max(1, Math.floor(historyLimit)) : CHAT_HISTORY_LIMIT;
+    const limitedHistory = messageHistory?.slice(-limit) ?? [];
 
     const sanitized = this.sanitizePromptIfEnabled(userMessage, limitedHistory);
 

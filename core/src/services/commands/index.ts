@@ -4,6 +4,7 @@ import { handleSkillsCommand, isSkillCommand, listSkillCommands, resolveSkillCom
 import { handleToolsCommand } from './tools';
 import { handleChannelsCommand } from './channels';
 import { handleMcpsCommand } from './mcps';
+import { handleErrandCommand } from './errands';
 import { formatCommandResult, formatMessage } from './format';
 import { addAllowedDomain } from '../security/allowed-domains';
 import {
@@ -20,6 +21,7 @@ export { handleSkillsCommand, isSkillCommand, listSkillCommands, listSkills, res
 export { handleToolsCommand, listTools } from './tools';
 export { handleChannelsCommand, listChannels, listInstalledChannelNames } from './channels';
 export { handleMcpsCommand, listInstalledMcpNames } from './mcps';
+export { handleErrandCommand } from './errands';
 export { formatCommandResult, formatMessage } from './format';
 
 export async function handleCommand(command: string, context: CommandContext): Promise<CommandResult> {
@@ -63,6 +65,9 @@ export async function handleCommand(command: string, context: CommandContext): P
 
     case '/mcps':
       return handleMcpsCommand(command, context);
+
+    case '/errand':
+      return handleErrandCommand(command, context);
 
     case '/skill':
       return handleSkill(command, context);

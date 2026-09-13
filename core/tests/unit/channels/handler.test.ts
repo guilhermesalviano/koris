@@ -80,7 +80,7 @@ describe('channels/handler', () => {
     expect(gateway.handle).toHaveBeenCalledWith(
       { text: '[Context] Chat: direct (untrusted sender). Sender: guilherme. Message: hi', images: undefined, stickers: undefined },
       'jid',
-      { channel: 'test-channel', toolsEnabled: false, learnedSkillsEnabled: false },
+      { channel: 'test-channel', toolsEnabled: false, learnedSkillsEnabled: false, isTrustedSender: false },
     );
   });
 
@@ -225,7 +225,7 @@ describe('channels/handler', () => {
     expect(gateway.handle).toHaveBeenCalledWith(
       expect.anything(),
       'jid',
-      { channel: 'test-channel', toolsEnabled: true, learnedSkillsEnabled: true },
+      { channel: 'test-channel', toolsEnabled: true, learnedSkillsEnabled: true, isTrustedSender: true },
     );
   });
 
@@ -238,7 +238,7 @@ describe('channels/handler', () => {
     expect(gateway.handle).toHaveBeenCalledWith(
       expect.anything(),
       'jid',
-      { channel: 'test-channel', toolsEnabled: false, learnedSkillsEnabled: false },
+      { channel: 'test-channel', toolsEnabled: false, learnedSkillsEnabled: false, isTrustedSender: false },
     );
   });
 

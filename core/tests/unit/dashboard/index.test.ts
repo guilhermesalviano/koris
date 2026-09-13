@@ -843,9 +843,11 @@ describe('DashboardServer lifecycle', () => {
   });
 
   it('startWebServer binds an ephemeral port and serves /health, then stops cleanly', async () => {
+    const health = { status: 'ok', timestamp: '2026-01-01', details: 'lifecycle health check' };
+    mockHealthCheck.mockResolvedValue(health);
     const { startWebServer } = await loadWebModule();
 
-    const handle = await startWebServer(logger, gateway, {} as never, {
+    const handle = await startWebServer(logger, gateway, {} as never, {} as never, {
       port: 0,
       host: '127.0.0.1',
     });
@@ -855,7 +857,7 @@ describe('DashboardServer lifecycle', () => {
 
       const response = await fetch(`http://127.0.0.1:${handle.port}/health`);
       expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ status: 'ok' });
+      expect(await response.json()).toEqual(health);
       expect(mockHealthCheck).toHaveBeenCalled();
     } finally {
       await handle.stop();

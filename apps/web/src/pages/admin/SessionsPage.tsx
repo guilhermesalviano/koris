@@ -16,6 +16,8 @@ export default function SessionsPage() {
   const [detail, setDetail] = useState<SessionDetailResponse | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [toastMsg, showToast, isError] = useToast();
+  const parentSessionId = typeof detail?.session.metadata.parentSessionId === 'string' ? detail.session.metadata.parentSessionId : null;
+  const instructions = typeof detail?.session.metadata.instructions === 'string' ? detail.session.metadata.instructions : null;
 
   const load = useCallback(async () => {
     setError(null);
@@ -71,7 +73,9 @@ export default function SessionsPage() {
               <thead>
                 <tr className="border-b border-subtle text-left font-mono text-micro uppercase text-txt-3">
                   <th className="px-4 py-3 font-semibold">ID</th>
-                  <th className="px-4 py-3 font-semibold">Initiated channel</th>
+                  <th className="px-4 py-3 font-semibold">Channel</th>
+                  <th className="px-4 py-3 font-semibold">Peer</th>
+                  <th className="px-4 py-3 font-semibold">Kind</th>
                   <th className="px-4 py-3 font-semibold">Started</th>
                   <th className="px-4 py-3 font-semibold">Ended</th>
                   <th className="px-4 py-3 font-semibold">Msgs</th>
@@ -82,7 +86,17 @@ export default function SessionsPage() {
                 {data.items.map((s) => (
                   <tr key={s.id} className="cursor-pointer border-b border-subtle/60 transition-colors hover:bg-bg-3/60" onClick={() => loadDetail(s.id)}>
                     <td className="px-4 py-3 font-mono text-caption text-txt-2">{s.id.slice(0, 12)}…</td>
-                    <td className="px-4 py-3 text-body text-txt">{s.entryChannel}</td>
+                    <td className="px-4 py-3 text-body text-txt">{s.channel}</td>
+                    <td className="px-4 py-3 font-mono text-caption text-txt-2">{s.peerId}</td>
+                    <td className="px-4 py-3 text-body">
+                      {s.kind === 'delegated' ? (
+                        <span title="Child delegated session for an errand">
+                          <Badge tone="accent">errand child</Badge>
+                        </span>
+                      ) : (
+                        <span className="text-txt-3">user</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-mono text-caption text-txt-2">{formatDate(s.startedAt)}</td>
                     <td className="px-4 py-3 font-mono text-caption text-txt-2">
                       {s.endedAt ? formatDate(s.endedAt) : <Badge tone="success" dot>open</Badge>}
@@ -113,6 +127,21 @@ export default function SessionsPage() {
           {!detailError && !detail && <EmptyState text="Loading session…" />}
           {!detailError && detail && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {(parentSessionId || instructions) && (
+                <Card className="md:col-span-2">
+                  {parentSessionId && (
+                    <button className="text-sm text-accent-2 hover:underline" onClick={() => loadDetail(parentSessionId)}>
+                      Open parent session · {parentSessionId}
+                    </button>
+                  )}
+                  {instructions && (
+                    <details className="mt-3">
+                      <summary className="cursor-pointer text-sm text-txt-2">Session instructions</summary>
+                      <div className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap text-sm text-txt-2">{instructions}</div>
+                    </details>
+                  )}
+                </Card>
+              )}
               <Card>
                 <PanelLabel>Messages</PanelLabel>
                 <div className="flex max-h-96 flex-col gap-2 overflow-y-auto">

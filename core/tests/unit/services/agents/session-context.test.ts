@@ -23,6 +23,8 @@ function makeResolver(overrides: {
   return { resolver, logger, sessionService, byIdService, sessionManager };
 }
 
+const ORIGIN = { channel: 'whatsapp', peerId: 'origin-1', kind: 'user' as const };
+
 describe('SessionContextResolver', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -31,9 +33,9 @@ describe('SessionContextResolver', () => {
   it('resolves the initiated channel session when no session id is provided', () => {
     const { resolver, sessionManager, sessionService } = makeResolver();
 
-    const context = resolver.resolve('origin-1');
+    const context = resolver.resolve(ORIGIN);
 
-    expect(sessionManager.getSessionService).toHaveBeenCalledWith('origin-1');
+    expect(sessionManager.getSessionService).toHaveBeenCalledWith(ORIGIN);
     expect(context.sessionService).toBe(sessionService);
     expect(context.messageService).toBeDefined();
     expect(context.memoryService).toBeDefined();
@@ -42,7 +44,7 @@ describe('SessionContextResolver', () => {
   it('resolves a specific session by id when provided', () => {
     const { resolver, sessionManager, byIdService } = makeResolver();
 
-    const context = resolver.resolve('origin-1', 'session-by-id');
+    const context = resolver.resolve(ORIGIN, 'session-by-id');
 
     expect(sessionManager.getSessionServiceById).toHaveBeenCalledWith('session-by-id');
     expect(sessionManager.getSessionService).not.toHaveBeenCalled();
@@ -56,14 +58,14 @@ describe('SessionContextResolver', () => {
       }),
     });
 
-    const context = resolver.resolve('origin-1', 'missing');
+    const context = resolver.resolve(ORIGIN, 'missing');
 
     expect(sessionManager.getSessionServiceById).toHaveBeenCalledWith('missing');
-    expect(sessionManager.getSessionService).toHaveBeenCalledWith('origin-1');
+    expect(sessionManager.getSessionService).toHaveBeenCalledWith(ORIGIN);
     expect(context.sessionService).toBe(sessionService);
     expect(logger.warn).toHaveBeenCalledWith(
       'Session "missing" not found, falling back to initiated channel session',
-      expect.objectContaining({ originId: 'origin-1' }),
+      expect.objectContaining({ origin: ORIGIN }),
     );
   });
 });

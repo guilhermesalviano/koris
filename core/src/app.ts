@@ -101,7 +101,7 @@ function createToolPluginContext(logger: ILogger, db: IDatabaseService): ToolPlu
         if (!channelsManager) {
           throw new Error('Outbound messaging is not available: no channel manager is running.');
         }
-        const service = OutboundMessageServiceFactory.create(logger, channelsManager, db);
+        const service = OutboundMessageServiceFactory.create(logger, channelsManager, db, new SessionManager(db));
         return service.send({ content, channel, target });
       },
       sendSticker: async (channel, target, sticker) => {
@@ -292,7 +292,7 @@ class Application implements IApplication {
 
     try {
       const webServer = this.modes.web
-        ? await DashboardServerFactory.create(this.logger, gateway, db, this.webListen).start()
+        ? await DashboardServerFactory.create(this.logger, gateway, db, sessionManager, this.webListen).start()
         : null;
 
       return { gateway, channels, heartbeat, webServer };

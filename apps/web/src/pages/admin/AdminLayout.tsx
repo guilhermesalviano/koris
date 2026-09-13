@@ -143,7 +143,7 @@ function ChatItem({ session, live, onNavigate }: { session: SessionSummary; live
       <div className="mt-0.5 flex items-center gap-1.5 font-mono text-micro text-txt-3">
         <span>{formatShortDate(session.startedAt)}</span>
         <span aria-hidden="true">·</span>
-        {live ? <span className="text-success">live</span> : <span>{session.entryChannel}</span>}
+        {live ? <span className="text-success">live</span> : <span>{session.channel}</span>}
       </div>
     </button>
   );
@@ -152,7 +152,7 @@ function ChatItem({ session, live, onNavigate }: { session: SessionSummary; live
 function ChatsPanel({ onNavigate }: { onNavigate?: () => void }) {
   const { sessions, newChat } = useChat();
   const navigate = useNavigate();
-  const liveWebId = sessions.find((s) => s.entryChannel === 'web' && !s.endedAt)?.id;
+  const liveWebId = sessions.find((s) => s.channel === 'web' && !s.endedAt)?.id;
   const [query, setQuery] = useState('');
 
   async function handleNewChat() {

@@ -6,6 +6,8 @@ const {
   mockHealthCheck,
   auditRepo,
   sessionRepo,
+  sessionManager,
+  errandRepo,
   messageRepo,
   memoryRepo,
   heartbeatRepo,
@@ -36,10 +38,23 @@ const {
     count: vi.fn(),
     countOpen: vi.fn(),
     findById: vi.fn(),
-    findLatestOpenByEntryChannel: vi.fn(),
+    findAll: vi.fn(() => []),
+    findLatestOpen: vi.fn(),
+    save: vi.fn(),
+    deleteById: vi.fn(),
   },
-  messageRepo: { count: vi.fn(), getBySessionId: vi.fn(() => []) },
-  memoryRepo: { count: vi.fn() },
+  sessionManager: {
+    getSessionService: vi.fn(),
+    getSessionServiceById: vi.fn(),
+    invalidate: vi.fn(),
+    invalidateKey: vi.fn(),
+  },
+  errandRepo: {
+    countByState: vi.fn(() => 0),
+    findTargets: vi.fn(() => []),
+  },
+  messageRepo: { count: vi.fn(), getBySessionId: vi.fn(() => []), getPreviewBySessionId: vi.fn(() => null) },
+  memoryRepo: { count: vi.fn(), getBySessionId: vi.fn(() => []) },
   heartbeatRepo: {
     getAll: vi.fn(() => []),
     getById: vi.fn(),
@@ -94,6 +109,10 @@ vi.mock('../../../src/repositories/audit-log', () => ({
 
 vi.mock('../../../src/repositories/session', () => ({
   SessionRepositoryFactory: { create: () => sessionRepo },
+}));
+
+vi.mock('../../../src/repositories/errand', () => ({
+  ErrandRepositoryFactory: { create: () => errandRepo },
 }));
 
 vi.mock('../../../src/repositories/message', () => ({
@@ -227,7 +246,7 @@ describe('AdminRouterFactory /audit', () => {
       { id: 'a3', type: 'tool', role: 'worker', agent_name: 'executorWorker', tool_name: 'search_engine', duration_ms: 2, status: 'success', created_at: '2026-01-01T00:02:00.000Z' },
     ] as never);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/audit?type=llm&limit=25', { type: 'llm', limit: '25' }), res);
 
@@ -269,7 +288,7 @@ describe('AdminRouterFactory /audit', () => {
       created_at: '2026-01-01T00:00:00.000Z',
     } as never);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/audit/a1'), res);
 
@@ -280,7 +299,7 @@ describe('AdminRouterFactory /audit', () => {
   it('returns 404 when the audit entry is not found', () => {
     auditRepo.findById.mockReturnValue(null);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/audit/missing'), res);
 
@@ -291,7 +310,7 @@ describe('AdminRouterFactory /audit', () => {
   it('deletes a single audit entry', () => {
     auditRepo.deleteById.mockReturnValue(true);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('DELETE', '/audit/a1'), res);
 
@@ -302,7 +321,7 @@ describe('AdminRouterFactory /audit', () => {
   it('returns 404 when deleting a missing audit entry', () => {
     auditRepo.deleteById.mockReturnValue(false);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('DELETE', '/audit/missing'), res);
 
@@ -312,7 +331,7 @@ describe('AdminRouterFactory /audit', () => {
   it('clears all audit entries', () => {
     auditRepo.deleteAll.mockReturnValue(12);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('DELETE', '/audit'), res);
 
@@ -326,7 +345,7 @@ describe('AdminRouterFactory /queue', () => {
   });
 
   it('returns the serial queue state', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/queue'), res);
 
@@ -353,7 +372,7 @@ describe('AdminRouterFactory /usage', () => {
       { id: 'a2', run_id: 'r1', channel: 'telegram', type: 'tool', role: 'worker', agent_name: 'executorWorker', tool_name: 'curl-request', duration_ms: 4, created_at: '2026-01-01T00:00:10.000Z' },
     ] as never);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/usage'), res);
 
@@ -371,7 +390,7 @@ describe('AdminRouterFactory /usage', () => {
   it('forwards the days filter to the repository', () => {
     auditRepo.usage.mockReturnValue([]);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/usage', { days: '7' }), res);
 
@@ -383,7 +402,7 @@ describe('AdminRouterFactory /usage', () => {
   it('ignores invalid days values', () => {
     auditRepo.usage.mockReturnValue([]);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/usage', { days: 'abc' }), res);
 
@@ -430,7 +449,7 @@ describe('AdminRouterFactory /overview', () => {
   });
 
   it('returns aggregate counts, config, queue, usage and recent errors', async () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     router.handle(makeRequest('GET', '/overview'), res, () => {});
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -493,7 +512,7 @@ describe('AdminRouterFactory /skills', () => {
   it('POST /skills/sync triggers a resync when initialized', () => {
     skillSync.getExistingInstance.mockReturnValue(skillSync);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/skills/sync'), res);
 
@@ -504,7 +523,7 @@ describe('AdminRouterFactory /skills', () => {
   it('POST /skills/sync returns 503 when sync is not initialized', () => {
     skillSync.getExistingInstance.mockReturnValue(null);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/skills/sync'), res);
 
@@ -534,7 +553,7 @@ describe('AdminRouterFactory /plugins', () => {
     pluginSettingsRepo.getEnabled.mockImplementation((family: string, name: string) =>
       family === 'tools' && name === 'curl-request' ? false : null);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/plugins'), res);
 
@@ -557,7 +576,7 @@ describe('AdminRouterFactory /plugins', () => {
       { name: 'git', enabled: false, learned_at: '2026-01-01 00:00:00' },
     ] as never);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/plugins'), res);
 
@@ -588,7 +607,7 @@ describe('AdminRouterFactory /plugins', () => {
   it('PATCH /plugins/skills/:name writes through the learned-skills store, not plugin_settings', () => {
     learnedSkillsRepo.setEnabled.mockReturnValue(true);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/plugins/skills/git');
     req.body = { enabled: false };
@@ -605,7 +624,7 @@ describe('AdminRouterFactory /plugins', () => {
   it('PATCH /plugins/skills/:name returns 404 for an unknown skill', () => {
     learnedSkillsRepo.setEnabled.mockReturnValue(false);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/plugins/skills/missing');
     req.body = { enabled: true };
@@ -616,7 +635,7 @@ describe('AdminRouterFactory /plugins', () => {
   });
 
   it('PATCH /plugins/skills/:name rejects a non-boolean enabled value', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/plugins/skills/git');
     req.body = { enabled: 'yes' };
@@ -628,7 +647,7 @@ describe('AdminRouterFactory /plugins', () => {
   });
 
   it('PATCH /plugins/:family/:name rejects an invalid family', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/plugins/bogus/curl-request');
     req.body = { enabled: true };
@@ -639,7 +658,7 @@ describe('AdminRouterFactory /plugins', () => {
   });
 
   it('PATCH /plugins/:family/:name rejects a non-boolean enabled value', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/plugins/tools/curl-request');
     req.body = { enabled: 'yes' };
@@ -650,7 +669,7 @@ describe('AdminRouterFactory /plugins', () => {
   });
 
   it('PATCH /plugins/:family/:name returns 404 for a plugin not in the catalog', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/plugins/tools/does-not-exist');
     req.body = { enabled: true };
@@ -661,7 +680,7 @@ describe('AdminRouterFactory /plugins', () => {
   });
 
   it('PATCH /plugins/:family/:name toggles a tool and does not touch live channels', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/plugins/tools/curl-request');
     req.body = { enabled: false };
@@ -673,7 +692,7 @@ describe('AdminRouterFactory /plugins', () => {
   });
 
   it('PATCH /plugins/:family/:name starts a channel live when enabling it', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/plugins/channels/telegram');
     req.body = { enabled: true };
@@ -688,7 +707,7 @@ describe('AdminRouterFactory /plugins', () => {
     const stopChannel = vi.fn();
     channelsManager.getExistingInstance.mockReturnValue({ stopChannel });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/plugins/channels/telegram');
     req.body = { enabled: false };
@@ -700,7 +719,7 @@ describe('AdminRouterFactory /plugins', () => {
 
   it('GET /plugins discovers and appends channels installed on disk to the catalog', () => {
     channelsCommands.listInstalledChannelNames.mockReturnValue(['whatsapp']);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/plugins'), res);
 
@@ -712,7 +731,7 @@ describe('AdminRouterFactory /plugins', () => {
   it('PATCH /plugins/channels/:name appends channel from disk if not yet in catalog', () => {
     channelsCommands.listInstalledChannelNames.mockReturnValue(['whatsapp']);
     pluginCatalog.getExistingInstance.mockReturnValue([{ family: 'channels', name: 'whatsapp' }]);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('PATCH', '/plugins/channels/whatsapp');
     req.body = { enabled: true };
@@ -731,7 +750,7 @@ describe('AdminRouterFactory /marketplace', () => {
   it('GET /marketplace lists missing koris-hub entries, pinning baseDir to config.BASE_DIR', async () => {
     hubSync.listMissing.mockResolvedValue([{ family: 'tool', slug: 'issue', summary: 'File a GitHub issue.' }]);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/marketplace'), res);
     await new Promise((resolve) => setImmediate(resolve));
@@ -743,7 +762,7 @@ describe('AdminRouterFactory /marketplace', () => {
   it('GET /marketplace returns 502 when koris-hub is unreachable', async () => {
     hubSync.listMissing.mockRejectedValue(new Error('Request to https://api.github.com/... failed: 500 Internal Server Error'));
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/marketplace'), res);
     await new Promise((resolve) => setImmediate(resolve));
@@ -755,7 +774,7 @@ describe('AdminRouterFactory /marketplace', () => {
   it('POST /marketplace/:slug/pull installs a channel INACTIVE, overriding any stale enabled row', async () => {
     hubSync.pullEntry.mockResolvedValue({ family: 'channel', slug: 'whatsapp', createdFiles: ['plugins/channels/whatsapp/index.js'] });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/marketplace/whatsapp/pull'), res);
     await new Promise((resolve) => setImmediate(resolve));
@@ -770,7 +789,7 @@ describe('AdminRouterFactory /marketplace', () => {
   it('POST /marketplace/:slug/pull leaves tool enablement alone', async () => {
     hubSync.pullEntry.mockResolvedValue({ family: 'tool', slug: 'issue', createdFiles: ['plugins/tools/issue/index.ts'] });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/marketplace/issue/pull'), res);
     await new Promise((resolve) => setImmediate(resolve));
@@ -785,7 +804,7 @@ describe('AdminRouterFactory /marketplace', () => {
       whatsapp: { uninstalled: 'Download WA' },
     });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/channels/hints'), res);
     await new Promise((resolve) => setImmediate(resolve));
@@ -805,7 +824,7 @@ describe('AdminRouterFactory /marketplace', () => {
   it('GET /channels/hints falls back to empty hints on error', async () => {
     hubSync.fetchChannelHints.mockRejectedValue(new Error('Network failure'));
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/channels/hints'), res);
     await new Promise((resolve) => setImmediate(resolve));
@@ -819,7 +838,7 @@ describe('AdminRouterFactory /marketplace', () => {
       { slug: 'whatsapp', name: 'WhatsApp' },
     ]);
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/channels/catalog'), res);
     await new Promise((resolve) => setImmediate(resolve));
@@ -838,7 +857,7 @@ describe('AdminRouterFactory /marketplace', () => {
   it('GET /channels/catalog falls back to empty array on error', async () => {
     hubSync.fetchChannelCatalog.mockRejectedValue(new Error('Network failure'));
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/channels/catalog'), res);
     await new Promise((resolve) => setImmediate(resolve));
@@ -850,7 +869,7 @@ describe('AdminRouterFactory /marketplace', () => {
     hubSync.pullEntry.mockResolvedValue({ family: 'tool', slug: 'issue', createdFiles: ['plugins/tools/issue/index.ts'] });
     toolSync.getExistingInstance.mockReturnValue({ sync: toolSync.sync });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/marketplace/issue/pull'), res);
     await new Promise((resolve) => setImmediate(resolve));
@@ -868,7 +887,7 @@ describe('AdminRouterFactory /marketplace', () => {
     hubSync.pullEntry.mockResolvedValue({ family: 'skill', slug: 'git', createdFiles: ['plugins/skills/git/SKILL.md'] });
     skillSync.getExistingInstance.mockReturnValue({ sync: skillSync.sync });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/marketplace/git/pull'), res);
     await new Promise((resolve) => setImmediate(resolve));
@@ -885,7 +904,7 @@ describe('AdminRouterFactory /marketplace', () => {
       createdFiles: ['plugins/channels/telegram/index.js', 'plugins/channels/telegram/config.example.yml'],
     });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/marketplace/telegram/pull'), res);
     await new Promise((resolve) => setImmediate(resolve));
@@ -899,7 +918,7 @@ describe('AdminRouterFactory /marketplace', () => {
   it('POST /marketplace/:slug/pull returns 400 when the plugin already exists locally', async () => {
     hubSync.pullEntry.mockRejectedValue(new Error('"plugins/tools/issue" already exists locally. Pass --force to overwrite.'));
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/marketplace/issue/pull'), res);
     await new Promise((resolve) => setImmediate(resolve));
@@ -915,7 +934,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('GET /settings/status reports whether a settings file is configured', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/settings/status'), res);
 
@@ -925,7 +944,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('GET /capabilities returns the real supported providers and channel types, excluding the internal mock provider', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/capabilities'), res);
 
@@ -938,7 +957,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('GET /providers returns the metadata catalogue plus the active per-role config', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/providers'), res);
 
@@ -986,7 +1005,7 @@ describe('AdminRouterFactory /settings', () => {
       },
     });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/providers'), res);
 
@@ -1013,7 +1032,7 @@ describe('AdminRouterFactory /settings', () => {
       },
     });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/providers'), res);
 
@@ -1026,7 +1045,7 @@ describe('AdminRouterFactory /settings', () => {
     const actual = await vi.importActual<typeof import('../../../src/config/settings-writer')>('../../../src/config/settings-writer');
     settingsWriter.loadCurrentOrExampleSettings.mockReturnValueOnce({ personal_information: { name: 'Old name', location: 'Old place' }, allowed_domains: ['example.com'] });
     settingsWriter.mergeSettingsPayload.mockImplementationOnce(actual.mergeSettingsPayload);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { personal_information: personalInformation };
@@ -1035,7 +1054,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /settings rejects a non-object body', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = 'nope';
@@ -1046,7 +1065,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /settings rejects an out-of-range web_port', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { web_port: 99999 };
@@ -1059,7 +1078,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /settings rejects an unrecognised skills.mode', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { skills: { mode: 'nope' } };
@@ -1072,7 +1091,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /settings rejects a non-positive skills.limit', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { skills: { limit: 0 } };
@@ -1085,7 +1104,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /settings accepts a skills mode patch', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { skills: { mode: 'manual' } };
@@ -1096,7 +1115,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /settings rejects an unsupported AI provider', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { ai: { manager: { provider: 'anthropic' } } };
@@ -1109,7 +1128,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /settings rejects the internal mock provider', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { ai: { manager: { provider: 'mock' } } };
@@ -1123,7 +1142,7 @@ describe('AdminRouterFactory /settings', () => {
 
   it('POST /settings rejects blanking the Telegram bot token while Telegram is enabled', () => {
     pluginSettingsRepo.getEnabled.mockImplementation((family: string, name: string) => family === 'channels' && name === 'telegram');
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { channels: { telegram: { bot_token: '' } } };
@@ -1136,7 +1155,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /settings writes a valid patch and reports success', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { web_port: 4000 };
@@ -1161,7 +1180,7 @@ describe('AdminRouterFactory /settings', () => {
       },
     });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = {
@@ -1191,7 +1210,7 @@ describe('AdminRouterFactory /settings', () => {
       },
     });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { ai: { embed: { enabled: true, provider: 'ollama', model: 'nomic-embed-text' } } };
@@ -1207,7 +1226,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /settings rejects an unsupported provider in an ai.embed patch', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { ai: { embed: { enabled: true, provider: 'anthropic', model: 'x' } } };
@@ -1232,7 +1251,7 @@ describe('AdminRouterFactory /settings', () => {
       },
     });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = {
@@ -1251,7 +1270,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /settings rejects an unsupported provider in an ai.provider save patch', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { ai: { provider: { provider: 'anthropic', model: 'claude' } } };
@@ -1264,7 +1283,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /settings rejects an out-of-range num_ctx on a provider patch', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { ai: { manager: { provider: 'openrouter', model: 'qwen/qwen3', num_ctx: 10 } } };
@@ -1277,7 +1296,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /settings rejects manager+workers on one provider with conflicting num_ctx', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = {
@@ -1304,7 +1323,7 @@ describe('AdminRouterFactory /settings', () => {
       },
     });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = {
@@ -1326,7 +1345,7 @@ describe('AdminRouterFactory /settings', () => {
       },
     });
 
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/settings');
     req.body = { ai: { manager: { provider: 'openrouter', model: 'qwen/qwen3', num_ctx: 32768 } } };
@@ -1341,7 +1360,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /ai/test-connection requires a provider and base_url', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/ai/test-connection'), res);
 
@@ -1349,7 +1368,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /ai/test-connection skips connectivity checks for the mock provider', async () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     const req = makeRequest('POST', '/ai/test-connection');
     req.body = { provider: 'mock', base_url: 'http://localhost:11434' };
@@ -1361,7 +1380,7 @@ describe('AdminRouterFactory /settings', () => {
   });
 
   it('POST /whatsapp/connect triggers a live connection attempt', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('POST', '/whatsapp/connect'), res);
 
@@ -1418,17 +1437,17 @@ describe('AdminRouterFactory chat/history & chat/context', () => {
   });
 
   it('GET /chat/history returns an empty payload when there is no open web session', () => {
-    sessionRepo.findLatestOpenByEntryChannel.mockReturnValue(undefined);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    sessionRepo.findLatestOpen.mockReturnValue(undefined);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/chat/history'), res);
 
-    expect(sessionRepo.findLatestOpenByEntryChannel).toHaveBeenCalledWith('web');
+    expect(sessionRepo.findLatestOpen).toHaveBeenCalledWith({ channel: 'web', peerId: 'web' });
     expect(res.json).toHaveBeenCalledWith({ sessionId: null, messages: [] });
   });
 
   it('GET /chat/history projects the latest open web session messages', () => {
-    sessionRepo.findLatestOpenByEntryChannel.mockReturnValue({ id: 'sess-1' });
+    sessionRepo.findLatestOpen.mockReturnValue({ id: 'sess-1' });
     messageRepo.getBySessionId.mockReturnValue([
       {
         id: 'm1',
@@ -1441,7 +1460,7 @@ describe('AdminRouterFactory chat/history & chat/context', () => {
         extra: 'dropped',
       },
     ]);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/chat/history'), res);
 
@@ -1463,8 +1482,8 @@ describe('AdminRouterFactory chat/history & chat/context', () => {
   });
 
   it('GET /chat/context reports zero usage when the session is missing', () => {
-    sessionRepo.findLatestOpenByEntryChannel.mockReturnValue(undefined);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    sessionRepo.findLatestOpen.mockReturnValue(undefined);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/chat/context'), res);
 
@@ -1479,14 +1498,165 @@ describe('AdminRouterFactory chat/history & chat/context', () => {
     messageRepo.getBySessionId.mockReturnValue([
       { id: 'm1', role: 'user', content: 'a longer message that carries some tokens' },
     ]);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/chat/context', { sessionId: 'sess-9' }), res);
 
     expect(sessionRepo.findById).toHaveBeenCalledWith('sess-9');
-    expect(sessionRepo.findLatestOpenByEntryChannel).not.toHaveBeenCalled();
+    expect(sessionRepo.findLatestOpen).not.toHaveBeenCalled();
     const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(payload.used).toBeGreaterThan(0);
+  });
+});
+
+describe('AdminRouterFactory /sessions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    channelsManager.getExistingInstance.mockReturnValue(undefined);
+  });
+
+  it('GET /sessions lists sessions with channel/peerId/kind (not the old entryChannel shape)', () => {
+    sessionRepo.count.mockReturnValue(1);
+    sessionRepo.findAll.mockReturnValue([
+      {
+        id: 's1',
+        channel: 'whatsapp',
+        peerId: '5551234',
+        kind: 'delegated',
+        startedAt: '2026-01-01T00:00:00.000Z',
+        endedAt: undefined,
+        messageCount: 3,
+        metadata: {},
+      },
+    ] as never);
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/sessions'), res);
+
+    expect(sessionRepo.findAll).toHaveBeenCalledWith(20, 0, undefined);
+    const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(body.items[0]).toMatchObject({ id: 's1', channel: 'whatsapp', peerId: '5551234', kind: 'delegated' });
+    expect(body.items[0]).not.toHaveProperty('entryChannel');
+  });
+
+  it('GET /sessions?kind=user forwards the kind filter', () => {
+    sessionRepo.count.mockReturnValue(0);
+    sessionRepo.findAll.mockReturnValue([]);
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/sessions', { kind: 'user' }), res);
+
+    expect(sessionRepo.findAll).toHaveBeenCalledWith(20, 0, 'user');
+    expect(sessionRepo.count).toHaveBeenCalledWith('user');
+  });
+
+  it('POST /sessions creates a web session and invalidates the manager cache for it', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/sessions'), res);
+
+    expect(sessionRepo.save).toHaveBeenCalledTimes(1);
+    expect(sessionManager.invalidateKey).toHaveBeenCalledWith({ channel: 'web', peerId: 'web', kind: 'user' });
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('DELETE /sessions/:id deletes the row and invalidates the manager cache', () => {
+    sessionRepo.findById.mockReturnValue({ id: 's1' });
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('DELETE', '/sessions/s1'), res);
+
+    expect(sessionRepo.deleteById).toHaveBeenCalledWith('s1');
+    expect(sessionManager.invalidate).toHaveBeenCalledWith('s1');
+    expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('DELETE /sessions/:id returns 404 without touching the cache when the session is missing', () => {
+    sessionRepo.findById.mockReturnValue(null);
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('DELETE', '/sessions/missing'), res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(sessionRepo.deleteById).not.toHaveBeenCalled();
+    expect(sessionManager.invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminRouterFactory /errands', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    channelsManager.getExistingInstance.mockReturnValue(undefined);
+  });
+
+  // No channels manager is running in this test process (channelsManager.getExistingInstance
+  // defaults to undefined), so every errand route must degrade to 503 rather than throw.
+  it('GET /errands returns 503 when no channel manager is running', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/errands'), res);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+  });
+
+  it('GET /errands/:id returns 503 when no channel manager is running', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/errands/e1'), res);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+  });
+
+  it('POST /errands/:id/approve returns 503 when no channel manager is running', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('POST', '/errands/e1/approve'), res);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+  });
+
+  it('POST /errands/:id/reply returns 503 when no channel manager is running', async () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    await router.handle(makeRequest('POST', '/errands/e1/reply', { answer: 'yes' }), res, () => {});
+
+    expect(res.status).toHaveBeenCalledWith(503);
+  });
+
+  it('GET /errands/:id/transcript returns 503 when no channel manager is running', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/errands/e1/transcript'), res);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+  });
+
+  it('/overview folds every non-terminal errand state into openErrands', async () => {
+    errandRepo.countByState.mockImplementation((state: string) =>
+      ({ draft: 1, queued: 2, open: 0, awaiting_peer: 3, awaiting_principal: 1 } as Record<string, number>)[state] ?? 0,
+    );
+    sessionRepo.count.mockReturnValue(0);
+    sessionRepo.countOpen.mockReturnValue(0);
+    messageRepo.count.mockReturnValue(0);
+    memoryRepo.count.mockReturnValue(0);
+    learnedSkillsRepo.count.mockReturnValue(0);
+    skillsRepo.get.mockReturnValue([]);
+    outboundRepo.count.mockReturnValue(0);
+    auditRepo.count.mockReturnValue(0);
+    auditRepo.findAll.mockReturnValue([]);
+    auditRepo.usage.mockReturnValue([]);
+
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    router.handle(makeRequest('GET', '/overview'), res, () => {});
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(body.openErrands).toBe(7);
   });
 });
 
@@ -1508,7 +1678,7 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
         createdAt: new Date('2025-12-01T00:00:00.000Z'),
       },
     ]);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/heartbeats'), res);
 
@@ -1527,7 +1697,7 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
 
   it('GET /channels returns the stored channel rows', () => {
     channelRepo.getAll.mockReturnValue([{ id: 'c1', type: 'telegram', principal: true }]);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/channels'), res);
 
@@ -1536,7 +1706,7 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
 
   it('PATCH /channels/:id/principal promotes an existing channel', () => {
     channelRepo.setPrincipal.mockReturnValue({ id: 'c1', principal: true });
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('PATCH', '/channels/c1/principal'), res);
 
@@ -1546,7 +1716,7 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
 
   it('PATCH /channels/:id/principal is a 404 when the channel is unknown', () => {
     channelRepo.setPrincipal.mockReturnValue(undefined);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('PATCH', '/channels/missing/principal'), res);
 
@@ -1556,7 +1726,7 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
 
   it('GET /outbound lists queued outbound messages', () => {
     outboundRepo.getAll.mockReturnValue([{ id: 'o1', status: 'pending' }]);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/outbound'), res);
 
@@ -1564,7 +1734,7 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
   });
 
   it('POST /outbound validates inputs and reports 503 if no channel manager is running', async () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
 
     // Missing content
     let req = makeRequest('POST', '/outbound');
@@ -1600,7 +1770,7 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
   });
 
   it('POST /heartbeats validates fields, intervals, and saves valid beats', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
 
     // Missing beat
     let req = makeRequest('POST', '/heartbeats');
@@ -1662,7 +1832,7 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
   });
 
   it('POST /heartbeats accepts one-time beats only with a pinned date', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
 
     let req = makeRequest('POST', '/heartbeats');
     req.body = { beat: 'check', cronExpression: '0 9 * * *', runOnce: 'yes' };
@@ -1688,7 +1858,7 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
   });
 
   it('PATCH and DELETE /heartbeats/:id handle not-found and valid updates', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
 
     // PATCH not found
     heartbeatRepo.getById.mockReturnValueOnce(null);
@@ -1783,7 +1953,7 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
   });
 
   it('POST /skills/sync triggers sync or returns 503 when not initialized', () => {
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
 
     skillSync.getExistingInstance.mockReturnValueOnce(null);
     let res = makeResponse();

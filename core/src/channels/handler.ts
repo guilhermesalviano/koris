@@ -74,9 +74,11 @@ class ChannelHandler implements IChannelHandler {
           channel: this.channel,
           toolsEnabled: message.isTrustedSender,
           learnedSkillsEnabled: message.isTrustedSender,
+          isTrustedSender: message.isTrustedSender,
         },
       );
       const resolved = await resolveResponse(response);
+      if (!resolved.trim()) return true;
       const mode = this.readResponseMode(target);
       const canSendAudio = typeof this.reply.sendAudio === 'function';
       handlerLogger?.info(
@@ -108,7 +110,7 @@ class ChannelHandler implements IChannelHandler {
       return 'text';
     }
     try {
-      const metadata = sessionManager.getSessionService(target).getSession().metadata;
+      const metadata = sessionManager.getSessionService({ channel: this.channel, peerId: target }).getSession().metadata;
       const mode = metadata?.responseMode === 'voice' ? 'voice' : 'text';
       if (mode !== 'voice') {
         handlerLogger?.info(

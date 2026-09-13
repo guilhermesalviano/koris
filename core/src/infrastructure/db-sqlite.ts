@@ -151,12 +151,63 @@ class DatabaseService implements IDatabaseService {
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (
           id TEXT PRIMARY KEY,
-          entry_channel TEXT NOT NULL,
+          channel TEXT NOT NULL,
+          peer_id TEXT NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'user' CHECK(kind IN ('user', 'delegated')),
           started_at DATETIME,
           ended_at DATETIME,
           message_count INTEGER DEFAULT 0,
           metadata TEXT
         );
+      `);
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_sessions_lookup
+          ON sessions(channel, peer_id, kind, ended_at, started_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC);
+      `);
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS errands (
+          id TEXT PRIMARY KEY,
+          goal TEXT NOT NULL,
+          state TEXT NOT NULL CHECK(state IN (
+            'draft','queued','open','awaiting_peer','awaiting_principal',
+            'resolved','failed','cancelled','expired')),
+          origin_session_id TEXT NOT NULL,
+          pending_message TEXT,
+          pending_delivery TEXT,
+          notes TEXT,
+          result TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          last_progress_at DATETIME,
+          closed_at DATETIME,
+          FOREIGN KEY (origin_session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        );
+      `);
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_errands_state ON errands(state, last_progress_at);
+        CREATE INDEX IF NOT EXISTS idx_errands_origin ON errands(origin_session_id);
+      `);
+
+      const errandColumns = this.db.prepare('PRAGMA table_info(errands)').all() as { name: string }[];
+      if (!errandColumns.some((column) => column.name === 'pending_delivery')) {
+        this.db.exec('ALTER TABLE errands ADD COLUMN pending_delivery TEXT;');
+      }
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS errand_targets (
+          errand_id TEXT NOT NULL,
+          session_id TEXT NOT NULL,
+          PRIMARY KEY (errand_id, session_id),
+          FOREIGN KEY (errand_id) REFERENCES errands(id) ON DELETE CASCADE,
+          FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        );
+      `);
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_errand_targets_session ON errand_targets(session_id);
       `);
 
       /**

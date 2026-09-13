@@ -1,6 +1,7 @@
 export interface OverviewResponse {
   sessions: number;
   openSessions: number;
+  openErrands: number;
   messages: number;
   memories: number;
   heartbeats: number;
@@ -28,9 +29,13 @@ export interface OverviewResponse {
   recentErrors: AuditItem[];
 }
 
+export type SessionKind = 'user' | 'delegated';
+
 export interface SessionSummary {
   id: string;
-  entryChannel: string;
+  channel: string;
+  peerId: string;
+  kind: SessionKind;
   startedAt?: string;
   endedAt?: string;
   messageCount: number;
@@ -43,6 +48,61 @@ export interface SessionsResponse {
   limit: number;
   offset: number;
   items: SessionSummary[];
+}
+
+export type ErrandState =
+  | 'draft'
+  | 'queued'
+  | 'open'
+  | 'awaiting_peer'
+  | 'awaiting_principal'
+  | 'resolved'
+  | 'failed'
+  | 'cancelled'
+  | 'expired';
+
+export interface ErrandTargetSession {
+  sessionId: string;
+  channel: string;
+  peerId: string;
+  kind: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  messageCount: number;
+}
+
+export interface ErrandItem {
+  id: string;
+  goal: string;
+  state: ErrandState;
+  originSessionId: string;
+  pendingMessage: string | null;
+  delivery: { type: 'opener' | 'resume'; sent: number; total: number; error: string | null } | null;
+  notes: string | null;
+  result: string | null;
+  createdAt: string;
+  lastProgressAt: string | null;
+  closedAt: string | null;
+  targets: ErrandTargetSession[];
+}
+
+export interface ErrandTranscriptMessage {
+  id: string;
+  sessionId: string;
+  role: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface ErrandTranscriptResponse {
+  errandId: string;
+  messages: ErrandTranscriptMessage[];
+}
+
+export interface ErrandsResponse {
+  limit: number;
+  offset: number;
+  items: ErrandItem[];
 }
 
 export interface ImageAttachment {
