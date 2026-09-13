@@ -10,6 +10,11 @@ export function imageSrc(image: ImageAttachment): string {
   return `data:${image.mimeType ?? 'image/png'};base64,${image.data}`;
 }
 
+/** Steps through a set of `length` items, wrapping around at either end. */
+export function cycleIndex(index: number, step: number, length: number): number {
+  return length > 0 ? (((index + step) % length) + length) % length : 0;
+}
+
 /** Opens the lightbox on one image of a set. */
 export type PreviewImages = (images: ImageAttachment[], index: number) => void;
 

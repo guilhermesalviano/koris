@@ -9,6 +9,8 @@ export interface ErrandProps {
   originSessionId: string;
   pendingMessage?: string;
   pendingDelivery?: ErrandDelivery;
+  /** The Negotiator's closing message, held while the proposed result waits for the principal's confirmation. */
+  closingReply?: string;
   notes?: string;
   result?: string;
   createdAt?: string;
@@ -23,6 +25,7 @@ export class Errand {
   public readonly originSessionId: string;
   public readonly pendingMessage?: string;
   public readonly pendingDelivery?: ErrandDelivery;
+  public readonly closingReply?: string;
   public readonly notes?: string;
   public readonly result?: string;
   public readonly createdAt: string;
@@ -36,6 +39,7 @@ export class Errand {
     this.originSessionId = props.originSessionId;
     this.pendingMessage = props.pendingMessage;
     this.pendingDelivery = props.pendingDelivery;
+    this.closingReply = props.closingReply;
     this.notes = props.notes;
     this.result = props.result;
     this.createdAt = props.createdAt ?? nowISO();

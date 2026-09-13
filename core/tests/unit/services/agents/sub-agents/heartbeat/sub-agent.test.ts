@@ -13,7 +13,6 @@ function makeHeartbeat(overrides: Partial<{
   beats: Array<{ id: string; beat: string; cronExpression: string; type: string; channel?: string; target?: string; lastRun?: Date; runOnce?: boolean }>;
   completionResponse: unknown;
   pipelineResult: string;
-  deliveryTarget: { channel: string; target: string } | null;
 }> = {}) {
   const logger = makeLogger();
   const heartbeatRepository = {
@@ -32,18 +31,11 @@ function makeHeartbeat(overrides: Partial<{
   const pipeline = {
     execute: vi.fn().mockResolvedValue(overrides.pipelineResult ?? 'executed'),
   };
-  const channelsManager = {
-    sendMessage: vi.fn().mockResolvedValue(undefined),
-  };
-  const channelService = {
-    resolveDelivery: vi.fn().mockReturnValue(
-      overrides.deliveryTarget === undefined
-        ? { channel: 'telegram', target: '987654321' }
-        : overrides.deliveryTarget,
-    ),
-  };
   const imageRepository = {
     deleteAll: vi.fn().mockReturnValue(3),
+  };
+  const beatRunRepository = {
+    save: vi.fn(),
   };
 
   const heartbeat = new Heartbeat(
@@ -51,11 +43,10 @@ function makeHeartbeat(overrides: Partial<{
     promptRepository as never,
     heartbeatRepository as never,
     { enqueue: vi.fn() } as never,
-    channelsManager as never,
     completionService as never,
     pipeline as never,
-    channelService as never,
     imageRepository as never,
+    beatRunRepository as never,
   );
 
   return {
@@ -65,9 +56,8 @@ function makeHeartbeat(overrides: Partial<{
     promptRepository,
     completionService,
     pipeline,
-    channelsManager,
-    channelService,
     imageRepository,
+    beatRunRepository,
   };
 }
 
@@ -110,9 +100,9 @@ describe('Heartbeat', () => {
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('not due yet'));
     });
 
-    it('executes due beats and delivers the result via the resolved channel', async () => {
+    it('executes due beats and stores the result without messaging a channel', async () => {
       const now = localDate(9, 0);
-      const { heartbeat, completionService, channelsManager, channelService, heartbeatRepository, logger } = makeHeartbeat({
+      const { heartbeat, completionService, beatRunRepository, heartbeatRepository, logger } = makeHeartbeat({
         beats: [{
           id: 'morning',
           beat: 'send status',
@@ -120,21 +110,19 @@ describe('Heartbeat', () => {
           type: 'report',
         }],
         completionResponse: { kind: 'message', text: 'status ok' },
-        deliveryTarget: { channel: 'telegram', target: '987654321' },
       });
 
       await heartbeat.handler(now);
 
       expect(completionService.complete).toHaveBeenCalled();
-      expect(channelService.resolveDelivery).toHaveBeenCalledWith(expect.objectContaining({ id: 'morning' }));
-      expect(channelsManager.sendMessage).toHaveBeenCalledWith('telegram', '987654321', 'status ok');
+      expect(beatRunRepository.save).toHaveBeenCalledWith(expect.objectContaining({ beatId: 'morning', status: 'success', result: 'status ok' }));
       expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('morning', now);
       expect(logger.info).toHaveBeenCalledWith('Heartbeat: Beat "morning" completed successfully.');
     });
 
     it('removes a one-time beat after it fires', async () => {
       const now = localDate(9, 30);
-      const { heartbeat, channelsManager, heartbeatRepository, logger } = makeHeartbeat({
+      const { heartbeat, beatRunRepository, heartbeatRepository, logger } = makeHeartbeat({
         beats: [{
           id: 'once',
           beat: 'call mom',
@@ -147,7 +135,7 @@ describe('Heartbeat', () => {
 
       await heartbeat.handler(now);
 
-      expect(channelsManager.sendMessage).toHaveBeenCalledWith('telegram', '987654321', 'call mom');
+      expect(beatRunRepository.save).toHaveBeenCalledWith(expect.objectContaining({ beatId: 'once', status: 'success', result: 'call mom' }));
       expect(heartbeatRepository.deleteById).toHaveBeenCalledWith('once');
       expect(logger.info).toHaveBeenCalledWith('Heartbeat: One-time beat "once" fired and was removed.');
     });
@@ -185,7 +173,7 @@ describe('Heartbeat', () => {
     it('routes tool-call responses through the tool-call pipeline', async () => {
       const now = localDate(9, 0);
       const toolCalls = [{ name: 'execute_command', arguments: { command: 'echo hi' } }];
-      const { heartbeat, pipeline, channelsManager } = makeHeartbeat({
+      const { heartbeat, pipeline, beatRunRepository } = makeHeartbeat({
         beats: [{
           id: 'tool-beat',
           beat: 'run command',
@@ -194,7 +182,6 @@ describe('Heartbeat', () => {
         }],
         completionResponse: { kind: 'tool_calls', calls: toolCalls },
         pipelineResult: 'hi',
-        deliveryTarget: { channel: 'telegram', target: '987654321' },
       });
 
       await heartbeat.handler(now);
@@ -205,16 +192,16 @@ describe('Heartbeat', () => {
         [],
         expect.objectContaining({
           channel: 'background',
-          options: expect.objectContaining({ runId: 'tool-beat' }),
+          options: expect.objectContaining({ runId: expect.any(String) }),
           initiatedBy: 'heartbeat',
         }),
       );
-      expect(channelsManager.sendMessage).toHaveBeenCalledWith('telegram', '987654321', 'hi');
+      expect(beatRunRepository.save).toHaveBeenCalledWith(expect.objectContaining({ beatId: 'tool-beat', status: 'success', result: 'hi' }));
     });
 
     it('continues executing remaining beats when one beat fails', async () => {
       const now = localDate(9, 0);
-      const { heartbeat, logger, completionService, heartbeatRepository, channelsManager } = makeHeartbeat({
+      const { heartbeat, logger, completionService, heartbeatRepository, beatRunRepository } = makeHeartbeat({
         beats: [
           {
             id: 'failing',
@@ -229,7 +216,6 @@ describe('Heartbeat', () => {
             type: 'report',
           },
         ],
-        deliveryTarget: { channel: 'telegram', target: '987654321' },
       });
       completionService.complete
         .mockRejectedValueOnce(new Error('model failed'))
@@ -243,56 +229,8 @@ describe('Heartbeat', () => {
         expect.objectContaining({ err: expect.any(Error) }),
       );
       expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('success', now);
-      expect(channelsManager.sendMessage).toHaveBeenCalledWith('telegram', '987654321', 'all good');
+      expect(beatRunRepository.save).toHaveBeenCalledWith(expect.objectContaining({ beatId: 'success', status: 'success', result: 'all good' }));
       expect(logger.info).toHaveBeenCalledWith('Heartbeat: Beat "success" completed successfully.');
-    });
-
-    it('delivers to the beat channel and target when specified', async () => {
-      const now = localDate(9, 0);
-      const { heartbeat, channelsManager, channelService } = makeHeartbeat({
-        beats: [{
-          id: 'group-beat',
-          beat: 'daily report',
-          cronExpression: '0 9 * * *',
-          type: 'report',
-          channel: 'whatsapp',
-          target: '5511999999999@s.whatsapp.net',
-        }],
-        completionResponse: { kind: 'message', text: 'group report' },
-      });
-      (channelService.resolveDelivery as ReturnType<typeof vi.fn>).mockReturnValue({
-        channel: 'whatsapp',
-        target: '5511999999999@s.whatsapp.net',
-      });
-
-      await heartbeat.handler(now);
-
-      expect(channelsManager.sendMessage).toHaveBeenCalledWith(
-        'whatsapp',
-        '5511999999999@s.whatsapp.net',
-        'group report',
-      );
-    });
-
-    it('does not send when no delivery channel is resolved', async () => {
-      const now = localDate(9, 0);
-      const { heartbeat, channelsManager, logger } = makeHeartbeat({
-        beats: [{
-          id: 'morning',
-          beat: 'send status',
-          cronExpression: '0 9 * * *',
-          type: 'report',
-        }],
-        completionResponse: { kind: 'message', text: 'status ok' },
-        deliveryTarget: null,
-      });
-
-      await heartbeat.handler(now);
-
-      expect(channelsManager.sendMessage).not.toHaveBeenCalled();
-      expect(logger.info).toHaveBeenCalledWith(
-        expect.stringContaining('No delivery channel recorded'),
-      );
     });
 
     it('logs beat failures without stopping other beats', async () => {
@@ -342,7 +280,7 @@ describe('Heartbeat', () => {
       const release: Array<() => void> = [];
       const gated = () => new Promise((resolve) => release.push(() => resolve({ kind: 'message', text: 'beat done' })));
 
-      const { heartbeat, completionService, channelsManager } = makeHeartbeat({
+      const { heartbeat, completionService, beatRunRepository } = makeHeartbeat({
         beats: [
           {
             id: 'beat-a',
@@ -357,7 +295,6 @@ describe('Heartbeat', () => {
             type: 'report',
           },
         ],
-        deliveryTarget: { channel: 'telegram', target: '987654321' },
       });
       completionService.complete.mockImplementation(gated);
 
@@ -373,18 +310,7 @@ describe('Heartbeat', () => {
       release[1]();
       await run;
 
-      expect(channelsManager.sendMessage).toHaveBeenNthCalledWith(
-        1,
-        'telegram',
-        '987654321',
-        'beat done',
-      );
-      expect(channelsManager.sendMessage).toHaveBeenNthCalledWith(
-        2,
-        'telegram',
-        '987654321',
-        'beat done',
-      );
+      expect(beatRunRepository.save.mock.calls.map(([run]) => run.beatId)).toEqual(['beat-a', 'beat-b']);
     });
 
     it('uses the shared sub-agent queue when subagents_parallel is false', async () => {
@@ -401,9 +327,9 @@ describe('Heartbeat', () => {
       expect((heartbeat as unknown as { queue: unknown }).queue).not.toBe(sharedSubAgentQueue);
     });
 
-    it('executes a system cleanup beat natively without the LLM or delivery', async () => {
+    it('executes a system cleanup beat natively without the LLM or a stored run', async () => {
       const now = localDate(0, 0);
-      const { heartbeat, imageRepository, completionService, promptRepository, channelsManager, heartbeatRepository } = makeHeartbeat({
+      const { heartbeat, imageRepository, completionService, promptRepository, beatRunRepository, heartbeatRepository } = makeHeartbeat({
         beats: [{
           id: 'cleanup',
           beat: SYSTEM_BEAT_CLEAR_IMAGES,
@@ -417,7 +343,7 @@ describe('Heartbeat', () => {
       expect(imageRepository.deleteAll).toHaveBeenCalledTimes(1);
       expect(completionService.complete).not.toHaveBeenCalled();
       expect(promptRepository.build).not.toHaveBeenCalled();
-      expect(channelsManager.sendMessage).not.toHaveBeenCalled();
+      expect(beatRunRepository.save).not.toHaveBeenCalled();
       expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('cleanup', now);
     });
 
@@ -446,6 +372,63 @@ describe('Heartbeat', () => {
       await run;
 
       expect(queue.snapshot()).toEqual({ queued: 0, active: 0, concurrency: 1, queuedLabels: [], activeLabels: [] });
+    });
+  });
+
+  describe('run history', () => {
+    it('records each run with its own id and result', async () => {
+      const now = localDate(9, 0);
+      const { heartbeat, completionService, beatRunRepository } = makeHeartbeat({
+        beats: [{ id: 'morning', beat: 'send status', cronExpression: '0 9 * * *', type: 'scheduled_beat' }],
+        completionResponse: { kind: 'message', text: 'status ok' },
+      });
+
+      await heartbeat.handler(now);
+
+      const [run] = beatRunRepository.save.mock.calls[0];
+      expect(run).toMatchObject({
+        beatId: 'morning', beat: 'send status', beatType: 'scheduled_beat',
+        status: 'success', result: 'status ok', startedAt: expect.any(Date), finishedAt: expect.any(Date),
+      });
+      expect(run.id).not.toBe('morning');
+      expect(completionService.complete).toHaveBeenCalledWith(expect.anything(), { audit: { channel: 'background', runId: run.id } });
+    });
+
+    it('records a failed run with its error and keeps other beats running', async () => {
+      const now = localDate(9, 0);
+      const { heartbeat, completionService, beatRunRepository } = makeHeartbeat({
+        beats: [
+          { id: 'failing', beat: 'broken beat', cronExpression: '0 9 * * *', type: 'report' },
+          { id: 'success', beat: 'healthy beat', cronExpression: '0 9 * * *', type: 'report' },
+        ],
+      });
+      completionService.complete.mockRejectedValueOnce(new Error('model failed')).mockResolvedValueOnce({ kind: 'message', text: 'all good' });
+
+      await heartbeat.handler(now);
+
+      const runs = beatRunRepository.save.mock.calls.map(([run]) => run);
+      expect(runs).toEqual([
+        expect.objectContaining({ beatId: 'failing', status: 'error', errorMessage: 'model failed', result: undefined }),
+        expect.objectContaining({ beatId: 'success', status: 'success', result: 'all good' }),
+      ]);
+      expect(runs[0].id).not.toBe(runs[1].id);
+    });
+
+    it('logs a run that cannot be recorded, and skips the system image cleanup', async () => {
+      const now = localDate(9, 0);
+      const { heartbeat, beatRunRepository, logger } = makeHeartbeat({
+        beats: [
+          { id: 'morning', beat: 'send status', cronExpression: '0 9 * * *', type: 'report' },
+          { id: 'system', beat: SYSTEM_BEAT_CLEAR_IMAGES, cronExpression: '0 9 * * *', type: 'scheduled_beat' },
+        ],
+        completionResponse: { kind: 'message', text: 'status ok' },
+      });
+      beatRunRepository.save.mockImplementation(() => { throw new Error('disk full'); });
+
+      await heartbeat.handler(now);
+
+      expect(beatRunRepository.save).toHaveBeenCalledTimes(1);
+      expect(logger.error).toHaveBeenCalledWith('Heartbeat: Could not record the run of beat "morning".', expect.anything());
     });
   });
 });

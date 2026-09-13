@@ -11,6 +11,7 @@ const {
   messageRepo,
   memoryRepo,
   heartbeatRepo,
+  beatRunRepo,
   channelRepo,
   outboundRepo,
   learnedSkillsRepo,
@@ -55,6 +56,7 @@ const {
   },
   messageRepo: { count: vi.fn(), getBySessionId: vi.fn(() => []), getPreviewBySessionId: vi.fn(() => null) },
   memoryRepo: { count: vi.fn(), getBySessionId: vi.fn(() => []) },
+  beatRunRepo: { findRecent: vi.fn(() => []) },
   heartbeatRepo: {
     getAll: vi.fn(() => []),
     getById: vi.fn(),
@@ -125,6 +127,10 @@ vi.mock('../../../src/repositories/memory', () => ({
 
 vi.mock('../../../src/repositories/heartbeat', () => ({
   HeartbeatRepositoryFactory: { create: () => heartbeatRepo },
+}));
+
+vi.mock('../../../src/repositories/beat-run', () => ({
+  BeatRunRepositoryFactory: { create: () => beatRunRepo },
 }));
 
 vi.mock('../../../src/repositories/channel', () => ({
@@ -1431,54 +1437,9 @@ describe('AdminRouterFactory /settings', () => {
   });
 });
 
-describe('AdminRouterFactory chat/history & chat/context', () => {
+describe('AdminRouterFactory chat/context', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('GET /chat/history returns an empty payload when there is no open web session', () => {
-    sessionRepo.findLatestOpen.mockReturnValue(undefined);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
-    const res = makeResponse();
-    callRoute(router, makeRequest('GET', '/chat/history'), res);
-
-    expect(sessionRepo.findLatestOpen).toHaveBeenCalledWith({ channel: 'web', peerId: 'web' });
-    expect(res.json).toHaveBeenCalledWith({ sessionId: null, messages: [] });
-  });
-
-  it('GET /chat/history projects the latest open web session messages', () => {
-    sessionRepo.findLatestOpen.mockReturnValue({ id: 'sess-1' });
-    messageRepo.getBySessionId.mockReturnValue([
-      {
-        id: 'm1',
-        role: 'user',
-        content: 'hi',
-        images: [],
-        missingImages: false,
-        errorCode: null,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        extra: 'dropped',
-      },
-    ]);
-    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
-    const res = makeResponse();
-    callRoute(router, makeRequest('GET', '/chat/history'), res);
-
-    expect(messageRepo.getBySessionId).toHaveBeenCalledWith('sess-1', 200);
-    expect(res.json).toHaveBeenCalledWith({
-      sessionId: 'sess-1',
-      messages: [
-        {
-          id: 'm1',
-          role: 'user',
-          content: 'hi',
-          images: [],
-          missingImages: false,
-          errorCode: null,
-          createdAt: '2026-01-01T00:00:00.000Z',
-        },
-      ],
-    });
   });
 
   it('GET /chat/context reports zero usage when the session is missing', () => {
@@ -1506,6 +1467,21 @@ describe('AdminRouterFactory chat/history & chat/context', () => {
     expect(sessionRepo.findLatestOpen).not.toHaveBeenCalled();
     const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(payload.used).toBeGreaterThan(0);
+  });
+});
+
+describe('AdminRouterFactory /agents', () => {
+  it('GET /agents returns the roster with the orchestrator as the only messageable root', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/agents'), res);
+
+    const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(body.items.map((a: { id: string }) => a.id)).toEqual(['orchestrator', 'negotiator', 'watcher']);
+    expect(body.items.filter((a: { parentId: string | null }) => a.parentId === null)).toHaveLength(1);
+    expect(body.items.filter((a: { messageable: boolean }) => a.messageable).map((a: { id: string }) => a.id)).toEqual([
+      'orchestrator',
+    ]);
   });
 });
 
@@ -1695,7 +1671,30 @@ describe('AdminRouterFactory heartbeats/channels/outbound reads', () => {
     expect(typeof payload.items[0].next_run).toBe('string');
   });
 
-  it('GET /channels returns the stored channel rows', () => {
+  it('GET /heartbeats/runs returns the latest runs with the tools each one called', () => {
+    beatRunRepo.findRecent.mockReturnValue([{
+      id: 'run-1', beatId: 'b1', beat: 'daily digest', beatType: 'scheduled_beat',
+      status: 'success', result: 'Sunny', startedAt: new Date('2026-01-01T09:00:00.000Z'), finishedAt: new Date('2026-01-01T09:00:05.000Z'),
+    }]);
+    auditRepo.findAll.mockReturnValue([
+      { tool_name: 'read_url', status: 'error' },
+      { tool_name: 'search_engine', status: 'success' },
+    ]);
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/heartbeats/runs', { limit: '500' }), res);
+
+    expect(beatRunRepo.findRecent).toHaveBeenCalledWith(100);
+    expect(auditRepo.findAll).toHaveBeenCalledWith({ limit: 50, offset: 0, filters: { type: 'tool', runId: 'run-1' } });
+    const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(payload.items).toEqual([expect.objectContaining({
+      id: 'run-1', beatId: 'b1', beat: 'daily digest', type: 'scheduled_beat', status: 'success',
+      result: 'Sunny', errorMessage: null, startedAt: expect.any(String), finishedAt: expect.any(String),
+      tools: [{ name: 'search_engine', status: 'success' }, { name: 'read_url', status: 'error' }],
+    })]);
+  });
+
+    it('GET /channels returns the stored channel rows', () => {
     channelRepo.getAll.mockReturnValue([{ id: 'c1', type: 'telegram', principal: true }]);
     const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();

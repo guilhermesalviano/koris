@@ -1,0 +1,232 @@
+import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { AgentAvatar } from '../AgentAvatar';
+import { BrokenImageIcon } from '../Icons';
+import { Button } from '../ui';
+import { DateSeparator } from './DateSeparator';
+import { imageSrc, type PreviewImages } from './shared';
+import { chatSeparatorLabel, dayTimeLabel } from '../../lib/date';
+import { cn } from '../../lib/cn';
+import { renderMarkdown } from '../../lib/markdown';
+import { isNearBottom } from '../../lib/timeline';
+import { usePageTitle } from '../../lib/use-page-title';
+import type { AgentId } from '../../lib/types';
+import type { ReadOnlyChatEntry } from '../../lib/subagent-chat';
+
+interface ReadOnlyAgentChatProps {
+  agentId: AgentId;
+  title: string;
+  entries: readonly ReadOnlyChatEntry[];
+  loading: boolean;
+  loaded: boolean;
+  error: string | null;
+  emptyText: string;
+  historyLabel: string;
+  onRefresh: () => void;
+  actions?: ReactNode;
+  /** Per-entry controls (e.g. errand actions); the chat is no longer labelled read-only when set. */
+  renderEntryActions?: (entry: ReadOnlyChatEntry) => ReactNode;
+  /** Opens a lightbox on an entry's image; without it thumbnails are not clickable. */
+  onPreviewImages?: PreviewImages;
+  /** Moves the history into a right-hand aside and leaves the main conversation area blank. */
+  historyAside?: boolean;
+  /** Pinned above the history inside the aside. */
+  asideHeader?: ReactNode;
+  /** Content of the main area beside the history aside; blank when omitted. */
+  main?: ReactNode;
+  children?: ReactNode;
+}
+
+/** Thumbnails of the images an entry carried, plus placeholders for ones since deleted. */
+function EntryImages({ entry, onPreviewImages }: { entry: ReadOnlyChatEntry; onPreviewImages?: PreviewImages }) {
+  const images = entry.images ?? [];
+  const missing = entry.missingImages ?? 0;
+  if (images.length === 0 && missing === 0) return null;
+  const thumbnail = 'h-24 max-w-[160px] rounded-control object-cover';
+  return (
+    <div className="mb-2 flex flex-wrap gap-1.5">
+      {images.map((image, index) => onPreviewImages ? (
+        <button
+          key={index}
+          type="button"
+          onClick={() => onPreviewImages(images, index)}
+          title="View image"
+          aria-label={`View image ${index + 1}`}
+          className="overflow-hidden rounded-control outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <img src={imageSrc(image)} alt={`image ${index + 1}`} className={cn(thumbnail, 'cursor-zoom-in')} />
+        </button>
+      ) : (
+        <img key={index} src={imageSrc(image)} alt={`image ${index + 1}`} className={thumbnail} />
+      ))}
+      {Array.from({ length: missing }).map((_, index) => (
+        <div key={`missing-${index}`} title="This image was deleted and is no longer accessible" className="flex h-24 w-[120px] items-center justify-center rounded-control border border-dashed border-strong bg-bg-3">
+          <BrokenImageIcon className="h-6 w-6 fill-none stroke-txt-3" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ReadOnlyChatMessage({ entry, agentId, actions, onPreviewImages }: { entry: ReadOnlyChatEntry; agentId: AgentId; actions?: ReactNode; onPreviewImages?: PreviewImages }) {
+  const contact = entry.kind === 'contact';
+  const task = entry.kind === 'task';
+  const notices = entry.details?.filter((detail) => ['Unsent draft', 'Question awaiting your answer', 'Result awaiting your confirmation', 'Delivery incomplete', 'Conversation unavailable'].includes(detail.label));
+  return (
+    <article data-entry-id={entry.id} className={cn('flex min-w-0 gap-2.5', contact && 'flex-row-reverse')}>
+      {!contact && !task && <AgentAvatar id={agentId} className="mt-1 h-10 w-10" />}
+      <div className={cn('flex min-w-0 max-w-[calc(100%-44px)] flex-col gap-1', contact && 'items-end', task && 'mx-auto w-full max-w-2xl')}>
+        <div className={cn('flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 text-caption', contact && 'justify-end')}>
+          <span className="font-medium text-txt">{entry.author}</span>
+          <span className="min-w-0 break-words text-txt-3">{entry.context}</span>
+        </div>
+        <div className={cn(
+          'bubble min-w-0 max-w-full break-words rounded-card border px-3.5 py-2.5 text-sm leading-relaxed',
+          contact ? 'rounded-br-[5px] border-transparent bg-accent text-white' : 'rounded-bl-[5px] border-subtle bg-bg-3 text-txt',
+          task && 'border-dashed bg-bg-2',
+          entry.error && 'border-danger bg-danger-muted text-txt',
+        )}>
+          {entry.status && <div className="mb-1 font-mono text-micro text-txt-3">{task ? 'Current status: ' : ''}{entry.status}</div>}
+          <EntryImages entry={entry} onPreviewImages={onPreviewImages} />
+          {entry.kind === 'assistant'
+            ? <div dangerouslySetInnerHTML={{ __html: renderMarkdown(entry.content) }} />
+            : entry.content && <div className="whitespace-pre-wrap">{entry.content}</div>}
+          {Boolean(entry.details?.length) && (
+            <details className="mt-2 border-t border-subtle pt-2">
+              <summary className="cursor-pointer text-caption text-txt-2">
+                {entry.detailsLabel ?? (task ? 'Current errand details' : 'Activity details')}
+                {notices?.map((notice) => ` · ${notice.label}`).join('')}
+              </summary>
+              <dl className="mt-2 space-y-3">
+                {entry.details?.map((detail) => (
+                  <div key={detail.label}>
+                    <dt className="text-caption font-medium text-txt-2">{detail.label}</dt>
+                    <dd className="mt-1 whitespace-pre-wrap break-words text-caption text-txt">{detail.content}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
+        </div>
+        {actions}
+        <time dateTime={new Date(entry.at).toISOString()} className="px-1 font-mono text-micro text-txt-3">
+          {task && 'Started '}{dayTimeLabel(entry.at)}
+        </time>
+      </div>
+    </article>
+  );
+}
+
+export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, error, emptyText, historyLabel, onRefresh, actions, renderEntryActions, onPreviewImages, historyAside = false, asideHeader, main, children }: ReadOnlyAgentChatProps) {
+  usePageTitle(title, renderEntryActions ? 'Agent chat' : 'Read-only agent chat');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const following = useRef(true);
+  const positioned = useRef(false);
+  const lastEntryId = useRef<string | undefined>(undefined);
+  const anchor = useRef<{ id: string; top: number } | null>(null);
+  const [newMessages, setNewMessages] = useState(false);
+
+  function rememberPosition() {
+    const element = scrollRef.current;
+    if (!element) return;
+    following.current = isNearBottom(element);
+    if (following.current) {
+      setNewMessages(false);
+      anchor.current = null;
+      return;
+    }
+    const top = element.getBoundingClientRect().top;
+    const visible = Array.from(element.querySelectorAll<HTMLElement>('[data-entry-id]')).find((message) => message.getBoundingClientRect().bottom > top);
+    anchor.current = visible ? { id: visible.dataset.entryId!, top: visible.getBoundingClientRect().top - top } : null;
+  }
+
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    if (entries.length === 0) {
+      following.current = true;
+      positioned.current = false;
+      lastEntryId.current = undefined;
+      anchor.current = null;
+      setNewMessages(false);
+      return;
+    }
+    const last = entries[entries.length - 1].id;
+    if (!positioned.current || following.current) {
+      element.scrollTop = element.scrollHeight;
+      positioned.current = true;
+    } else {
+      if (anchor.current) {
+        const saved = anchor.current;
+        const message = Array.from(element.querySelectorAll<HTMLElement>('[data-entry-id]')).find((item) => item.dataset.entryId === saved.id);
+        if (message) element.scrollTop += message.getBoundingClientRect().top - element.getBoundingClientRect().top - saved.top;
+      }
+      if (last !== lastEntryId.current) setNewMessages(true);
+    }
+    lastEntryId.current = last;
+  }, [entries]);
+
+  const history = (
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      <div ref={scrollRef} onScroll={rememberPosition} aria-label={`${title} conversation`} aria-busy={loading} className="min-h-0 flex-1 overflow-y-auto px-4 py-6 [overflow-anchor:none] sm:px-5">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
+          {children}
+          {!loaded && loading && <p role="status" className="py-12 text-center text-caption text-txt-3">Loading conversation…</p>}
+          {loaded && entries.length === 0 && <p className="py-12 text-center text-body text-txt-3">{emptyText}</p>}
+          {entries.length > 0 && <p className="text-center font-mono text-micro text-txt-3">{historyLabel}</p>}
+          {entries.map((entry, index) => {
+            // A new errand or run always opens its own section, labelled with when it started.
+            const separator = entry.section ? `${entry.section} · ${dayTimeLabel(entry.sectionAt ?? entry.at)}` : chatSeparatorLabel(entry.at, entries[index - 1]?.at);
+            return (
+              <Fragment key={entry.id}>
+                {separator && <DateSeparator label={separator} session={Boolean(entry.section)} />}
+                <ReadOnlyChatMessage entry={entry} agentId={agentId} actions={renderEntryActions?.(entry)} onPreviewImages={onPreviewImages} />
+              </Fragment>
+            );
+          })}
+        </div>
+      </div>
+      {newMessages && (
+        <Button size="sm" className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full shadow-pop" onClick={() => {
+          following.current = true;
+          anchor.current = null;
+          setNewMessages(false);
+          scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+        }}>↓ New messages</Button>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
+      <header className="flex min-h-12 flex-shrink-0 flex-wrap items-center gap-2 border-b border-subtle bg-bg/80 px-4 py-2 backdrop-blur-md">
+        <AgentAvatar id={agentId} className="h-10 w-10" />
+        <h1 className="text-body font-medium text-txt">{title}</h1>
+        {!renderEntryActions && <span className="font-mono text-micro text-txt-3">Read-only</span>}
+        <div className="ml-auto flex items-center gap-2">
+          {actions}
+          <Button size="sm" variant="ghost" loading={loading} onClick={onRefresh}>Refresh</Button>
+        </div>
+      </header>
+      {error && (
+        <div role="alert" className="flex flex-shrink-0 items-center gap-3 border-b border-danger bg-danger-muted px-4 py-2 text-caption text-txt">
+          <span className="min-w-0 break-words">{error}{loaded && ' Previously loaded history is still shown.'}</span>
+          <Button size="sm" variant="ghost" disabled={loading} onClick={onRefresh}>Retry</Button>
+        </div>
+      )}
+      {historyAside ? (
+        <div className={cn('flex min-h-0 flex-1', main && 'flex-col lg:flex-row')}>
+          {/* Without content the main area stays blank, and narrow screens show only the history.
+              With content, narrow screens stack it above the history. */}
+          <section aria-label={`${title} main`} className={cn('min-h-0 min-w-0 flex-1', main ? 'flex flex-col' : 'hidden lg:block')}>{main}</section>
+          <aside aria-label={`${title} history`} className={cn(
+            'flex min-h-0 w-full flex-col bg-bg-2 lg:w-[420px] lg:flex-shrink-0 lg:border-l lg:border-subtle',
+            main && 'h-[45%] flex-shrink-0 border-t border-subtle lg:h-auto lg:border-t-0',
+          )}>
+            {asideHeader}
+            {history}
+          </aside>
+        </div>
+      ) : history}
+    </div>
+  );
+}

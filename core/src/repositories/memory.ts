@@ -11,6 +11,9 @@ interface IMemoryRepository {
   update(memory: Memory): void;
   getAll(excludeSessionId?: string): Memory[];
   getBySessionId(sessionId: string): Memory[];
+  /** Every memory (reminders included), or only one type, newest first — backs `/memories`. */
+  findRecent(limit: number, offset: number, type?: MemoryType): Memory[];
+  countAll(type?: MemoryType): number;
   deleteById(id: string): void;
   search(queryEmbedding: number[], limit: number, excludeSessionId?: string): Memory[];
   count(): number;
@@ -78,6 +81,26 @@ class MemoryRepository implements IMemoryRepository {
     );
 
     return rows.map(this.mapRow);
+  }
+
+  findRecent(limit: number, offset: number, type?: MemoryType): Memory[] {
+    // Embeddings are left out: a listing never needs them and they dominate row size.
+    const rows = this.db.query<any>(
+      `SELECT id, session_id, source, type, content, tags, importance, created_at FROM memories
+       ${type ? 'WHERE type = ?' : ''}
+       ORDER BY created_at DESC, rowid DESC
+       LIMIT ? OFFSET ?`,
+      type ? [type, limit, offset] : [limit, offset]
+    );
+
+    return rows.map(this.mapRow);
+  }
+
+  countAll(type?: MemoryType): number {
+    const row = (type
+      ? this.db.get('SELECT COUNT(*) AS total FROM memories WHERE type = ?', [type])
+      : this.db.get('SELECT COUNT(*) AS total FROM memories')) as { total?: number } | undefined;
+    return row?.total ?? 0;
   }
 
   search(queryEmbedding: number[], limit: number, excludeSessionId?: string): Memory[] {

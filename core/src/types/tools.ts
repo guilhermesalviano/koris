@@ -5,6 +5,9 @@ export interface ToolCall {
   id?: string;
   name: string;
   arguments: Record<string, unknown>;
+  /** Opaque provider data that must be sent back with this call on the next
+   * turn (OpenAI-compat `extra_content`, e.g. Gemini's `thought_signature`). */
+  extraContent?: Record<string, unknown>;
 }
 
 export interface ToolResult {

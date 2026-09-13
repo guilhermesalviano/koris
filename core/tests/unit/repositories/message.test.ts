@@ -22,6 +22,27 @@ function makeRepository(db: any, imageRepo: any = makeImageRepo()) {
 }
 
 describe('MessageRepository', () => {
+  it('deletes a message by id and counts every stored message', () => {
+    const db = makeDb();
+    const repository = makeRepository(db);
+    repository.deleteById('m1');
+    expect(db.run).toHaveBeenCalledWith('DELETE FROM messages WHERE id = ?', ['m1']);
+
+    db.get.mockReturnValue({ total: 42 });
+    expect(repository.count()).toBe(42);
+    db.get.mockReturnValue(undefined);
+    expect(repository.count()).toBe(0);
+  });
+
+  it('spans every peer on a channel when the timeline key has no peer', () => {
+    const db = makeDb([]);
+    const repository = makeRepository(db);
+    repository.getTimeline({ key: { channel: 'negotiator', kind: 'user' }, limit: 10 });
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).not.toContain('s.peer_id = ?');
+    expect(params).toEqual(['negotiator', 'user', 11]);
+  });
+
   it('fetches the latest N messages while returning them in chronological order', () => {
     const db = makeDb([
       {

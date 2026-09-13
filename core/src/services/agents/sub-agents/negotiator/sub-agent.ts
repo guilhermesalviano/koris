@@ -3,19 +3,22 @@ import type { ILogger } from "../../../../infrastructure/logger";
 import { IPromptRepository, PromptRepositoryFactory } from "../../../../repositories/prompt";
 import { getAIProvider } from "../../../providers";
 import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
-import { NEGOTIATOR_INSTRUCTIONS, ERRAND_ACTION_FOLLOWUPS, ERRAND_FOLLOWUP_CONTEXT, ERRAND_OPENER_INSTRUCTIONS, ERRAND_RESUME_INSTRUCTIONS, THIRD_PARTY_CONVERSATION_CONTEXT } from "../../../../constants";
+import { NEGOTIATOR_INSTRUCTIONS, NEGOTIATOR_IMAGE_INSTRUCTION, ERRAND_ACTION_FOLLOWUPS, ERRAND_FOLLOWUP_CONTEXT, ERRAND_OPENER_INSTRUCTIONS, ERRAND_RESUME_INSTRUCTIONS, THIRD_PARTY_CONVERSATION_CONTEXT } from "../../../../constants";
 import { config } from "../../../../config";
 import { replacePlaceholders } from "../../../../utils/prompt";
 import { parseNegotiatorResponse } from "../../../../utils/negotiator-response";
 import { ISessionManager } from "../../../session-manager";
 import { buildErrandService } from "../../../errands";
 import type { Message } from "../../../../entities/message";
+import type { ImageAttachment } from "../../../../types/messages";
 
 export interface NegotiatorTurnProps {
   errandId: string;
   sessionId: string;
   channel: string;
   peerMessage: string;
+  /** Images attached to (or quoted by) the contact's latest message. */
+  peerImages?: ImageAttachment[];
   messageHistory: Message[];
 }
 
@@ -144,7 +147,7 @@ class Negotiator {
     // A further message from the contact is not principal approval. Keep it in
     // the transcript (the gateway persists it), but do not restart a paused or
     // closed negotiation, or send anything before the opener is approved.
-    if (errand.pendingDelivery || (errand.state !== 'open' && errand.state !== 'awaiting_peer')) {
+    if (errand.pendingDelivery || !['open', 'awaiting_peer', 'awaiting_confirmation'].includes(errand.state)) {
       return { reply: '', applied: 'skipped' };
     }
 
@@ -161,6 +164,8 @@ class Negotiator {
 
     const payload = await this.promptRepository.build({
       userMessage: props.peerMessage,
+      images: props.peerImages,
+      imageInstruction: NEGOTIATOR_IMAGE_INSTRUCTION,
       channel: props.channel,
       messageHistory: props.messageHistory,
       historyLimit: config.ERRANDS.HISTORY_LIMIT,
@@ -196,10 +201,8 @@ class Negotiator {
         errandService.escalate(errand.id, verdict.detail || 'The negotiator needs your input.', verdict.notes);
         break;
       case 'resolved':
-        await errandService.resolveWithClosingReply(
-          errand.id, props.sessionId, reply,
-          verdict.detail || verdict.reply || 'Resolved.', verdict.notes,
-        );
+        // The closing message is held until the principal confirms the result.
+        errandService.proposeResolution(errand.id, verdict.detail || verdict.reply || 'Resolved.', reply, verdict.notes);
         return { reply: '', applied: 'resolved' };
       case 'failed':
         errandService.fail(errand.id, verdict.detail || verdict.reply || 'Failed.', verdict.notes);

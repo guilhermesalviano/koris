@@ -57,6 +57,16 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
     summary: 'Show what earlier context I have summarised into this session',
   },
   {
+    name: '/memories',
+    summary: 'List the newest long-term memories the Summarizer has written',
+    usage: '/memories [summary|fact|lesson|reminder] [count]',
+    trusted: true,
+    details:
+      'Newest first, across every session. Filter by type and choose how many to show ' +
+      '(default 10, at most 50), in either order: `/memories lesson 5`. ' +
+      'Unlike /memory, which shows only the summary carried into this session.',
+  },
+  {
     name: '/clear',
     aliases: ['/reset'],
     summary: 'End this session and start a fresh, empty one (no summary kept)',
@@ -137,14 +147,16 @@ export const SLASH_COMMANDS: readonly CommandSpec[] = [
   {
     name: '/errand',
     summary: 'Start or manage a delegated conversation with someone else',
-    usage: '/errand [<goal> with <contact> on <channel>|approve <id>|reply <id> <answer>|retry <id>|close <id>|cancel <id>]',
+    usage: '/errand [<goal> with <contact> on <channel>|approve <id>|reply <id> <answer>|resolve <id>|retry <id>|close <id>|cancel <id>]',
     trusted: true,
     details:
       'Without arguments, lists errands started from this session. ' +
       '`/errand <goal> with <contact> on <channel>` stages a new errand as a draft — ' +
       'it does nothing until approved. `/errand approve <id>` sends the opening message ' +
       'and starts the negotiation; koris then drives it autonomously, escalating back to ' +
-      'you when it needs your input, until it resolves. `/errand close <id>` marks it ' +
+      'you when it needs your input. When the goal looks achieved it waits for you: ' +
+      '`/errand resolve <id>` sends the closing message and resolves it, or `/errand reply <id> <more>` ' +
+      'asks the contact for something more. `/errand close <id>` marks it ' +
       'resolved manually; `/errand cancel <id>` cancels it. `/errand retry <id>` retries a saved pending message only to targets that have not received it.',
   },
   {

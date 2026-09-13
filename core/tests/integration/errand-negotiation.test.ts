@@ -119,6 +119,7 @@ describe('errand negotiation across contact and parent sessions', () => {
       JSON.stringify({ action: 'escalate', reply: 'I will check which time works and get back to you.', notes: 'Saturday 11 or 14 for $25; waiting for principal to choose.', detail: approvalQuestion }),
       'Alex approved Saturday at 11 for $25. Could you confirm that booking?',
       JSON.stringify({ action: 'resolved', reply: 'Thank you, see you then!', notes: 'Principal approved 11; contact confirmed booking.', detail: 'Haircut confirmed Saturday at 11 for $25.' }),
+      JSON.stringify({ action: 'continue', reply: 'Just the haircut, thanks.', notes: 'Principal approved 11; contact confirmed booking. Waiting for principal confirmation.' }),
     ];
     const completion = {
       complete: vi.fn(async (request: AIChatRequest) => {
@@ -172,10 +173,12 @@ describe('errand negotiation across contact and parent sessions', () => {
     expect(requests[3].messages.map((m) => m.content)).toContain(clarification);
     expect(errands.get(errand.id)?.state).toBe('awaiting_principal');
     expect(errands.get(errand.id)?.pendingMessage).toBe(approvalQuestion);
-    const parentNotices = messages.getBySessionId(parent.id);
+    expect(messages.getBySessionId(parent.id)).toEqual([]);
+    const negotiation = SessionRepositoryFactory.create(db).findLatestOpen({ channel: 'negotiator', peerId: errand.id, kind: 'user' });
+    const parentNotices = messages.getBySessionId(negotiation!.id);
     expect(parentNotices).toHaveLength(1);
     expect(parentNotices[0].content).toContain(approvalQuestion);
-    expect(parentNotices[0].content).toContain(`/errand reply ${errand.id}`);
+    expect(parentNotices[0].content).not.toContain('/errand reply');
 
     const callsBeforePause = completion.complete.mock.calls.length;
     expect(await peer('14 is now taken, but 11 is still free.')).toBe('');
@@ -190,6 +193,22 @@ describe('errand negotiation across contact and parent sessions', () => {
     expect(errands.get(errand.id)?.pendingMessage).toBeUndefined();
     expect(errands.get(errand.id)?.state).toBe('awaiting_peer');
 
+    // The goal looks achieved: the thank-you is held until the principal confirms.
+    expect(await peer('Confirmed for Saturday at 11, $25.')).toBe('');
+    expect(channels.sendMessage).not.toHaveBeenCalledWith('whatsapp', '555', 'Thank you, see you then!');
+    expect(errands.get(errand.id)).toMatchObject({
+      state: 'awaiting_confirmation', pendingMessage: 'Haircut confirmed Saturday at 11 for $25.', closingReply: 'Thank you, see you then!',
+    });
+    expect(requests[5].messages[0].content).toContain('Principal answer: "11 works for me; please book it."');
+    expect(requests[5].messages.map((m) => m.content)).toContain('Alex approved Saturday at 11 for $25. Could you confirm that booking?');
+    expect(messages.getBySessionId(negotiation!.id).at(-1)?.content).toBe('🏁 Errand "' + goal + '" looks done: Haircut confirmed Saturday at 11 for $25.');
+
+    // The contact writes while confirmation is pending: the Negotiator still replies, and it keeps waiting.
+    expect(await peer('Anything else you need?')).toBe('Just the haircut, thanks.');
+    expect(requests[6].messages[0].content).toContain('awaiting_confirmation');
+    expect(errands.get(errand.id)?.state).toBe('awaiting_confirmation');
+
+    // The principal confirms: the held thank-you goes out first, then the errand resolves.
     let finishDelivery!: () => void;
     const deliveryStarted = new Promise<void>((started) => {
       channels.sendMessage.mockImplementationOnce(() => {
@@ -197,21 +216,16 @@ describe('errand negotiation across contact and parent sessions', () => {
         return new Promise<void>((resolve) => { finishDelivery = resolve; });
       });
     });
-    const finalTurn = peer('Confirmed for Saturday at 11, $25.');
+    const confirmation = errands.confirmResolution(errand.id);
     await deliveryStarted;
     expect(channels.sendMessage).toHaveBeenLastCalledWith('whatsapp', '555', 'Thank you, see you then!');
-    expect(errands.get(errand.id)?.state).toBe('awaiting_peer');
-    expect(messages.getBySessionId(parent.id).some((m) => m.content.includes('Haircut confirmed Saturday at 11'))).toBe(false);
+    expect(errands.get(errand.id)?.state).toBe('awaiting_confirmation');
     finishDelivery();
-    expect(await finalTurn).toBe('');
-    expect(messages.getBySessionId(delegatedId).slice(-2).map((m) => m.content)).toEqual([
-      'Confirmed for Saturday at 11, $25.', 'Thank you, see you then!',
-    ]);
+    expect(await confirmation).toMatchObject({ state: 'resolved', result: 'Haircut confirmed Saturday at 11 for $25.', closingReply: undefined });
     expect(messages.getBySessionId(delegatedId).filter((m) => m.content === 'Thank you, see you then!')).toHaveLength(1);
-    expect(requests[5].messages[0].content).toContain('Principal answer: "11 works for me; please book it."');
-    expect(requests[5].messages.map((m) => m.content)).toContain('Alex approved Saturday at 11 for $25. Could you confirm that booking?');
-    expect(errands.get(errand.id)?.state).toBe('resolved');
-    expect(messages.getBySessionId(parent.id).some((m) => m.content.includes('Haircut confirmed Saturday at 11'))).toBe(true);
+    expect(messages.getBySessionId(negotiation!.id).map((m) => m.role)).toEqual(['assistant', 'user', 'assistant', 'assistant']);
+    expect(messages.getBySessionId(negotiation!.id).at(-1)?.content).toContain('resolved: Haircut confirmed Saturday at 11');
+    expect(messages.getBySessionId(parent.id)).toEqual([]);
     expect(db.get<{ total: number }>("SELECT COUNT(*) AS total FROM sessions WHERE kind = 'delegated'")?.total).toBe(1);
     expect(mainAgent.run).not.toHaveBeenCalled();
     expect(responses).toHaveLength(0);

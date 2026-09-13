@@ -29,6 +29,20 @@ export interface OverviewResponse {
   recentErrors: AuditItem[];
 }
 
+export type AgentId = 'orchestrator' | 'negotiator' | 'watcher';
+
+export interface AgentSummary {
+  id: AgentId;
+  name: string;
+  description: string;
+  parentId: AgentId | null;
+  messageable: boolean;
+}
+
+export interface AgentsResponse {
+  items: AgentSummary[];
+}
+
 export type SessionKind = 'user' | 'delegated';
 
 export interface SessionSummary {
@@ -56,6 +70,7 @@ export type ErrandState =
   | 'open'
   | 'awaiting_peer'
   | 'awaiting_principal'
+  | 'awaiting_confirmation'
   | 'resolved'
   | 'failed'
   | 'cancelled'
@@ -91,7 +106,38 @@ export interface ErrandTranscriptMessage {
   sessionId: string;
   role: string;
   content: string;
+  images?: ImageAttachment[];
+  /** Attached images that have since been deleted. */
+  missingImages?: number;
   createdAt: string;
+}
+
+/** A message of an errand's negotiation session: a Negotiator notice or the principal's answer. */
+export interface NegotiatorNotice {
+  id: string;
+  role: string;
+  content: string;
+  senderAgentId?: AgentId;
+  createdAt: string;
+  errandId: string | null;
+}
+
+/** An errand waiting on the principal's answer, returned with the notices. */
+export interface NegotiatorPendingQuestion {
+  errandId: string;
+  goal: string;
+  /** A question to answer, or a proposed result to confirm (or add requirements to). */
+  kind: 'question' | 'confirmation';
+  question: string | null;
+  askedAt: string;
+}
+
+export interface NegotiatorNoticesResponse {
+  messages: NegotiatorNotice[];
+  pending: NegotiatorPendingQuestion[];
+  /** Changes whenever anything the errand list shows changes (status, progress, delivery, messages). */
+  errandsVersion: string;
+  nextCursor: string | null;
 }
 
 export interface ErrandTranscriptResponse {
@@ -156,6 +202,24 @@ export interface HeartbeatItem {
 
 export interface HeartbeatsResponse {
   items: HeartbeatItem[];
+}
+
+/** One executed beat (`GET /heartbeats/runs`), kept even after a run-once beat is deleted. */
+export interface BeatRunItem {
+  id: string;
+  beatId: string;
+  beat: string;
+  type: string;
+  status: 'success' | 'error';
+  result: string | null;
+  errorMessage: string | null;
+  startedAt: string;
+  finishedAt: string;
+  tools: { name: string; status: string }[];
+}
+
+export interface BeatRunsResponse {
+  items: BeatRunItem[];
 }
 
 export interface ChannelItem {

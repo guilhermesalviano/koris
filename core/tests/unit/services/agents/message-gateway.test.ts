@@ -5,6 +5,7 @@ import { config } from '../../../../src/config';
 import { applyTestConfigDefaults } from '../../../helpers/test-config';
 import type { ILogger } from '../../../../src/infrastructure/logger';
 import { buildErrandService } from '../../../../src/services/errands';
+import { Errand } from '../../../../src/entities/errand';
 
 vi.mock('../../../../src/services/errands', () => ({ buildErrandService: vi.fn() }));
 
@@ -71,7 +72,7 @@ describe('MessageGateway', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     applyTestConfigDefaults();
-    vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null) } as never);
+    vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), reopenForPeer: vi.fn().mockReturnValue(null), listByOrigin: vi.fn().mockReturnValue([]) } as never);
   });
 
   afterEach(() => {
@@ -328,7 +329,7 @@ describe('MessageGateway', () => {
         channel: 'tui',
         memoryService: deps.memoryService,
       });
-      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith({ compactSummary: 'we covered X' });
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith('compact', { compactSummary: 'we covered X' });
       expect(deps.messageService.save).toHaveBeenCalledWith({
         role: 'assistant',
         content: 'Compacting session — starting a fresh one with a summary of what we covered.',
@@ -356,7 +357,7 @@ describe('MessageGateway', () => {
 
       await gateway.handle('/compact', 'origin-1');
 
-      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith(undefined);
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith('compact', {});
       expect(deps.messageService.save).toHaveBeenCalledWith({
         role: 'assistant',
         content: 'Compacting session — starting a fresh one with a summary of what we covered.',
@@ -394,7 +395,7 @@ describe('MessageGateway', () => {
 
       expect(deps.mainAgent.run).not.toHaveBeenCalled();
       expect(deps.backgroundDispatcher.compactConversation).not.toHaveBeenCalled();
-      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith();
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith('clear', undefined);
       expect(onSessionRotated).toHaveBeenCalledWith('session-2');
       expect(deps.backgroundDispatcher.persistConversation).toHaveBeenCalledWith(
         expect.objectContaining({ sessionId: 'session-1', ask: '/clear' }),
@@ -420,7 +421,7 @@ describe('MessageGateway', () => {
 
       await gateway.handle('/clear', 'origin-1', { onSessionRotated: vi.fn() });
 
-      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith({ responseMode: 'voice' });
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith('clear', { responseMode: 'voice' });
     });
   });
 
@@ -513,7 +514,7 @@ describe('MessageGateway', () => {
       expect(deps.backgroundDispatcher.compactConversation).toHaveBeenCalledWith(
         expect.objectContaining({ sessionId: 'session-1' }),
       );
-      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith({ compactSummary: 'we covered X' });
+      expect(deps.sessionService.forceRotate).toHaveBeenCalledWith('compact', { compactSummary: 'we covered X' });
       expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
       expect(result).toBe('assistant reply');
       expect(onProgress).toHaveBeenCalledWith(expect.stringContaining('summarized'));
@@ -605,6 +606,51 @@ describe('MessageGateway', () => {
       expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
     });
 
+    it('tells a trusted turn about the chat\'s pending errand questions so a plain reply can answer them', async () => {
+      const { gateway, deps } = makeGateway('whatsapp');
+      const listByOrigin = vi.fn().mockReturnValue([
+        new Errand({ id: 'e1', goal: 'Book a class', state: 'awaiting_principal', originSessionId: 'session-1', pendingMessage: 'Wednesday instead?' }),
+        new Errand({ id: 'e2', goal: 'Old errand', state: 'resolved', originSessionId: 'session-1' }),
+      ]);
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), reopenForPeer: vi.fn().mockReturnValue(null), listByOrigin } as never);
+
+      await gateway.handle('sim', 'origin-1', { toolsEnabled: true, isTrustedSender: true });
+
+      expect(listByOrigin).toHaveBeenCalledWith('session-1');
+      const [block] = deps.mainAgent.run.mock.calls[0][0].options.skillBlocks;
+      expect(block).toContain('# Errands In This Chat');
+      expect(block).toContain('[e1] waiting on the human\'s answer — Book a class');
+      expect(block).toContain('Pending question: Wednesday instead?');
+      expect(block).not.toContain('Old errand');
+    });
+
+    it('keeps pending questions out of a web Orchestrator turn, since they are answered on the Negotiator page', async () => {
+      const { gateway, deps } = makeGateway('web');
+      const listByOrigin = vi.fn().mockReturnValue([
+        new Errand({ id: 'e1', goal: 'Book a class', state: 'awaiting_principal', originSessionId: 'session-1', pendingMessage: 'Wednesday instead?' }),
+        new Errand({ id: 'e2', goal: 'Buy milk', state: 'draft', originSessionId: 'session-1', pendingMessage: 'Hi!' }),
+      ]);
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), reopenForPeer: vi.fn().mockReturnValue(null), listByOrigin } as never);
+
+      await gateway.handle('sim', 'web', { toolsEnabled: true });
+
+      const [block] = deps.mainAgent.run.mock.calls[0][0].options.skillBlocks;
+      expect(block).toContain('Draft opener: Hi!');
+      expect(block).not.toContain('Wednesday instead?');
+    });
+
+    it('adds no errand block without open errands or without tools', async () => {
+      const { gateway, deps } = makeGateway('whatsapp');
+      await gateway.handle('hello', 'origin-1', { toolsEnabled: true, isTrustedSender: true });
+      expect(deps.mainAgent.run.mock.calls[0][0].options.skillBlocks).toBeUndefined();
+
+      const listByOrigin = vi.fn().mockReturnValue([new Errand({ id: 'e1', goal: 'Book', state: 'awaiting_principal', originSessionId: 'session-1' })]);
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), reopenForPeer: vi.fn().mockReturnValue(null), listByOrigin } as never);
+      await gateway.handle('hello', 'origin-1', { toolsEnabled: false, isTrustedSender: false });
+      expect(listByOrigin).not.toHaveBeenCalled();
+      expect(deps.mainAgent.run.mock.calls[1][0].options.skillBlocks).toBeUndefined();
+    });
+
     it('an untrusted sender with no active errand gets today\'s behaviour: routed to the user session, tools disabled by the caller', async () => {
       const { gateway, deps, negotiator } = makeGateway('whatsapp');
 
@@ -615,6 +661,45 @@ describe('MessageGateway', () => {
         { channel: 'whatsapp', peerId: 'origin-1', kind: 'user' },
         undefined,
       );
+      expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
+    });
+
+    it('an untrusted contact of a recently resolved errand reopens it, is recorded in its contact session and gets no reply', async () => {
+      const { gateway, deps, negotiator } = makeGateway('whatsapp');
+      const reopenForPeer = vi.fn().mockReturnValue({ errand: { id: 'errand-1' }, sessionId: 'delegated-session' });
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), reopenForPeer } as never);
+
+      const result = await gateway.handle('Can I add a drink?', 'origin-1', { isTrustedSender: false, peerAliases: ['555@s.whatsapp.net'] });
+
+      expect(reopenForPeer).toHaveBeenCalledWith('whatsapp', 'origin-1', 'Can I add a drink?', ['555@s.whatsapp.net']);
+      expect(deps.sessionContextFactory.resolve).toHaveBeenCalledWith({ channel: 'whatsapp', peerId: 'origin-1', kind: 'delegated' }, 'delegated-session');
+      expect(deps.messageService.save).toHaveBeenCalledExactlyOnceWith({ role: 'user', content: 'Can I add a drink?', images: undefined });
+      expect(result).toBe('');
+      expect(negotiator.run).not.toHaveBeenCalled();
+      expect(deps.mainAgent.run).not.toHaveBeenCalled();
+    });
+
+    it('hands the contact\'s images to the negotiator and keeps them in the contact session', async () => {
+      const { gateway, deps, negotiator } = makeGateway('whatsapp');
+      vi.mocked(buildErrandService).mockReturnValue({
+        findActiveForPeer: vi.fn().mockReturnValue({ errand: { id: 'errand-1' }, sessionId: 'delegated-session' }),
+      } as never);
+      const images = [{ data: 'bWVudQ==', mimeType: 'image/jpeg' }];
+
+      await gateway.handle({ text: 'Segue o cardápio', images }, 'origin-1', { isTrustedSender: false });
+
+      expect(deps.messageService.save).toHaveBeenCalledWith({ role: 'user', content: 'Segue o cardápio', images });
+      expect(negotiator.run).toHaveBeenCalledWith(expect.objectContaining({ peerMessage: 'Segue o cardápio', peerImages: images }));
+    });
+
+    it('a trusted sender never reopens a resolved errand', async () => {
+      const { gateway, deps } = makeGateway('whatsapp');
+      const reopenForPeer = vi.fn();
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), reopenForPeer, listByOrigin: vi.fn().mockReturnValue([]) } as never);
+
+      await gateway.handle('hello', 'origin-1', { isTrustedSender: true });
+
+      expect(reopenForPeer).not.toHaveBeenCalled();
       expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
     });
 
@@ -639,6 +724,16 @@ describe('MessageGateway', () => {
       });
       expect(result).toBe('negotiator reply');
       expect(deps.mainAgent.run).not.toHaveBeenCalled();
+    });
+
+    it('looks the errand up by the contact\'s other channel addresses too', async () => {
+      const { gateway } = makeGateway('whatsapp');
+      const findActiveForPeer = vi.fn().mockReturnValue(null);
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer, reopenForPeer: vi.fn().mockReturnValue(null) } as never);
+
+      await gateway.handle('hello', '141789856067723@lid', { isTrustedSender: false, peerAliases: ['555@s.whatsapp.net'] });
+
+      expect(findActiveForPeer).toHaveBeenCalledWith('whatsapp', '141789856067723@lid', ['555@s.whatsapp.net']);
     });
 
     it('a trusted contact can still run commands in their own user session', async () => {

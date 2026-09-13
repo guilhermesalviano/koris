@@ -10,6 +10,7 @@ interface ErrandRow {
   origin_session_id: string;
   pending_message?: string;
   pending_delivery?: string;
+  closing_reply?: string;
   notes?: string;
   result?: string;
   created_at: string;
@@ -21,7 +22,7 @@ interface ErrandRow {
 // holding pen and the terminal states. At most one of these may exist per
 // target session at a time (enforced by `ErrandService`, not the schema:
 // the predicate lives on `errands.state`, not `errand_targets`).
-const ACTIVE_STATES: ErrandState[] = ['draft', 'open', 'awaiting_peer', 'awaiting_principal'];
+const ACTIVE_STATES: ErrandState[] = ['draft', 'open', 'awaiting_peer', 'awaiting_principal', 'awaiting_confirmation'];
 
 interface IErrandRepository {
   save(errand: Errand): void;
@@ -31,6 +32,8 @@ interface IErrandRepository {
   findNextQueuedBySessionId(sessionId: string): Errand | null;
   findActiveByPeer(channel: string, peerIds: string[]): { errand: Errand; sessionId: string } | null;
   findNextQueuedByPeer(channel: string, peerIds: string[]): Errand | null;
+  /** The contact's most recently closed `resolved` errand, with its contact session. */
+  findLatestResolvedByPeer(channel: string, peerIds: string[]): { errand: Errand; sessionId: string } | null;
   findByOriginSessionId(originSessionId: string): Errand[];
   findAll(state?: ErrandState, limit?: number, offset?: number): Errand[];
   addTarget(errandId: string, sessionId: string): void;
@@ -46,6 +49,7 @@ function mapRowToErrand(row: ErrandRow): Errand {
     originSessionId: row.origin_session_id,
     pendingMessage: row.pending_message ?? undefined,
     pendingDelivery: row.pending_delivery ? JSON.parse(row.pending_delivery) : undefined,
+    closingReply: row.closing_reply ?? undefined,
     notes: row.notes ?? undefined,
     result: row.result ?? undefined,
     createdAt: row.created_at,
@@ -59,8 +63,8 @@ class ErrandRepository implements IErrandRepository {
 
   save(errand: Errand): void {
     this.db.run(
-      `INSERT INTO errands (id, goal, state, origin_session_id, pending_message, notes, result, created_at, last_progress_at, closed_at, pending_delivery)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO errands (id, goal, state, origin_session_id, pending_message, notes, result, created_at, last_progress_at, closed_at, pending_delivery, closing_reply)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         errand.id,
         errand.goal,
@@ -73,6 +77,7 @@ class ErrandRepository implements IErrandRepository {
         errand.lastProgressAt ?? null,
         errand.closedAt ?? null,
         errand.pendingDelivery ? JSON.stringify(errand.pendingDelivery) : null,
+        errand.closingReply ?? null,
       ],
     );
   }
@@ -160,6 +165,20 @@ class ErrandRepository implements IErrandRepository {
       [channel, ...peerIds],
     ) as ErrandRow | undefined;
     return row ? mapRowToErrand(row) : null;
+  }
+
+  findLatestResolvedByPeer(channel: string, peerIds: string[]): { errand: Errand; sessionId: string } | null {
+    if (!peerIds.length) return null;
+    const row = this.db.get(
+      `SELECT e.*, s.id AS target_session_id FROM errands e
+       JOIN errand_targets t ON t.errand_id = e.id
+       JOIN sessions s ON s.id = t.session_id
+       WHERE s.channel = ? AND s.peer_id IN (${peerIds.map(() => '?').join(', ')})
+         AND s.kind = 'delegated' AND s.ended_at IS NULL AND e.state = 'resolved'
+       ORDER BY e.closed_at DESC, e.rowid DESC LIMIT 1`,
+      [channel, ...peerIds],
+    ) as (ErrandRow & { target_session_id: string }) | undefined;
+    return row ? { errand: mapRowToErrand(row), sessionId: row.target_session_id } : null;
   }
 
   findAll(state?: ErrandState, limit = 50, offset = 0): Errand[] {

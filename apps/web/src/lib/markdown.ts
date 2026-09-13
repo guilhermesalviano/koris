@@ -10,7 +10,7 @@ export function escapeHtml(value: string): string {
  * vanilla-JS chat UI (public/chat/main.js) to avoid pulling in a new
  * dependency for a small, well-understood feature set.
  */
-export function renderMarkdown(raw: string): string {
+export function renderMarkdown(raw: string, origin: string | undefined = globalThis.location?.origin): string {
   let s = escapeHtml(raw);
 
   s = s.replace(/```(\w*)\n?([\s\S]*?)```/g, (_match, lang: string, code: string) => {
@@ -48,7 +48,41 @@ export function renderMarkdown(raw: string): string {
     })
     .join('');
 
-  return s;
+  return linkify(s, origin);
+}
+
+// `"` stays out of the URL so it can never close the href attribute; the input is already HTML-escaped.
+const URL_PATTERN = 'https?:\\/\\/[^\\s<>"]+';
+const MARKDOWN_LINK = new RegExp(`\\[([^\\]\\n]+)\\]\\((${URL_PATTERN}?)\\)`, 'g');
+const BARE_URL = new RegExp(`(<a [^>]*>[\\s\\S]*?<\\/a>)|(${URL_PATTERN})`, 'g');
+const CODE_SEGMENT = /(<pre[\s\S]*?<\/pre>|<code>[\s\S]*?<\/code>)/;
+
+/** Links back into this app (e.g. the Negotiator page) open in place; anything else opens in a new tab. */
+function anchor(href: string, text: string, origin: string | undefined): string {
+  const internal = Boolean(origin) && (href === origin || href.startsWith(`${origin}/`));
+  return internal
+    ? `<a href="${href}">${text}</a>`
+    : `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+}
+
+/** Turns `[text](url)` and bare http(s) URLs into links, leaving code untouched. */
+function linkify(html: string, origin: string | undefined): string {
+  const link = (href: string, text: string) => anchor(href, text, origin);
+  return html
+    .split(CODE_SEGMENT)
+    .map((part, index) => {
+      if (index % 2 === 1) return part;
+      return part
+        .replace(MARKDOWN_LINK, (_match, text: string, href: string) => link(href, text))
+        .replace(BARE_URL, (match, existing: string | undefined) => {
+          if (existing) return existing;
+          // Sentence punctuation right after a URL is not part of it.
+          const trailing = /[.,;:!?)]+$/.exec(match)?.[0] ?? '';
+          const href = match.slice(0, match.length - trailing.length);
+          return link(href, href) + trailing;
+        });
+    })
+    .join('');
 }
 
 /**

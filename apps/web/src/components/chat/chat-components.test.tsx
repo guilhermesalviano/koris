@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { DateSeparator } from './DateSeparator';
 import { MessageBubble } from './MessageBubble';
+import { cycleIndex } from './shared';
 import type { ChatMessage } from '../../lib/chat-context';
 
 describe('DateSeparator', () => {
@@ -9,6 +10,22 @@ describe('DateSeparator', () => {
     const html = renderToStaticMarkup(<DateSeparator label="Today" />);
     expect(html).toContain('Today');
     expect(html).toContain('uppercase text-txt-3');
+    expect(html).not.toContain('<details');
+  });
+
+  it('renders a session boundary in the accent tone', () => {
+    const html = renderToStaticMarkup(<DateSeparator label="Cleared · Today 2:14 PM" session />);
+    expect(html).toContain('Cleared · Today 2:14 PM');
+    expect(html).toContain('uppercase text-accent-2');
+    expect(html).not.toContain('<details');
+  });
+
+  it('offers the carried-over summary of a compacted session, collapsed', () => {
+    const html = renderToStaticMarkup(<DateSeparator label="Compacted · Today" session summary="We planned the trip." />);
+    expect(html).toContain('<details');
+    expect(html).not.toContain('<details open');
+    expect(html).toContain('Show carried-over summary');
+    expect(html).toContain('We planned the trip.');
   });
 });
 
@@ -204,5 +221,14 @@ describe('MessageBubble', () => {
       />,
     );
     expect(htmlLoading).toContain('Loading…');
+  });
+});
+
+describe('cycleIndex', () => {
+  it('steps through a set and wraps at both ends', () => {
+    expect(cycleIndex(0, 1, 3)).toBe(1);
+    expect(cycleIndex(2, 1, 3)).toBe(0);
+    expect(cycleIndex(0, -1, 3)).toBe(2);
+    expect(cycleIndex(0, 1, 0)).toBe(0);
   });
 });

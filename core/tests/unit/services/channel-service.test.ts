@@ -76,6 +76,15 @@ describe('ChannelService', () => {
     expect(service.getAll()).toEqual(channels);
   });
 
+  it('getByChannel returns the channels for one channel type from the repository', () => {
+    const whatsapp = makeChannel({ channel: 'whatsapp', target: '5511@s.whatsapp.net' });
+    const repo = makeRepo({ byChannel: [whatsapp] });
+    const service = new ChannelService(repo as never);
+
+    expect(service.getByChannel('whatsapp')).toEqual([whatsapp]);
+    expect(repo.getByChannel).toHaveBeenCalledWith('whatsapp');
+  });
+
   it('setPrincipal delegates to the repository', () => {
     const principal = makeChannel({ channel: 'whatsapp', target: '5511@s.whatsapp.net', isPrincipal: true });
     const repo = makeRepo({ setPrincipal: principal });

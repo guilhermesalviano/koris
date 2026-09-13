@@ -3,7 +3,7 @@ import { IDatabaseService } from '../../infrastructure/db-sqlite';
 import { config } from '../../config';
 import { Errand, ErrandProps } from '../../entities/errand';
 import { Session } from '../../entities/session';
-import { ErrandSessionMetadata } from '../../types/session';
+import { ErrandSessionMetadata, NEGOTIATION_CHANNEL, NegotiationSessionMetadata, SessionKey } from '../../types/session';
 import { THIRD_PARTY_CONVERSATION_CONTEXT } from '../../constants';
 import { IErrandRepository, ErrandRepositoryFactory } from '../../repositories/errand';
 import { ISessionRepository, SessionRepositoryFactory } from '../../repositories/session';
@@ -17,12 +17,19 @@ import { ErrandDelivery, ErrandState, ERRAND_OPEN_STATES } from '../../types/err
 import { generateId } from '../../utils/generate-id';
 import { runErrandOperation } from './operations';
 
-const NEGOTIATING_STATES: ErrandState[] = ['open', 'awaiting_peer', 'awaiting_principal'];
-const NON_TERMINAL_STATES: ErrandState[] = ['draft', 'queued', 'open', 'awaiting_peer', 'awaiting_principal'];
+const NEGOTIATING_STATES: ErrandState[] = ['open', 'awaiting_peer', 'awaiting_principal', 'awaiting_confirmation'];
+const NON_TERMINAL_STATES: ErrandState[] = ['draft', 'queued', 'open', 'awaiting_peer', 'awaiting_principal', 'awaiting_confirmation'];
+/** States the principal's answer can resume: a pending question, or extra requirements for a proposed result. */
+const ANSWERABLE_STATES: ErrandState[] = ['awaiting_principal', 'awaiting_confirmation'];
 
 export interface ErrandTargetRef {
   channel: string;
   peerId: string;
+}
+
+/** Session key of an errand's own principal-facing session. */
+function negotiationSessionKey(errandId: string): Required<SessionKey> {
+  return { channel: NEGOTIATION_CHANNEL, peerId: errandId, kind: 'user' };
 }
 
 function isDeliverableChannel(channel: string): boolean {
@@ -33,9 +40,9 @@ function isDeliverableChannel(channel: string): boolean {
 // when checking contention and promoting a queued errand, too.
 function peerAliases(channel: string, peerId: string): string[] {
   if (channel !== 'whatsapp') return [peerId];
-  return [peerId, peerId.endsWith('@s.whatsapp.net')
-    ? peerId.replace(/@s\.whatsapp\.net$/, '')
-    : `${peerId}@s.whatsapp.net`];
+  if (peerId.endsWith('@s.whatsapp.net')) return [peerId, peerId.replace(/@s\.whatsapp\.net$/, '')];
+  // Other JIDs (`@lid`, `@g.us`) have no bare-number form.
+  return peerId.includes('@') ? [peerId] : [peerId, `${peerId}@s.whatsapp.net`];
 }
 
 interface IErrandService {
@@ -45,7 +52,8 @@ interface IErrandService {
   recordPeerReply(id: string, notes?: string): Errand;
   escalate(id: string, question: string, notes?: string): Errand;
   resolve(id: string, result: string, notes?: string): Errand;
-  resolveWithClosingReply(id: string, sessionId: string, reply: string, result: string, notes?: string): Promise<Errand>;
+  proposeResolution(id: string, result: string, closingReply: string, notes?: string): Errand;
+  confirmResolution(id: string): Promise<Errand>;
   fail(id: string, reason: string, notes?: string): Errand;
   cancel(id: string): Errand;
   hydrate(errand: Errand): Errand;
@@ -53,7 +61,8 @@ interface IErrandService {
   listByOrigin(originSessionId: string): Errand[];
   listAll(state?: ErrandState, limit?: number, offset?: number): Errand[];
   resumeWithPrincipalAnswer(id: string, answer: string): Promise<{ errand: Errand; reply: string }>;
-  findActiveForPeer(channel: string, peerId: string): { errand: Errand; sessionId: string } | null;
+  findActiveForPeer(channel: string, peerId: string, otherPeerIds?: string[]): { errand: Errand; sessionId: string } | null;
+  reopenForPeer(channel: string, peerId: string, contactMessage: string, otherPeerIds?: string[]): { errand: Errand; sessionId: string } | null;
 }
 
 class ErrandService implements IErrandService {
@@ -125,7 +134,8 @@ class ErrandService implements IErrandService {
   recordPeerReply(id: string, notes?: string): Errand {
     const errand = this.mustFind(id);
     return this.transition(errand, {
-      state: 'awaiting_peer',
+      // Small talk while a proposed result waits for confirmation keeps it waiting.
+      state: errand.state === 'awaiting_confirmation' ? 'awaiting_confirmation' : 'awaiting_peer',
       notes: notes ?? errand.notes,
       lastProgressAt: nowISO(),
     });
@@ -136,13 +146,11 @@ class ErrandService implements IErrandService {
     const updated = this.transition(errand, {
       state: 'awaiting_principal',
       pendingMessage: question,
+      closingReply: undefined,
       notes: notes ?? errand.notes,
       lastProgressAt: nowISO(),
     });
-    this.pushToSession(
-      errand.originSessionId,
-      `❓ Errand "${errand.goal}" needs your input: ${question}\n\nReply with: \`/errand reply ${errand.id} <your answer>\``,
-    );
+    this.pushToSession(errand, `❓ Errand "${errand.goal}" needs your input: ${question}`);
     return updated;
   }
 
@@ -151,27 +159,46 @@ class ErrandService implements IErrandService {
     return this.close(errand, 'resolved', result, notes, `✅ Errand "${errand.goal}" resolved: ${result}`);
   }
 
-  async resolveWithClosingReply(id: string, sessionId: string, reply: string, result: string, notes?: string): Promise<Errand> {
+  // The Negotiator believes the goal is achieved: hold its closing message and
+  // ask the principal to confirm before anything more is sent to the contact.
+  proposeResolution(id: string, result: string, closingReply: string, notes?: string): Errand {
     const errand = this.mustFind(id);
-    if (errand.state !== 'open' && errand.state !== 'awaiting_peer') return errand;
-    if (!this.errandRepository.findTargets(id).includes(sessionId)) {
-      throw new Error(`Session ${sessionId} is not a target of errand ${id}.`);
-    }
-    const session = this.sessionRepository.findById(sessionId);
-    if (!session) throw new Error(`Errand target session not found: ${sessionId}`);
-    const delivery = await this.outboundMessageService.send({
-      channel: session.channel,
-      target: session.peerId,
-      kind: session.kind,
-      sessionId,
-      content: reply,
+    const updated = this.transition(errand, {
+      state: 'awaiting_confirmation',
+      pendingMessage: result,
+      closingReply,
+      notes: notes ?? errand.notes,
+      lastProgressAt: nowISO(),
     });
-    if (delivery.status !== 'sent') {
-      throw new Error(`Could not deliver the closing reply for errand ${id}.`);
-    }
-    const latest = this.mustFind(id);
-    if (latest.state !== errand.state) return latest;
-    return this.resolve(id, result, notes);
+    this.pushToSession(errand, `🏁 Errand "${errand.goal}" looks done: ${result}`);
+    return updated;
+  }
+
+  // The principal confirmed the proposed result: send the held closing message
+  // to every contact, then resolve. A failed delivery leaves it waiting.
+  confirmResolution(id: string): Promise<Errand> {
+    return runErrandOperation(id, async () => {
+      const errand = this.mustFind(id);
+      if (errand.state !== 'awaiting_confirmation') {
+        throw new Error(`Errand ${id} is not waiting for your confirmation (state=${errand.state}).`);
+      }
+      const reply = errand.closingReply?.trim();
+      if (reply) {
+        for (const sessionId of this.errandRepository.findTargets(id)) {
+          const session = this.sessionRepository.findById(sessionId);
+          if (!session) throw new Error(`Errand target session not found: ${sessionId}`);
+          const delivery = await this.outboundMessageService.send({
+            channel: session.channel, target: session.peerId, kind: session.kind, sessionId, content: reply,
+          });
+          if (delivery.status !== 'sent') {
+            throw new Error(`Could not deliver the closing message for errand ${id}. It is still waiting for your confirmation.`);
+          }
+        }
+      }
+      const latest = this.mustFind(id);
+      if (latest.state !== 'awaiting_confirmation') return latest;
+      return this.resolve(id, latest.pendingMessage || 'Resolved.');
+    }, true);
   }
 
   fail(id: string, reason: string, notes?: string): Errand {
@@ -222,7 +249,7 @@ class ErrandService implements IErrandService {
 
   private async prepareResume(id: string, answer: string): Promise<{ errand: Errand; reply: string }> {
     const errand = this.mustFind(id);
-    if (errand.state !== 'awaiting_principal') {
+    if (!ANSWERABLE_STATES.includes(errand.state)) {
       throw new Error(`Errand ${id} is not awaiting your input (state=${errand.state}).`);
     }
     this.ensureNoDelivery(errand);
@@ -243,14 +270,16 @@ class ErrandService implements IErrandService {
       goal: errand.goal,
       notes: errand.notes,
       answer,
-      question: errand.pendingMessage,
+      question: errand.state === 'awaiting_confirmation'
+        ? `The goal looked achieved (${errand.pendingMessage ?? 'no summary'}). Did the human confirm it, or add something it still needs?`
+        : errand.pendingMessage,
       channel: targetSession?.channel ?? 'unknown',
       sessionId: targetSessionIds[0],
       messageHistory,
     });
 
     const latest = this.mustFind(id);
-    if (latest.state !== 'awaiting_principal' || latest.pendingMessage !== errand.pendingMessage) {
+    if (latest.state !== errand.state || latest.pendingMessage !== errand.pendingMessage) {
       throw new Error(`Errand ${id} changed while composing the reply. Review its current state before answering again.`);
     }
 
@@ -272,7 +301,7 @@ class ErrandService implements IErrandService {
 
   private async deliverPrepared(errand: Errand): Promise<Errand> {
     const batch = errand.pendingDelivery;
-    if (!batch || errand.state !== (batch.type === 'opener' ? 'draft' : 'awaiting_principal')) {
+    if (!batch || (batch.type === 'opener' ? errand.state !== 'draft' : !ANSWERABLE_STATES.includes(errand.state))) {
       throw new Error('This errand has no retryable delivery.');
     }
     const current = () => {
@@ -311,11 +340,14 @@ class ErrandService implements IErrandService {
       ? (latest.notes ? latest.notes + '\n' : '') + `Principal answer: "${batch.answer}"`
       : latest.notes;
     const updated = this.transition(latest, {
-      state: 'awaiting_peer', pendingMessage: undefined, pendingDelivery: undefined,
+      state: 'awaiting_peer', pendingMessage: undefined, pendingDelivery: undefined, closingReply: undefined,
       notes, lastProgressAt: nowISO(),
     });
-    if (batch.type === 'resume') {
-      this.pushToSession(errand.originSessionId, `📤 Errand "${errand.goal}" resumed. Sent to contact: "${batch.content}"`);
+    // The negotiation gets its own session once it is open; the principal's
+    // answers are kept there next to the questions they answer.
+    const negotiation = this.negotiationSession(updated);
+    if (batch.type === 'resume' && batch.answer) {
+      this.saveToSession(negotiation.id, { role: 'user', content: batch.answer });
     }
     return updated;
   }
@@ -326,9 +358,13 @@ class ErrandService implements IErrandService {
     }
   }
 
-  findActiveForPeer(channel: string, peerId: string): { errand: Errand; sessionId: string } | null {
+  // `otherPeerIds` are addresses the channel reports for the same sender (e.g.
+  // the phone-number JID behind a WhatsApp LID), so a reply arriving under a
+  // different address than the errand was sent to still reaches the negotiator.
+  findActiveForPeer(channel: string, peerId: string, otherPeerIds: string[] = []): { errand: Errand; sessionId: string } | null {
     this.expireStale();
-    const active = this.errandRepository.findActiveByPeer(channel, peerAliases(channel, peerId));
+    const candidates = [...new Set([peerId, ...otherPeerIds].flatMap((id) => peerAliases(channel, id)))];
+    const active = this.errandRepository.findActiveByPeer(channel, candidates);
     if (!active) return null;
 
     const hydrated = this.hydrate(active.errand);
@@ -337,11 +373,32 @@ class ErrandService implements IErrandService {
     return { errand: hydrated, sessionId: active.sessionId };
   }
 
+  // A contact writing again after their errand was resolved reopens it and asks
+  // the principal how to reply — only within the errand expiry window, and
+  // never while another errand is in flight with that contact.
+  reopenForPeer(channel: string, peerId: string, contactMessage: string, otherPeerIds: string[] = []): { errand: Errand; sessionId: string } | null {
+    this.expireStale();
+    const candidates = [...new Set([peerId, ...otherPeerIds].flatMap((id) => peerAliases(channel, id)))];
+    if (this.errandRepository.findActiveByPeer(channel, candidates)) return null;
+
+    const latest = this.errandRepository.findLatestResolvedByPeer(channel, candidates);
+    if (!latest?.errand.closedAt) return null;
+    const ageMs = this.now().getTime() - new Date(latest.errand.closedAt).getTime();
+    if (!(ageMs <= config.ERRANDS.HARD_EXPIRY_MS)) return null;
+
+    const { errand } = latest;
+    const notes = [errand.notes, errand.result && `Resolved before: ${errand.result}`].filter(Boolean).join('\n') || undefined;
+    this.transition(errand, { closedAt: undefined, result: undefined, notes });
+    const reopened = this.escalate(errand.id, `The contact wrote again after this errand was resolved: "${contactMessage}". How should I reply?`);
+    return { errand: reopened, sessionId: latest.sessionId };
+  }
+
   private close(errand: Errand, state: ErrandState, result: string | undefined, notes: string | undefined, notice?: string): Errand {
     const closedAt = nowISO();
     const updated = this.transition(errand, {
       state,
       pendingDelivery: undefined,
+      closingReply: undefined,
       result,
       notes: notes ?? errand.notes,
       closedAt,
@@ -349,7 +406,7 @@ class ErrandService implements IErrandService {
     });
     this.promoteQueued(this.errandRepository.findTargets(errand.id));
     if (notice) {
-      this.pushToSession(errand.originSessionId, notice);
+      this.pushToSession(errand, notice);
     }
     return updated;
   }
@@ -380,27 +437,41 @@ class ErrandService implements IErrandService {
     }
   }
 
-  private pushToSession(sessionId: string, content: string): void {
-    const session = this.sessionRepository.findById(sessionId);
-    if (!session) {
-      this.logger.warn(`Errand push target session not found: ${sessionId}`);
-      return;
-    }
+  // Notices are recorded in the errand's negotiation session, never in the
+  // Orchestrator conversation. A principal on WhatsApp/Telegram still receives
+  // them in that chat; the outbound record lands in the negotiation session.
+  private pushToSession(errand: Errand, content: string): void {
+    const negotiation = this.negotiationSession(errand);
+    const origin = this.sessionRepository.findById(errand.originSessionId);
 
-    if (isDeliverableChannel(session.channel)) {
+    if (origin && isDeliverableChannel(origin.channel)) {
       void this.outboundMessageService.send({
-        channel: session.channel,
-        target: session.peerId,
+        channel: origin.channel,
+        target: origin.peerId,
         content,
-        kind: session.kind,
-        sessionId: session.id,
+        kind: origin.kind,
+        sessionId: negotiation.id,
       }).catch(() => this.logger.warn('Could not deliver errand notice.'));
       return;
     }
 
     // web/tui: nothing to deliver to, just record it in the transcript.
-    const sessionService = this.sessionManager.getSessionServiceById(session.id);
-    MessageServiceFactory.create(this.db, sessionService).save({ role: 'assistant', content });
+    this.saveToSession(negotiation.id, { role: 'assistant', content, senderAgentId: 'negotiator' });
+  }
+
+  private negotiationSession(errand: Errand): Session {
+    const key = negotiationSessionKey(errand.id);
+    const existing = this.sessionRepository.findLatestOpen(key);
+    if (existing) return existing;
+    const metadata: NegotiationSessionMetadata = { errandId: errand.id, parentSessionId: errand.originSessionId };
+    const session = new Session({ ...key, metadata });
+    this.sessionRepository.save(session);
+    return session;
+  }
+
+  private saveToSession(sessionId: string, message: { role: 'user' | 'assistant'; content: string; senderAgentId?: 'negotiator' }): void {
+    const sessionService = this.sessionManager.getSessionServiceById(sessionId);
+    MessageServiceFactory.create(this.db, sessionService).save(message);
   }
 
   private transition(errand: Errand, patch: Partial<ErrandProps>): Errand {
@@ -454,4 +525,4 @@ function buildErrandService(
   return ErrandServiceFactory.create(logger, db, sessionManager, outboundMessageService);
 }
 
-export { IErrandService, ErrandService, ErrandServiceFactory, buildErrandService };
+export { IErrandService, ErrandService, ErrandServiceFactory, buildErrandService, negotiationSessionKey };

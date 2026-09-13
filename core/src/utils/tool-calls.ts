@@ -120,10 +120,14 @@ function parseToolCall(tc: any, index: number, logger?: ILogger): ToolCall {
     parsedArgs = {};
   }
 
+  const extraContent = tc.extra_content;
+
   return {
     id: typeof tc.id === 'string' && tc.id ? tc.id : `call_${index}`,
     name,
     arguments: parsedArgs,
+    // Gemini rejects the follow-up turn unless its thought_signature is echoed back.
+    ...(extraContent && typeof extraContent === 'object' && !Array.isArray(extraContent) ? { extraContent } : {}),
   };
 }
 

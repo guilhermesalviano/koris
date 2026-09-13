@@ -32,7 +32,7 @@ import { ToolSyncSingleton } from './services/tools/tool-sync';
 import { config } from './config';
 import path from 'node:path';
 import type { PluginContext } from '../../plugins/channels/contracts';
-import type { ToolPluginContext } from '../../plugins/tools/contracts';
+import type { ErrandRecord, IErrandsGateway, ToolPluginContext } from '../../plugins/tools/contracts';
 import type { McpPluginContext } from '../../plugins/mcps/contracts';
 import { IDatabaseService } from './infrastructure/db-sqlite';
 import { Heartbeat } from './entities/heartbeat';
@@ -47,6 +47,9 @@ import { listInstalledChannelNames } from './services/commands/channels';
 import { getAudioTranscriptionService } from './services/audio/audio-transcription-service';
 import { McpManagerSingleton } from './services/mcps/mcp-manager';
 import { McpSyncSingleton } from './services/mcps/mcp-sync';
+import { buildErrandService } from './services/errands';
+import { startErrand } from './services/errands/start';
+import type { Errand } from './entities/errand';
 
 const logger = LoggerFactory.create();
 const MODES = ['tui', 'web'] as const;
@@ -61,6 +64,48 @@ function createPluginContext(logger: ILogger, gateway: IMessageGateway, db: IDat
       isEnabled: (name) => resolvePluginEnabled(pluginSettingsRepo, 'channels', name),
     },
     audioTranscriber: getAudioTranscriptionService(logger),
+  };
+}
+
+function toErrandRecord(errand: Errand): ErrandRecord {
+  return {
+    id: errand.id,
+    goal: errand.goal,
+    state: errand.state,
+    originSessionId: errand.originSessionId,
+    pendingMessage: errand.pendingMessage,
+    deliveryIncomplete: Boolean(errand.pendingDelivery),
+    deliveryError: errand.pendingDelivery?.error,
+    notes: errand.notes,
+    result: errand.result,
+    createdAt: errand.createdAt,
+  };
+}
+
+function createErrandsGateway(logger: ILogger, db: IDatabaseService): IErrandsGateway {
+  const resolve = () => {
+    const sessionManager = new SessionManager(db);
+    const errandService = buildErrandService(logger, db, sessionManager);
+    if (!errandService) throw new Error('Errands are not available: no channel manager is running.');
+    return { sessionManager, errandService };
+  };
+  return {
+    listForSession: (sessionId) => resolve().errandService.listByOrigin(sessionId).map(toErrandRecord),
+    start: async (input) => {
+      const { sessionManager, errandService } = resolve();
+      const { errand, openingMessage } = await startErrand(logger, db, sessionManager, errandService, input);
+      return { errand: toErrandRecord(errand), openingMessage };
+    },
+    approve: async (id) => toErrandRecord(await resolve().errandService.approve(id)),
+    retry: async (id) => toErrandRecord(await resolve().errandService.retryDelivery(id)),
+    answer: async (id, answer) => {
+      const { errand, reply } = await resolve().errandService.resumeWithPrincipalAnswer(id, answer);
+      return { errand: toErrandRecord(errand), reply };
+    },
+    confirm: async (id) => toErrandRecord(await resolve().errandService.confirmResolution(id)),
+    close: async (id, result) => toErrandRecord(resolve().errandService.resolve(id, result)),
+    cancel: async (id) => toErrandRecord(resolve().errandService.cancel(id)),
+    followUrl: () => `${config.GATEWAY_HOST.replace(/\/+$/, '')}/admin/agents/negotiator`,
   };
 }
 
@@ -117,6 +162,7 @@ function createToolPluginContext(logger: ILogger, db: IDatabaseService): ToolPlu
       getById: (id) => StickerRulesRepositoryFactory.create(db).getById(id),
       deleteById: (id) => StickerRulesRepositoryFactory.create(db).deleteById(id),
     },
+    errands: createErrandsGateway(logger, db),
     security: {
       gateUrl: gateErrorForUrl,
     },
@@ -252,7 +298,6 @@ class Application implements IApplication {
     const heartbeat = HeartbeatSingleton.getInstance(
       this.logger,
       HeartbeatRepositoryFactory.create(db),
-      channels,
       HeartbeatRunRepositoryFactory.create(db),
     );
     const skillSync = SkillSyncSingleton.getInstance(

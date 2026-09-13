@@ -19,6 +19,7 @@ vi.mock('node:child_process', () => ({
 import {
   execFilePromise,
   getOptionalBooleanArg,
+  getOptionalDataArg,
   getOptionalNumberArg,
   getOptionalStringArg,
   getOptionalStringArrayArg,
@@ -104,6 +105,29 @@ describe('getOptionalStringArrayArg', () => {
 
   it('returns empty array when value is not an array', () => {
     expect(getOptionalStringArrayArg({ k: 'string' }, 'k')).toEqual([]);
+  });
+});
+
+// ── getOptionalDataArg ──────────────────────────────────────────────────────
+
+describe('getOptionalDataArg', () => {
+  it('returns the trimmed string when present', () => {
+    expect(getOptionalDataArg({ k: '  coffee  ' }, 'k')).toBe('coffee');
+  });
+
+  it('returns null for whitespace-only or empty strings', () => {
+    expect(getOptionalDataArg({ k: '   ' }, 'k')).toBeNull();
+    expect(getOptionalDataArg({ k: '' }, 'k')).toBeNull();
+  });
+
+  it('serializes a plain object value to JSON', () => {
+    expect(getOptionalDataArg({ k: { a: 1, b: 'x' } }, 'k')).toBe('{"a":1,"b":"x"}');
+  });
+
+  it('returns null for arrays, numbers and missing keys', () => {
+    expect(getOptionalDataArg({ k: [1, 2] }, 'k')).toBeNull();
+    expect(getOptionalDataArg({ k: 42 }, 'k')).toBeNull();
+    expect(getOptionalDataArg({}, 'k')).toBeNull();
   });
 });
 

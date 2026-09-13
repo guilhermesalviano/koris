@@ -1,15 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { checkHealth, streamChat, cancelChat, apiRequest } from './api';
 import { clearResponseAlert, triggerResponseDone } from './response-alert';
-import { createHistoryPoller, mapMessages, nextId, timeStr, type ChatMessage, type HistoryMessage } from './chat-history';
-import type { ActiveRun, ActiveRunsResponse, AllowedDomainsResponse, GateBlock, GateBlocksResponse, ImageAttachment, SessionDetailResponse, SessionsResponse, SessionSummary } from './types';
+import { createHistoryPoller, mapMessages, mergeMessages, nextId, timeStr, type ChatMessage } from './chat-history';
+import { mergeSessions, prependOlder, sessionFromNewSession, type NewSessionResponse, type SessionMap, type TimelineResponse } from './timeline';
+import type { ActiveRun, ActiveRunsResponse, AllowedDomainsResponse, GateBlock, GateBlocksResponse, ImageAttachment } from './types';
 
 export type { ChatMessage } from './chat-history';
 
-interface ChatHistoryResponse {
-  sessionId: string | null;
-  messages: HistoryMessage[];
+const TIMELINE_PATH = '/agents/orchestrator/timeline';
+const NEW_SESSION_PATH = '/agents/orchestrator/new-session';
+/** Poll-state key: the thread spans sessions, so the poller tracks it as one. */
+const THREAD_KEY = 'orchestrator';
+
+function indexSessions(page: TimelineResponse): SessionMap {
+  return mergeSessions({}, page.sessions);
 }
 
 interface ChatContextValue {
@@ -29,10 +33,17 @@ interface ChatContextValue {
   resendLast: () => Promise<void>;
   cancel: () => void;
   fillPrompt: (text: string) => void;
+  /** The open web session new turns go to; `null` until the first one exists. */
   activeSessionId: string | null;
-  sessions: SessionSummary[];
-  openSession: (id: string | null) => void;
-  newChat: () => Promise<void>;
+  /** Sessions of the loaded messages, for drawing session boundaries. */
+  threadSessions: SessionMap;
+  /** Whether older messages exist above the loaded ones. */
+  hasOlder: boolean;
+  loadingOlder: boolean;
+  loadOlder: () => Promise<void>;
+  /** Ends the open session on the server and starts a fresh one (like `/clear`). */
+  startNewSession: () => Promise<void>;
+  startingSession: boolean;
   gateBlocks: GateBlock[];
   allowDomain: (domain: string) => Promise<void>;
   dismissGateBlock: (domain: string) => void;
@@ -47,7 +58,6 @@ const ACTIVE_RUN_POLL_MS = 4000;
 const MESSAGE_POLL_MS = 3500;
 
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
@@ -56,7 +66,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [threadSessions, setThreadSessions] = useState<SessionMap>({});
+  const [olderCursor, setOlderCursorState] = useState<string | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [startingSession, setStartingSession] = useState(false);
   const [backgroundRun, setBackgroundRun] = useState<ActiveRun | null>(null);
   const [gateBlocks, setGateBlocks] = useState<GateBlock[]>([]);
   const [responseMode, setResponseMode] = useState<'text' | 'voice'>('text');
@@ -64,7 +77,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const loadToken = useRef(0);
   const historyLoadingRef = useRef(false);
   const historyGenerationRef = useRef(0);
-  const pendingNewChatRef = useRef(false);
+  const olderCursorRef = useRef<string | null>(null);
+  const loadingOlderRef = useRef(false);
+  /** Set once an older page is loaded: reloading the newest page must keep its cursor. */
+  const loadedOlderRef = useRef(false);
+  const startingSessionRef = useRef(false);
   const streamingRef = useRef(false);
   const streamTargetRef = useRef<string | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
@@ -89,106 +106,96 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     return null;
   }, [messages]);
 
-  const loadSessions = useCallback(async () => {
-    try {
-      // kind=user: the sidebar is the principal's own chats, not delegated
-      // (errand) sessions running with other contacts.
-      const res = await apiRequest<SessionsResponse>('/sessions?limit=50&kind=user');
-      setSessions(res.items);
-    } catch {
-      // Keep the current list if the request fails.
-    }
+  const setOlderCursor = useCallback((cursor: string | null) => {
+    olderCursorRef.current = cursor;
+    setOlderCursorState(cursor);
   }, []);
 
-  // Loads a session into view. `null` targets the live chat (latest open web
-  // session, without creating one — a session is only created on first send).
-  // A token guards against stale responses when switching sessions quickly.
-  const loadSession = useCallback(async (target: string | null) => {
+  // Loads the newest page of the Orchestrator thread. Pages loaded above it are
+  // kept; local turns not yet saved are dropped in favour of the server copy
+  // (e.g. the placeholder shown while a background run was processing).
+  // A token guards against stale responses.
+  const loadThread = useCallback(async () => {
+    if (streamTargetRef.current && activeSessionIdRef.current === streamTargetRef.current) {
+      // A reply is still being streamed. Keep the in-progress exchange on screen
+      // instead of replacing it with history that doesn't include it yet.
+      setHistoryLoaded(true);
+      return;
+    }
+
+    if (backgroundRunRef.current && backgroundRunRef.current.sessionId === activeSessionIdRef.current) {
+      // A reply is still being processed in the background (e.g. after a
+      // reload). Keep the restored exchange on screen instead of replacing it
+      // with history that doesn't include it yet.
+      setHistoryLoaded(true);
+      return;
+    }
+
     const token = ++loadToken.current;
     historyGenerationRef.current += 1;
     historyLoadingRef.current = true;
-    setHistoryLoaded(false);
 
     try {
-      if (target === null) {
-        if (pendingNewChatRef.current) {
-          pendingNewChatRef.current = false;
-          setActiveSessionId(null);
-          setMessages([]);
-          return;
-        }
+      const page = await apiRequest<TimelineResponse>(TIMELINE_PATH);
+      if (token !== loadToken.current) return;
 
-        if (streamTargetRef.current && activeSessionIdRef.current === streamTargetRef.current) {
-          // A reply is still being streamed into the live chat while the user
-          // navigated away and back. Keep the in-progress exchange on screen
-          // instead of replacing it with history that doesn't include it yet.
-          setHistoryLoaded(true);
-          return;
-        }
-
-        if (backgroundRunRef.current && backgroundRunRef.current.sessionId === activeSessionIdRef.current) {
-          // A reply is still being processed in the background (e.g. after a
-          // reload). Keep the restored exchange on screen instead of replacing
-          // it with history that doesn't include it yet.
-          setHistoryLoaded(true);
-          return;
-        }
-
-        const history = await apiRequest<ChatHistoryResponse>('/chat/history');
-        if (token !== loadToken.current) return;
-
-        if (history.sessionId) {
-          setActiveSessionId(history.sessionId);
-          setMessages(mapMessages(history.messages));
-        } else {
-          setActiveSessionId(null);
-          setMessages([]);
-        }
+      setActiveSessionId(page.activeSessionId);
+      if (loadedOlderRef.current) {
+        setThreadSessions((prev) => mergeSessions(prev, page.sessions));
+        setMessages((prev) => mergeMessages(prev.filter((m) => !!m.serverId), page.messages));
       } else {
-        if (streamTargetRef.current === target && inFlightRef.current?.sessionId === target) {
-          // A reply is still streaming into a freshly-rotated session (the
-          // navigation that follows a `/compact` / auto-compact rotation). Keep
-          // the in-progress exchange on screen instead of replacing it with
-          // history that doesn't include it yet.
-          setHistoryLoaded(true);
-          return;
-        }
-
-        const detail = await apiRequest<SessionDetailResponse>(`/sessions/${target}`);
-        if (token !== loadToken.current) return;
-
-        setActiveSessionId(detail.session.id);
-        setMessages(mapMessages(detail.messages));
+        setThreadSessions(indexSessions(page));
+        setMessages(mapMessages(page.messages));
+        setOlderCursor(page.nextCursor);
       }
     } catch {
-      if (token !== loadToken.current) return;
-      setActiveSessionId(target);
-      setMessages([]);
+      // Keep what is on screen; the poller retries.
     } finally {
       if (token === loadToken.current) {
         historyLoadingRef.current = false;
         setHistoryLoaded(true);
       }
     }
-  }, [loadSessions]);
+  }, [setOlderCursor]);
 
-  const openSession = useCallback((id: string | null) => {
-    loadSession(id);
-  }, [loadSession]);
+  const loadOlder = useCallback(async () => {
+    const cursor = olderCursorRef.current;
+    if (!cursor || loadingOlderRef.current) return;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const page = await apiRequest<TimelineResponse>(`${TIMELINE_PATH}?before=${encodeURIComponent(cursor)}`);
+      loadedOlderRef.current = true;
+      setThreadSessions((prev) => mergeSessions(prev, page.sessions));
+      setMessages((prev) => prependOlder(prev, page.messages));
+      setOlderCursor(page.nextCursor);
+    } catch (err) {
+      setToast(`Error: ${err instanceof Error ? err.message : 'Failed to load earlier messages'}`);
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [setOlderCursor]);
 
-  const newChat = useCallback(async () => {
-    pendingNewChatRef.current = true;
-    loadToken.current += 1;
-    historyGenerationRef.current += 1;
-    historyLoadingRef.current = false;
-    activeSessionIdRef.current = null;
-    setActiveSessionId(null);
-    setMessages([]);
-    setHistoryLoaded(true);
-    setGateBlocks([]);
-    dismissedDomainsRef.current = new Set();
-    await loadSessions();
-  }, [loadSessions]);
+  const startNewSession = useCallback(async () => {
+    if (streamingRef.current || startingSessionRef.current) return;
+    startingSessionRef.current = true;
+    setStartingSession(true);
+    try {
+      const res = await apiRequest<NewSessionResponse>(NEW_SESSION_PATH, { method: 'POST' });
+      historyGenerationRef.current += 1;
+      activeSessionIdRef.current = res.session.id;
+      setActiveSessionId(res.session.id);
+      setThreadSessions((prev) => mergeSessions(prev, [sessionFromNewSession(res)]));
+      setGateBlocks([]);
+      dismissedDomainsRef.current = new Set();
+    } catch (err) {
+      setToast(`Error: ${err instanceof Error ? err.message : 'Failed to start a new session'}`);
+    } finally {
+      startingSessionRef.current = false;
+      setStartingSession(false);
+    }
+  }, []);
 
   // Domain-gate blocks: after a turn, a tool call may have been refused because
   // its target host is not in koris.json `allowed_domains`. Surface those so the
@@ -229,10 +236,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     void refreshGateBlocks();
   }, [activeSessionId, refreshGateBlocks]);
 
-  // Populate the sidebar list on mount. The chat page drives session loading.
   useEffect(() => {
-    loadSessions();
-  }, [loadSessions]);
+    void loadThread();
+  }, [loadThread]);
 
   useEffect(() => {
     let cancelled = false;
@@ -250,24 +256,36 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Poll for background messages in the active session (e.g. errand escalations or notices).
+  // Poll the newest page for messages that arrive outside a local turn (errand
+  // escalations or notices, turns from another tab) and for session changes.
   useEffect(() => {
+    let latestPage: TimelineResponse | null = null;
     const poller = createHistoryPoller({
       getState: () => {
         const sessionId = activeSessionIdRef.current;
         return {
-          sessionId,
+          sessionId: THREAD_KEY,
           generation: historyGenerationRef.current,
           busy: historyLoadingRef.current
-            || (streamingRef.current && (!streamTargetRef.current || streamTargetRef.current === sessionId))
+            || streamingRef.current
             || (!!backgroundRunRef.current && backgroundRunRef.current.sessionId === sessionId),
         };
       },
-      fetchHistory: async (sessionId) => {
-        const detail = await apiRequest<SessionDetailResponse>(`/sessions/${encodeURIComponent(sessionId)}`);
-        return detail.messages;
+      fetchHistory: async () => {
+        latestPage = await apiRequest<TimelineResponse>(TIMELINE_PATH);
+        return latestPage.messages;
       },
-      update: setMessages,
+      // Only reached when the response is still current for this view.
+      update: (apply) => {
+        const page = latestPage;
+        if (page) {
+          activeSessionIdRef.current = page.activeSessionId;
+          setActiveSessionId(page.activeSessionId);
+          setThreadSessions((prev) => mergeSessions(prev, page.sessions));
+          if (!loadedOlderRef.current && olderCursorRef.current === null) setOlderCursor(page.nextCursor);
+        }
+        setMessages(apply);
+      },
     });
     void poller.poll();
     const interval = setInterval(() => { void poller.poll(); }, MESSAGE_POLL_MS);
@@ -324,7 +342,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (run && run.startedAt !== prevKey) {
       if (prevKey) {
         surfacedRunKeyRef.current = run.startedAt;
-        void loadSession(activeSessionId ?? null);
+        void loadThread();
         return;
       }
       surfacedRunKeyRef.current = run.startedAt;
@@ -358,10 +376,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       surfacedRunKeyRef.current = null;
       if (backgroundPendingRef.current) {
         backgroundPendingRef.current = false;
-        void loadSession(activeSessionId ?? null);
+        void loadThread();
       }
     }
-  }, [backgroundRun, activeSessionId, loadSession, messages]);
+  }, [backgroundRun, activeSessionId, loadThread, messages]);
 
   // Restore the locally-streamed exchange when the user returns to the session
   // it belongs to (e.g. after opening another session, which replaced messages
@@ -407,20 +425,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     historyGenerationRef.current += 1;
     clearResponseAlert();
     const sentAt = Date.now();
-    const userMsg: ChatMessage = { id: nextId(), role: 'user', content: text, images, timestamp: timeStr(new Date()), at: sentAt };
+    const sessionId = activeSessionId ?? undefined;
+    const userMsg: ChatMessage = { id: nextId(), sessionId, role: 'user', content: text, images, timestamp: timeStr(new Date()), at: sentAt };
     const assistantId = nextId();
-    setMessages((prev) => [...prev, userMsg, { id: assistantId, role: 'assistant', content: '', pending: true, timestamp: '', at: sentAt }]);
+    setMessages((prev) => [...prev, userMsg, { id: assistantId, sessionId, role: 'assistant', content: '', pending: true, timestamp: '', at: sentAt }]);
 
     let accumulated = '';
 
     try {
       let targetId = activeSessionId;
       if (!targetId) {
-        const created = await apiRequest<SessionSummary>('/sessions', { method: 'POST' });
-        pendingNewChatRef.current = false;
-        setActiveSessionId(created.id);
-        targetId = created.id;
-        loadSessions();
+        const created = await apiRequest<NewSessionResponse>(NEW_SESSION_PATH, { method: 'POST' });
+        const newId = created.session.id;
+        targetId = newId;
+        activeSessionIdRef.current = newId;
+        setActiveSessionId(newId);
+        setThreadSessions((prev) => mergeSessions(prev, [sessionFromNewSession(created)]));
+        userMsg.sessionId = newId;
+        setMessages((prev) => prev.map((m) => (m.id === userMsg.id || m.id === assistantId ? { ...m, sessionId: newId } : m)));
       }
       streamTargetRef.current = targetId;
       inFlightRef.current = { sessionId: targetId, userMsg, assistantId, content: '', status: null };
@@ -442,16 +464,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         },
         controller.signal,
         (rotatedSessionId) => {
-          // `/compact` (or the manual-mode auto-compact) ended the current
-          // session and opened a fresh one. Follow it so the next turn is routed
-          // to the new session (and its resumed summary / memory reach the model),
-          // redirect the URL to the new chat, and refresh the sidebar list.
+          // `/compact`, `/clear` (or the manual-mode auto-compact) ended the
+          // current session and opened a fresh one. Follow it so the next turn is
+          // routed to the new session (and its resumed summary / memory reach the
+          // model). Its start reason arrives with the next timeline poll.
           streamTargetRef.current = rotatedSessionId;
           historyGenerationRef.current += 1;
           if (inFlightRef.current) inFlightRef.current.sessionId = rotatedSessionId;
+          activeSessionIdRef.current = rotatedSessionId;
           setActiveSessionId(rotatedSessionId);
-          void loadSessions();
-          navigate(`/admin/chat/${rotatedSessionId}`);
+          setThreadSessions((prev) => (prev[rotatedSessionId] ? prev : mergeSessions(prev, [{
+            id: rotatedSessionId,
+            startedAt: new Date().toISOString(),
+            endedAt: null,
+            startReason: null,
+            compactSummary: null,
+          }])));
         },
         (mode) => setResponseMode(mode),
       );
@@ -479,10 +507,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       streamingRef.current = false;
       streamTargetRef.current = null;
       setStreaming(false);
-      loadSessions();
       void refreshGateBlocks();
     }
-  }, [streaming, activeSessionId, loadSessions, refreshGateBlocks, navigate]);
+  }, [streaming, activeSessionId, refreshGateBlocks]);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
@@ -529,9 +556,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     cancel,
     fillPrompt,
     activeSessionId,
-    sessions,
-    openSession,
-    newChat,
+    threadSessions,
+    hasOlder: olderCursor !== null,
+    loadingOlder,
+    loadOlder,
+    startNewSession,
+    startingSession,
     gateBlocks,
     allowDomain,
     dismissGateBlock,

@@ -11,6 +11,7 @@ import { IMainAgent, MainAgentFactory } from './main-agent';
 import { ProcessedMessage, ProcessOptions } from '../../types/agents';
 import { ImageAttachment } from '../../types/messages';
 import { generateId } from '../../utils/generate-id';
+import { carryForwardMetadata } from '../../utils/session';
 import { replacePlaceholders } from '../../utils/prompt';
 import { SKILL_INVOCATION_PROMPT } from '../../constants';
 import { ISessionContextFactory, SessionContextFactory, SessionContext } from './session-context';
@@ -20,7 +21,9 @@ import { shouldAutoCompact } from './context-budget';
 import { IChannelService, ChannelServiceFactory } from '../channel-service';
 import type { InboundInput, IMessageGateway, StickerReference } from '../../../../plugins/channels/contracts';
 import { buildErrandService } from '../errands';
+import { formatOpenErrandsBlock } from '../errands/prompt';
 import { runErrandOperation } from '../errands/operations';
+import { CHANNEL_TYPES } from '../../entities/channel';
 import { Negotiator, NegotiatorFactory } from './sub-agents/negotiator/sub-agent';
 
 export type { InboundInput, IMessageGateway };
@@ -28,16 +31,6 @@ export type { InboundInput, IMessageGateway };
 function metadataString(metadata: Record<string, unknown> | undefined, key: string): string | undefined {
   const value = metadata?.[key];
   return typeof value === 'string' && value ? value : undefined;
-}
-
-// Session metadata keys that are a conversation preference rather than a
-// property of one thread, so they must survive `/clear` and `/compact`
-// rotation. `lastActivityAt` / `compactSummary` deliberately do not.
-function carryForwardMetadata(
-  metadata: Record<string, unknown> | undefined,
-): Record<string, unknown> | undefined {
-  const responseMode = metadataString(metadata, 'responseMode');
-  return responseMode ? { responseMode } : undefined;
 }
 
 // User-facing explanation shown when a manual-mode session is auto-compacted.
@@ -80,19 +73,35 @@ class MessageGateway implements IMessageGateway {
     // An approved errand owns the contact conversation regardless of whether
     // that contact is also trusted. Trusted slash commands still belong to
     // their user session; web/TUI requests without channel trust stay there too.
-    const activeErrand = options?.isTrustedSender !== undefined
-      && (!isCommand(safeMessage) || options.isTrustedSender === false)
-      ? buildErrandService(this.logger, this.db, this.sessionManager)?.findActiveForPeer(channel, originId) ?? null
+    // The contact may reply under a different address than the errand was sent
+    // to (WhatsApp LID vs phone number), so the channel's aliases count too.
+    const routesErrands = options?.isTrustedSender !== undefined
+      && (!isCommand(safeMessage) || options.isTrustedSender === false);
+    const errandService = routesErrands ? buildErrandService(this.logger, this.db, this.sessionManager) : null;
+    const activeErrand = errandService?.findActiveForPeer(channel, originId, options?.peerAliases) ?? null;
+    // An untrusted contact writing after their errand was resolved reopens it
+    // and escalates to the principal; trusted senders keep their own session.
+    const reopenedErrand = !activeErrand && options?.isTrustedSender === false
+      ? errandService?.reopenForPeer(channel, originId, safeMessage, options.peerAliases) ?? null
       : null;
+    const delegated = activeErrand ?? reopenedErrand;
 
-    const origin: SessionKey = activeErrand
+    const origin: SessionKey = delegated
       ? { channel, peerId: originId, kind: 'delegated' }
       : { channel, peerId: originId, kind: 'user' };
-    const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(origin, activeErrand?.sessionId ?? options?.sessionId);
+    const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(origin, delegated?.sessionId ?? options?.sessionId);
 
     this.channelService.record(channel, originId);
 
     const sessionCtx: SessionContext = { sessionService, messageService, memoryService };
+
+    if (reopenedErrand) {
+      // Nothing goes back to the contact until the principal answers the escalation.
+      return runErrandOperation(reopenedErrand.errand.id, async () => {
+        messageService.save({ role: 'user', content: safeMessage, images });
+        return '';
+      });
+    }
 
     if (activeErrand) {
       // Delegated turn: the negotiator drives it end to end — commands and
@@ -106,6 +115,7 @@ class MessageGateway implements IMessageGateway {
           sessionId: sessionService.getSession().id,
           channel,
           peerMessage: safeMessage,
+          peerImages: images,
           messageHistory,
         });
         if (result.reply) messageService.save({ role: 'assistant', content: result.reply });
@@ -157,7 +167,9 @@ class MessageGateway implements IMessageGateway {
     }
 
     const runId = options?.runId ?? generateId();
-    const turnOptions = { ...options, runId, ...(skillBlocks ? { skillBlocks } : {}) };
+    const errandBlock = options?.toolsEnabled ? this.openErrandsBlock(sessionService.getSession().id, channel) : null;
+    const promptBlocks = [...(skillBlocks ?? []), ...(errandBlock ? [errandBlock] : [])];
+    const turnOptions = { ...options, runId, ...(promptBlocks.length ? { skillBlocks: promptBlocks } : {}) };
 
     // Manual-mode safety valve (proactive): if the session is near the manager's
     // context window, summarize it into memory and start fresh before this turn.
@@ -260,6 +272,22 @@ class MessageGateway implements IMessageGateway {
     }
   }
 
+  // Lets the Orchestrator map a plain "yes" to the right errand tool. Errands
+  // only run with a channel manager, so there is nothing to list without one.
+  // Questions only reach a WhatsApp/Telegram principal in this chat; on web they
+  // are answered from the Negotiator page, so the Orchestrator does not see them.
+  private openErrandsBlock(sessionId: string, channel: string): string | null {
+    try {
+      const errands = buildErrandService(this.logger, this.db, this.sessionManager)?.listByOrigin(sessionId) ?? [];
+      return formatOpenErrandsBlock(errands, { includeQuestions: (CHANNEL_TYPES as readonly string[]).includes(channel) });
+    } catch (err) {
+      this.logger.warn('Failed to list open errands for the prompt', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  }
+
   private async handleCompact(
     ctx: SessionContext,
     channel: string,
@@ -305,12 +333,7 @@ class MessageGateway implements IMessageGateway {
       channel,
     });
 
-    const carried = carryForwardMetadata(ctx.sessionService.getSession().metadata);
-    if (carried) {
-      ctx.sessionService.forceRotate(carried);
-    } else {
-      ctx.sessionService.forceRotate();
-    }
+    ctx.sessionService.forceRotate('clear', carryForwardMetadata(ctx.sessionService.getSession().metadata));
     const freshSessionId = ctx.sessionService.getSession().id;
     options?.onSessionRotated?.(freshSessionId);
     this.logger.info(`Cleared session ${clearedSessionId} → ${freshSessionId} (${channel})`);
@@ -403,7 +426,7 @@ class MessageGateway implements IMessageGateway {
       ...carried,
       ...(result ? { compactSummary: result.content } : {}),
     };
-    sessionService.forceRotate(Object.keys(rotateMetadata).length > 0 ? rotateMetadata : undefined);
+    sessionService.forceRotate('compact', rotateMetadata);
     options?.onSessionRotated?.(sessionService.getSession().id);
     this.logger.info(`Compacted session ${compactedSessionId} → ${sessionService.getSession().id} (${channel})`);
     return { compactedSessionId, rotated: true };

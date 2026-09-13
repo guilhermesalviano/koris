@@ -1,4 +1,5 @@
 import express, { type Request, type Response, type Router } from 'express';
+import { createHash } from 'node:crypto';
 import { config, reloadConfig } from '../config';
 import { isConfigFilePresent } from '../config/helpers';
 import {
@@ -26,9 +27,11 @@ import { ILogger } from '../infrastructure/logger';
 import { IDatabaseService } from '../infrastructure/db-sqlite';
 import { healthCheck } from '../services/provider-health-service';
 import { SessionRepositoryFactory } from '../repositories/session';
-import { MessageRepositoryFactory } from '../repositories/message';
+import { MessageRepositoryFactory, type TimelineCursor } from '../repositories/message';
+import type { Message } from '../entities/message';
 import { MemoryRepositoryFactory } from '../repositories/memory';
 import { HeartbeatRepositoryFactory } from '../repositories/heartbeat';
+import { BeatRunRepositoryFactory } from '../repositories/beat-run';
 import { ChannelRepositoryFactory } from '../repositories/channel';
 import { CHANNEL_TYPES, ChannelType } from '../entities/channel';
 import { LearnedSkillsRepositoryFactory } from '../repositories/learned-skills';
@@ -42,6 +45,8 @@ import { buildUsageReport, usageFrom } from '../services/usage/usage';
 import { Heartbeat } from '../entities/heartbeat';
 import { AuditStatus, AuditType } from '../entities/audit-log';
 import { Session } from '../entities/session';
+import { NEGOTIATION_CHANNEL, SESSION_START_REASONS, type SessionKey, type SessionStartReason } from '../types/session';
+import { carryForwardMetadata } from '../utils/session';
 import { BEAT_TYPES, BeatType } from '../types/beat';
 import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
 import { hasSpecificHour, isEveryMinute, isOneTimeCron, isValidCronExpression, nextCronFire } from '../utils/heartbeat';
@@ -58,6 +63,7 @@ import { ErrandRepositoryFactory } from '../repositories/errand';
 import { buildErrandService } from '../services/errands';
 import { ERRAND_STATES, ErrandState } from '../types/errand';
 import { Errand } from '../entities/errand';
+import { AGENTS } from '../constants/agents';
 import { PluginSettingsRepositoryFactory, type IPluginSettingsRepository } from '../repositories/plugin-settings';
 import { resolvePluginEnabled } from '../services/plugins/plugin-enablement';
 import { PluginCatalogSingleton } from '../services/plugins/plugin-catalog-singleton';
@@ -279,6 +285,66 @@ function parsePagination(req: Request): { limit: number; offset: number } {
   return { limit, offset };
 }
 
+/** The principal's own web chat — every session on it forms the Orchestrator thread. */
+const ORCHESTRATOR_THREAD: Required<SessionKey> = { channel: 'web', peerId: 'web', kind: 'user' };
+
+const TIMELINE_DEFAULT_LIMIT = 50;
+
+function encodeTimelineCursor(cursor: TimelineCursor): string {
+  return Buffer.from(JSON.stringify([cursor.createdAt, cursor.rowid])).toString('base64url');
+}
+
+/** `undefined` for no cursor, `null` for one that is malformed. */
+function decodeTimelineCursor(raw: unknown): TimelineCursor | undefined | null {
+  if (raw === undefined || raw === '') return undefined;
+  if (typeof raw !== 'string') return null;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+    if (
+      Array.isArray(parsed)
+      && parsed.length === 2
+      && typeof parsed[0] === 'string'
+      && Number.isInteger(parsed[1])
+    ) {
+      return { createdAt: parsed[0], rowid: parsed[1] };
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
+function toMessageJson(m: Message) {
+  return {
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    senderAgentId: m.senderAgentId,
+    images: m.images,
+    missingImages: m.missingImages,
+    errorCode: m.errorCode,
+    createdAt: m.createdAt,
+  };
+}
+
+function toSessionJson(session: Session) {
+  return {
+    id: session.id,
+    channel: session.channel,
+    peerId: session.peerId,
+    kind: session.kind,
+    startedAt: session.startedAt,
+    endedAt: session.endedAt,
+    messageCount: session.messageCount,
+    metadata: session.metadata,
+  };
+}
+
+function sessionStartReason(session: Session): SessionStartReason | null {
+  const value = session.metadata.startReason;
+  return SESSION_START_REASONS.includes(value as SessionStartReason) ? (value as SessionStartReason) : null;
+}
+
 function previewText(value: string | null, maxLength = 120): string | null {
   if (!value) return null;
   const text = value.replace(/\s+/g, ' ').trim();
@@ -325,6 +391,7 @@ class AdminRouterFactory {
     const messageRepo = MessageRepositoryFactory.create(db);
     const memoryRepo = MemoryRepositoryFactory.create(db);
     const heartbeatRepo = HeartbeatRepositoryFactory.create(db);
+    const beatRunRepo = BeatRunRepositoryFactory.create(db);
     const channelRepo = ChannelRepositoryFactory.create(db);
     const outboundRepo = OutboundMessageRepositoryFactory.create(db);
     const learnedSkillsRepo = LearnedSkillsRepositoryFactory.create(db);
@@ -384,7 +451,7 @@ class AdminRouterFactory {
       res.json({
         sessions: sessionRepo.count(),
         openSessions: sessionRepo.countOpen(),
-        openErrands: (['draft', 'queued', 'open', 'awaiting_peer', 'awaiting_principal'] as ErrandState[])
+        openErrands: (['draft', 'queued', 'open', 'awaiting_peer', 'awaiting_principal', 'awaiting_confirmation'] as ErrandState[])
           .reduce((sum, state) => sum + ErrandRepositoryFactory.create(db).countByState(state), 0),
         messages: messageRepo.count(),
         memories: memoryRepo.count(),
@@ -419,6 +486,122 @@ class AdminRouterFactory {
         usage: buildUsageReport(auditRepo.usage({ from: usageFrom(7) }), 7).total,
         recentErrors,
       });
+    });
+
+    router.get('/agents', (_req: Request, res: Response) => {
+      res.json({ items: AGENTS });
+    });
+
+    // The Orchestrator thread: messages across every web session, paged from
+    // the newest backwards. Each page carries the sessions its messages belong
+    // to (plus the open session, on the newest page, even while it is still
+    // empty) so the client can draw session boundaries.
+    router.get('/agents/orchestrator/timeline', (req: Request, res: Response) => {
+      const before = decodeTimelineCursor(req.query.before);
+      if (before === null) {
+        res.status(400).json({ error: 'Invalid cursor' });
+        return;
+      }
+      const limit = Math.min(Math.max(Number(req.query.limit) || TIMELINE_DEFAULT_LIMIT, 1), 200);
+
+      const page = messageRepo.getTimeline({ key: ORCHESTRATOR_THREAD, before, limit });
+      const active = sessionRepo.findLatestOpen(ORCHESTRATOR_THREAD);
+
+      const sessionIds = new Set(page.messages.map((m) => m.sessionId));
+      if (!before && active) sessionIds.add(active.id);
+      const sessions = [...sessionIds]
+        .map((id) => (id === active?.id ? active : sessionRepo.findById(id)))
+        .filter((session): session is Session => session !== null)
+        .map((session) => ({
+          id: session.id,
+          startedAt: session.startedAt,
+          endedAt: session.endedAt,
+          startReason: sessionStartReason(session),
+          compactSummary: typeof session.metadata.compactSummary === 'string' ? session.metadata.compactSummary : null,
+        }));
+
+      res.json({
+        messages: page.messages.map((m) => ({ ...toMessageJson(m), sessionId: m.sessionId })),
+        sessions,
+        activeSessionId: active?.id ?? null,
+        nextCursor: page.nextCursor ? encodeTimelineCursor(page.nextCursor) : null,
+      });
+    });
+
+    // The negotiation center: every errand's negotiation session (Negotiator
+    // notices and the principal's answers) as one feed, paged from the newest
+    // backwards. Each message names the errand its session belongs to.
+    router.get('/agents/negotiator/notices', (req: Request, res: Response) => {
+      const before = decodeTimelineCursor(req.query.before);
+      if (before === null) {
+        res.status(400).json({ error: 'Invalid cursor' });
+        return;
+      }
+      const limit = Math.min(Math.max(Number(req.query.limit) || TIMELINE_DEFAULT_LIMIT, 1), 200);
+
+      const page = messageRepo.getTimeline({ key: { channel: NEGOTIATION_CHANNEL, kind: 'user' }, before, limit });
+      const errandIds = new Map([...new Set(page.messages.map((m) => m.sessionId))]
+        .map((id) => [id, sessionRepo.findById(id)?.peerId ?? null]));
+      // Questions and proposed results still waiting on the principal, read in the
+      // same request as the notices so the page never shows one it cannot answer yet.
+      const errandService = buildErrandService(logger, db, sessionManager);
+      // Fingerprint of what the errand list shows (the same latest 50 errands):
+      // state, progress, delivery and each contact session's message count. It
+      // changes on every status change, with or without a notice, so the page can
+      // refresh the errand list only when it needs to.
+      const errands = errandService?.listAll(undefined, 50) ?? [];
+      const errandsVersion = createHash('sha1').update(JSON.stringify(errands.map((errand) => [
+        errand.id, errand.state, errand.lastProgressAt ?? null, errand.closedAt ?? null,
+        errand.pendingDelivery ? [errand.pendingDelivery.id, errand.pendingDelivery.targets.filter((target) => target.sentAt).length] : null,
+        getTargetDetails(errand.id).map((target) => target.messageCount),
+      ]))).digest('hex').slice(0, 16);
+      const pending = (['awaiting_principal', 'awaiting_confirmation'] as const)
+        .flatMap((state) => errandService?.listAll(state, 50) ?? [])
+        .filter((errand) => !errand.pendingDelivery)
+        .map((errand) => ({
+          errandId: errand.id,
+          goal: errand.goal,
+          kind: errand.state === 'awaiting_confirmation' ? 'confirmation' : 'question',
+          question: errand.pendingMessage ?? null,
+          askedAt: errand.lastProgressAt ?? errand.createdAt,
+        }));
+
+      res.json({
+        messages: page.messages.map((m) => ({ ...toMessageJson(m), errandId: errandIds.get(m.sessionId) ?? null })),
+        pending,
+        errandsVersion,
+        nextCursor: page.nextCursor ? encodeTimelineCursor(page.nextCursor) : null,
+      });
+    });
+
+    // "New session" in the Orchestrator header: like `/clear`, ends the open web
+    // session and starts a fresh one. An open session with no messages yet is
+    // reused, so repeated clicks don't pile up empty sessions.
+    router.post('/agents/orchestrator/new-session', (_req: Request, res: Response) => {
+      const open = sessionRepo.findLatestOpen(ORCHESTRATOR_THREAD);
+
+      if (open && activeRunsRegistry.list().some((run) => run.sessionId === open.id)) {
+        res.status(409).json({ error: 'A reply is still running in this session' });
+        return;
+      }
+
+      if (open && messageRepo.getBySessionId(open.id, 1).length === 0) {
+        res.json({ session: toSessionJson(open), rotated: false });
+        return;
+      }
+
+      let session: Session;
+      if (open) {
+        session = sessionManager
+          .getSessionServiceById(open.id)
+          .forceRotate('clear', carryForwardMetadata(open.metadata));
+      } else {
+        session = new Session({ ...ORCHESTRATOR_THREAD });
+        sessionRepo.save(session);
+      }
+      sessionManager.invalidateKey(ORCHESTRATOR_THREAD);
+
+      res.status(201).json({ session: toSessionJson(session), rotated: Boolean(open) });
     });
 
     router.get('/sessions', (req: Request, res: Response) => {
@@ -480,15 +663,7 @@ class AdminRouterFactory {
           messageCount: session.messageCount,
           metadata: session.metadata,
         },
-        messages: messages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          images: m.images,
-          missingImages: m.missingImages,
-          errorCode: m.errorCode,
-          createdAt: m.createdAt,
-        })),
+        messages: messages.map(toMessageJson),
         memories: memories.map((m) => ({
           id: m.id,
           type: m.type,
@@ -613,6 +788,8 @@ class AdminRouterFactory {
           sessionId,
           role: msg.role,
           content: msg.content,
+          ...(msg.images?.length ? { images: msg.images } : {}),
+          ...(msg.missingImages ? { missingImages: msg.missingImages } : {}),
           createdAt: msg.createdAt,
         }));
       }).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -683,6 +860,19 @@ class AdminRouterFactory {
 
       try {
         res.json(toErrandJson(errandService.cancel(String(req.params.id))));
+      } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    router.post('/errands/:id/confirm', async (req: Request, res: Response) => {
+      const errandService = buildErrandService(logger, db, sessionManager);
+      if (!errandService) {
+        res.status(503).json({ error: 'Errands are not available: no channel manager is running.' });
+        return;
+      }
+      try {
+        res.json(toErrandJson(await errandService.confirmResolution(String(req.params.id))));
       } catch (err) {
         res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
       }
@@ -804,28 +994,6 @@ class AdminRouterFactory {
       res.json(buildUsageReport(rows, days));
     });
 
-    router.get('/chat/history', (_req: Request, res: Response) => {
-      const session = sessionRepo.findLatestOpen({ channel: 'web', peerId: 'web' });
-      if (!session) {
-        res.json({ sessionId: null, messages: [] });
-        return;
-      }
-
-      const messages = messageRepo.getBySessionId(session.id, 200);
-      res.json({
-        sessionId: session.id,
-        messages: messages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          images: m.images,
-          missingImages: m.missingImages,
-          errorCode: m.errorCode,
-          createdAt: m.createdAt,
-        })),
-      });
-    });
-
     // Estimated context usage for a chat session — powers the small usage bar
     // in the chat UI. `?sessionId=` targets the viewed session; without it the
     // live web session is used. Mirrors what the manual-mode auto-compact check
@@ -874,6 +1042,28 @@ class AdminRouterFactory {
             next_run: next ? formatISO(next) : null,
           };
         }),
+      });
+    });
+
+    // Latest executed beats, newest first, with the tools each run called.
+    router.get('/heartbeats/runs', (req: Request, res: Response) => {
+      const requested = Number(req.query.limit);
+      const limit = Number.isInteger(requested) && requested > 0 ? Math.min(requested, 100) : 20;
+      res.json({
+        items: beatRunRepo.findRecent(limit).map((run) => ({
+          id: run.id,
+          beatId: run.beatId,
+          beat: run.beat,
+          type: run.beatType,
+          status: run.status,
+          result: run.result ?? null,
+          errorMessage: run.errorMessage ?? null,
+          startedAt: formatISO(run.startedAt),
+          finishedAt: formatISO(run.finishedAt),
+          tools: auditRepo.findAll({ limit: 50, offset: 0, filters: { type: 'tool', runId: run.id } })
+            .reverse()
+            .map((row) => ({ name: row.tool_name ?? 'unknown', status: row.status })),
+        })),
       });
     });
 

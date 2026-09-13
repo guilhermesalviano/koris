@@ -26,6 +26,8 @@ type OpenAIToolCall = {
     name?: string;
     arguments?: string;
   };
+  /** Provider data to echo back with the call, e.g. Gemini's `google.thought_signature`. */
+  extra_content?: Record<string, unknown>;
 };
 
 type OpenAIChatResponse = {
@@ -61,6 +63,7 @@ type ToolCallAccumulator = {
   id: string;
   type: 'function';
   function: { name: string; arguments: string };
+  extra_content?: Record<string, unknown>;
 };
 
 class OpenAICompatibleAIProvider implements AIProvider {
@@ -209,10 +212,12 @@ class OpenAICompatibleAIProvider implements AIProvider {
                 id: tc.id ?? '',
                 type: 'function',
                 function: { name: tc.function?.name ?? '', arguments: tc.function?.arguments ?? '' },
+                ...(tc.extra_content ? { extra_content: tc.extra_content } : {}),
               });
             } else {
               const acc = toolCallAccumulator.get(idx)!;
               if (tc.id) acc.id = tc.id;
+              if (tc.extra_content) acc.extra_content = tc.extra_content;
               if (tc.function?.name) acc.function.name += tc.function.name;
               if (tc.function?.arguments) acc.function.arguments += tc.function.arguments;
             }
@@ -484,6 +489,8 @@ class OpenAICompatibleAIProvider implements AIProvider {
     // The shared Message keeps tool-call arguments as a parsed object (Ollama's
     // native shape); the OpenAI spec requires a JSON string plus `type`, and
     // strict endpoints (Gemini) reject objects with a 400 "Value is not a string".
+    // Gemini also requires each call's `extra_content` (its thought_signature)
+    // back verbatim, or it rejects the turn with a 400.
     if (message.tool_calls?.length) {
       openAIMessage.tool_calls = message.tool_calls.map((tc) => ({
         ...(tc.id ? { id: tc.id } : {}),
@@ -494,6 +501,7 @@ class OpenAICompatibleAIProvider implements AIProvider {
             ? tc.function.arguments
             : JSON.stringify(tc.function.arguments ?? {}),
         },
+        ...(tc.extraContent ? { extra_content: tc.extraContent } : {}),
       }));
     }
 

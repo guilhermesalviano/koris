@@ -285,6 +285,57 @@ describe('OpenAICompatibleAIProvider', () => {
     expect(body.messages[3].tool_call_id).toBe('call_2');
   });
 
+  it('echoes a tool call\'s extra_content (Gemini thought_signature) back in the payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'done' }, finish_reason: 'stop' }] }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    ) as unknown as typeof fetch;
+    globalThis.fetch = fetchMock;
+
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+    const extraContent = { google: { thought_signature: 'sig-abc' } };
+
+    await provider.chat({
+      messages: [
+        { role: 'user', content: 'order lunch' },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{ id: 'call_1', function: { name: 'start_errand', arguments: { goal: 'lunch' } }, extraContent }],
+        },
+        { role: 'tool', content: 'Tool: start_errand, Result: ok', tool_call_id: 'call_1' },
+      ],
+    });
+
+    const body = JSON.parse((fetchMock as any).mock.calls[0]?.[1].body);
+    expect(body.messages[1].tool_calls[0]).toEqual({
+      id: 'call_1',
+      type: 'function',
+      function: { name: 'start_errand', arguments: '{"goal":"lunch"}' },
+      extra_content: extraContent,
+    });
+    expect(body.messages[1]).not.toHaveProperty('extraContent');
+  });
+
+  it('keeps a streamed tool call\'s extra_content (Gemini thought_signature)', async () => {
+    const extraContent = { google: { thought_signature: 'sig-abc' } };
+    const stream = makeSSE([
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'start_errand', arguments: '{}' }, extra_content: extraContent }] }, finish_reason: null }] },
+      { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+    ]);
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    ) as unknown as typeof fetch;
+
+    const provider = new OpenAICompatibleAIProvider(logger, nvidiaPreset, { model: 'test-model' });
+    let out = '';
+    for await (const chunk of provider.chatStream({ messages: [{ role: 'user', content: 'order lunch' }] })) out += chunk;
+
+    expect(JSON.parse(out).tool_calls[0].extra_content).toEqual(extraContent);
+  });
+
   it('returns serialized tool_calls JSON when chat response contains tool calls', async () => {
     const toolCalls = [
       { id: 'call_1', type: 'function', function: { name: 'get_skill', arguments: '{"skill_name":"git"}' } },

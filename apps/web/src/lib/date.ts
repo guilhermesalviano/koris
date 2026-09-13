@@ -25,6 +25,11 @@ function dayWord(at: number, now: number): string {
   });
 }
 
+/** "Today 2:14 PM", "Yesterday 9:03 AM", "Sep 3 4:40 PM" — a moment with its day. */
+export function dayTimeLabel(at: number, now: number = Date.now()): string {
+  return `${dayWord(at, now)} ${timeOf(at)}`;
+}
+
 /**
  * The separator to show above a message, or null when it follows its predecessor
  * closely enough to need none.
@@ -36,12 +41,12 @@ export function chatSeparatorLabel(at: number, prevAt?: number, now: number = Da
   if (!Number.isFinite(at)) return null;
 
   if (prevAt === undefined || !Number.isFinite(prevAt)) {
-    return `${dayWord(at, now)} ${timeOf(at)}`;
+    return dayTimeLabel(at, now);
   }
 
   // A day change always breaks the thread, however small the gap.
   if (!sameDay(at, prevAt)) {
-    return `${dayWord(at, now)} ${timeOf(at)}`;
+    return dayTimeLabel(at, now);
   }
 
   return at - prevAt > SEPARATOR_GAP_MS ? timeOf(at) : null;

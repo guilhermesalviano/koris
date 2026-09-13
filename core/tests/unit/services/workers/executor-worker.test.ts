@@ -131,6 +131,21 @@ describe('ExecutorWorker', () => {
     );
   });
 
+  it('carries each tool call\'s provider extra content into the follow-up assistant message', async () => {
+    const { executor, managerComplete } = makeWorker();
+    const extraContent = { google: { thought_signature: 'sig-abc' } };
+
+    await executor.run({
+      toolCalls: [{ ...toolCalls[0], extraContent }],
+      userMessage: 'list files',
+      messageHistory: [],
+      ctx: makeContext({ initiatedBy: 'manager' }),
+    });
+
+    const toolMessages = managerComplete.mock.calls[0][6];
+    expect(toolMessages[0].tool_calls[0]).toMatchObject({ id: 'call_1', extraContent });
+  });
+
   it('recurses when the chat service returns more tool calls', async () => {
     const { executor, managerComplete } = makeWorker({
       managerComplete: vi.fn()

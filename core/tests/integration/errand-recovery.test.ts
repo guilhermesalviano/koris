@@ -49,13 +49,17 @@ describe('errand recovery and privacy', () => {
       errands: ErrandRepositoryFactory.create(db), messages: MessageRepositoryFactory.create(db) };
   }
 
+  function messagesIn(sessionId: string): number {
+    return MessageRepositoryFactory.create(db).getBySessionId(sessionId, 100).length;
+  }
+
   function gateway(manager: SessionManager, text: string) {
     const completion = { complete: vi.fn().mockResolvedValue({ kind: 'message', text }) };
     const prompts = { build: vi.fn().mockResolvedValue({ messages: [] }) };
     const negotiator = new Negotiator(logger, db, manager, completion as never, prompts);
     const mainAgent = { run: vi.fn() };
     const result = new MessageGateway(logger, 'whatsapp', db, manager,
-      SessionContextFactory.create(logger, db, manager), {} as never,
+      SessionContextFactory.create(logger, db, manager), { persistConversation: vi.fn(), summarizeConversation: vi.fn() } as never,
       mainAgent as never, { record: vi.fn() } as never, {} as never, negotiator);
     return { gateway: result, completion, prompts, mainAgent };
   }
@@ -94,14 +98,17 @@ describe('errand recovery and privacy', () => {
     expect(runtime.mainAgent.run).not.toHaveBeenCalled();
   });
 
-  it.each([undefined, { compactSummary: 'Earlier conversation' }])('pins late notices to the origin after rotation with %j', (metadata) => {
+  it.each([undefined, { compactSummary: 'Earlier conversation' }])('keeps late notices in the negotiation session, out of the Orchestrator, after rotation with %j', (metadata) => {
     const { manager, service, parent, messages } = setup();
     const errand = service.create('Book a haircut', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Hello');
-    const fresh = manager.getSessionServiceById(parent.id).forceRotate(metadata);
+    const fresh = manager.getSessionServiceById(parent.id).forceRotate('clear', metadata);
     service.escalate(errand.id, 'Is 11 okay?');
     expect(manager.getSessionServiceById(parent.id).getSession().id).toBe(parent.id);
-    expect(messages.getBySessionId(parent.id).map((message) => message.content)).toEqual([expect.stringContaining('Is 11 okay?')]);
+    expect(messages.getBySessionId(parent.id)).toEqual([]);
     expect(messages.getBySessionId(fresh.id)).toEqual([]);
+    const negotiation = SessionRepositoryFactory.create(db).findLatestOpen({ channel: 'negotiator', peerId: errand.id, kind: 'user' });
+    expect(negotiation?.metadata).toMatchObject({ errandId: errand.id, parentSessionId: parent.id });
+    expect(messages.getBySessionId(negotiation!.id).map((message) => message.content)).toEqual([expect.stringContaining('Is 11 okay?')]);
     manager.getSessionServiceById(fresh.id);
     SessionRepositoryFactory.create(db).deleteById(fresh.id);
     manager.invalidate(fresh.id);
@@ -178,7 +185,7 @@ describe('errand recovery and privacy', () => {
     expect(composeResume).toHaveBeenCalledTimes(1);
     expect(channels.sendMessage.mock.calls.slice(-2).map((call) => call[2])).toEqual(['Please book 11.', 'Please book 11.']);
     expect(service.get(errand.id)?.notes).toBe('Principal answer: "11 works"');
-    expect(messages.getBySessionId(parent.id).filter((message) => message.content.includes('resumed.'))).toHaveLength(1);
+    expect(messages.getBySessionId(parent.id).filter((message) => message.content.includes('resumed.'))).toHaveLength(0);
   });
 
   it('stops further targets after cancellation during delivery and rejects terminal retries', async () => {
@@ -225,7 +232,7 @@ describe('errand recovery and privacy', () => {
 
   it('invalidates all aliases to a deleted rotated session', () => {
     const { manager, parent } = setup();
-    const rotated = manager.getSessionServiceById(parent.id).forceRotate();
+    const rotated = manager.getSessionServiceById(parent.id).forceRotate('clear');
     manager.getSessionServiceById(rotated.id);
     SessionRepositoryFactory.create(db).deleteById(rotated.id);
     manager.invalidate(rotated.id);
@@ -233,6 +240,203 @@ describe('errand recovery and privacy', () => {
     MessageServiceFactory.create(db, original).save({ role: 'assistant', content: 'Original notice' });
     expect(original.getSession().id).toBe(parent.id);
     expect(() => manager.getSessionServiceById(rotated.id)).toThrow('Session not found');
+  });
+
+  it('opens a negotiation session on approval that collects notices and answers, sent to a WhatsApp principal and listed by the admin API', async () => {
+    const { manager, service, channels, messages } = setup();
+    const principal = manager.getSessionService({ channel: 'whatsapp', peerId: '999' }).getSession();
+    const errand = service.create('Book a haircut', [{ channel: 'whatsapp', peerId: '555' }], principal.id, 'Is 10 available?');
+    const sessions = SessionRepositoryFactory.create(db);
+    const key = { channel: 'negotiator', peerId: errand.id, kind: 'user' as const };
+    expect(sessions.findLatestOpen(key)).toBeNull();
+
+    await service.approve(errand.id);
+    const negotiation = sessions.findLatestOpen(key)!;
+    expect(negotiation.metadata).toEqual({ errandId: errand.id, parentSessionId: principal.id });
+    expect(messages.getBySessionId(negotiation.id)).toEqual([]);
+
+    service.escalate(errand.id, 'Would 11 work?');
+    await Promise.resolve();
+    const noticesRouter = AdminRouterFactory.create(logger, db, {} as never, manager);
+    const noticesLayer = noticesRouter.stack.find((item) => item.route?.path === '/agents/negotiator/notices' && item.route.methods.get);
+    const waiting = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    await noticesLayer!.route.stack[0].handle({ params: {}, query: {} }, waiting, vi.fn());
+    expect(waiting.json.mock.calls[0][0].pending).toEqual([
+      { errandId: errand.id, goal: 'Book a haircut', kind: 'question', question: 'Would 11 work?', askedAt: expect.any(String) },
+    ]);
+    expect(channels.sendMessage).toHaveBeenLastCalledWith('whatsapp', '999', expect.stringContaining('Would 11 work?'));
+    await vi.waitFor(() => expect(messages.getBySessionId(negotiation.id)).toHaveLength(1));
+    vi.spyOn(NegotiatorFactory, 'create').mockReturnValue({ composeResume: vi.fn().mockResolvedValue('Please book 11.') } as never);
+    await service.resumeWithPrincipalAnswer(errand.id, '11 works');
+    expect(messages.getBySessionId(principal.id)).toEqual([]);
+    expect(messages.getBySessionId(negotiation.id).map((message) => [message.role, message.content])).toEqual([
+      ['assistant', expect.stringContaining('Would 11 work?')],
+      ['user', '11 works'],
+    ]);
+
+    const router = AdminRouterFactory.create(logger, db, {} as never, manager);
+    const layer = router.stack.find((item) => item.route?.path === '/agents/negotiator/notices' && item.route.methods.get);
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    await layer!.route.stack[0].handle({ params: {}, query: {} }, res, vi.fn());
+    expect(res.json.mock.calls[0][0]).toMatchObject({
+      messages: [
+        { role: 'assistant', content: expect.stringContaining('Would 11 work?'), errandId: errand.id },
+        { role: 'user', content: '11 works', errandId: errand.id },
+      ],
+      pending: [],
+      nextCursor: null,
+    });
+  });
+
+  it('reopens a resolved errand when its contact writes again, asks the principal, and resumes with their answer', async () => {
+    const { manager, service, parent, channels, errands, messages } = setup();
+    const errand = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Can I order a sandwich?');
+    await service.approve(errand.id);
+    service.resolve(errand.id, 'Sandwich ordered');
+    const contactSession = errands.findTargets(errand.id)[0];
+    channels.sendMessage.mockClear();
+
+    const runtime = gateway(manager, '{"action":"continue","reply":"unused"}');
+    expect(await runtime.gateway.handle('Do you want a drink too?', '555', { isTrustedSender: false })).toBe('');
+
+    expect(service.get(errand.id)).toMatchObject({
+      state: 'awaiting_principal', result: undefined, closedAt: undefined,
+      notes: 'Resolved before: Sandwich ordered',
+      pendingMessage: 'The contact wrote again after this errand was resolved: "Do you want a drink too?". How should I reply?',
+    });
+    expect(messages.getBySessionId(contactSession).map((message) => message.content)).toEqual(['Can I order a sandwich?', 'Do you want a drink too?']);
+    const negotiation = SessionRepositoryFactory.create(db).findLatestOpen({ channel: 'negotiator', peerId: errand.id, kind: 'user' })!;
+    expect(messages.getBySessionId(negotiation.id).at(-1)?.content).toContain('Do you want a drink too?');
+    expect(channels.sendMessage).not.toHaveBeenCalled();
+    expect(runtime.completion.complete).not.toHaveBeenCalled();
+    expect(runtime.mainAgent.run).not.toHaveBeenCalled();
+
+    // A second message while the principal decides is only recorded.
+    expect(await runtime.gateway.handle('Hello?', '555', { isTrustedSender: false })).toBe('');
+    expect(service.get(errand.id)?.state).toBe('awaiting_principal');
+
+    vi.spyOn(NegotiatorFactory, 'create').mockReturnValue({ composeResume: vi.fn().mockResolvedValue('Yes, a juice please.') } as never);
+    await service.resumeWithPrincipalAnswer(errand.id, 'yes, a juice');
+    expect(channels.sendMessage).toHaveBeenCalledExactlyOnceWith('whatsapp', '555', 'Yes, a juice please.');
+    expect(service.get(errand.id)?.state).toBe('awaiting_peer');
+  });
+
+  it('keeps an old resolved errand closed and lets a trusted sender reach their own session', async () => {
+    const { manager, service, parent, errands } = setup();
+    const errand = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Hi');
+    await service.approve(errand.id);
+    service.resolve(errand.id, 'Done');
+    const runtime = gateway(manager, '{"action":"continue","reply":"unused"}');
+    runtime.mainAgent.run.mockResolvedValue('Hi there');
+
+    await runtime.gateway.handle('hello', '555', { isTrustedSender: true });
+    expect(service.get(errand.id)?.state).toBe('resolved');
+    expect(runtime.mainAgent.run).toHaveBeenCalledTimes(1);
+
+    errands.update(errand.id, { closedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString() });
+    await runtime.gateway.handle('hello again', '555', { isTrustedSender: false });
+    expect(service.get(errand.id)?.state).toBe('resolved');
+    expect(runtime.mainAgent.run).toHaveBeenCalledTimes(2);
+  });
+
+  it('changes the errands fingerprint on every status or message change, even without a notice', async () => {
+    const { manager, service, parent, errands } = setup();
+    const router = AdminRouterFactory.create(logger, db, {} as never, manager);
+    const layer = router.stack.find((item) => item.route?.path === '/agents/negotiator/notices' && item.route.methods.get);
+    const version = async () => {
+      const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      await layer!.route.stack[0].handle({ params: {}, query: {} }, res, vi.fn());
+      return res.json.mock.calls[0][0].errandsVersion as string;
+    };
+
+    const empty = await version();
+    const errand = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Can I order a sandwich?');
+    const drafted = await version();
+    expect(drafted).not.toBe(empty);
+    expect(await version()).toBe(drafted);
+
+    await service.approve(errand.id);
+    const contacted = await version();
+    expect(contacted).not.toBe(drafted);
+
+    const runtime = gateway(manager, '{"action":"continue","reply":"Great, thanks!"}');
+    await runtime.gateway.handle('Sure, what would you like?', '555', { isTrustedSender: false });
+    expect(service.get(errand.id)?.state).toBe('awaiting_peer');
+    expect(messagesIn(errands.findTargets(errand.id)[0])).toBeGreaterThan(1);
+    expect(await version()).not.toBe(contacted);
+  });
+
+  it('lists, closes and cancels errands through the admin API, and fingerprints a partial delivery', async () => {
+    const { manager, service, parent, channels } = setup();
+    const first = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Can I order a sandwich?');
+    const second = service.create('Book a haircut', [{ channel: 'whatsapp', peerId: '777' }], parent.id, 'Is 10 free?');
+    const router = AdminRouterFactory.create(logger, db, {} as never, manager);
+    const call = async (path: string, method: 'get' | 'post', params: Record<string, string> = {}, body: unknown = undefined) => {
+      const layer = router.stack.find((item) => item.route?.path === path && item.route.methods[method]);
+      const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      await layer!.route.stack[0].handle({ params, query: {}, body }, res, vi.fn());
+      return res;
+    };
+    const fingerprint = async () => (await call('/agents/negotiator/notices', 'get')).json.mock.calls[0][0].errandsVersion as string;
+
+    const listed = (await call('/errands', 'get')).json.mock.calls[0][0];
+    expect(listed.items.map((item: { id: string }) => item.id).sort()).toEqual([first.id, second.id].sort());
+    expect(listed.items[0].targets).toEqual([expect.objectContaining({ channel: 'whatsapp', kind: 'delegated' })]);
+
+    const beforeDelivery = await fingerprint();
+    channels.sendMessage.mockRejectedValueOnce(new Error('offline'));
+    await expect(service.approve(first.id)).rejects.toThrow('Message delivery failed');
+    expect(await fingerprint()).not.toBe(beforeDelivery);
+
+    const closed = await call('/errands/:id/close', 'post', { id: first.id }, { result: 'Ordered by phone' });
+    expect(closed.json.mock.calls[0][0]).toMatchObject({ state: 'resolved', result: 'Ordered by phone' });
+    const cancelled = await call('/errands/:id/cancel', 'post', { id: second.id });
+    expect(cancelled.json.mock.calls[0][0]).toMatchObject({ state: 'cancelled' });
+    expect((await call('/errands/:id/cancel', 'post', { id: 'missing' })).status).toHaveBeenCalledWith(400);
+  });
+
+  it('confirms a proposed result through the admin API and lists it as a pending confirmation', async () => {
+    const { manager, service, parent, channels } = setup();
+    const errand = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Can I order a sandwich?');
+    await service.approve(errand.id);
+    service.proposeResolution(errand.id, 'Sandwich ordered for noon', 'Obrigado!');
+    const router = AdminRouterFactory.create(logger, db, {} as never, manager);
+    const call = async (path: string, method: 'get' | 'post') => {
+      const layer = router.stack.find((item) => item.route?.path === path && item.route.methods[method]);
+      const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      await layer!.route.stack[0].handle({ params: { id: errand.id }, query: {} }, res, vi.fn());
+      return res;
+    };
+
+    const notices = await call('/agents/negotiator/notices', 'get');
+    expect(notices.json.mock.calls[0][0].pending).toEqual([
+      { errandId: errand.id, goal: 'Order lunch', kind: 'confirmation', question: 'Sandwich ordered for noon', askedAt: expect.any(String) },
+    ]);
+    channels.sendMessage.mockClear();
+
+    const confirmed = await call('/errands/:id/confirm', 'post');
+    expect(confirmed.status).not.toHaveBeenCalled();
+    expect(confirmed.json.mock.calls[0][0]).toMatchObject({ state: 'resolved', result: 'Sandwich ordered for noon' });
+    expect(channels.sendMessage).toHaveBeenCalledExactlyOnceWith('whatsapp', '555', 'Obrigado!');
+    expect((await call('/errands/:id/confirm', 'post')).status).toHaveBeenCalledWith(400);
+  });
+
+  it('returns the images a contact sent in the errand transcript', async () => {
+    const { manager, service, parent } = setup();
+    const errand = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Can I see the menu?');
+    await service.approve(errand.id);
+    const runtime = gateway(manager, '{"action":"continue","reply":"Thanks, I will pick one."}');
+    const menu = { data: 'bWVudQ==', mimeType: 'image/jpeg' };
+    await runtime.gateway.handle({ text: 'Here it is', images: [menu] }, '555', { isTrustedSender: false });
+    expect(runtime.prompts.build.mock.calls[0][0]).toMatchObject({ images: [menu] });
+
+    const router = AdminRouterFactory.create(logger, db, {} as never, manager);
+    const layer = router.stack.find((item) => item.route?.path === '/errands/:id/transcript' && item.route.methods.get);
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    await layer!.route.stack[0].handle({ params: { id: errand.id }, query: {} }, res, vi.fn());
+    const { messages: transcript } = res.json.mock.calls[0][0];
+    expect(transcript.find((message: { content: string }) => message.content === 'Here it is')).toMatchObject({ role: 'user', images: [menu] });
+    expect(transcript.find((message: { content: string }) => message.content === 'Can I see the menu?')).not.toHaveProperty('images');
   });
 
   it('exposes failure and retry through the admin API without exposing internal delivery instructions', async () => {

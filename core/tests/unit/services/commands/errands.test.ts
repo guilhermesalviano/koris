@@ -8,7 +8,7 @@ import type { CommandContext } from '../../../../src/types/commands';
 const { service, composeOpener, findTargets } = vi.hoisted(() => ({
   service: {
     listByOrigin: vi.fn(), listAll: vi.fn(), create: vi.fn(), approve: vi.fn(),
-    retryDelivery: vi.fn(), resolve: vi.fn(), cancel: vi.fn(), resumeWithPrincipalAnswer: vi.fn(),
+    retryDelivery: vi.fn(), resolve: vi.fn(), cancel: vi.fn(), resumeWithPrincipalAnswer: vi.fn(), confirmResolution: vi.fn(),
   },
   composeOpener: vi.fn(),
   findTargets: vi.fn(),
@@ -44,6 +44,14 @@ describe('errand command', () => {
     expect(result).toMatchObject({ handled: true, response: 'Only trusted senders can manage errands.' });
     expect(DatabaseServiceFactory.create).not.toHaveBeenCalled();
     expect(service.approve).not.toHaveBeenCalled();
+  });
+
+  it('confirms a proposed result with /errand resolve', async () => {
+    service.confirmResolution.mockResolvedValue(new Errand({ ...draft, state: 'resolved' }));
+    const result = await handleErrandCommand('/errand resolve e1', context);
+    expect(service.confirmResolution).toHaveBeenCalledExactlyOnceWith('e1');
+    expect(result.response).toBe('Errand [e1] is now "resolved".');
+    expect((await handleErrandCommand('/errand resolve', context)).response).toBe('Usage: /errand resolve <id>');
   });
 
   it('lists only the invoking session and explains how to create the first errand', async () => {

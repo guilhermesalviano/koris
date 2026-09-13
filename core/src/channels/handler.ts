@@ -75,6 +75,7 @@ class ChannelHandler implements IChannelHandler {
           toolsEnabled: message.isTrustedSender,
           learnedSkillsEnabled: message.isTrustedSender,
           isTrustedSender: message.isTrustedSender,
+          ...(message.peerAliases?.length ? { peerAliases: message.peerAliases } : {}),
         },
       );
       const resolved = await resolveResponse(response);

@@ -10,6 +10,8 @@ export interface MessageToolCall {
     name: string;
     arguments: Record<string, unknown>;
   };
+  /** See `ToolCall.extraContent`. */
+  extraContent?: Record<string, unknown>;
 }
 
 export interface Message {
