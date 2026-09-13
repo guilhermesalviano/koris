@@ -10,6 +10,8 @@ apps/tauri/src-tauri/gen
 next-env.d.ts
 *.tsbuildinfo
 
+.agents
+
 # Dependencies
 node_modules
 
@@ -64,7 +66,7 @@ plugins/tools/*
 
 plugins/skills/*
 !plugins/skills/.gitkeep
-
+!plugins/skills/koris-help
 
 plugins/mcps/*
 !plugins/mcps/contracts.ts

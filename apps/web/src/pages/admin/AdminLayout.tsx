@@ -1,74 +1,39 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import type { SessionSummary } from '../../lib/types';
-import {
-  AuditIcon,
-  CloseIcon,
-  MenuIcon,
-  MoreIcon,
-  OverviewIcon,
-  PlusIcon,
-  QueueIcon,
-  SettingsIcon,
-} from '../../components/Icons';
+import { CloseIcon, MenuIcon, OverviewIcon, PlusIcon, SettingsIcon } from '../../components/Icons';
+import { IconButton, Input } from '../../components/ui';
+import { cn } from '../../lib/cn';
 import ConfigModal from './ConfigModal';
 import { useSaveStates } from '../../lib/config-save-context';
 import ChatPage from './ChatPage';
-import OverviewPage from './OverviewPage';
-import QueuePage from './QueuePage';
-import AuditPage from './AuditPage';
+import ActivityPage, { DEFAULT_ACTIVITY_TAB } from './ActivityPage';
 import { ChatProvider, useChat } from '../../lib/chat-context';
 import { UiProvider, useUi } from '../../lib/ui-context';
 import { ProvidersProvider } from '../../lib/use-providers';
 
-const NAV_ICONS = {
-  overview: OverviewIcon,
-  queue: QueueIcon,
-  audit: AuditIcon,
-};
-
-const MAIN_ITEMS: { to: string; label: string; icon: keyof typeof NAV_ICONS }[] = [
-  { to: '/admin/overview', label: 'Overview', icon: 'overview' },
-  { to: '/admin/queue', label: 'Queue', icon: 'queue' },
-  { to: '/admin/audit', label: 'Audit', icon: 'audit' },
-];
-
-function navItemClass({ isActive }: { isActive: boolean }, vertical: boolean): string {
-  const base = vertical
-    ? 'flex w-full items-center gap-2.5 rounded-lg border border-transparent px-3 py-2.5 text-[13px] text-txt-2 hover:bg-bg-3 hover:text-txt'
-    : 'flex items-center gap-1.5 rounded-lg border border-transparent px-2.5 py-1.5 text-[13px] text-txt-2 hover:bg-bg-3 hover:text-txt';
-  return isActive ? `${base} bg-accent-muted !text-accent-2 border-accent-muted` : base;
+/** Shared chrome for the sidebar/drawer nav rows — active state without an `!important`. */
+function navItemClass({ isActive }: { isActive: boolean }): string {
+  return cn(
+    'flex w-full items-center gap-2.5 rounded-control border border-transparent px-3 py-2.5',
+    'text-body transition-colors duration-150 outline-none',
+    'focus-visible:ring-2 focus-visible:ring-accent/40',
+    isActive
+      ? 'border-accent-muted bg-accent-muted text-accent-2'
+      : 'text-txt-2 hover:bg-bg-3 hover:text-txt',
+  );
 }
 
-function NavItems({
-  items,
-  vertical = false,
-  onNavigate,
-  role,
-}: {
-  items: typeof MAIN_ITEMS;
-  vertical?: boolean;
-  onNavigate?: () => void;
-  role?: string;
-}) {
+const NAV_ICON_CLASS = 'h-4 w-4 flex-shrink-0 fill-none stroke-current';
+
+function PrimaryNav({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <>
-      {items.map((item) => {
-        const Icon = NAV_ICONS[item.icon];
-        return (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            role={role}
-            onClick={onNavigate}
-            className={(state) => navItemClass(state, vertical)}
-          >
-            <Icon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-            <span>{item.label}</span>
-          </NavLink>
-        );
-      })}
-    </>
+    <nav aria-label="Views" className="flex-shrink-0 border-b border-subtle p-2">
+      <NavLink to="/admin/activity" onClick={onNavigate} className={navItemClass}>
+        <OverviewIcon className={NAV_ICON_CLASS} />
+        <span>Activity</span>
+      </NavLink>
+    </nav>
   );
 }
 
@@ -97,18 +62,21 @@ function Drawer({
   return (
     <div className={mobileOnly ? 'md:hidden' : undefined} aria-hidden={!open}>
       <div
-        className={`fixed inset-0 z-40 bg-black/60 transition-opacity duration-200 ${
-          open ? 'opacity-100' : 'pointer-events-none opacity-0'
-        }`}
+        className={cn(
+          'fixed inset-0 z-40 bg-black/60 transition-opacity duration-200',
+          open ? 'opacity-100' : 'pointer-events-none opacity-0',
+        )}
         onClick={onClose}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-subtle bg-bg-2 shadow-2xl transition-transform duration-200 ease-out ${
-          open ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-subtle bg-bg-2',
+          'shadow-pop transition-transform duration-200 ease-out',
+          open ? 'translate-x-0' : '-translate-x-full',
+        )}
       >
         {children}
       </div>
@@ -126,22 +94,17 @@ function getInitialDark(): boolean {
   }
 }
 
+/**
+ * Mobile top bar. On `md:` and up the sidebar plus each page's own PageShell
+ * header carry the navigation, so this bar stays out of the way.
+ */
 function Header({ onOpenNav }: { onOpenNav: () => void }) {
   return (
-    <header className="relative z-20 flex h-14 flex-shrink-0 items-center justify-between gap-2 border-b border-subtle bg-bg/80 px-3 backdrop-blur-md sm:px-4">
-      <div className="flex min-w-0 items-center">
-        <button
-          onClick={onOpenNav}
-          aria-label="Open navigation"
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt md:hidden"
-        >
-          <MenuIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-        </button>
-      </div>
-
-      <div className="flex flex-shrink-0 items-center gap-2">
-        <HeaderAppMenu />
-      </div>
+    <header className="relative z-20 flex h-14 flex-shrink-0 items-center gap-2 border-b border-subtle bg-bg/80 px-3 backdrop-blur-md md:hidden">
+      <IconButton aria-label="Open navigation" onClick={onOpenNav}>
+        <MenuIcon className={NAV_ICON_CLASS} />
+      </IconButton>
+      <span className="font-mono text-caption tracking-wide text-txt-2">koris</span>
     </header>
   );
 }
@@ -170,19 +133,17 @@ function ChatItem({ session, live, onNavigate }: { session: SessionSummary; live
   return (
     <button
       onClick={handleClick}
-      className={`w-full rounded-lg border px-3 py-2 text-left transition-colors duration-150 ${
-        isActive ? 'border-accent-muted bg-accent-muted' : 'border-transparent hover:bg-bg-3'
-      }`}
+      className={cn(
+        'w-full rounded-control border px-3 py-2 text-left transition-colors duration-150 outline-none',
+        'focus-visible:ring-2 focus-visible:ring-accent/40',
+        isActive ? 'border-accent-muted bg-accent-muted' : 'border-transparent hover:bg-bg-3',
+      )}
     >
-      <div className="truncate text-[13px] text-txt">{title}</div>
-      <div className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-txt-3">
+      <div className={cn('truncate text-body', isActive ? 'text-accent-2' : 'text-txt')}>{title}</div>
+      <div className="mt-0.5 flex items-center gap-1.5 font-mono text-micro text-txt-3">
         <span>{formatShortDate(session.startedAt)}</span>
-        <span>·</span>
-        {live ? (
-          <span className="text-green-400">live</span>
-        ) : (
-          <span>{session.channel}</span>
-        )}
+        <span aria-hidden="true">·</span>
+        {live ? <span className="text-success">live</span> : <span>{session.channel}</span>}
       </div>
     </button>
   );
@@ -207,38 +168,30 @@ function ChatsPanel({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-2 px-3 pt-2.5 pb-1.5">
-        <div className="font-mono text-[10px] uppercase tracking-wider text-txt-3">Chats</div>
-        <button
-          onClick={handleNewChat}
-          title="New chat"
-          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-strong bg-bg-3 text-txt transition-all duration-150 hover:border-accent hover:bg-accent-muted hover:text-accent-2"
-        >
+      <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+        <div className="font-mono text-micro uppercase text-txt-3">Chats</div>
+        <IconButton aria-label="New chat" title="New chat" variant="secondary" size="sm" onClick={handleNewChat}>
           <PlusIcon className="h-3.5 w-3.5 fill-none stroke-current" />
-        </button>
+        </IconButton>
       </div>
-      <div className="px-3 pb-1.5">
-        <input
+      <div className="px-3 pb-2">
+        <Input
           type="search"
+          aria-label="Search chats"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search chats"
-          className="w-full rounded-lg border border-strong bg-bg-3/60 px-2.5 py-1.5 text-[12px] text-txt outline-none transition-colors placeholder:text-txt-3 focus:border-accent focus:ring-2 focus:ring-accent/15"
+          className="h-8 text-caption"
         />
       </div>
       <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
         {filtered.length === 0 && (
-          <div className="px-3 py-8 text-center font-mono text-[11px] text-txt-3">
+          <div className="px-3 py-8 text-center font-mono text-mini text-txt-3">
             {trimmed ? 'No matching chats.' : 'No chats yet.'}
           </div>
         )}
         {filtered.map((session) => (
-          <ChatItem
-            key={session.id}
-            session={session}
-            live={session.id === liveWebId}
-            onNavigate={onNavigate}
-          />
+          <ChatItem key={session.id} session={session} live={session.id === liveWebId} onNavigate={onNavigate} />
         ))}
       </div>
     </div>
@@ -252,101 +205,30 @@ function ConfigButton({ onOpen }: { onOpen: () => void }) {
       onClick={onOpen}
       aria-label="Configuration"
       title={hasError ? 'Configuration · changes need attention' : undefined}
-      className="flex w-full items-center gap-2.5 rounded-lg border border-transparent px-3 py-2.5 text-[13px] text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
+      className={cn(
+        'flex w-full items-center gap-2.5 rounded-control border border-transparent px-3 py-2.5',
+        'text-body text-txt-2 transition-colors duration-150 outline-none',
+        'hover:bg-bg-3 hover:text-txt focus-visible:ring-2 focus-visible:ring-accent/40',
+      )}
     >
-      <SettingsIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
+      <SettingsIcon className={NAV_ICON_CLASS} />
       <span>Configuration</span>
-      {hasError && <span aria-label="Changes need attention" className="h-1.5 w-1.5 rounded-full bg-red-400" />}
+      {hasError && <span aria-label="Changes need attention" className="h-1.5 w-1.5 rounded-full bg-danger" />}
     </button>
   );
 }
 
-function HeaderAppMenu() {
-  const [open, setOpen] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const dismiss = (event: PointerEvent) => {
-      if (!container.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-        container.current?.querySelector('button')?.focus();
-      }
-    };
-    document.addEventListener('pointerdown', dismiss);
-    document.addEventListener('keydown', escape);
-    return () => {
-      document.removeEventListener('pointerdown', dismiss);
-      document.removeEventListener('keydown', escape);
-    };
-  }, [open]);
-
-  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>('a[href], button') ?? []);
-    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % items.length;
-      items[nextIndex]?.focus();
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      const prevIndex = currentIndex === -1 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length;
-      items[prevIndex]?.focus();
-    } else if (event.key === 'Home') {
-      event.preventDefault();
-      items[0]?.focus();
-    } else if (event.key === 'End') {
-      event.preventDefault();
-      items[items.length - 1]?.focus();
-    } else if (event.key === 'Tab') {
-      setOpen(false);
-    }
-  }
-
-  return (
-    <div ref={container} className="relative z-20">
-      <button
-        id="app-menu-button"
-        type="button"
-        aria-label="Admin navigation"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
-      >
-        <MoreIcon className="h-4 w-4 fill-none stroke-current" />
-      </button>
-      {open && (
-        <div
-          ref={menuRef}
-          role="menu"
-          aria-labelledby="app-menu-button"
-          onKeyDown={handleKeyDown}
-          className="absolute right-0 top-full z-20 mt-1.5 w-52 rounded-xl border border-strong bg-bg-2 p-1.5 shadow-2xl animate-[modalIn_0.15s_ease-out_both]"
-        >
-          <div className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-txt-3">Admin views</div>
-          <NavItems items={MAIN_ITEMS} vertical onNavigate={() => setOpen(false)} role="menuitem" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SidebarContent({ onNavigate, onOpenConfig }: { onNavigate?: () => void; onOpenConfig?: () => void }) {
+/** Body shared by the desktop sidebar and the mobile drawer. */
+function SidebarContent({ onNavigate, onOpenConfig }: { onNavigate?: () => void; onOpenConfig: () => void }) {
   return (
     <>
+      <PrimaryNav onNavigate={onNavigate} />
       <div className="min-h-0 flex-1">
         <ChatsPanel onNavigate={onNavigate} />
       </div>
-      {onOpenConfig && (
-        <div className="flex-shrink-0 border-t border-subtle p-2">
-          <ConfigButton onOpen={onOpenConfig} />
-        </div>
-      )}
+      <div className="flex-shrink-0 border-t border-subtle p-2">
+        <ConfigButton onOpen={onOpenConfig} />
+      </div>
     </>
   );
 }
@@ -355,12 +237,7 @@ function Sidebar() {
   const { openConfig } = useUi();
   return (
     <aside className="relative hidden w-60 flex-shrink-0 flex-col border-r border-subtle bg-bg-2 md:flex">
-      <div className="min-h-0 flex-1">
-        <ChatsPanel />
-      </div>
-      <div className="flex-shrink-0 border-t border-subtle p-2">
-        <ConfigButton onOpen={() => openConfig()} />
-      </div>
+      <SidebarContent onOpenConfig={() => openConfig()} />
     </aside>
   );
 }
@@ -376,15 +253,11 @@ function ConfigSectionRedirect({ sectionId }: { sectionId: string }) {
 
 function DrawerHeader({ title, onClose }: { title: string; onClose: () => void }) {
   return (
-    <div className="flex h-14 flex-shrink-0 items-center gap-2.5 border-b border-subtle px-4">
-      <span className="text-[13px] font-medium">{title}</span>
-      <button
-        onClick={onClose}
-        aria-label={`Close ${title}`}
-        className="ml-auto flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-txt-2 transition-colors duration-150 hover:bg-bg-3 hover:text-txt"
-      >
-        <CloseIcon className="h-4 w-4 flex-shrink-0 fill-none stroke-current" />
-      </button>
+    <div className="flex h-14 flex-shrink-0 items-center gap-2.5 border-b border-subtle px-3">
+      <span className="text-body font-medium text-txt">{title}</span>
+      <IconButton aria-label={`Close ${title}`} size="sm" onClick={onClose} className="ml-auto">
+        <CloseIcon className={NAV_ICON_CLASS} />
+      </IconButton>
     </div>
   );
 }
@@ -392,11 +265,11 @@ function DrawerHeader({ title, onClose }: { title: string; onClose: () => void }
 export default function AdminLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
-  const [configSection, setConfigSection] = useState<string | undefined>(undefined);
+  const [configSection, setConfigSection] = useState<string | undefined>('general');
   const [isDark, setIsDark] = useState(getInitialDark);
 
   function handleOpenConfig(sectionId?: string) {
-    if (sectionId) setConfigSection(sectionId);
+    setConfigSection(sectionId || 'general');
     setConfigOpen(true);
   }
 
@@ -423,11 +296,17 @@ export default function AdminLayout() {
                     <Route index element={<Navigate to="/admin/chat" replace />} />
                     <Route path="chat" element={<ChatPage />} />
                     <Route path="chat/:sessionId" element={<ChatPage />} />
-                    <Route path="overview" element={<OverviewPage />} />
+                    <Route
+                      path="activity"
+                      element={<Navigate to={`/admin/activity/${DEFAULT_ACTIVITY_TAB}`} replace />}
+                    />
+                    <Route path="activity/:tab" element={<ActivityPage />} />
+                    {/* Legacy single-view routes now resolve to their Activity tab. */}
+                    <Route path="overview" element={<Navigate to="/admin/activity/overview" replace />} />
+                    <Route path="queue" element={<Navigate to="/admin/activity/queue" replace />} />
+                    <Route path="audit" element={<Navigate to="/admin/activity/audit" replace />} />
                     <Route path="memories" element={<ConfigSectionRedirect sectionId="memories" />} />
                     <Route path="heartbeats" element={<ConfigSectionRedirect sectionId="beats" />} />
-                    <Route path="queue" element={<QueuePage />} />
-                    <Route path="audit" element={<AuditPage />} />
                     <Route path="*" element={<Navigate to="/admin/chat" replace />} />
                   </Routes>
                 </main>
@@ -439,17 +318,15 @@ export default function AdminLayout() {
               <div className="flex min-h-0 flex-1 flex-col">
                 <SidebarContent
                   onNavigate={() => setNavOpen(false)}
-                  onOpenConfig={() => { setNavOpen(false); handleOpenConfig(); }}
+                  onOpenConfig={() => {
+                    setNavOpen(false);
+                    handleOpenConfig();
+                  }}
                 />
               </div>
             </Drawer>
 
-            <ConfigModal
-              open={configOpen}
-              initialSectionId={configSection}
-              onClose={() => setConfigOpen(false)}
-            />
-
+            <ConfigModal open={configOpen} initialSectionId={configSection} onClose={() => setConfigOpen(false)} />
           </div>
         </UiProvider>
       </ChatProvider>

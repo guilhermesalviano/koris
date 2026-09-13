@@ -266,3 +266,41 @@ export function MoreIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function WaveformIcon({ className }: IconProps) {
+  return (
+    <svg className={className} style={svgStyle(1.8)} viewBox="0 0 24 24">
+      <path d="M3 10v4M7 6v12M11 3v18M15 8v8M19 5v14M23 11v2" />
+    </svg>
+  );
+}
+
+export function CheckIcon({ className }: IconProps) {
+  return (
+    <svg className={className} style={svgStyle(2)} viewBox="0 0 24 24">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+export function MicOffIcon({ className }: IconProps) {
+  return (
+    <svg className={className} style={svgStyle(1.8)} viewBox="0 0 24 24">
+      <line x1="1" y1="1" x2="23" y2="23" />
+      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
+}
+
+export function AlertCircleIcon({ className }: IconProps) {
+  return (
+    <svg className={className} style={svgStyle(1.8)} viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  );
+}

@@ -222,6 +222,7 @@ export interface ChannelHints {
 export interface MarketplaceItem {
   family: 'tool' | 'skill' | 'channel' | 'mcp';
   slug: string;
+  group?: string;
   summary?: string;
   hints?: ChannelHints;
   configFields?: ChannelConfigField[];

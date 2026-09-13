@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import type { ILogger } from '../../../src/infrastructure/logger';
 
 const {
+  mockHealthCheck,
   auditRepo,
   sessionRepo,
   sessionManager,
@@ -24,6 +25,7 @@ const {
   hubSync,
   channelsCommands,
 } = vi.hoisted(() => ({
+  mockHealthCheck: vi.fn(async () => ({ status: 'ok', timestamp: '2026-01-01' })),
   auditRepo: {
     count: vi.fn(),
     findAll: vi.fn(),
@@ -95,6 +97,10 @@ const {
   channelsManager: { getExistingInstance: vi.fn(() => undefined as { stopChannel: (name: string) => void } | undefined) },
   hubSync: { listMissing: vi.fn(), pullEntry: vi.fn(), fetchChannelHints: vi.fn(), fetchChannelCatalog: vi.fn() },
   channelsCommands: { listInstalledChannelNames: vi.fn(() => [] as string[]) },
+}));
+
+vi.mock('../../../src/services/provider-health-service', () => ({
+  healthCheck: mockHealthCheck,
 }));
 
 vi.mock('../../../src/repositories/audit-log', () => ({
@@ -1380,6 +1386,48 @@ describe('AdminRouterFactory /settings', () => {
 
     expect(liveChannelRuntime.startChannelLive).toHaveBeenCalledWith('whatsapp', expect.anything(), expect.anything());
     expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('GET /health returns 200 when health status is ok and 500 when error', async () => {
+    mockHealthCheck.mockResolvedValueOnce({ status: 'ok', timestamp: '2026-01-01' });
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    let res = makeResponse();
+    callRoute(router, makeRequest('GET', '/health'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'ok' }));
+
+    mockHealthCheck.mockResolvedValueOnce({ status: 'error', timestamp: '2026-01-01', details: 'down' });
+    res = makeResponse();
+    callRoute(router, makeRequest('GET', '/health'), res);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'error' }));
+  });
+
+  it('POST /allowed-domains rejects invalid domains and adds valid domains', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+
+    let res = makeResponse();
+    const reqInvalid = makeRequest('POST', '/allowed-domains');
+    reqInvalid.body = { domain: '' };
+    callRoute(router, reqInvalid, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    res = makeResponse();
+    const reqValid = makeRequest('POST', '/allowed-domains');
+    reqValid.body = { domain: 'https://new-api.example.com/path' };
+    callRoute(router, reqValid, res);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true, added: true }));
+  });
+
+  it('GET /chat/gate-blocks queries gate blocks for a given session', () => {
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never);
+    auditRepo.findAll.mockReturnValueOnce([]);
+    const res = makeResponse();
+    const req = makeRequest('GET', '/chat/gate-blocks', { sessionId: 'sess-123' });
+    callRoute(router, req, res);
+    expect(res.json).toHaveBeenCalledWith({ blocks: [] });
   });
 });
 

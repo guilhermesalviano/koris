@@ -6,13 +6,12 @@ import { useMarketplace } from '../../../lib/use-marketplace';
 import type { MarketplaceItem } from '../../../lib/types';
 import type { SettingsFormApi } from '../../../lib/use-settings-form';
 import { useSaveCoordinator } from '../../../lib/config-save-context';
-
-const secondaryBtn = 'rounded-lg border border-strong bg-bg-3 px-3 py-1.5 text-sm font-medium hover:border-accent disabled:opacity-60';
+import { Segmented, type SegmentedOption } from '../../../components/ui';
 
 type TabKey = 'installed' | 'marketplace';
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'installed', label: 'Installed' },
-  { key: 'marketplace', label: 'Marketplace' },
+const TABS: readonly SegmentedOption<TabKey>[] = [
+  { value: 'installed', label: 'Installed' },
+  { value: 'marketplace', label: 'Marketplace' },
 ];
 
 export function PluginsStep({
@@ -40,24 +39,19 @@ export function PluginsStep({
 
   return (
     <div>
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => { void saves.flush('plugins.'); setTab(t.key); }}
-            className={
-              tab === t.key
-                ? 'flex items-center justify-center rounded-lg border border-accent-muted bg-accent-muted px-3 py-2 text-sm font-medium text-accent-2 sm:py-1.5'
-                : `${secondaryBtn} flex items-center justify-center py-2 sm:py-1.5`
-            }
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        label="Plugin source"
+        options={TABS}
+        value={tab}
+        onChange={(next) => {
+          void saves.flush('plugins.');
+          setTab(next);
+        }}
+        panelId={() => 'plugins-step-panel'}
+        className="mb-4"
+      />
 
-      <p className="mb-4 font-mono text-[11px] text-txt-3">
+      <p className="mb-4 max-w-prose text-caption leading-relaxed text-txt-2">
         {tab === 'installed' ? (
           'Turn off any tools, channels, MCP servers, or skills you don’t want enabled. Toggling here takes effect immediately and can be changed later from Configuration → Plugins.'
         ) : (
@@ -76,11 +70,13 @@ export function PluginsStep({
         )}
       </p>
 
-      {tab === 'installed' ? (
-        <PluginsList api={pluginsApi} />
-      ) : (
-        <MarketplaceList api={wrappedMarketplaceApi} />
-      )}
+      <div id="plugins-step-panel" role="tabpanel">
+        {tab === 'installed' ? (
+          <PluginsList api={pluginsApi} />
+        ) : (
+          <MarketplaceList api={wrappedMarketplaceApi} />
+        )}
+      </div>
     </div>
   );
 }

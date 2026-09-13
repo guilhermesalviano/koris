@@ -10,6 +10,18 @@ import type { ILogger } from '../../../plugins/channels/contracts';
 
 export type { ILogger };
 
+function reorderedJsonLogs() {
+  return format((info) => {
+    const { level, message, date, ...details } = info;
+    const ordered: Record<string, unknown> = { message, level, ...details };
+    if (date !== undefined) {
+      ordered.date = date;
+    }
+    info[Symbol.for('message')] = JSON.stringify(ordered);
+    return info;
+  })();
+}
+
 class Logger implements ILogger {
   logger: WinstonLogger;
 
@@ -80,7 +92,7 @@ class LoggerFactory {
 
     const options: LoggerOptions = {
       level: config.LOG_LEVEL || 'info',
-      format: format.json(),
+      format: reorderedJsonLogs(),
       defaultMeta: {
         date: nowISO(),
       },

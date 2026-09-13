@@ -276,4 +276,42 @@ describe('SessionRepository', () => {
     repository.findById('s1');
     expect(db.get).toHaveBeenCalledWith('SELECT * FROM sessions WHERE id = ?', ['s1']);
   });
+
+  it('count returns the total count of sessions or 0', () => {
+    const db = { ...makeDb(), query: vi.fn() };
+    db.get.mockReturnValueOnce({ total: 42 });
+    const repository = new SessionRepository(db as never);
+    expect(repository.count()).toBe(42);
+
+    db.get.mockReturnValueOnce(undefined);
+    expect(repository.count()).toBe(0);
+  });
+
+  it('countOpen returns the total count of open sessions or 0', () => {
+    const db = { ...makeDb(), query: vi.fn() };
+    db.get.mockReturnValueOnce({ total: 5 });
+    const repository = new SessionRepository(db as never);
+    expect(repository.countOpen()).toBe(5);
+
+    db.get.mockReturnValueOnce(undefined);
+    expect(repository.countOpen()).toBe(0);
+  });
+
+  it('findAll queries sessions with limit and offset', () => {
+    const db = { ...makeDb(), query: vi.fn().mockReturnValue([{ id: 's1', entry_channel: 'web' }]) };
+    const repository = new SessionRepository(db as never);
+    const results = repository.findAll(10, 20);
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('s1');
+    expect(db.query).toHaveBeenCalledWith(
+      'SELECT * FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?',
+      [10, 20],
+    );
+
+    repository.findAll();
+    expect(db.query).toHaveBeenCalledWith(
+      'SELECT * FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?',
+      [50, 0],
+    );
+  });
 });

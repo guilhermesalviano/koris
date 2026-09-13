@@ -108,6 +108,7 @@ export class AudioSynthesisService implements ISpeechSynthesisService {
       const contentType = response.headers.get('content-type') || (format === 'ogg' ? 'audio/ogg' : 'audio/wav');
       const durationHeader = Number(response.headers.get('x-audio-duration-seconds'));
       const seconds = Number.isFinite(durationHeader) && durationHeader > 0 ? durationHeader : undefined;
+      this.logger?.info(`[AudioSynthesisService] Connected to voice server at ${endpoint} - synthesis successful (${audio.length} bytes)`);
       return { audio, contentType, seconds };
     } catch (err: unknown) {
       const error = err as Error & { cause?: Error & { code?: string } };

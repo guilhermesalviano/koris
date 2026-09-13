@@ -142,6 +142,33 @@ function createMcpPluginContext(logger: ILogger, db: IDatabaseService): McpPlugi
   };
 }
 
+async function checkAndLogVoiceServerConnectivity(logger: ILogger): Promise<void> {
+  const sttEnabled = config.AUDIO.STT.ENABLED;
+  const ttsEnabled = config.AUDIO.TTS.ENABLED;
+  const endpoint = sttEnabled
+    ? config.AUDIO.STT.ENDPOINT
+    : ttsEnabled
+      ? config.AUDIO.TTS.ENDPOINT
+      : config.AUDIO.STT.ENDPOINT;
+
+  try {
+    const url = new URL(endpoint);
+    const healthUrl = `${url.origin}/health`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(healthUrl, { signal: controller.signal }).finally(() => clearTimeout(timer));
+    if (res.ok) {
+      logger.info(`[audio] Voice server is connected at ${url.origin} (health: ok)`);
+    } else {
+      logger.info(`[audio] Voice server responded at ${url.origin} (status: ${res.status})`);
+    }
+  } catch {
+    if (sttEnabled || ttsEnabled) {
+      logger.info(`[audio] Voice server is offline or unreachable at ${endpoint}`);
+    }
+  }
+}
+
 type Mode = typeof MODES[number];
 type RuntimeModes = Record<Mode, boolean>;
 
@@ -261,6 +288,7 @@ class Application implements IApplication {
     skillSync.start();
     toolSync.start();
     mcpSync.start();
+    void checkAndLogVoiceServerConnectivity(this.logger);
 
     try {
       const webServer = this.modes.web

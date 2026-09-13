@@ -424,6 +424,108 @@ describe('createChatHandler', () => {
     expect(res.write).not.toHaveBeenCalledWith(expect.stringContaining('"type":"error"'));
     expect(res.write).toHaveBeenCalledWith('data: [DONE]\n\n');
   });
+
+  it('accepts images when message text is empty and dispatches to gateway', async () => {
+    mockAgentHandle.mockResolvedValue('image response');
+
+    const { createChatHandler } = await loadWebModule();
+    const handler = createChatHandler({ handle: mockAgentHandle } as unknown as IMessageGateway) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    req.body = {
+      message: '',
+      images: [
+        { data: 'base64-1', mimeType: 'image/png' },
+        { data: 'base64-2' },
+        null,
+        'invalid',
+        { data: '' },
+      ],
+    } as Request['body'];
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(mockAgentHandle).toHaveBeenCalledWith(
+      {
+        text: '',
+        images: [
+          { data: 'base64-1', mimeType: 'image/png' },
+          { data: 'base64-2' },
+        ],
+      },
+      'web',
+      expect.anything(),
+    );
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"text":"image response"'));
+  });
+
+  it('returns 400 when more than 10 images are provided', async () => {
+    const { createChatHandler } = await loadWebModule();
+    const handler = createChatHandler({ handle: mockAgentHandle } as unknown as IMessageGateway) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    req.body = {
+      message: 'look at these',
+      images: Array.from({ length: 11 }, (_, i) => ({ data: `img-${i}` })),
+    } as Request['body'];
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'too many images (max 10)' });
+  });
+
+  it('emits a session SSE event when onSessionRotated is invoked', async () => {
+    mockAgentHandle.mockImplementation(async (_msg: unknown, _origin: unknown, options: { onSessionRotated?: (id: string) => void }) => {
+      options.onSessionRotated?.('rotated-sess-123');
+      return 'ok';
+    });
+
+    const { createChatHandler } = await loadWebModule();
+    const handler = createChatHandler({ handle: mockAgentHandle } as unknown as IMessageGateway) as AsyncHandler;
+    const req = makeRequest('127.0.0.1');
+    req.body = { message: 'rotate me', sessionId: 'old-sess' } as Request['body'];
+    const res = makeResponse();
+
+    await handler(req, res);
+
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"type":"session"'));
+    expect(res.write).toHaveBeenCalledWith(expect.stringContaining('"sessionId":"rotated-sess-123"'));
+  });
+
+  it('rejects with 429 when max concurrent SSE connections per IP is exceeded', async () => {
+    const resolvers: Array<() => void> = [];
+    mockAgentHandle.mockImplementation(() => new Promise((resolve) => {
+      resolvers.push(() => resolve('done'));
+    }));
+
+    const { createChatHandler } = await loadWebModule();
+    const handler = createChatHandler({ handle: mockAgentHandle } as unknown as IMessageGateway) as AsyncHandler;
+
+    const promises = [];
+    for (let i = 0; i < 5; i++) {
+      const req = makeRequest('10.0.0.99');
+      req.body = { message: `msg ${i}` } as Request['body'];
+      promises.push(handler(req, makeResponse()));
+    }
+
+    // Wait a tick for handlers to increment the active SSE counter
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // 6th request from same IP
+    const overflowReq = makeRequest('10.0.0.99');
+    overflowReq.body = { message: 'msg 6' } as Request['body'];
+    const overflowRes = makeResponse();
+    await handler(overflowReq, overflowRes);
+
+    expect(overflowRes.status).toHaveBeenCalledWith(429);
+    expect(overflowRes.json).toHaveBeenCalledWith({ error: expect.stringContaining('Too many concurrent chat streams') });
+
+    for (const r of resolvers) {
+      r();
+    }
+    await Promise.all(promises);
+  });
 });
 
 describe('createChatCancelHandler', () => {
@@ -778,8 +880,23 @@ describe('DashboardServer lifecycle', () => {
       // the bundled dist-web/index.html isn't present in the test environment).
       const response = await fetch(`http://127.0.0.1:${handle.port}/some/client/route`);
       expect([200, 404]).toContain(response.status);
+
+      // Unknown non-GET request falls through to Express 404 (not SPA index)
+      const postResponse = await fetch(`http://127.0.0.1:${handle.port}/some/client/route`, { method: 'POST' });
+      expect(postResponse.status).toBe(404);
     } finally {
       await handle.stop();
     }
+  });
+
+  it('createApp helper creates an Express application instance', async () => {
+    const { createApp } = await loadWebModule();
+    const app = createApp({
+      logger,
+      gateway,
+      db: {} as never,
+    });
+    expect(app).toBeDefined();
+    expect(typeof app.use).toBe('function');
   });
 });

@@ -1,8 +1,13 @@
 import { SettingsSection } from '../../components/SettingsUI';
 import { useCallback, useEffect, useState } from 'react';
 import { Card, EmptyState, formatDate, useToast, Toast } from '../../components/AdminUI';
+import { Badge, Button } from '../../components/ui';
 import { apiRequest } from '../../lib/api';
 import type { SessionsResponse, SessionDetailResponse } from '../../lib/types';
+
+function PanelLabel({ children }: { children: React.ReactNode }) {
+  return <div className="mb-3 font-mono text-micro uppercase text-txt-3">{children}</div>;
+}
 
 export default function SessionsPage() {
   const [data, setData] = useState<SessionsResponse | null>(null);
@@ -62,48 +67,51 @@ export default function SessionsPage() {
       {!error && !data && <EmptyState text="Loading…" />}
       {!error && data && data.items.length === 0 && <EmptyState text="No sessions yet." />}
       {!error && data && data.items.length > 0 && (
-        <Card className="!p-0">
+        <Card className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="border-b border-subtle text-left font-mono text-[11px] uppercase tracking-wide text-txt-3">
-                  <th className="px-3 py-2">ID</th>
-                  <th className="px-3 py-2">Channel</th>
-                  <th className="px-3 py-2">Peer</th>
-                  <th className="px-3 py-2">Kind</th>
-                  <th className="px-3 py-2">Started</th>
-                  <th className="px-3 py-2">Ended</th>
-                  <th className="px-3 py-2">Msgs</th>
-                  <th className="px-3 py-2" />
+                <tr className="border-b border-subtle text-left font-mono text-micro uppercase text-txt-3">
+                  <th className="px-4 py-3 font-semibold">ID</th>
+                  <th className="px-4 py-3 font-semibold">Channel</th>
+                  <th className="px-4 py-3 font-semibold">Peer</th>
+                  <th className="px-4 py-3 font-semibold">Kind</th>
+                  <th className="px-4 py-3 font-semibold">Started</th>
+                  <th className="px-4 py-3 font-semibold">Ended</th>
+                  <th className="px-4 py-3 font-semibold">Msgs</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
                 {data.items.map((s) => (
-                  <tr key={s.id} className="border-b border-subtle/60 cursor-pointer hover:bg-bg-3/60" onClick={() => loadDetail(s.id)}>
-                    <td className="px-3 py-2 font-mono text-xs text-txt-2">{s.id.slice(0, 12)}…</td>
-                    <td className="px-3 py-2 text-sm">{s.channel}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-txt-2">{s.peerId}</td>
-                    <td className="px-3 py-2 text-sm">
+                  <tr key={s.id} className="cursor-pointer border-b border-subtle/60 transition-colors hover:bg-bg-3/60" onClick={() => loadDetail(s.id)}>
+                    <td className="px-4 py-3 font-mono text-caption text-txt-2">{s.id.slice(0, 12)}…</td>
+                    <td className="px-4 py-3 text-body text-txt">{s.channel}</td>
+                    <td className="px-4 py-3 font-mono text-caption text-txt-2">{s.peerId}</td>
+                    <td className="px-4 py-3 text-body">
                       {s.kind === 'delegated' ? (
-                        <span className="rounded-full border border-accent/40 bg-accent-muted px-2 py-0.5 text-[11px] text-accent-2" title="Child delegated session for an errand">
-                          errand child
+                        <span title="Child delegated session for an errand">
+                          <Badge tone="accent">errand child</Badge>
                         </span>
                       ) : (
                         <span className="text-txt-3">user</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-txt-2">{formatDate(s.startedAt)}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-txt-2">
-                      {s.endedAt ? formatDate(s.endedAt) : <span className="text-green-400">open</span>}
+                    <td className="px-4 py-3 font-mono text-caption text-txt-2">{formatDate(s.startedAt)}</td>
+                    <td className="px-4 py-3 font-mono text-caption text-txt-2">
+                      {s.endedAt ? formatDate(s.endedAt) : <Badge tone="success" dot>open</Badge>}
                     </td>
-                    <td className="px-3 py-2 text-sm">{s.messageCount}</td>
-                    <td className="px-3 py-2 text-right">
-                      <button
+                    <td className="px-4 py-3 text-body tabular-nums text-txt">{s.messageCount}</td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label="Delete session"
                         onClick={(e) => deleteSession(s.id, e)}
-                        className="rounded-md border border-subtle px-2 py-1 font-mono text-[11px] text-txt-3 hover:border-red-500/40 hover:text-red-400"
+                        className="border-subtle text-txt-3 hover:bg-danger-muted hover:text-danger-2"
                       >
                         Delete
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -114,7 +122,7 @@ export default function SessionsPage() {
       )}
 
       {selectedId && (
-        <div className="mt-4">
+        <div className="mt-6">
           {detailError && <EmptyState text={detailError} />}
           {!detailError && !detail && <EmptyState text="Loading session…" />}
           {!detailError && detail && (
@@ -135,25 +143,25 @@ export default function SessionsPage() {
                 </Card>
               )}
               <Card>
-                <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">Messages</div>
-                <div className="max-h-96 overflow-y-auto">
+                <PanelLabel>Messages</PanelLabel>
+                <div className="flex max-h-96 flex-col gap-2 overflow-y-auto">
                   {detail.messages.length === 0 && <EmptyState text="No messages." />}
                   {detail.messages.map((m) => (
-                    <div key={m.id} className="mb-2 rounded-lg border border-subtle bg-bg-3 px-3 py-2">
-                      <div className="font-mono text-[10px] uppercase text-txt-3">{m.role} · {formatDate(m.createdAt)}</div>
-                      <div className="mt-1 whitespace-pre-wrap text-sm">{m.content}</div>
+                    <div key={m.id} className="rounded-panel border border-subtle bg-bg-3 px-3 py-2.5">
+                      <div className="font-mono text-micro uppercase text-txt-3">{m.role} · {formatDate(m.createdAt)}</div>
+                      <div className="mt-1.5 whitespace-pre-wrap text-body text-txt">{m.content}</div>
                     </div>
                   ))}
                 </div>
               </Card>
               <Card>
-                <div className="mb-3 font-mono text-[11px] uppercase tracking-wide text-txt-3">Memories</div>
-                <div className="max-h-96 overflow-y-auto">
+                <PanelLabel>Memories</PanelLabel>
+                <div className="flex max-h-96 flex-col gap-2 overflow-y-auto">
                   {detail.memories.length === 0 && <EmptyState text="No memories." />}
                   {detail.memories.map((m) => (
-                    <div key={m.id} className="mb-2 rounded-lg border border-subtle bg-bg-3 px-3 py-2">
-                      <div className="font-mono text-[10px] uppercase text-txt-3">{m.type} · {formatDate(m.createdAt)}</div>
-                      <div className="mt-1 whitespace-pre-wrap text-sm">{m.content}</div>
+                    <div key={m.id} className="rounded-panel border border-subtle bg-bg-3 px-3 py-2.5">
+                      <div className="font-mono text-micro uppercase text-txt-3">{m.type} · {formatDate(m.createdAt)}</div>
+                      <div className="mt-1.5 whitespace-pre-wrap text-body text-txt">{m.content}</div>
                     </div>
                   ))}
                 </div>
