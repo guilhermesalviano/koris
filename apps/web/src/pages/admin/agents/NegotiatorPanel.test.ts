@@ -69,8 +69,9 @@ describe('negotiation steps header', () => {
     const html = renderToStaticMarkup(createElement(NegotiationStepsHeader, { errand: { goal: 'Pedir um lanche', state: 'awaiting_principal' } }));
     expect(html).toContain('Pedir um lanche');
     expect(html).toContain('aria-label="Negotiation steps"');
-    expect([...html.matchAll(/<li[^>]*>/g)]).toHaveLength(4);
-    expect(html).toMatch(/<li aria-current="step"[^>]*>[\s\S]*?Your input/);
+    expect([...html.matchAll(/<li[^>]*>/g)]).toHaveLength(3);
+    expect(html).not.toContain('Your input');
+    expect(html).toMatch(/<li aria-current="step"[^>]*>[\s\S]*?Contacted/);
   });
 });
 

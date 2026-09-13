@@ -59,6 +59,7 @@ interface IErrandService {
   listAll(state?: ErrandState, limit?: number, offset?: number): Errand[];
   resumeWithPrincipalAnswer(id: string, answer: string): Promise<{ errand: Errand; reply: string }>;
   findActiveForPeer(channel: string, peerId: string, otherPeerIds?: string[]): { errand: Errand; sessionId: string } | null;
+  reopenForPeer(channel: string, peerId: string, contactMessage: string, otherPeerIds?: string[]): { errand: Errand; sessionId: string } | null;
 }
 
 class ErrandService implements IErrandService {
@@ -344,6 +345,26 @@ class ErrandService implements IErrandService {
     if (!NEGOTIATING_STATES.includes(hydrated.state) && !(hydrated.state === 'draft' && hydrated.pendingDelivery)) return null;
 
     return { errand: hydrated, sessionId: active.sessionId };
+  }
+
+  // A contact writing again after their errand was resolved reopens it and asks
+  // the principal how to reply — only within the errand expiry window, and
+  // never while another errand is in flight with that contact.
+  reopenForPeer(channel: string, peerId: string, contactMessage: string, otherPeerIds: string[] = []): { errand: Errand; sessionId: string } | null {
+    this.expireStale();
+    const candidates = [...new Set([peerId, ...otherPeerIds].flatMap((id) => peerAliases(channel, id)))];
+    if (this.errandRepository.findActiveByPeer(channel, candidates)) return null;
+
+    const latest = this.errandRepository.findLatestResolvedByPeer(channel, candidates);
+    if (!latest?.errand.closedAt) return null;
+    const ageMs = this.now().getTime() - new Date(latest.errand.closedAt).getTime();
+    if (!(ageMs <= config.ERRANDS.HARD_EXPIRY_MS)) return null;
+
+    const { errand } = latest;
+    const notes = [errand.notes, errand.result && `Resolved before: ${errand.result}`].filter(Boolean).join('\n') || undefined;
+    this.transition(errand, { closedAt: undefined, result: undefined, notes });
+    const reopened = this.escalate(errand.id, `The contact wrote again after this errand was resolved: "${contactMessage}". How should I reply?`);
+    return { errand: reopened, sessionId: latest.sessionId };
   }
 
   private close(errand: Errand, state: ErrandState, result: string | undefined, notes: string | undefined, notice?: string): Errand {

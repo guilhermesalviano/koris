@@ -55,7 +55,7 @@ describe('errand recovery and privacy', () => {
     const negotiator = new Negotiator(logger, db, manager, completion as never, prompts);
     const mainAgent = { run: vi.fn() };
     const result = new MessageGateway(logger, 'whatsapp', db, manager,
-      SessionContextFactory.create(logger, db, manager), {} as never,
+      SessionContextFactory.create(logger, db, manager), { persistConversation: vi.fn(), summarizeConversation: vi.fn() } as never,
       mainAgent as never, { record: vi.fn() } as never, {} as never, negotiator);
     return { gateway: result, completion, prompts, mainAgent };
   }
@@ -274,6 +274,57 @@ describe('errand recovery and privacy', () => {
       ],
       nextCursor: null,
     });
+  });
+
+  it('reopens a resolved errand when its contact writes again, asks the principal, and resumes with their answer', async () => {
+    const { manager, service, parent, channels, errands, messages } = setup();
+    const errand = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Can I order a sandwich?');
+    await service.approve(errand.id);
+    service.resolve(errand.id, 'Sandwich ordered');
+    const contactSession = errands.findTargets(errand.id)[0];
+    channels.sendMessage.mockClear();
+
+    const runtime = gateway(manager, '{"action":"continue","reply":"unused"}');
+    expect(await runtime.gateway.handle('Do you want a drink too?', '555', { isTrustedSender: false })).toBe('');
+
+    expect(service.get(errand.id)).toMatchObject({
+      state: 'awaiting_principal', result: undefined, closedAt: undefined,
+      notes: 'Resolved before: Sandwich ordered',
+      pendingMessage: 'The contact wrote again after this errand was resolved: "Do you want a drink too?". How should I reply?',
+    });
+    expect(messages.getBySessionId(contactSession).map((message) => message.content)).toEqual(['Can I order a sandwich?', 'Do you want a drink too?']);
+    const negotiation = SessionRepositoryFactory.create(db).findLatestOpen({ channel: 'negotiator', peerId: errand.id, kind: 'user' })!;
+    expect(messages.getBySessionId(negotiation.id).at(-1)?.content).toContain('Do you want a drink too?');
+    expect(channels.sendMessage).not.toHaveBeenCalled();
+    expect(runtime.completion.complete).not.toHaveBeenCalled();
+    expect(runtime.mainAgent.run).not.toHaveBeenCalled();
+
+    // A second message while the principal decides is only recorded.
+    expect(await runtime.gateway.handle('Hello?', '555', { isTrustedSender: false })).toBe('');
+    expect(service.get(errand.id)?.state).toBe('awaiting_principal');
+
+    vi.spyOn(NegotiatorFactory, 'create').mockReturnValue({ composeResume: vi.fn().mockResolvedValue('Yes, a juice please.') } as never);
+    await service.resumeWithPrincipalAnswer(errand.id, 'yes, a juice');
+    expect(channels.sendMessage).toHaveBeenCalledExactlyOnceWith('whatsapp', '555', 'Yes, a juice please.');
+    expect(service.get(errand.id)?.state).toBe('awaiting_peer');
+  });
+
+  it('keeps an old resolved errand closed and lets a trusted sender reach their own session', async () => {
+    const { manager, service, parent, errands } = setup();
+    const errand = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Hi');
+    await service.approve(errand.id);
+    service.resolve(errand.id, 'Done');
+    const runtime = gateway(manager, '{"action":"continue","reply":"unused"}');
+    runtime.mainAgent.run.mockResolvedValue('Hi there');
+
+    await runtime.gateway.handle('hello', '555', { isTrustedSender: true });
+    expect(service.get(errand.id)?.state).toBe('resolved');
+    expect(runtime.mainAgent.run).toHaveBeenCalledTimes(1);
+
+    errands.update(errand.id, { closedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString() });
+    await runtime.gateway.handle('hello again', '555', { isTrustedSender: false });
+    expect(service.get(errand.id)?.state).toBe('resolved');
+    expect(runtime.mainAgent.run).toHaveBeenCalledTimes(2);
   });
 
   it('exposes failure and retry through the admin API without exposing internal delivery instructions', async () => {

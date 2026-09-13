@@ -140,19 +140,18 @@ describe('negotiation steps header', () => {
     expect(headerErrand([])).toBeNull();
   });
 
-  it('places the errand on Approval, Contacted, Your input or Done', () => {
-    expect(negotiationSteps('draft').map((step) => step.label)).toEqual(['Approval', 'Contacted', 'Your input', 'Done']);
-    expect(statuses('queued')).toEqual(['current', 'upcoming', 'upcoming', 'upcoming']);
-    expect(statuses('awaiting_peer')).toEqual(['done', 'current', 'upcoming', 'upcoming']);
-    expect(statuses('awaiting_principal')).toEqual(['done', 'done', 'current', 'upcoming']);
+  it('places the errand on Approval, Contacted or Done, keeping a question for the human on Contacted', () => {
+    expect(negotiationSteps('draft').map((step) => step.label)).toEqual(['Approval', 'Contacted', 'Done']);
+    expect(statuses('queued')).toEqual(['current', 'upcoming', 'upcoming']);
+    expect(statuses('awaiting_peer')).toEqual(['done', 'current', 'upcoming']);
+    expect(statuses('awaiting_principal')).toEqual(['done', 'current', 'upcoming']);
   });
 
   it('completes every step once closed, naming the outcome and flagging an unsuccessful one', () => {
     expect(negotiationSteps('resolved')).toEqual([
-      { label: 'Approval', status: 'done' }, { label: 'Contacted', status: 'done' },
-      { label: 'Your input', status: 'done' }, { label: 'Resolved', status: 'done' },
+      { label: 'Approval', status: 'done' }, { label: 'Contacted', status: 'done' }, { label: 'Resolved', status: 'done' },
     ]);
-    expect(negotiationSteps('cancelled')[3]).toEqual({ label: 'Cancelled', status: 'done', unsuccessful: true });
+    expect(negotiationSteps('cancelled')[2]).toEqual({ label: 'Cancelled', status: 'done', unsuccessful: true });
   });
 });
 

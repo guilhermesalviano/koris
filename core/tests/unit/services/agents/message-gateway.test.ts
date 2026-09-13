@@ -72,7 +72,7 @@ describe('MessageGateway', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     applyTestConfigDefaults();
-    vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), listByOrigin: vi.fn().mockReturnValue([]) } as never);
+    vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), reopenForPeer: vi.fn().mockReturnValue(null), listByOrigin: vi.fn().mockReturnValue([]) } as never);
   });
 
   afterEach(() => {
@@ -612,7 +612,7 @@ describe('MessageGateway', () => {
         new Errand({ id: 'e1', goal: 'Book a class', state: 'awaiting_principal', originSessionId: 'session-1', pendingMessage: 'Wednesday instead?' }),
         new Errand({ id: 'e2', goal: 'Old errand', state: 'resolved', originSessionId: 'session-1' }),
       ]);
-      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), listByOrigin } as never);
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), reopenForPeer: vi.fn().mockReturnValue(null), listByOrigin } as never);
 
       await gateway.handle('sim', 'origin-1', { toolsEnabled: true, isTrustedSender: true });
 
@@ -630,7 +630,7 @@ describe('MessageGateway', () => {
         new Errand({ id: 'e1', goal: 'Book a class', state: 'awaiting_principal', originSessionId: 'session-1', pendingMessage: 'Wednesday instead?' }),
         new Errand({ id: 'e2', goal: 'Buy milk', state: 'draft', originSessionId: 'session-1', pendingMessage: 'Hi!' }),
       ]);
-      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), listByOrigin } as never);
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), reopenForPeer: vi.fn().mockReturnValue(null), listByOrigin } as never);
 
       await gateway.handle('sim', 'web', { toolsEnabled: true });
 
@@ -645,7 +645,7 @@ describe('MessageGateway', () => {
       expect(deps.mainAgent.run.mock.calls[0][0].options.skillBlocks).toBeUndefined();
 
       const listByOrigin = vi.fn().mockReturnValue([new Errand({ id: 'e1', goal: 'Book', state: 'awaiting_principal', originSessionId: 'session-1' })]);
-      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), listByOrigin } as never);
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), reopenForPeer: vi.fn().mockReturnValue(null), listByOrigin } as never);
       await gateway.handle('hello', 'origin-1', { toolsEnabled: false, isTrustedSender: false });
       expect(listByOrigin).not.toHaveBeenCalled();
       expect(deps.mainAgent.run.mock.calls[1][0].options.skillBlocks).toBeUndefined();
@@ -661,6 +661,32 @@ describe('MessageGateway', () => {
         { channel: 'whatsapp', peerId: 'origin-1', kind: 'user' },
         undefined,
       );
+      expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
+    });
+
+    it('an untrusted contact of a recently resolved errand reopens it, is recorded in its contact session and gets no reply', async () => {
+      const { gateway, deps, negotiator } = makeGateway('whatsapp');
+      const reopenForPeer = vi.fn().mockReturnValue({ errand: { id: 'errand-1' }, sessionId: 'delegated-session' });
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), reopenForPeer } as never);
+
+      const result = await gateway.handle('Can I add a drink?', 'origin-1', { isTrustedSender: false, peerAliases: ['555@s.whatsapp.net'] });
+
+      expect(reopenForPeer).toHaveBeenCalledWith('whatsapp', 'origin-1', 'Can I add a drink?', ['555@s.whatsapp.net']);
+      expect(deps.sessionContextFactory.resolve).toHaveBeenCalledWith({ channel: 'whatsapp', peerId: 'origin-1', kind: 'delegated' }, 'delegated-session');
+      expect(deps.messageService.save).toHaveBeenCalledExactlyOnceWith({ role: 'user', content: 'Can I add a drink?', images: undefined });
+      expect(result).toBe('');
+      expect(negotiator.run).not.toHaveBeenCalled();
+      expect(deps.mainAgent.run).not.toHaveBeenCalled();
+    });
+
+    it('a trusted sender never reopens a resolved errand', async () => {
+      const { gateway, deps } = makeGateway('whatsapp');
+      const reopenForPeer = vi.fn();
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer: vi.fn().mockReturnValue(null), reopenForPeer, listByOrigin: vi.fn().mockReturnValue([]) } as never);
+
+      await gateway.handle('hello', 'origin-1', { isTrustedSender: true });
+
+      expect(reopenForPeer).not.toHaveBeenCalled();
       expect(deps.mainAgent.run).toHaveBeenCalledTimes(1);
     });
 
@@ -690,7 +716,7 @@ describe('MessageGateway', () => {
     it('looks the errand up by the contact\'s other channel addresses too', async () => {
       const { gateway } = makeGateway('whatsapp');
       const findActiveForPeer = vi.fn().mockReturnValue(null);
-      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer } as never);
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer, reopenForPeer: vi.fn().mockReturnValue(null) } as never);
 
       await gateway.handle('hello', '141789856067723@lid', { isTrustedSender: false, peerAliases: ['555@s.whatsapp.net'] });
 

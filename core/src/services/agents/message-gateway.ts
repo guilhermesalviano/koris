@@ -75,19 +75,33 @@ class MessageGateway implements IMessageGateway {
     // their user session; web/TUI requests without channel trust stay there too.
     // The contact may reply under a different address than the errand was sent
     // to (WhatsApp LID vs phone number), so the channel's aliases count too.
-    const activeErrand = options?.isTrustedSender !== undefined
-      && (!isCommand(safeMessage) || options.isTrustedSender === false)
-      ? buildErrandService(this.logger, this.db, this.sessionManager)?.findActiveForPeer(channel, originId, options.peerAliases) ?? null
+    const routesErrands = options?.isTrustedSender !== undefined
+      && (!isCommand(safeMessage) || options.isTrustedSender === false);
+    const errandService = routesErrands ? buildErrandService(this.logger, this.db, this.sessionManager) : null;
+    const activeErrand = errandService?.findActiveForPeer(channel, originId, options?.peerAliases) ?? null;
+    // An untrusted contact writing after their errand was resolved reopens it
+    // and escalates to the principal; trusted senders keep their own session.
+    const reopenedErrand = !activeErrand && options?.isTrustedSender === false
+      ? errandService?.reopenForPeer(channel, originId, safeMessage, options.peerAliases) ?? null
       : null;
+    const delegated = activeErrand ?? reopenedErrand;
 
-    const origin: SessionKey = activeErrand
+    const origin: SessionKey = delegated
       ? { channel, peerId: originId, kind: 'delegated' }
       : { channel, peerId: originId, kind: 'user' };
-    const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(origin, activeErrand?.sessionId ?? options?.sessionId);
+    const { sessionService, messageService, memoryService } = this.sessionContextFactory.resolve(origin, delegated?.sessionId ?? options?.sessionId);
 
     this.channelService.record(channel, originId);
 
     const sessionCtx: SessionContext = { sessionService, messageService, memoryService };
+
+    if (reopenedErrand) {
+      // Nothing goes back to the contact until the principal answers the escalation.
+      return runErrandOperation(reopenedErrand.errand.id, async () => {
+        messageService.save({ role: 'user', content: safeMessage, images });
+        return '';
+      });
+    }
 
     if (activeErrand) {
       // Delegated turn: the negotiator drives it end to end — commands and

@@ -31,6 +31,8 @@ interface IErrandRepository {
   findNextQueuedBySessionId(sessionId: string): Errand | null;
   findActiveByPeer(channel: string, peerIds: string[]): { errand: Errand; sessionId: string } | null;
   findNextQueuedByPeer(channel: string, peerIds: string[]): Errand | null;
+  /** The contact's most recently closed `resolved` errand, with its contact session. */
+  findLatestResolvedByPeer(channel: string, peerIds: string[]): { errand: Errand; sessionId: string } | null;
   findByOriginSessionId(originSessionId: string): Errand[];
   findAll(state?: ErrandState, limit?: number, offset?: number): Errand[];
   addTarget(errandId: string, sessionId: string): void;
@@ -160,6 +162,20 @@ class ErrandRepository implements IErrandRepository {
       [channel, ...peerIds],
     ) as ErrandRow | undefined;
     return row ? mapRowToErrand(row) : null;
+  }
+
+  findLatestResolvedByPeer(channel: string, peerIds: string[]): { errand: Errand; sessionId: string } | null {
+    if (!peerIds.length) return null;
+    const row = this.db.get(
+      `SELECT e.*, s.id AS target_session_id FROM errands e
+       JOIN errand_targets t ON t.errand_id = e.id
+       JOIN sessions s ON s.id = t.session_id
+       WHERE s.channel = ? AND s.peer_id IN (${peerIds.map(() => '?').join(', ')})
+         AND s.kind = 'delegated' AND s.ended_at IS NULL AND e.state = 'resolved'
+       ORDER BY e.closed_at DESC, e.rowid DESC LIMIT 1`,
+      [channel, ...peerIds],
+    ) as (ErrandRow & { target_session_id: string }) | undefined;
+    return row ? { errand: mapRowToErrand(row), sessionId: row.target_session_id } : null;
   }
 
   findAll(state?: ErrandState, limit = 50, offset = 0): Errand[] {

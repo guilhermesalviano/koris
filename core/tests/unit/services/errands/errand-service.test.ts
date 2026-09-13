@@ -3,6 +3,7 @@ import { ErrandService } from '../../../../src/services/errands';
 import { Errand } from '../../../../src/entities/errand';
 import { THIRD_PARTY_CONVERSATION_CONTEXT } from '../../../../src/constants';
 import { applyTestConfigDefaults } from '../../../helpers/test-config';
+import { config } from '../../../../src/config';
 
 const { mockComposeResume } = vi.hoisted(() => ({ mockComposeResume: vi.fn().mockResolvedValue('resumed reply') }));
 vi.mock('../../../../src/services/agents/sub-agents/negotiator/sub-agent', () => ({
@@ -24,6 +25,7 @@ function makeErrandRepo() {
     findNextQueuedBySessionId: vi.fn().mockReturnValue(null),
     findActiveByPeer: vi.fn().mockReturnValue(null),
     findNextQueuedByPeer: vi.fn().mockReturnValue(null),
+    findLatestResolvedByPeer: vi.fn().mockReturnValue(null),
     findByOriginSessionId: vi.fn().mockReturnValue([]),
     findAll: vi.fn().mockReturnValue([]),
     addTarget: vi.fn(),
@@ -452,6 +454,50 @@ describe('ErrandService', () => {
 
       expect(service.listAll()[0].state).toBe('expired');
       expect(service.listByOrigin('o1')[0].state).toBe('expired');
+    });
+  });
+
+  describe('reopenForPeer', () => {
+    const now = new Date('2026-09-13T12:00:00Z');
+    const resolvedAgo = (ms: number) => new Errand({
+      id: 'e1', goal: 'Pedir um lanche', state: 'resolved', originSessionId: 'o1',
+      notes: 'X-tudo for 50', result: 'Order confirmed', closedAt: new Date(now.getTime() - ms).toISOString(),
+    });
+
+    it('reopens a recently resolved errand and asks the principal how to reply to the contact', () => {
+      const { service, errandRepo } = makeService({ now: () => now });
+      errandRepo.findLatestResolvedByPeer.mockReturnValue({ errand: resolvedAgo(60_000), sessionId: 'child' });
+      errandRepo.findById.mockReturnValue(resolvedAgo(60_000));
+      errandRepo.update.mockImplementation((_id, patch) => {
+        errandRepo.findById.mockReturnValue(new Errand({ ...errandRepo.findById('e1'), ...patch }));
+      });
+
+      const reopened = service.reopenForPeer('whatsapp', '555@s.whatsapp.net', 'Can I add a drink?', ['141789856067723@lid']);
+
+      expect(errandRepo.findLatestResolvedByPeer).toHaveBeenCalledWith('whatsapp', ['555@s.whatsapp.net', '555', '141789856067723@lid']);
+      expect(reopened).toEqual({ errand: expect.objectContaining({ id: 'e1', state: 'awaiting_principal' }), sessionId: 'child' });
+      expect(errandRepo.update).toHaveBeenCalledWith('e1', { closedAt: undefined, result: undefined, notes: 'X-tudo for 50\nResolved before: Order confirmed' });
+      expect(reopened?.errand.pendingMessage).toBe('The contact wrote again after this errand was resolved: "Can I add a drink?". How should I reply?');
+    });
+
+    it('leaves the errand closed once it is older than the expiry window', () => {
+      const { service, errandRepo } = makeService({ now: () => now });
+      errandRepo.findLatestResolvedByPeer.mockReturnValue({ errand: resolvedAgo(config.ERRANDS.HARD_EXPIRY_MS + 1), sessionId: 'child' });
+      expect(service.reopenForPeer('whatsapp', '555', 'hi')).toBeNull();
+      expect(errandRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('does not reopen while another errand with the contact is in flight, or when none was resolved', () => {
+      const { service, errandRepo } = makeService({ now: () => now });
+      errandRepo.findLatestResolvedByPeer.mockReturnValue({ errand: resolvedAgo(60_000), sessionId: 'child' });
+      errandRepo.findActiveByPeer.mockReturnValue({ errand: new Errand({ id: 'e2', goal: 'x', state: 'draft', originSessionId: 'o1' }), sessionId: 'other' });
+      expect(service.reopenForPeer('whatsapp', '555', 'hi')).toBeNull();
+      expect(errandRepo.findLatestResolvedByPeer).not.toHaveBeenCalled();
+
+      errandRepo.findActiveByPeer.mockReturnValue(null);
+      errandRepo.findLatestResolvedByPeer.mockReturnValue(null);
+      expect(service.reopenForPeer('whatsapp', '555', 'hi')).toBeNull();
+      expect(errandRepo.update).not.toHaveBeenCalled();
     });
   });
 

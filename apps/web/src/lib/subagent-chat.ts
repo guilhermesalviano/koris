@@ -56,15 +56,15 @@ export function headerErrand(errands: readonly ErrandItem[]): ErrandItem | null 
   return newest.find((errand) => !CLOSED_ERRAND_STATES.includes(errand.state)) ?? newest[0] ?? null;
 }
 
-/** Approval → Contacted → Your input → Done, positioned at the errand's current state. */
+/** Approval → Contacted → Done, positioned at the errand's current state; waiting on the human stays on Contacted. */
 export function negotiationSteps(state: ErrandState): NegotiationStep[] {
   const closed = CLOSED_ERRAND_STATES.includes(state);
-  const current = closed ? 3 : state === 'awaiting_principal' ? 2 : state === 'draft' || state === 'queued' ? 0 : 1;
-  const labels = ['Approval', 'Contacted', 'Your input', closed ? ERRAND_STATUS[state] : 'Done'];
+  const current = closed ? 2 : state === 'draft' || state === 'queued' ? 0 : 1;
+  const labels = ['Approval', 'Contacted', closed ? ERRAND_STATUS[state] : 'Done'];
   return labels.map((label, index) => ({
     label,
     status: index < current || closed ? 'done' : index === current ? 'current' : 'upcoming',
-    ...(closed && index === 3 && state !== 'resolved' ? { unsuccessful: true } : {}),
+    ...(closed && index === 2 && state !== 'resolved' ? { unsuccessful: true } : {}),
   }));
 }
 
