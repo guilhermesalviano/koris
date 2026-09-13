@@ -176,6 +176,26 @@ describe('ErrandService', () => {
       expect(errandRepo.update).toHaveBeenCalledWith('e1', expect.objectContaining({ state: 'awaiting_peer', pendingMessage: undefined }));
     });
 
+    it('posts the sent opener in the origin chat as the Negotiator', async () => {
+      const { service, db, errandRepo, sessionRepo } = makeService();
+      errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'Pedir um lanche', state: 'draft', originSessionId: 'origin-1', pendingMessage: 'Oi! Um lanche?' }));
+      errandRepo.findTargets.mockReturnValue(['target-session']);
+      sessionRepo.findById.mockImplementation((id: string) => (id === 'origin-1'
+        ? { id, channel: 'web', peerId: 'web', kind: 'user' }
+        : { id, channel: 'whatsapp', peerId: '555', kind: 'delegated' }));
+      errandRepo.update.mockImplementation((_id, patch) => {
+        errandRepo.findById.mockReturnValue(new Errand({ ...errandRepo.findById('e1'), ...patch }));
+      });
+
+      await service.approve('e1');
+
+      expect(db.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO messages'), [
+        expect.any(String), 'origin-1', 'assistant',
+        '📤 Errand "Pedir um lanche" started. Sent to contact: "Oi! Um lanche?"',
+        null, null, expect.any(String), 'negotiator',
+      ]);
+    });
+
     it('refuses to approve an errand that is not a draft', async () => {
       const { service, errandRepo } = makeService();
       errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'g', state: 'awaiting_peer', originSessionId: 'o1' }));

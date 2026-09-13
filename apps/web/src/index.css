@@ -254,6 +254,13 @@ body::before {
   font-family: "DM Mono", monospace;
 }
 
+.bubble a {
+  color: var(--color-accent-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+
 .bubble :not(pre) > code {
   background: rgba(255, 255, 255, 0.08);
   padding: 0.1em 0.35em;

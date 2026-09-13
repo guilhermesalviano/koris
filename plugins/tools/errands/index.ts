@@ -16,6 +16,8 @@ type ToolName = typeof TOOL_NAMES[keyof typeof TOOL_NAMES];
 type ErrandHandler = (logger: ILogger, args: Record<string, unknown>, context: ToolExecutionContext | undefined, errands: IErrandsGateway) => Promise<ToolResult>;
 
 const CHANNEL_TYPES = ['telegram', 'whatsapp'] as const;
+/** Fixed lead-in before the Negotiator page URL; a plain URL is clickable on the web chat and on WhatsApp/Telegram alike. */
+const FOLLOW_TEXT = 'follow details on ';
 const CLOSED_STATES = ['resolved', 'failed', 'cancelled', 'expired'];
 
 const STATUS: Record<string, string> = {
@@ -115,10 +117,18 @@ export const startErrand = withErrands(TOOL_NAMES.start, async (args, sessionId,
   if (!peerId) throw new Error(`"${contact}" is not a valid ${channel} contact.`);
 
   const { errand, openingMessage } = await errands.start({ goal, channel, peerId, originSessionId: sessionId });
+  const follow = `${FOLLOW_TEXT}${errands.followUrl()}`;
   if (errand.state === 'queued') {
-    return `Errand ${errand.id} is queued: another errand with ${peerId} is still running, so it starts once that one closes. Its draft opener is: "${openingMessage}"`;
+    return `Errand ${errand.id} is queued: another errand with ${peerId} is still running, so it starts once that one closes. Its draft opener is: "${openingMessage}". Tell the human, and end your reply with this exact line, untranslated: ${follow}`;
   }
-  return `Errand ${errand.id} staged; nothing has been sent yet. Show the human this draft opener exactly and ask whether to send it (then call ${TOOL_NAMES.approve}): "${openingMessage}"`;
+  try {
+    await errands.approve(errand.id);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return `Errand ${errand.id} was created but its opener did not reach ${peerId} (${reason}). Tell the human and offer to retry with ${TOOL_NAMES.approve}.`;
+  }
+  // The Negotiator already posted the opener in this chat; do not repeat it.
+  return `Errand ${errand.id} started: the Negotiator sent the opener to ${peerId} on ${channel}. Reply with exactly this line and nothing else — untranslated, with the URL as plain text: ${follow}`;
 });
 
 export const approveErrand = withErrands(TOOL_NAMES.approve, async (args, sessionId, errands) => {
@@ -173,8 +183,8 @@ export function create(context: ToolPluginContext): Plugin {
           name: TOOL_NAMES.start,
           description:
             'Start an errand: the Negotiator talks to a contact on WhatsApp or Telegram on the human\'s behalf until the goal is done ' +
-            '(book, ask, confirm, negotiate…). Stages a draft opener only — nothing is sent until the human approves it with ' +
-            `${TOOL_NAMES.approve}. After calling, show the draft to the human and ask whether to send it.`,
+            '(book, ask, confirm, negotiate…). The Negotiator writes and sends the opening message right away — do not ask the human ' +
+            'to approve a draft. After calling, reply with the "follow details on" line from the result.',
           parameters: {
             goal: { type: 'string', required: true, description: 'What the errand must achieve, with every constraint the human gave (dates, limits, preferences), in the human\'s language.' },
             contact: { type: 'string', required: true, description: 'Who to talk to: a WhatsApp phone number with country code (e.g. "5511999998888") or JID, or a Telegram chat id.' },
@@ -186,8 +196,8 @@ export function create(context: ToolPluginContext): Plugin {
         defineTool({
           name: TOOL_NAMES.approve,
           description:
-            'Send an errand\'s staged message to the contact: the draft opener the human just approved ("send it", "yes", "ok"), ' +
-            'or a message whose delivery did not finish.',
+            'Send an errand\'s staged message to the contact: a draft opener the human agrees to send (e.g. a queued errand that is ' +
+            'now ready), or a message whose delivery did not finish.',
           parameters: { errandId: ERRAND_ID },
           handler: handler(approveErrand),
           enabled,

@@ -48,7 +48,36 @@ export function renderMarkdown(raw: string): string {
     })
     .join('');
 
-  return s;
+  return linkify(s);
+}
+
+// `"` stays out of the URL so it can never close the href attribute; the input is already HTML-escaped.
+const URL_PATTERN = 'https?:\\/\\/[^\\s<>"]+';
+const MARKDOWN_LINK = new RegExp(`\\[([^\\]\\n]+)\\]\\((${URL_PATTERN}?)\\)`, 'g');
+const BARE_URL = new RegExp(`(<a [^>]*>[\\s\\S]*?<\\/a>)|(${URL_PATTERN})`, 'g');
+const CODE_SEGMENT = /(<pre[\s\S]*?<\/pre>|<code>[\s\S]*?<\/code>)/;
+
+function anchor(href: string, text: string): string {
+  return `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+}
+
+/** Turns `[text](url)` and bare http(s) URLs into links, leaving code untouched. */
+function linkify(html: string): string {
+  return html
+    .split(CODE_SEGMENT)
+    .map((part, index) => {
+      if (index % 2 === 1) return part;
+      return part
+        .replace(MARKDOWN_LINK, (_match, text: string, href: string) => anchor(href, text))
+        .replace(BARE_URL, (match, existing: string | undefined) => {
+          if (existing) return existing;
+          // Sentence punctuation right after a URL is not part of it.
+          const trailing = /[.,;:!?)]+$/.exec(match)?.[0] ?? '';
+          const href = match.slice(0, match.length - trailing.length);
+          return anchor(href, href) + trailing;
+        });
+    })
+    .join('');
 }
 
 /**

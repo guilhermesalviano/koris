@@ -24,6 +24,7 @@ function gateway(errands: ErrandRecord[] = [errand()]): { [K in keyof IErrandsGa
     answer: vi.fn().mockResolvedValue({ errand: errand({ state: 'awaiting_peer' }), reply: 'Perfeito, quarta então!' }),
     close: vi.fn().mockResolvedValue(errand({ state: 'resolved' })),
     cancel: vi.fn().mockResolvedValue(errand({ state: 'cancelled' })),
+    followUrl: vi.fn().mockReturnValue('http://koris.local:3000/admin/agents/negotiator'),
   } as never;
 }
 
@@ -94,7 +95,32 @@ describe('errand tools', () => {
     const errands = gateway();
     const result = await startErrand(logger, { goal: 'Book a class', contact: '+55 (11) 99999-8888' }, { sessionId: 'chat-1', channel: 'whatsapp' }, errands);
     expect(errands.start).toHaveBeenCalledWith({ goal: 'Book a class', channel: 'whatsapp', peerId: '5511999998888', originSessionId: 'chat-1' });
-    expect(result).toMatchObject({ success: true, result: expect.stringContaining('"Hi! Is Friday free?"') });
+    expect(result).toMatchObject({ success: true });
+  });
+
+  it('sends the opener right away and hands the Orchestrator the link to follow the negotiation', async () => {
+    const errands = gateway();
+    const result = await startErrand(logger, { goal: 'Pedir um lanche', contact: '5511948449969', channel: 'whatsapp' }, chat, errands);
+    expect(errands.approve).toHaveBeenCalledExactlyOnceWith('new');
+    expect(result).toMatchObject({ success: true, result: expect.stringMatching(/follow details on http:\/\/koris\.local:3000\/admin\/agents\/negotiator$/) });
+    expect(result.result).not.toContain('Hi! Is Friday free?');
+  });
+
+  it('does not send a queued errand, but still shares the link', async () => {
+    const errands = gateway();
+    errands.start.mockResolvedValue({ errand: errand({ id: 'new', state: 'queued' }), openingMessage: 'Hi!' });
+    const result = await startErrand(logger, { goal: 'Book', contact: '555', channel: 'whatsapp' }, chat, errands);
+    expect(errands.approve).not.toHaveBeenCalled();
+    expect(result.result).toContain('queued');
+    expect(result.result).toContain('follow details on http://koris.local:3000/admin/agents/negotiator');
+  });
+
+  it('reports an opener that failed to send and offers a retry', async () => {
+    const errands = gateway();
+    errands.approve.mockRejectedValue(new Error('WhatsApp is disconnected'));
+    const result = await startErrand(logger, { goal: 'Book', contact: '555', channel: 'whatsapp' }, chat, errands);
+    expect(result).toMatchObject({ success: true, result: expect.stringContaining('WhatsApp is disconnected') });
+    expect(result.result).toContain(TOOL_NAMES.approve);
   });
 
   it('needs an explicit, known channel outside WhatsApp and Telegram chats', async () => {

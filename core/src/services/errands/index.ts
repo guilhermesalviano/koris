@@ -314,9 +314,8 @@ class ErrandService implements IErrandService {
       state: 'awaiting_peer', pendingMessage: undefined, pendingDelivery: undefined,
       notes, lastProgressAt: nowISO(),
     });
-    if (batch.type === 'resume') {
-      this.pushToSession(errand.originSessionId, `📤 Errand "${errand.goal}" resumed. Sent to contact: "${batch.content}"`);
-    }
+    const verb = batch.type === 'resume' ? 'resumed' : 'started';
+    this.pushToSession(errand.originSessionId, `📤 Errand "${errand.goal}" ${verb}. Sent to contact: "${batch.content}"`);
     return updated;
   }
 

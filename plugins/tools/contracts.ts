@@ -184,7 +184,7 @@ export interface StartErrandInput {
 /** Every method throws when errands are unavailable (no channel manager running) or the operation is refused. */
 export interface IErrandsGateway {
   listForSession(sessionId: string): ErrandRecord[];
-  /** Has the Negotiator draft the opener and stages the errand; nothing is sent yet. */
+  /** Has the Negotiator draft the opener and stages the errand; nothing is sent until `approve`. */
   start(input: StartErrandInput): Promise<{ errand: ErrandRecord; openingMessage: string }>;
   approve(id: string): Promise<ErrandRecord>;
   retry(id: string): Promise<ErrandRecord>;
@@ -192,6 +192,8 @@ export interface IErrandsGateway {
   answer(id: string, answer: string): Promise<{ errand: ErrandRecord; reply: string }>;
   close(id: string, result: string): Promise<ErrandRecord>;
   cancel(id: string): Promise<ErrandRecord>;
+  /** Dashboard page where the human follows the Negotiator's conversations. */
+  followUrl(): string;
 }
 
 export interface ToolPluginConfigValues {
