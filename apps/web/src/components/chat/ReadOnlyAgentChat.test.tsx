@@ -25,6 +25,16 @@ describe('read-only agent chat', () => {
     expect(html).toContain('role="separator"');
   });
 
+  it('renders per-entry actions and drops the read-only label when they are provided', () => {
+    const html = renderToStaticMarkup(<ReadOnlyAgentChat
+      agentId="negotiator" title="Negotiator" entries={[entry]} loading={false} loaded error={null}
+      onRefresh={() => {}} emptyText="No errands yet." historyLabel="Recent history"
+      renderEntryActions={(item) => <button type="button">Act on {item.id}</button>}
+    />);
+    expect(html).toContain('Act on m1');
+    expect(html).not.toContain('Read-only');
+  });
+
   it('distinguishes loading and empty history', () => {
     const loading = renderState({ entries: [], loaded: false, loading: true });
     expect(loading).toContain('Loading conversation…');

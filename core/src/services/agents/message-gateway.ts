@@ -71,9 +71,11 @@ class MessageGateway implements IMessageGateway {
     // An approved errand owns the contact conversation regardless of whether
     // that contact is also trusted. Trusted slash commands still belong to
     // their user session; web/TUI requests without channel trust stay there too.
+    // The contact may reply under a different address than the errand was sent
+    // to (WhatsApp LID vs phone number), so the channel's aliases count too.
     const activeErrand = options?.isTrustedSender !== undefined
       && (!isCommand(safeMessage) || options.isTrustedSender === false)
-      ? buildErrandService(this.logger, this.db, this.sessionManager)?.findActiveForPeer(channel, originId) ?? null
+      ? buildErrandService(this.logger, this.db, this.sessionManager)?.findActiveForPeer(channel, originId, options.peerAliases) ?? null
       : null;
 
     const origin: SessionKey = activeErrand

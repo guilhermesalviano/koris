@@ -231,7 +231,7 @@ describe('ErrandService', () => {
       expect(db.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO messages'), [
         expect.any(String), 'origin-1', 'assistant',
         expect.stringContaining('what brand?\n\nReply with: `/errand reply e1 <your answer>`'),
-        null, null, expect.any(String),
+        null, null, expect.any(String), 'negotiator',
       ]);
     });
   });
@@ -309,7 +309,7 @@ describe('ErrandService', () => {
       expect(db.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO messages'), [
         expect.any(String), 'origin-1', 'assistant',
         expect.stringContaining('resolved: they said yes, on the way'),
-        null, null, expect.any(String),
+        null, null, expect.any(String), 'negotiator',
       ]);
     });
 
@@ -462,6 +462,15 @@ describe('ErrandService', () => {
       });
       expect(errandRepo.findActiveByPeer).toHaveBeenCalledWith('whatsapp', ['555@s.whatsapp.net', '555']);
       expect(sessionRepo.findLatestOpen).not.toHaveBeenCalled();
+    });
+
+    it('matches a contact that replies under another address the channel reports (WhatsApp LID)', () => {
+      const { service, errandRepo } = makeService();
+      errandRepo.findActiveByPeer.mockReturnValue({
+        errand: new Errand({ id: 'e1', goal: 'haircut', state: 'awaiting_peer', originSessionId: 'o1' }), sessionId: 'child',
+      });
+      expect(service.findActiveForPeer('whatsapp', '141789856067723@lid', ['555@s.whatsapp.net'])?.sessionId).toBe('child');
+      expect(errandRepo.findActiveByPeer).toHaveBeenCalledWith('whatsapp', ['141789856067723@lid', '555@s.whatsapp.net', '555']);
     });
   });
 

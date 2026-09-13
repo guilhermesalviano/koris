@@ -317,6 +317,7 @@ function toMessageJson(m: Message) {
     id: m.id,
     role: m.role,
     content: m.content,
+    senderAgentId: m.senderAgentId,
     images: m.images,
     missingImages: m.missingImages,
     errorCode: m.errorCode,

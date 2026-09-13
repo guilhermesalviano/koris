@@ -99,6 +99,19 @@ describe('Orchestrator timeline', () => {
     expect(body.nextCursor).toBeNull();
   });
 
+  it('returns subagent sender attribution in history and in older timeline pages', () => {
+    const { request, addSession, addMessage, messages } = setup();
+    const parent = addSession();
+    messages.save(new Message({ sessionId: parent.id, role: 'assistant', senderAgentId: 'negotiator', content: 'Booked.', createdAt: '2026-09-01T10:00:00.000Z' }));
+    addMessage(parent.id, 1, 'Thank you');
+
+    expect(messages.getBySessionId(parent.id)[0].senderAgentId).toBe('negotiator');
+    const newest = request('/agents/orchestrator/timeline', 'get', { limit: '1' }).body;
+    expect(newest.messages[0].senderAgentId).toBeUndefined();
+    const older = request('/agents/orchestrator/timeline', 'get', { limit: '1', before: newest.nextCursor }).body;
+    expect(older.messages[0]).toMatchObject({ senderAgentId: 'negotiator', content: 'Booked.', sessionId: parent.id });
+  });
+
   it('rejects a malformed cursor', () => {
     const { request } = setup();
 

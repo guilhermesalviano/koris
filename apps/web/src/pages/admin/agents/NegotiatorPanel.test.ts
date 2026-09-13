@@ -4,41 +4,62 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ReadOnlyChatMessage } from '../../../components/chat/ReadOnlyAgentChat';
 import { buildNegotiatorChat } from '../../../lib/subagent-chat';
 import type { ErrandItem } from '../../../lib/types';
+import { ErrandActions } from './NegotiatorPanel';
 
-function renderErrand(patch: Partial<ErrandItem>): string {
-  const errand: ErrandItem = {
+function makeErrand(patch: Partial<ErrandItem>): ErrandItem {
+  return {
     id: 'errand-1', goal: 'Book an appointment', state: 'draft', originSessionId: 'origin',
     pendingMessage: null, delivery: null, notes: null, result: null,
     createdAt: '2026-09-13T10:00:00Z', lastProgressAt: null, closedAt: null, targets: [], ...patch,
   };
+}
+
+function renderErrand(patch: Partial<ErrandItem>, initialAnswering = false): string {
+  const errand = makeErrand(patch);
   return renderToStaticMarkup(createElement(ReadOnlyChatMessage, {
-    entry: buildNegotiatorChat([{ errand, messages: [] }])[0], agentId: 'negotiator',
+    entry: buildNegotiatorChat([{ errand, messages: [] }])[0],
+    agentId: 'negotiator',
+    actions: createElement(ErrandActions, { errand, onChanged: () => {}, notify: () => {}, initialAnswering }),
   }));
 }
 
-describe('read-only errand information', () => {
-  it('identifies an unsent draft without offering approval', () => {
+function buttons(html: string): string[] {
+  return [...html.matchAll(/<button[^>]*>(?:<svg[\s\S]*?<\/svg>)?([^<]*)<\/button>/g)].map((match) => match[1]);
+}
+
+describe('errand information and actions', () => {
+  it('offers approval of an unsent draft alongside close and cancel', () => {
     const html = renderErrand({ pendingMessage: 'Could you book Saturday at 10?' });
     expect(html).toContain('Unsent draft');
     expect(html).toContain('Could you book Saturday at 10?');
     expect(html).toContain('Current status:');
-    expect(html).not.toContain('<button');
+    expect(buttons(html)).toEqual(['Approve', 'Close', 'Cancel']);
     expect(html).not.toContain('<details open');
   });
 
-  it('shows unanswered questions without an answer input', () => {
+  it('offers an answer to unanswered questions and opens the answer form', () => {
     const html = renderErrand({ state: 'awaiting_principal', pendingMessage: 'Would 11 or 14 work?' });
     expect(html).toContain('Question awaiting your answer');
     expect(html).toContain('Would 11 or 14 work?');
+    expect(buttons(html)).toEqual(['Answer', 'Close', 'Cancel']);
     expect(html).not.toContain('<input');
-    expect(html).not.toContain('<button');
+
+    const answering = renderErrand({ state: 'awaiting_principal', pendingMessage: 'Would 11 or 14 work?' }, true);
+    expect(answering).toContain('aria-label="Answer to send to the contact"');
+    expect(buttons(answering)).toEqual(['Close Reply', 'Close', 'Cancel', 'Send Answer']);
   });
 
-  it('explains partial delivery without offering to send anything', () => {
-    const html = renderErrand({ pendingMessage: 'Hello', delivery: { type: 'opener', sent: 1, total: 2, error: 'Channel offline' } });
+  it('offers to retry an incomplete delivery instead of approving or answering', () => {
+    const html = renderErrand({ state: 'awaiting_principal', pendingMessage: 'Hello', delivery: { type: 'opener', sent: 1, total: 2, error: 'Channel offline' } });
     expect(html).toContain('Channel offline');
     expect(html).toContain('1/2 contacts received the message');
     expect(html).toContain('Delivery incomplete');
-    expect(html).not.toContain('Retry');
+    expect(buttons(html)).toEqual(['Retry Send', 'Close', 'Cancel']);
+  });
+
+  it('offers no actions once an errand is closed', () => {
+    const html = renderErrand({ state: 'resolved', result: 'Booked for Saturday' });
+    expect(html).toContain('Booked for Saturday');
+    expect(html).not.toContain('<button');
   });
 });

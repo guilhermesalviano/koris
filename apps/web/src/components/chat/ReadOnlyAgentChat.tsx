@@ -21,10 +21,12 @@ interface ReadOnlyAgentChatProps {
   historyLabel: string;
   onRefresh: () => void;
   actions?: ReactNode;
+  /** Per-entry controls (e.g. errand actions); the chat is no longer labelled read-only when set. */
+  renderEntryActions?: (entry: ReadOnlyChatEntry) => ReactNode;
   children?: ReactNode;
 }
 
-export function ReadOnlyChatMessage({ entry, agentId }: { entry: ReadOnlyChatEntry; agentId: AgentId }) {
+export function ReadOnlyChatMessage({ entry, agentId, actions }: { entry: ReadOnlyChatEntry; agentId: AgentId; actions?: ReactNode }) {
   const contact = entry.kind === 'contact';
   const task = entry.kind === 'task';
   const notices = entry.details?.filter((detail) => ['Unsent draft', 'Question awaiting your answer', 'Delivery incomplete', 'Conversation unavailable'].includes(detail.label));
@@ -61,6 +63,7 @@ export function ReadOnlyChatMessage({ entry, agentId }: { entry: ReadOnlyChatEnt
             </details>
           )}
         </div>
+        {actions}
         <time dateTime={new Date(entry.at).toISOString()} className="px-1 font-mono text-micro text-txt-3">
           {task && 'Started '}{dayTimeLabel(entry.at)}
         </time>
@@ -69,8 +72,8 @@ export function ReadOnlyChatMessage({ entry, agentId }: { entry: ReadOnlyChatEnt
   );
 }
 
-export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, error, emptyText, historyLabel, onRefresh, actions, children }: ReadOnlyAgentChatProps) {
-  usePageTitle(title, 'Read-only agent chat');
+export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, error, emptyText, historyLabel, onRefresh, actions, renderEntryActions, children }: ReadOnlyAgentChatProps) {
+  usePageTitle(title, renderEntryActions ? 'Agent chat' : 'Read-only agent chat');
   const scrollRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   const positioned = useRef(false);
@@ -123,7 +126,7 @@ export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, er
       <header className="flex min-h-12 flex-shrink-0 flex-wrap items-center gap-2 border-b border-subtle bg-bg/80 px-4 py-2 backdrop-blur-md">
         <AgentAvatar id={agentId} className="h-8 w-8" />
         <h1 className="text-body font-medium text-txt">{title}</h1>
-        <span className="font-mono text-micro text-txt-3">Read-only</span>
+        {!renderEntryActions && <span className="font-mono text-micro text-txt-3">Read-only</span>}
         <div className="ml-auto flex items-center gap-2">
           {actions}
           <Button size="sm" variant="ghost" loading={loading} onClick={onRefresh}>Refresh</Button>
@@ -146,7 +149,7 @@ export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, er
             return (
               <Fragment key={entry.id}>
                 {separator && <DateSeparator label={separator} />}
-                <ReadOnlyChatMessage entry={entry} agentId={agentId} />
+                <ReadOnlyChatMessage entry={entry} agentId={agentId} actions={renderEntryActions?.(entry)} />
               </Fragment>
             );
           })}

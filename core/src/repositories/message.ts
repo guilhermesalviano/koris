@@ -48,8 +48,8 @@ class MessageRepository implements IMessageRepository {
     }) ?? [];
 
     this.db.run(
-      `INSERT INTO messages (id, session_id, role, content, image_ids, error_code, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO messages (id, session_id, role, content, image_ids, error_code, created_at, sender_agent_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         message.id,
         message.sessionId,
@@ -57,7 +57,8 @@ class MessageRepository implements IMessageRepository {
         message.content,
         imageIds.length ? JSON.stringify(imageIds) : null,
         message.errorCode ?? null,
-        message.createdAt
+        message.createdAt,
+        message.senderAgentId ?? null,
       ]
     );
   }
@@ -68,8 +69,8 @@ class MessageRepository implements IMessageRepository {
 
   getBySessionId(sessionId: string, limit = 15): Message[] {
     const rows = this.db.query<any>(
-      `SELECT id, session_id, role, content, image_ids, error_code, created_at FROM (
-         SELECT rowid AS insertion_order, id, session_id, role, content, image_ids, error_code, created_at FROM messages
+      `SELECT id, session_id, role, content, image_ids, error_code, created_at, sender_agent_id FROM (
+         SELECT rowid AS insertion_order, id, session_id, role, content, image_ids, error_code, created_at, sender_agent_id FROM messages
          WHERE session_id = ?
          ORDER BY created_at DESC, rowid DESC
          LIMIT ?
@@ -89,7 +90,7 @@ class MessageRepository implements IMessageRepository {
 
     // One extra row tells whether an older page exists without a COUNT query.
     const rows = this.db.query<any>(
-      `SELECT m.rowid AS row_order, m.id, m.session_id, m.role, m.content, m.image_ids, m.error_code, m.created_at
+      `SELECT m.rowid AS row_order, m.id, m.session_id, m.role, m.content, m.image_ids, m.error_code, m.created_at, m.sender_agent_id
        FROM messages m
        JOIN sessions s ON s.id = m.session_id
        WHERE s.channel = ? AND s.peer_id = ? AND s.kind = ? ${cursorClause}
@@ -118,6 +119,7 @@ class MessageRepository implements IMessageRepository {
       sessionId: row.session_id,
       role: row.role,
       content: row.content,
+      senderAgentId: row.sender_agent_id ?? undefined,
       images: images.length ? images : undefined,
       missingImages: missingImages > 0 ? missingImages : undefined,
       errorCode: row.error_code ?? undefined,

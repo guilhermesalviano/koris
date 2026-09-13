@@ -641,6 +641,16 @@ describe('MessageGateway', () => {
       expect(deps.mainAgent.run).not.toHaveBeenCalled();
     });
 
+    it('looks the errand up by the contact\'s other channel addresses too', async () => {
+      const { gateway } = makeGateway('whatsapp');
+      const findActiveForPeer = vi.fn().mockReturnValue(null);
+      vi.mocked(buildErrandService).mockReturnValue({ findActiveForPeer } as never);
+
+      await gateway.handle('hello', '141789856067723@lid', { isTrustedSender: false, peerAliases: ['555@s.whatsapp.net'] });
+
+      expect(findActiveForPeer).toHaveBeenCalledWith('whatsapp', '141789856067723@lid', ['555@s.whatsapp.net']);
+    });
+
     it('a trusted contact can still run commands in their own user session', async () => {
       const { gateway, deps, negotiator } = makeGateway('whatsapp');
       vi.mocked(buildErrandService).mockReturnValue({

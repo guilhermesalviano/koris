@@ -33,9 +33,9 @@ function isDeliverableChannel(channel: string): boolean {
 // when checking contention and promoting a queued errand, too.
 function peerAliases(channel: string, peerId: string): string[] {
   if (channel !== 'whatsapp') return [peerId];
-  return [peerId, peerId.endsWith('@s.whatsapp.net')
-    ? peerId.replace(/@s\.whatsapp\.net$/, '')
-    : `${peerId}@s.whatsapp.net`];
+  if (peerId.endsWith('@s.whatsapp.net')) return [peerId, peerId.replace(/@s\.whatsapp\.net$/, '')];
+  // Other JIDs (`@lid`, `@g.us`) have no bare-number form.
+  return peerId.includes('@') ? [peerId] : [peerId, `${peerId}@s.whatsapp.net`];
 }
 
 interface IErrandService {
@@ -53,7 +53,7 @@ interface IErrandService {
   listByOrigin(originSessionId: string): Errand[];
   listAll(state?: ErrandState, limit?: number, offset?: number): Errand[];
   resumeWithPrincipalAnswer(id: string, answer: string): Promise<{ errand: Errand; reply: string }>;
-  findActiveForPeer(channel: string, peerId: string): { errand: Errand; sessionId: string } | null;
+  findActiveForPeer(channel: string, peerId: string, otherPeerIds?: string[]): { errand: Errand; sessionId: string } | null;
 }
 
 class ErrandService implements IErrandService {
@@ -326,9 +326,13 @@ class ErrandService implements IErrandService {
     }
   }
 
-  findActiveForPeer(channel: string, peerId: string): { errand: Errand; sessionId: string } | null {
+  // `otherPeerIds` are addresses the channel reports for the same sender (e.g.
+  // the phone-number JID behind a WhatsApp LID), so a reply arriving under a
+  // different address than the errand was sent to still reaches the negotiator.
+  findActiveForPeer(channel: string, peerId: string, otherPeerIds: string[] = []): { errand: Errand; sessionId: string } | null {
     this.expireStale();
-    const active = this.errandRepository.findActiveByPeer(channel, peerAliases(channel, peerId));
+    const candidates = [...new Set([peerId, ...otherPeerIds].flatMap((id) => peerAliases(channel, id)))];
+    const active = this.errandRepository.findActiveByPeer(channel, candidates);
     if (!active) return null;
 
     const hydrated = this.hydrate(active.errand);
@@ -400,7 +404,7 @@ class ErrandService implements IErrandService {
 
     // web/tui: nothing to deliver to, just record it in the transcript.
     const sessionService = this.sessionManager.getSessionServiceById(session.id);
-    MessageServiceFactory.create(this.db, sessionService).save({ role: 'assistant', content });
+    MessageServiceFactory.create(this.db, sessionService).save({ role: 'assistant', content, senderAgentId: 'negotiator' });
   }
 
   private transition(errand: Errand, patch: Partial<ErrandProps>): Errand {

@@ -7,6 +7,7 @@ import ImageLightbox from '../../../components/ImageLightbox';
 import AudioRecognitionModal from '../../../components/chat/AudioRecognitionModal';
 import ChatComposer from '../../../components/chat/ChatComposer';
 import { DateSeparator } from '../../../components/chat/DateSeparator';
+import { AgentMessageLabel } from '../../../components/chat/AgentMessageLabel';
 import { imageSrc, readFileAsAttachment } from '../../../components/chat/shared';
 import { BrokenImageIcon, PlusIcon, RetryIcon, SpeakerIcon, SquareIcon } from '../../../components/Icons';
 import { Button } from '../../../components/ui';
@@ -324,9 +325,10 @@ export default function OrchestratorPage() {
           )}
           <div className={`flex gap-2.5 animate-msg-in ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
             {m.role === 'assistant' && (
-              <AgentAvatar id="orchestrator" className="mt-1 h-7 w-7" />
+              <AgentAvatar id={m.senderAgentId ?? 'orchestrator'} className="mt-1 h-7 w-7" />
             )}
             <div className={`bubble-col flex max-w-[calc(100%-44px)] flex-col gap-1 ${m.role === 'user' ? 'items-end' : ''}`}>
+              {m.role === 'assistant' && m.senderAgentId && m.senderAgentId !== 'orchestrator' && <AgentMessageLabel senderAgentId={m.senderAgentId} />}
               {m.role === 'user' ? (
                 <div className="bubble relative break-words rounded-card rounded-br-[5px] bg-accent px-3.5 py-2.5 text-sm leading-relaxed text-white">
                   {(m.images && m.images.length > 0) || (m.missingImages ?? 0) > 0 ? (
@@ -374,7 +376,7 @@ export default function OrchestratorPage() {
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
                 />
               )}
-              {m.role === 'assistant' && m.error && m.id === lastMessageId && !streaming && (
+              {m.role === 'assistant' && !m.senderAgentId && m.error && m.id === lastMessageId && !streaming && (
                 <button
                   onClick={() => void handleResend()}
                   title="Send the last message again"

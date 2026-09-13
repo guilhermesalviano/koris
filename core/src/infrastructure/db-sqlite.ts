@@ -245,6 +245,7 @@ class DatabaseService implements IDatabaseService {
           content TEXT NOT NULL,
           image_ids TEXT,
           error_code TEXT,
+          sender_agent_id TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
         );
@@ -254,6 +255,11 @@ class DatabaseService implements IDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
         CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
       `);
+
+      const messageColumns = this.db.pragma('table_info(messages)') as { name: string }[];
+      if (!messageColumns.some((column) => column.name === 'sender_agent_id')) {
+        this.db.exec('ALTER TABLE messages ADD COLUMN sender_agent_id TEXT;');
+      }
 
       /**
        * Image attachments stored independently so messages only reference them by id.

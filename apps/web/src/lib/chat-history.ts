@@ -1,4 +1,5 @@
-import type { ImageAttachment } from './types';
+import type { AgentId, ImageAttachment } from './types';
+import { agentMessagePresentation } from './agent-message';
 
 export interface ChatMessage {
   id: number;
@@ -8,6 +9,7 @@ export interface ChatMessage {
   sessionId?: string;
   role: 'user' | 'assistant';
   content: string;
+  senderAgentId?: AgentId;
   images?: ImageAttachment[];
   missingImages?: number;
   status?: string;
@@ -24,6 +26,7 @@ export type HistoryMessage = {
   id: string;
   role: string;
   content: string;
+  senderAgentId?: AgentId;
   images?: ImageAttachment[];
   missingImages?: number;
   errorCode?: string;
@@ -46,7 +49,7 @@ export function mapMessages(messages: HistoryMessage[]): ChatMessage[] {
     serverId: m.id,
     sessionId: m.sessionId,
     role: m.role === 'user' ? 'user' : 'assistant',
-    content: m.content,
+    ...agentMessagePresentation(m),
     images: m.images,
     missingImages: m.missingImages,
     error: !!m.errorCode,
@@ -70,9 +73,11 @@ export function mergeMessages(current: ChatMessage[], history: HistoryMessage[])
   const olderIds = new Set(history.slice(0, lastKnownIndex + 1).map((message) => message.id));
   for (const saved of unseen) {
     const role = saved.role === 'user' ? 'user' : 'assistant';
+    const presentation = agentMessagePresentation(saved);
     const localIndex = olderIds.has(saved.id) ? -1 : merged.findIndex((message) => (
       !message.serverId && !message.pending && !!message.error === !!saved.errorCode
-      && message.role === role && message.content === saved.content
+      && message.role === role && message.content === presentation.content
+      && message.senderAgentId === presentation.senderAgentId
       && JSON.stringify(message.images ?? []) === JSON.stringify(saved.images ?? [])
     ));
     const message = mapMessages([saved])[0];

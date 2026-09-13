@@ -4,9 +4,10 @@ import { IMessageRepository, MessageRepositoryFactory } from "../repositories/me
 import { MessageRole, ImageAttachment } from "../types/messages";
 import { ISessionService } from "./session-service";
 import { config } from "../config";
+import type { AgentId } from '../constants/agents';
 
 interface IMessageService {
-  save(props: { role: MessageRole; content: string; images?: ImageAttachment[]; errorCode?: string }): void;
+  save(props: { role: MessageRole; content: string; images?: ImageAttachment[]; errorCode?: string; senderAgentId?: AgentId }): void;
   getHistory(): Message[];
   getSessionId(): string;
   getSessionMetadata(): Record<string, unknown>;
@@ -21,12 +22,13 @@ class MessageService implements IMessageService {
     this.session = session;
   }
 
-  save(props: { role: MessageRole; content: string; images?: ImageAttachment[]; errorCode?: string }) {
+  save(props: { role: MessageRole; content: string; images?: ImageAttachment[]; errorCode?: string; senderAgentId?: AgentId }) {
     this.session.ensureActiveSession();
     const message = new Message({
       sessionId: this.session.getSession().id,
       role: props.role,
       content: props.content,
+      senderAgentId: props.senderAgentId,
       images: props.images,
       errorCode: props.errorCode,
     });

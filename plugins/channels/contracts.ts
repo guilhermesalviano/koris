@@ -51,6 +51,9 @@ export type ProcessOptions = {
    * route an untrusted peer with an active errand to the negotiator instead
    * of the principal's own session. Undefined (web/tui) is treated as trusted. */
   isTrustedSender?: boolean;
+  /** Forwarded from `InboundChannelMessage.peerAliases` so an errand addressed
+   * to one of the contact's other addresses still matches their reply. */
+  peerAliases?: string[];
 };
 
 export type InboundInput = string | { text: string; images?: ImageAttachment[]; stickers?: StickerReference[] };
@@ -166,6 +169,13 @@ export interface InboundChannelMessage {
    * conversation identity independent of the delivery target.
    */
   conversationId?: string;
+  /**
+   * Other addresses the same sender is known by on this channel, besides the
+   * `target` passed to `handle()` — e.g. the phone-number JID
+   * (`<n>@s.whatsapp.net`) of a WhatsApp message that arrived under a LID
+   * (`<n>@lid`). Lets core match a reply to an errand sent to the other form.
+   */
+  peerAliases?: string[];
 }
 
 export interface ChannelReply {
