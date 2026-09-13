@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { BeatCard, RunRow } from './WatcherPanel';
+import { BeatCard } from './WatcherPanel';
+import { ReadOnlyChatMessage } from '../../../components/chat/ReadOnlyAgentChat';
+import { buildWatcherChat } from '../../../lib/subagent-chat';
 import type { AuditItem, HeartbeatItem } from '../../../lib/types';
 
 const NOW = new Date('2026-09-13T12:00:00.000Z');
@@ -47,26 +49,23 @@ describe('BeatCard', () => {
   });
 });
 
-describe('RunRow', () => {
-  it('names the beat and shows what the run answered', () => {
-    const html = renderToStaticMarkup(<RunRow run={run()} beat={beat} />);
-
-    expect(html).toContain('ok');
+describe('Watcher chat messages', () => {
+  it('shows the scheduled task and full response with the Watcher avatar', () => {
+    const entry = buildWatcherChat({ beats: [beat], runs: [run({ response: '**Sunny**, 24°C with clear skies all day.' })] })[0];
+    const html = renderToStaticMarkup(<ReadOnlyChatMessage entry={entry} agentId="watcher" />);
     expect(html).toContain('Send me the weather forecast');
-    expect(html).toContain('llm gemma');
-    expect(html).toContain('1200 ms');
-    expect(html).toContain('Sunny, 24°C');
+    expect(html).toContain('<strong>Sunny</strong>');
+    expect(html).toContain('clear skies all day.');
+    expect(html).toContain('/agents/watcher.jpg');
   });
 
-  it('shows the error of a failed run and falls back to the run id without a beat', () => {
-    const html = renderToStaticMarkup(
-      <RunRow run={run({ status: 'error', type: 'tool', toolName: 'web_search', errorMessage: 'timeout', runId: 'deleted-beat-xyz' })} />,
-    );
-
-    expect(html).toContain('error');
-    expect(html).toContain('tool web_search');
+  it('shows failed activity for a deleted beat without offering resend', () => {
+    const entry = buildWatcherChat({ beats: [], runs: [run({ status: 'error', type: 'tool', toolName: 'web_search', errorMessage: 'timeout', runId: 'deleted-beat-xyz' })] })[0];
+    const html = renderToStaticMarkup(<ReadOnlyChatMessage entry={entry} agentId="watcher" />);
     expect(html).toContain('timeout');
-    expect(html).not.toContain('Sunny');
-    expect(html).toContain('beat deleted-…');
+    expect(html).toContain('deleted-beat-xyz');
+    expect(html).toContain('Activity details');
+    expect(html).not.toContain('<button');
+    expect(html).not.toContain('<details open');
   });
 });
