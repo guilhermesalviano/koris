@@ -172,11 +172,13 @@ export interface NegotiationCenterData {
   notices: NegotiatorNotice[];
   /** Questions waiting on the principal, newest first — from the same response as the notices. */
   pending: NegotiatorPendingQuestion[];
+  /** Fingerprint of the errand list; a change means the errands should be reloaded. */
+  errandsVersion: string;
 }
 
 export async function loadNegotiatorNotices(signal: AbortSignal): Promise<NegotiationCenterData> {
-  const { messages, pending } = await apiRequest<NegotiatorNoticesResponse>('/agents/negotiator/notices?limit=200', { signal });
-  return { notices: messages, pending: [...pending].sort((a, b) => timestamp(b.askedAt) - timestamp(a.askedAt)) };
+  const { messages, pending, errandsVersion } = await apiRequest<NegotiatorNoticesResponse>('/agents/negotiator/notices?limit=200', { signal });
+  return { notices: messages, pending: [...pending].sort((a, b) => timestamp(b.askedAt) - timestamp(a.askedAt)), errandsVersion };
 }
 
 const BEAT_TYPE: Record<string, string> = { reminder: 'Reminder', scheduled_beat: 'Scheduled task' };

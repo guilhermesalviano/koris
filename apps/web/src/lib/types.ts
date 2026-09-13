@@ -135,6 +135,8 @@ export interface NegotiatorPendingQuestion {
 export interface NegotiatorNoticesResponse {
   messages: NegotiatorNotice[];
   pending: NegotiatorPendingQuestion[];
+  /** Changes whenever anything the errand list shows changes (status, progress, delivery, messages). */
+  errandsVersion: string;
   nextCursor: string | null;
 }
 

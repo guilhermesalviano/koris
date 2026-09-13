@@ -147,9 +147,9 @@ describe('read-only history loading', () => {
   it('loads the notices and the pending questions in one request, newest question first', async () => {
     const older = { errandId: 'a', goal: 'Lunch', question: 'Noon?', askedAt: '2026-09-13T10:00:00Z' };
     const newer = { errandId: 'b', goal: 'Haircut', question: '11?', askedAt: '2026-09-13T10:05:00Z' };
-    const fetch = vi.fn(async () => Response.json({ messages: [], pending: [older, newer], nextCursor: null }));
+    const fetch = vi.fn(async () => Response.json({ messages: [], pending: [older, newer], errandsVersion: 'abc123', nextCursor: null }));
     vi.stubGlobal('fetch', fetch);
-    expect(await loadNegotiatorNotices(new AbortController().signal)).toEqual({ notices: [], pending: [newer, older] });
+    expect(await loadNegotiatorNotices(new AbortController().signal)).toEqual({ notices: [], pending: [newer, older], errandsVersion: 'abc123' });
     expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/admin/agents/negotiator/notices?limit=200', expect.anything());
   });
 

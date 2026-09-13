@@ -49,6 +49,10 @@ describe('errand recovery and privacy', () => {
       errands: ErrandRepositoryFactory.create(db), messages: MessageRepositoryFactory.create(db) };
   }
 
+  function messagesIn(sessionId: string): number {
+    return MessageRepositoryFactory.create(db).getBySessionId(sessionId, 100).length;
+  }
+
   function gateway(manager: SessionManager, text: string) {
     const completion = { complete: vi.fn().mockResolvedValue({ kind: 'message', text }) };
     const prompts = { build: vi.fn().mockResolvedValue({ messages: [] }) };
@@ -333,6 +337,33 @@ describe('errand recovery and privacy', () => {
     await runtime.gateway.handle('hello again', '555', { isTrustedSender: false });
     expect(service.get(errand.id)?.state).toBe('resolved');
     expect(runtime.mainAgent.run).toHaveBeenCalledTimes(2);
+  });
+
+  it('changes the errands fingerprint on every status or message change, even without a notice', async () => {
+    const { manager, service, parent, errands } = setup();
+    const router = AdminRouterFactory.create(logger, db, {} as never, manager);
+    const layer = router.stack.find((item) => item.route?.path === '/agents/negotiator/notices' && item.route.methods.get);
+    const version = async () => {
+      const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      await layer!.route.stack[0].handle({ params: {}, query: {} }, res, vi.fn());
+      return res.json.mock.calls[0][0].errandsVersion as string;
+    };
+
+    const empty = await version();
+    const errand = service.create('Order lunch', [{ channel: 'whatsapp', peerId: '555' }], parent.id, 'Can I order a sandwich?');
+    const drafted = await version();
+    expect(drafted).not.toBe(empty);
+    expect(await version()).toBe(drafted);
+
+    await service.approve(errand.id);
+    const contacted = await version();
+    expect(contacted).not.toBe(drafted);
+
+    const runtime = gateway(manager, '{"action":"continue","reply":"Great, thanks!"}');
+    await runtime.gateway.handle('Sure, what would you like?', '555', { isTrustedSender: false });
+    expect(service.get(errand.id)?.state).toBe('awaiting_peer');
+    expect(messagesIn(errands.findTargets(errand.id)[0])).toBeGreaterThan(1);
+    expect(await version()).not.toBe(contacted);
   });
 
   it('confirms a proposed result through the admin API and lists it as a pending confirmation', async () => {

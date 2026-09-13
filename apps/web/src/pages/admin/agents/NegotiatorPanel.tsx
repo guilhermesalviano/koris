@@ -280,9 +280,9 @@ export default function NegotiatorPanel() {
   const notices = useReadOnlyData(loadNegotiatorNotices);
   const centerEntries = useMemo(() => buildNegotiationCenter(notices.data?.notices ?? [], [...errands.values()]), [notices.data, errands]);
 
-  // The notices request is cheap and carries the pending questions, so it is
-  // polled often while the page is visible; the errand list follows only when
-  // it reports something new.
+  // The notices request is cheap and carries the pending questions plus a
+  // fingerprint of the errand list, so it is polled often while the page is
+  // visible; the errand list follows as soon as that fingerprint changes.
   const refreshNotices = notices.refresh;
   const noticesLoading = notices.loading;
   useEffect(() => {
@@ -292,7 +292,17 @@ export default function NegotiatorPanel() {
     return () => window.clearInterval(interval);
   }, [noticesLoading, refreshNotices]);
 
+  // Polling pauses in a hidden tab; catch up as soon as it is visible again.
+  useEffect(() => {
+    const onVisible = () => {
+      if (!document.hidden) void refreshNotices();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refreshNotices]);
+
   const noticesVersion = notices.data && JSON.stringify([
+    notices.data.errandsVersion,
     notices.data.notices.length, notices.data.notices[notices.data.notices.length - 1]?.id ?? null,
     notices.data.pending.map((question) => [question.errandId, question.askedAt]),
   ]);

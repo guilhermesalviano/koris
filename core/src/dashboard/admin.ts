@@ -1,4 +1,5 @@
 import express, { type Request, type Response, type Router } from 'express';
+import { createHash } from 'node:crypto';
 import { config, reloadConfig } from '../config';
 import { isConfigFilePresent } from '../config/helpers';
 import {
@@ -544,6 +545,16 @@ class AdminRouterFactory {
       // Questions and proposed results still waiting on the principal, read in the
       // same request as the notices so the page never shows one it cannot answer yet.
       const errandService = buildErrandService(logger, db, sessionManager);
+      // Fingerprint of what the errand list shows (the same latest 50 errands):
+      // state, progress, delivery and each contact session's message count. It
+      // changes on every status change, with or without a notice, so the page can
+      // refresh the errand list only when it needs to.
+      const errands = errandService?.listAll(undefined, 50) ?? [];
+      const errandsVersion = createHash('sha1').update(JSON.stringify(errands.map((errand) => [
+        errand.id, errand.state, errand.lastProgressAt ?? null, errand.closedAt ?? null,
+        errand.pendingDelivery ? [errand.pendingDelivery.id, errand.pendingDelivery.targets.filter((target) => target.sentAt).length] : null,
+        getTargetDetails(errand.id).map((target) => target.messageCount),
+      ]))).digest('hex').slice(0, 16);
       const pending = (['awaiting_principal', 'awaiting_confirmation'] as const)
         .flatMap((state) => errandService?.listAll(state, 50) ?? [])
         .filter((errand) => !errand.pendingDelivery)
@@ -558,6 +569,7 @@ class AdminRouterFactory {
       res.json({
         messages: page.messages.map((m) => ({ ...toMessageJson(m), errandId: errandIds.get(m.sessionId) ?? null })),
         pending,
+        errandsVersion,
         nextCursor: page.nextCursor ? encodeTimelineCursor(page.nextCursor) : null,
       });
     });
