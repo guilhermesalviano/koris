@@ -541,9 +541,20 @@ class AdminRouterFactory {
       const page = messageRepo.getTimeline({ key: { channel: NEGOTIATION_CHANNEL, kind: 'user' }, before, limit });
       const errandIds = new Map([...new Set(page.messages.map((m) => m.sessionId))]
         .map((id) => [id, sessionRepo.findById(id)?.peerId ?? null]));
+      // Questions still waiting on the principal, read in the same request as the
+      // notices so the page never shows a question it cannot answer yet.
+      const pending = (buildErrandService(logger, db, sessionManager)?.listAll('awaiting_principal', 50) ?? [])
+        .filter((errand) => !errand.pendingDelivery)
+        .map((errand) => ({
+          errandId: errand.id,
+          goal: errand.goal,
+          question: errand.pendingMessage ?? null,
+          askedAt: errand.lastProgressAt ?? errand.createdAt,
+        }));
 
       res.json({
         messages: page.messages.map((m) => ({ ...toMessageJson(m), errandId: errandIds.get(m.sessionId) ?? null })),
+        pending,
         nextCursor: page.nextCursor ? encodeTimelineCursor(page.nextCursor) : null,
       });
     });

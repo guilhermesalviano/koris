@@ -118,8 +118,17 @@ export interface NegotiatorNotice {
   errandId: string | null;
 }
 
+/** An errand waiting on the principal's answer, returned with the notices. */
+export interface NegotiatorPendingQuestion {
+  errandId: string;
+  goal: string;
+  question: string | null;
+  askedAt: string;
+}
+
 export interface NegotiatorNoticesResponse {
   messages: NegotiatorNotice[];
+  pending: NegotiatorPendingQuestion[];
   nextCursor: string | null;
 }
 

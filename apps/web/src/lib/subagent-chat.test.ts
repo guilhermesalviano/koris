@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildNegotiationCenter, buildNegotiatorChat, buildWatcherChat, headerErrand, loadNegotiatorChat, loadWatcherChat, negotiationSteps } from './subagent-chat';
+import { buildNegotiationCenter, buildNegotiatorChat, buildWatcherChat, headerErrand, loadNegotiatorChat, loadNegotiatorNotices, loadWatcherChat, negotiationSteps } from './subagent-chat';
 import type { BeatRunItem, ErrandItem, ErrandTranscriptMessage } from './types';
 
 const errand: ErrandItem = {
@@ -97,7 +97,7 @@ describe('read-only history loading', () => {
       return url.includes('/e1/') ? Response.json({ error: 'Contact unavailable' }, { status: 503 }) : Response.json({ messages: [message] });
     });
     vi.stubGlobal('fetch', fetch);
-    const result = loadNegotiatorChat(new AbortController().signal, [{ errand: items[1], messages: [message] }]);
+    const result = loadNegotiatorChat(new AbortController().signal, [{ errand: { ...items[1], lastProgressAt: '2026-09-13T09:00:00Z' }, messages: [message] }]);
     await vi.waitFor(() => expect(pending).toHaveLength(4));
     pending.splice(0).forEach((resolve) => resolve());
     await vi.waitFor(() => expect(pending).toHaveLength(2));
@@ -107,6 +107,42 @@ describe('read-only history loading', () => {
     expect(conversations).toHaveLength(6);
     expect(conversations[1]).toMatchObject({ messages: [message], error: 'Contact unavailable' });
     expect(conversations[5].messages).toEqual([message]);
+  });
+
+  it('reuses unchanged transcripts and refetches only errands that changed or failed before', async () => {
+    const items = [
+      { ...errand, id: 'same' },
+      { ...errand, id: 'progressed', lastProgressAt: '2026-09-13T10:05:00Z' },
+      { ...errand, id: 'new-message', targets: [{ ...errand.targets[0], messageCount: 3 }, errand.targets[1]] },
+      { ...errand, id: 'failed' },
+      { ...errand, id: 'brand-new' },
+    ];
+    const fetch = vi.fn(async (url: string) => url.endsWith('/errands?limit=50')
+      ? Response.json({ items })
+      : Response.json({ messages: [{ ...message, id: `fresh:${url}` }] }));
+    vi.stubGlobal('fetch', fetch);
+    const previous = [
+      { errand: { ...errand, id: 'same' }, messages: [message] },
+      { errand: { ...errand, id: 'progressed' }, messages: [message] },
+      { errand: { ...errand, id: 'new-message' }, messages: [message] },
+      { errand: { ...errand, id: 'failed' }, messages: [message], error: 'offline' },
+    ];
+
+    const conversations = await loadNegotiatorChat(new AbortController().signal, previous);
+
+    const fetched = fetch.mock.calls.map(([url]) => url).filter((url) => url.includes('/transcript'));
+    expect(fetched.map((url) => url.split('/')[4]).sort()).toEqual(['brand-new', 'failed', 'new-message', 'progressed']);
+    expect(conversations[0]).toEqual({ errand: items[0], messages: [message] });
+    expect(conversations[1].messages[0].id).toContain('/progressed/');
+  });
+
+  it('loads the notices and the pending questions in one request, newest question first', async () => {
+    const older = { errandId: 'a', goal: 'Lunch', question: 'Noon?', askedAt: '2026-09-13T10:00:00Z' };
+    const newer = { errandId: 'b', goal: 'Haircut', question: '11?', askedAt: '2026-09-13T10:05:00Z' };
+    const fetch = vi.fn(async () => Response.json({ messages: [], pending: [older, newer], nextCursor: null }));
+    vi.stubGlobal('fetch', fetch);
+    expect(await loadNegotiatorNotices(new AbortController().signal)).toEqual({ notices: [], pending: [newer, older] });
+    expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/admin/agents/negotiator/notices?limit=200', expect.anything());
   });
 
   it('stops scheduling transcripts after abort', async () => {

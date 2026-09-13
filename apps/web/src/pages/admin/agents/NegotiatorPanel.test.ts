@@ -3,8 +3,8 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ReadOnlyChatMessage } from '../../../components/chat/ReadOnlyAgentChat';
 import { buildNegotiatorChat } from '../../../lib/subagent-chat';
-import type { ErrandItem } from '../../../lib/types';
-import { ErrandActions, NegotiationCenter, NegotiationStepsHeader, answerableErrands } from './NegotiatorPanel';
+import type { ErrandItem, NegotiatorPendingQuestion } from '../../../lib/types';
+import { ErrandActions, NegotiationCenter, NegotiationStepsHeader } from './NegotiatorPanel';
 
 function makeErrand(patch: Partial<ErrandItem>): ErrandItem {
   return {
@@ -76,34 +76,28 @@ describe('negotiation steps header', () => {
 });
 
 describe('negotiation center', () => {
-  const center = (errands: ErrandItem[], entries = buildNegotiatorChat([])) => renderToStaticMarkup(createElement(NegotiationCenter, {
-    entries, errands, loading: false, loaded: true, error: null, notify: () => {}, onAnswered: () => {},
+  const question = (patch: Partial<NegotiatorPendingQuestion> = {}): NegotiatorPendingQuestion => ({
+    errandId: 'errand-1', goal: 'Book an appointment', question: 'Would 11 work?', askedAt: '2026-09-13T10:02:00Z', ...patch,
+  });
+  const center = (pending: NegotiatorPendingQuestion[]) => renderToStaticMarkup(createElement(NegotiationCenter, {
+    entries: [], pending, loading: false, loaded: true, error: null, notify: () => {}, onAnswered: () => {},
   }));
 
-  it('answers the newest pending question first and skips errands whose delivery is stuck', () => {
-    const older = makeErrand({ id: 'a', state: 'awaiting_principal', lastProgressAt: '2026-09-13T10:01:00Z' });
-    const newer = makeErrand({ id: 'b', state: 'awaiting_principal', lastProgressAt: '2026-09-13T10:02:00Z' });
-    const stuck = makeErrand({ id: 'c', state: 'awaiting_principal', delivery: { type: 'resume', sent: 0, total: 1, error: 'offline' } });
-    expect(answerableErrands([older, stuck, newer, makeErrand({ id: 'd', state: 'awaiting_peer' })]).map((item) => item.id)).toEqual(['b', 'a']);
-  });
-
   it('disables the composer when no question is waiting and explains the empty history', () => {
-    const html = center([makeErrand({ state: 'awaiting_peer' })]);
+    const html = center([]);
     expect(html).toContain('No negotiation updates yet.');
     expect(html).toMatch(/<input[^>]*disabled=""[^>]*placeholder="No question is waiting for your answer"/);
     expect(html).not.toContain('<select');
   });
 
-  it('shows the pending question in the composer, with a picker when several are waiting', () => {
-    const one = center([makeErrand({ state: 'awaiting_principal', pendingMessage: 'Would 11 work?' })]);
+  it('enables the composer from the pending questions, with a picker when several are waiting', () => {
+    const one = center([question()]);
     expect(one).toContain('placeholder="Answer: Would 11 work?"');
+    expect(one).not.toMatch(/<input[^>]*disabled=""/);
     expect(one).not.toContain('<select');
-    const several = center([
-      makeErrand({ id: 'a', goal: 'Lunch', state: 'awaiting_principal' }),
-      makeErrand({ id: 'b', goal: 'Haircut', state: 'awaiting_principal' }),
-    ]);
+    const several = center([question({ errandId: 'b', goal: 'Haircut' }), question({ errandId: 'a', goal: 'Lunch' })]);
     expect(several).toContain('aria-label="Question to answer"');
-    expect(several).toContain('>Lunch</option>');
-    expect(several).toContain('>Haircut</option>');
+    expect(several.indexOf('>Haircut</option>')).toBeLessThan(several.indexOf('>Lunch</option>'));
+    expect(several).toContain('placeholder="Answer: Would 11 work?"');
   });
 });

@@ -253,6 +253,13 @@ describe('errand recovery and privacy', () => {
 
     service.escalate(errand.id, 'Would 11 work?');
     await Promise.resolve();
+    const noticesRouter = AdminRouterFactory.create(logger, db, {} as never, manager);
+    const noticesLayer = noticesRouter.stack.find((item) => item.route?.path === '/agents/negotiator/notices' && item.route.methods.get);
+    const waiting = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    await noticesLayer!.route.stack[0].handle({ params: {}, query: {} }, waiting, vi.fn());
+    expect(waiting.json.mock.calls[0][0].pending).toEqual([
+      { errandId: errand.id, goal: 'Book a haircut', question: 'Would 11 work?', askedAt: expect.any(String) },
+    ]);
     expect(channels.sendMessage).toHaveBeenLastCalledWith('whatsapp', '999', expect.stringContaining('Would 11 work?'));
     await vi.waitFor(() => expect(messages.getBySessionId(negotiation.id)).toHaveLength(1));
     vi.spyOn(NegotiatorFactory, 'create').mockReturnValue({ composeResume: vi.fn().mockResolvedValue('Please book 11.') } as never);
@@ -272,6 +279,7 @@ describe('errand recovery and privacy', () => {
         { role: 'assistant', content: expect.stringContaining('Would 11 work?'), errandId: errand.id },
         { role: 'user', content: '11 works', errandId: errand.id },
       ],
+      pending: [],
       nextCursor: null,
     });
   });

@@ -10,7 +10,7 @@ import { buildNegotiationCenter, buildNegotiatorChat, headerErrand, loadNegotiat
 import { isNearBottom } from '../../../lib/timeline';
 import { useAgentActivity } from '../../../lib/agent-activity-context';
 import { useReadOnlyData } from '../../../lib/use-read-only-data';
-import type { ErrandItem, ErrandState } from '../../../lib/types';
+import type { ErrandItem, ErrandState, NegotiatorPendingQuestion } from '../../../lib/types';
 
 type ErrandAction = 'approve' | 'cancel' | 'close' | 'retry';
 
@@ -141,7 +141,8 @@ export function NegotiationStepsHeader({ errand }: { errand: Pick<ErrandItem, 'g
 
 interface NegotiationCenterProps {
   entries: readonly ReadOnlyChatEntry[];
-  errands: readonly ErrandItem[];
+  /** Questions waiting on the principal, newest first. */
+  pending: readonly NegotiatorPendingQuestion[];
   loading: boolean;
   loaded: boolean;
   error: string | null;
@@ -149,20 +150,12 @@ interface NegotiationCenterProps {
   onAnswered: () => void;
 }
 
-/** Errands whose question the composer can answer, newest question first. */
-export function answerableErrands(errands: readonly ErrandItem[]): ErrandItem[] {
-  return errands
-    .filter((errand) => errand.state === 'awaiting_principal' && !errand.delivery)
-    .sort((a, b) => Date.parse(b.lastProgressAt ?? b.createdAt) - Date.parse(a.lastProgressAt ?? a.createdAt));
-}
-
 /** Main area of the Negotiator page: every negotiation's notices as one history, plus a composer that answers a pending question. */
-export function NegotiationCenter({ entries, errands, loading, loaded, error, notify, onAnswered }: NegotiationCenterProps) {
+export function NegotiationCenter({ entries, pending, loading, loaded, error, notify, onAnswered }: NegotiationCenterProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
-  const pending = useMemo(() => answerableErrands(errands), [errands]);
   const [chosenId, setChosenId] = useState<string | null>(null);
-  const target = pending.find((errand) => errand.id === chosenId) ?? pending[0] ?? null;
+  const target = pending.find((question) => question.errandId === chosenId) ?? pending[0] ?? null;
   const [answer, setAnswer] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -176,7 +169,7 @@ export function NegotiationCenter({ entries, errands, loading, loaded, error, no
     if (!target || !text || sending) return;
     setSending(true);
     try {
-      await apiRequest(`/errands/${encodeURIComponent(target.id)}/reply`, { method: 'POST', body: JSON.stringify({ answer: text }) });
+      await apiRequest(`/errands/${encodeURIComponent(target.errandId)}/reply`, { method: 'POST', body: JSON.stringify({ answer: text }) });
       setAnswer('');
       following.current = true;
       notify('Answer sent to contact, errand resumed');
@@ -221,11 +214,11 @@ export function NegotiationCenter({ entries, errands, loading, loaded, error, no
         {pending.length > 1 && (
           <Select
             aria-label="Question to answer"
-            value={target?.id ?? ''}
+            value={target?.errandId ?? ''}
             onChange={(event) => setChosenId(event.target.value)}
             className="h-9 w-full sm:w-56"
           >
-            {pending.map((errand) => <option key={errand.id} value={errand.id}>{errand.goal}</option>)}
+            {pending.map((question) => <option key={question.errandId} value={question.errandId}>{question.goal}</option>)}
           </Select>
         )}
         <Input
@@ -233,7 +226,7 @@ export function NegotiationCenter({ entries, errands, loading, loaded, error, no
           value={answer}
           onChange={(event) => setAnswer(event.target.value)}
           disabled={!target}
-          placeholder={target ? `Answer: ${target.pendingMessage ?? target.goal}` : 'No question is waiting for your answer'}
+          placeholder={target ? `Answer: ${target.question ?? target.goal}` : 'No question is waiting for your answer'}
           className="min-w-0 flex-1"
         />
         <Button type="submit" variant="primary" loading={sending} disabled={!target || !answer.trim()}>Send</Button>
@@ -242,6 +235,8 @@ export function NegotiationCenter({ entries, errands, loading, loaded, error, no
   );
 }
 
+const NOTICES_POLL_MS = 4_000;
+
 export default function NegotiatorPanel() {
   const { negotiator: { data, loading, error, refresh } } = useAgentActivity();
   const entries = useMemo(() => buildNegotiatorChat(data ?? []), [data]);
@@ -249,17 +244,30 @@ export default function NegotiatorPanel() {
   const followed = useMemo(() => headerErrand([...errands.values()]), [errands]);
   const [toastMsg, showToast, isError] = useToast();
   const notices = useReadOnlyData(loadNegotiatorNotices);
-  const centerEntries = useMemo(() => buildNegotiationCenter(notices.data ?? [], [...errands.values()]), [notices.data, errands]);
+  const centerEntries = useMemo(() => buildNegotiationCenter(notices.data?.notices ?? [], [...errands.values()]), [notices.data, errands]);
 
-  // Notices only change alongside an errand's progress, which the shared errand
-  // polling already picks up; reload them whenever that data changes.
-  const polled = useRef(data);
+  // The notices request is cheap and carries the pending questions, so it is
+  // polled often while the page is visible; the errand list follows only when
+  // it reports something new.
   const refreshNotices = notices.refresh;
+  const noticesLoading = notices.loading;
   useEffect(() => {
-    if (polled.current === data) return;
-    polled.current = data;
-    void refreshNotices();
-  }, [data, refreshNotices]);
+    const interval = window.setInterval(() => {
+      if (!document.hidden && !noticesLoading) void refreshNotices();
+    }, NOTICES_POLL_MS);
+    return () => window.clearInterval(interval);
+  }, [noticesLoading, refreshNotices]);
+
+  const noticesVersion = notices.data && JSON.stringify([
+    notices.data.notices.length, notices.data.notices[notices.data.notices.length - 1]?.id ?? null,
+    notices.data.pending.map((question) => [question.errandId, question.askedAt]),
+  ]);
+  const seenVersion = useRef<string | null>(null);
+  useEffect(() => {
+    if (!noticesVersion) return;
+    if (seenVersion.current !== null && seenVersion.current !== noticesVersion) void refresh();
+    seenVersion.current = noticesVersion;
+  }, [noticesVersion, refresh]);
 
   const refreshAll = () => {
     void refresh();
@@ -279,7 +287,7 @@ export default function NegotiatorPanel() {
         main={(
           <NegotiationCenter
             entries={centerEntries}
-            errands={[...errands.values()]}
+            pending={notices.data?.pending ?? []}
             loading={notices.loading}
             loaded={notices.data !== null}
             error={notices.error}

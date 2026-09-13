@@ -1,6 +1,6 @@
 import { apiRequest } from './api';
 import { agentMessagePresentation } from './agent-message';
-import type { BeatRunItem, BeatRunsResponse, ErrandItem, ErrandState, ErrandsResponse, ErrandTranscriptMessage, ErrandTranscriptResponse, HeartbeatItem, HeartbeatsResponse, NegotiatorNotice, NegotiatorNoticesResponse } from './types';
+import type { BeatRunItem, BeatRunsResponse, ErrandItem, ErrandState, ErrandsResponse, ErrandTranscriptMessage, ErrandTranscriptResponse, HeartbeatItem, HeartbeatsResponse, NegotiatorNotice, NegotiatorNoticesResponse, NegotiatorPendingQuestion } from './types';
 
 export interface ReadOnlyChatEntry {
   id: string;
@@ -149,9 +149,15 @@ export function buildNegotiationCenter(notices: readonly NegotiatorNotice[], err
   }));
 }
 
-export async function loadNegotiatorNotices(signal: AbortSignal): Promise<NegotiatorNotice[]> {
-  const { messages } = await apiRequest<NegotiatorNoticesResponse>('/agents/negotiator/notices?limit=200', { signal });
-  return messages;
+export interface NegotiationCenterData {
+  notices: NegotiatorNotice[];
+  /** Questions waiting on the principal, newest first — from the same response as the notices. */
+  pending: NegotiatorPendingQuestion[];
+}
+
+export async function loadNegotiatorNotices(signal: AbortSignal): Promise<NegotiationCenterData> {
+  const { messages, pending } = await apiRequest<NegotiatorNoticesResponse>('/agents/negotiator/notices?limit=200', { signal });
+  return { notices: messages, pending: [...pending].sort((a, b) => timestamp(b.askedAt) - timestamp(a.askedAt)) };
 }
 
 const BEAT_TYPE: Record<string, string> ={ reminder: 'Reminder', scheduled_beat: 'Scheduled task' };
@@ -190,14 +196,29 @@ export function buildWatcherChat({ runs }: WatcherHistory): ReadOnlyChatEntry[] 
   }));
 }
 
+/** Changes whenever an errand's transcript may have: its state, progress, or any contact session's message count. */
+function transcriptVersion(errand: ErrandItem): string {
+  return JSON.stringify([errand.state, errand.lastProgressAt, errand.targets.map((target) => [target.sessionId, target.messageCount])]);
+}
+
 export async function loadNegotiatorChat(signal: AbortSignal, previous: ErrandConversation[] | null): Promise<ErrandConversation[]> {
   const { items } = await apiRequest<ErrandsResponse>('/errands?limit=50', { signal });
-  const saved = new Map(previous?.map((conversation) => [conversation.errand.id, conversation.messages]));
+  const saved = new Map(previous?.map((conversation) => [conversation.errand.id, conversation]));
   const conversations: ErrandConversation[] = new Array(items.length);
+  // Unchanged transcripts are reused, so a steady refresh costs one request.
+  const stale: number[] = [];
+  items.forEach((errand, index) => {
+    const known = saved.get(errand.id);
+    if (known && !known.error && transcriptVersion(known.errand) === transcriptVersion(errand)) {
+      conversations[index] = { errand, messages: known.messages };
+    } else {
+      stale.push(index);
+    }
+  });
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(4, items.length) }, async () => {
-    while (next < items.length && !signal.aborted) {
-      const index = next++;
+  await Promise.all(Array.from({ length: Math.min(4, stale.length) }, async () => {
+    while (next < stale.length && !signal.aborted) {
+      const index = stale[next++];
       const errand = items[index];
       try {
         const transcript = await apiRequest<ErrandTranscriptResponse>(`/errands/${encodeURIComponent(errand.id)}/transcript`, { signal });
@@ -206,7 +227,7 @@ export async function loadNegotiatorChat(signal: AbortSignal, previous: ErrandCo
         if (signal.aborted) throw error;
         conversations[index] = {
           errand,
-          messages: saved.get(errand.id) ?? [],
+          messages: saved.get(errand.id)?.messages ?? [],
           error: error instanceof Error ? error.message : 'Failed to load conversation',
         };
       }
