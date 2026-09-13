@@ -16,8 +16,6 @@ describe('errand messages to the Orchestrator', () => {
   it.each([
     ['✅ Errand "Book lunch" resolved: A table for two.\nAt noon.', "I've completed “Book lunch”.\n\nA table for two.\nAt noon."],
     ['⚠️ Errand "Book lunch" failed: No tables left.', "I couldn't complete “Book lunch”.\n\nNo tables left."],
-    ['📤 Errand "Book lunch" started. Sent to contact: "Hi! A table for two?"', "I've started “Book lunch”. I sent the contact:\n\nHi! A table for two?"],
-    ['📤 Errand "Book lunch" resumed. Sent to contact: "Noon works."', "I've resumed “Book lunch”. I sent the contact:\n\nNoon works."],
   ])('presents the recorded outcome as a message: %s', (content, expected) => {
     expect(agentMessagePresentation({ role: 'assistant', content, senderAgentId: 'negotiator' })).toEqual({ senderAgentId: 'negotiator', content: expected });
   });

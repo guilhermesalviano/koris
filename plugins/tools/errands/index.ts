@@ -130,7 +130,6 @@ export const approveErrand = withErrands(TOOL_NAMES.approve, async (args, sessio
     return `Errand "${errand.goal}": the message still did not reach every contact (${updated.deliveryError ?? 'delivery pending'}). It can be retried later.`;
   }
   if (errand.state === 'draft') {
-    // The Negotiator already posted the sent opener in this chat; do not repeat it.
     return `Errand "${errand.goal}": the Negotiator sent the opener to the contact. Reply with exactly this line and nothing else — untranslated, with the URL as plain text: ${FOLLOW_TEXT}${errands.followUrl()}`;
   }
   return `Errand "${errand.goal}": message sent to the contact. Status: ${status(updated)}.`;

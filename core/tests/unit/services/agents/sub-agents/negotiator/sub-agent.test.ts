@@ -234,7 +234,7 @@ describe('Negotiator', () => {
     expect(result).toEqual({ reply: 'Yes, still available!', applied: 'continue' });
   });
 
-  it.each([undefined, '', '   '])('"escalate": pushes the question to the principal and returns a holding reply when reply is %s', async (reply) => {
+  it.each([undefined, '', '   '])('"escalate": pushes the question to the principal and sends the contact nothing when reply is %s', async (reply) => {
     const { negotiator, errandService } = makeNegotiator({
       completionText: JSON.stringify({ action: 'escalate', reply, detail: 'what price should I offer?', notes: 'negotiating price' }),
     });
@@ -242,10 +242,10 @@ describe('Negotiator', () => {
     const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'how much?', messageHistory: [] });
 
     expect(errandService.escalate).toHaveBeenCalledWith('errand-1', 'what price should I offer?', 'negotiating price');
-    expect(result).toEqual({ reply: 'I’m checking on this.', applied: 'escalate' });
+    expect(result).toEqual({ reply: '', applied: 'escalate' });
   });
 
-  it('"escalate": uses the model\'s own reply instead of the holding message when one was given', async () => {
+  it('"escalate": sends the model\'s own reply when one was given', async () => {
     const { negotiator } = makeNegotiator({
       completionText: JSON.stringify({ action: 'escalate', reply: 'Let me check with them.', detail: 'need budget approval' }),
     });
@@ -293,7 +293,7 @@ describe('Negotiator', () => {
     const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'Which price?', messageHistory: [] });
 
     expect(errandService.escalate).toHaveBeenCalledExactlyOnceWith('errand-1', 'The negotiator needs your input.', undefined);
-    expect(result).toEqual({ reply: 'I’m checking on this.', applied: 'escalate' });
+    expect(result).toEqual({ reply: '', applied: 'escalate' });
   });
 
   it.each([

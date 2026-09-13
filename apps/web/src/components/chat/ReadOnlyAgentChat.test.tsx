@@ -45,6 +45,21 @@ describe('read-only agent chat', () => {
     expect(html).toContain('border-accent-muted');
   });
 
+  it('moves the history into a right aside and leaves the main area blank when asked', () => {
+    const inline = renderState();
+    expect(inline).not.toContain('<aside');
+
+    const html = renderToStaticMarkup(<ReadOnlyAgentChat
+      agentId="negotiator" title="Negotiator" entries={[entry]} loading={false} loaded error={null}
+      onRefresh={() => {}} emptyText="No errands yet." historyLabel="Recent history" historyAside
+    />);
+    const main = /<section aria-label="Negotiator main"[^>]*><\/section>/.exec(html);
+    expect(main).not.toBeNull();
+    const aside = html.slice(html.indexOf('<aside aria-label="Negotiator history"'));
+    expect(aside).toContain('Lunch confirmed.');
+    expect(aside).toContain('Recent history');
+  });
+
   it('distinguishes loading and empty history', () => {
     const loading = renderState({ entries: [], loaded: false, loading: true });
     expect(loading).toContain('Loading conversation…');

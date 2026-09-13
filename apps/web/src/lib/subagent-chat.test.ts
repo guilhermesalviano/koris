@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildNegotiatorChat, buildWatcherChat, loadNegotiatorChat, loadWatcherChat } from './subagent-chat';
+import { buildNegotiatorChat, buildWatcherChat, headerErrand, loadNegotiatorChat, loadWatcherChat, negotiationSteps } from './subagent-chat';
 import type { BeatRunItem, ErrandItem, ErrandTranscriptMessage } from './types';
 
 const errand: ErrandItem = {
@@ -126,5 +126,32 @@ describe('read-only history loading', () => {
     const result = await loadWatcherChat(new AbortController().signal);
     expect(result.runs).toHaveLength(1);
     expect(fetch.mock.calls.map(([url]) => url)).toEqual(['/api/admin/heartbeats', '/api/admin/heartbeats/runs?limit=20']);
+  });
+});
+
+describe('negotiation steps header', () => {
+  const statuses = (state: Parameters<typeof negotiationSteps>[0]) => negotiationSteps(state).map((step) => step.status);
+
+  it('follows the newest errand still in flight, else the newest one', () => {
+    const older = { ...errand, id: 'old', state: 'awaiting_peer' as const, createdAt: '2026-09-13T09:00:00Z' };
+    const newerClosed = { ...errand, id: 'new', state: 'resolved' as const, createdAt: '2026-09-13T11:00:00Z' };
+    expect(headerErrand([older, newerClosed])?.id).toBe('old');
+    expect(headerErrand([{ ...older, state: 'failed' }, newerClosed])?.id).toBe('new');
+    expect(headerErrand([])).toBeNull();
+  });
+
+  it('places the errand on Approval, Contacted, Your input or Done', () => {
+    expect(negotiationSteps('draft').map((step) => step.label)).toEqual(['Approval', 'Contacted', 'Your input', 'Done']);
+    expect(statuses('queued')).toEqual(['current', 'upcoming', 'upcoming', 'upcoming']);
+    expect(statuses('awaiting_peer')).toEqual(['done', 'current', 'upcoming', 'upcoming']);
+    expect(statuses('awaiting_principal')).toEqual(['done', 'done', 'current', 'upcoming']);
+  });
+
+  it('completes every step once closed, naming the outcome and flagging an unsuccessful one', () => {
+    expect(negotiationSteps('resolved')).toEqual([
+      { label: 'Approval', status: 'done' }, { label: 'Contacted', status: 'done' },
+      { label: 'Your input', status: 'done' }, { label: 'Resolved', status: 'done' },
+    ]);
+    expect(negotiationSteps('cancelled')[3]).toEqual({ label: 'Cancelled', status: 'done', unsuccessful: true });
   });
 });

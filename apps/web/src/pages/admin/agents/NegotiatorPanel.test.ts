@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ReadOnlyChatMessage } from '../../../components/chat/ReadOnlyAgentChat';
 import { buildNegotiatorChat } from '../../../lib/subagent-chat';
 import type { ErrandItem } from '../../../lib/types';
-import { ErrandActions } from './NegotiatorPanel';
+import { ErrandActions, NegotiationStepsHeader } from './NegotiatorPanel';
 
 function makeErrand(patch: Partial<ErrandItem>): ErrandItem {
   return {
@@ -61,5 +61,15 @@ describe('errand information and actions', () => {
     const html = renderErrand({ state: 'resolved', result: 'Booked for Saturday' });
     expect(html).toContain('Booked for Saturday');
     expect(html).not.toContain('<button');
+  });
+});
+
+describe('negotiation steps header', () => {
+  it('shows the goal and marks the current step in a single row', () => {
+    const html = renderToStaticMarkup(createElement(NegotiationStepsHeader, { errand: { goal: 'Pedir um lanche', state: 'awaiting_principal' } }));
+    expect(html).toContain('Pedir um lanche');
+    expect(html).toContain('aria-label="Negotiation steps"');
+    expect([...html.matchAll(/<li[^>]*>/g)]).toHaveLength(4);
+    expect(html).toMatch(/<li aria-current="step"[^>]*>[\s\S]*?Your input/);
   });
 });

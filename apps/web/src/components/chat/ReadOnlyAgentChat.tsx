@@ -23,6 +23,10 @@ interface ReadOnlyAgentChatProps {
   actions?: ReactNode;
   /** Per-entry controls (e.g. errand actions); the chat is no longer labelled read-only when set. */
   renderEntryActions?: (entry: ReadOnlyChatEntry) => ReactNode;
+  /** Moves the history into a right-hand aside and leaves the main conversation area blank. */
+  historyAside?: boolean;
+  /** Pinned above the history inside the aside. */
+  asideHeader?: ReactNode;
   children?: ReactNode;
 }
 
@@ -72,7 +76,7 @@ export function ReadOnlyChatMessage({ entry, agentId, actions }: { entry: ReadOn
   );
 }
 
-export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, error, emptyText, historyLabel, onRefresh, actions, renderEntryActions, children }: ReadOnlyAgentChatProps) {
+export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, error, emptyText, historyLabel, onRefresh, actions, renderEntryActions, historyAside = false, asideHeader, children }: ReadOnlyAgentChatProps) {
   usePageTitle(title, renderEntryActions ? 'Agent chat' : 'Read-only agent chat');
   const scrollRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
@@ -121,23 +125,8 @@ export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, er
     lastEntryId.current = last;
   }, [entries]);
 
-  return (
-    <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
-      <header className="flex min-h-12 flex-shrink-0 flex-wrap items-center gap-2 border-b border-subtle bg-bg/80 px-4 py-2 backdrop-blur-md">
-        <AgentAvatar id={agentId} className="h-10 w-10" />
-        <h1 className="text-body font-medium text-txt">{title}</h1>
-        {!renderEntryActions && <span className="font-mono text-micro text-txt-3">Read-only</span>}
-        <div className="ml-auto flex items-center gap-2">
-          {actions}
-          <Button size="sm" variant="ghost" loading={loading} onClick={onRefresh}>Refresh</Button>
-        </div>
-      </header>
-      {error && (
-        <div role="alert" className="flex flex-shrink-0 items-center gap-3 border-b border-danger bg-danger-muted px-4 py-2 text-caption text-txt">
-          <span className="min-w-0 break-words">{error}{loaded && ' Previously loaded history is still shown.'}</span>
-          <Button size="sm" variant="ghost" disabled={loading} onClick={onRefresh}>Retry</Button>
-        </div>
-      )}
+  const history = (
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       <div ref={scrollRef} onScroll={rememberPosition} aria-label={`${title} conversation`} aria-busy={loading} className="min-h-0 flex-1 overflow-y-auto px-4 py-6 [overflow-anchor:none] sm:px-5">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
           {children}
@@ -164,6 +153,36 @@ export function ReadOnlyAgentChat({ agentId, title, entries, loading, loaded, er
           scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
         }}>↓ New messages</Button>
       )}
+    </div>
+  );
+
+  return (
+    <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
+      <header className="flex min-h-12 flex-shrink-0 flex-wrap items-center gap-2 border-b border-subtle bg-bg/80 px-4 py-2 backdrop-blur-md">
+        <AgentAvatar id={agentId} className="h-10 w-10" />
+        <h1 className="text-body font-medium text-txt">{title}</h1>
+        {!renderEntryActions && <span className="font-mono text-micro text-txt-3">Read-only</span>}
+        <div className="ml-auto flex items-center gap-2">
+          {actions}
+          <Button size="sm" variant="ghost" loading={loading} onClick={onRefresh}>Refresh</Button>
+        </div>
+      </header>
+      {error && (
+        <div role="alert" className="flex flex-shrink-0 items-center gap-3 border-b border-danger bg-danger-muted px-4 py-2 text-caption text-txt">
+          <span className="min-w-0 break-words">{error}{loaded && ' Previously loaded history is still shown.'}</span>
+          <Button size="sm" variant="ghost" disabled={loading} onClick={onRefresh}>Retry</Button>
+        </div>
+      )}
+      {historyAside ? (
+        <div className="flex min-h-0 flex-1">
+          {/* Blank main area, reserved for what comes next; on narrow screens only the history shows. */}
+          <section aria-label={`${title} main`} className="hidden min-h-0 min-w-0 flex-1 lg:block" />
+          <aside aria-label={`${title} history`} className="flex min-h-0 w-full flex-col bg-bg-2 lg:w-[420px] lg:flex-shrink-0 lg:border-l lg:border-subtle">
+            {asideHeader}
+            {history}
+          </aside>
+        </div>
+      ) : history}
     </div>
   );
 }

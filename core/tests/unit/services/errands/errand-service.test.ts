@@ -176,7 +176,7 @@ describe('ErrandService', () => {
       expect(errandRepo.update).toHaveBeenCalledWith('e1', expect.objectContaining({ state: 'awaiting_peer', pendingMessage: undefined }));
     });
 
-    it('posts the sent opener in the origin chat as the Negotiator', async () => {
+    it('does not post the sent opener in the origin chat', async () => {
       const { service, db, errandRepo, sessionRepo } = makeService();
       errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'Pedir um lanche', state: 'draft', originSessionId: 'origin-1', pendingMessage: 'Oi! Um lanche?' }));
       errandRepo.findTargets.mockReturnValue(['target-session']);
@@ -189,11 +189,7 @@ describe('ErrandService', () => {
 
       await service.approve('e1');
 
-      expect(db.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO messages'), [
-        expect.any(String), 'origin-1', 'assistant',
-        '📤 Errand "Pedir um lanche" started. Sent to contact: "Oi! Um lanche?"',
-        null, null, expect.any(String), 'negotiator',
-      ]);
+      expect(db.run).not.toHaveBeenCalledWith(expect.stringContaining('INSERT INTO messages'), expect.anything());
     });
 
     it('refuses to approve an errand that is not a draft', async () => {
@@ -515,7 +511,7 @@ describe('ErrandService', () => {
       await expect(service.resumeWithPrincipalAnswer('e1', 'yes')).rejects.toThrow(/not awaiting your input/);
     });
 
-    it('resumes the errand, drafts reply, delivers to targets, and notifies origin', async () => {
+    it('resumes the errand, drafts reply, and delivers to targets without notifying origin', async () => {
       const { service, errandRepo, sessionRepo, outbound } = makeService();
       errandRepo.findById.mockReturnValue(
         new Errand({ id: 'e1', goal: 'haircut', state: 'awaiting_principal', originSessionId: 'o1', notes: 'prev notes' }),
@@ -539,11 +535,7 @@ describe('ErrandService', () => {
         target: '555',
         content: 'resumed reply',
       }));
-      expect(outbound.send).toHaveBeenCalledWith(expect.objectContaining({
-        channel: 'whatsapp',
-        target: '999',
-        content: expect.stringContaining('resumed reply'),
-      }));
+      expect(outbound.send).not.toHaveBeenCalledWith(expect.objectContaining({ target: '999' }));
     });
   });
 });

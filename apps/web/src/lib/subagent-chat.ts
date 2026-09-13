@@ -40,6 +40,33 @@ const ERRAND_STATUS: Record<ErrandState, string> = {
   expired: 'Expired',
 };
 
+const CLOSED_ERRAND_STATES: readonly ErrandState[] = ['resolved', 'failed', 'cancelled', 'expired'];
+
+export interface NegotiationStep {
+  label: string;
+  status: 'done' | 'current' | 'upcoming';
+  /** Set on the final step when the errand closed without reaching its goal. */
+  unsuccessful?: boolean;
+}
+
+/** The errand the steps header follows: the newest one still in flight, else the newest overall. */
+export function headerErrand(errands: readonly ErrandItem[]): ErrandItem | null {
+  const newest = [...errands].sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt));
+  return newest.find((errand) => !CLOSED_ERRAND_STATES.includes(errand.state)) ?? newest[0] ?? null;
+}
+
+/** Approval → Contacted → Your input → Done, positioned at the errand's current state. */
+export function negotiationSteps(state: ErrandState): NegotiationStep[] {
+  const closed = CLOSED_ERRAND_STATES.includes(state);
+  const current = closed ? 3 : state === 'awaiting_principal' ? 2 : state === 'draft' || state === 'queued' ? 0 : 1;
+  const labels = ['Approval', 'Contacted', 'Your input', closed ? ERRAND_STATUS[state] : 'Done'];
+  return labels.map((label, index) => ({
+    label,
+    status: index < current || closed ? 'done' : index === current ? 'current' : 'upcoming',
+    ...(closed && index === 3 && state !== 'resolved' ? { unsuccessful: true } : {}),
+  }));
+}
+
 function timestamp(value: string): number {
   const at = Date.parse(value);
   return Number.isFinite(at) ? at : 0;

@@ -178,7 +178,7 @@ describe('errand recovery and privacy', () => {
     expect(composeResume).toHaveBeenCalledTimes(1);
     expect(channels.sendMessage.mock.calls.slice(-2).map((call) => call[2])).toEqual(['Please book 11.', 'Please book 11.']);
     expect(service.get(errand.id)?.notes).toBe('Principal answer: "11 works"');
-    expect(messages.getBySessionId(parent.id).filter((message) => message.content.includes('resumed.'))).toHaveLength(1);
+    expect(messages.getBySessionId(parent.id).filter((message) => message.content.includes('resumed.'))).toHaveLength(0);
   });
 
   it('stops further targets after cancellation during delivery and rejects terminal retries', async () => {

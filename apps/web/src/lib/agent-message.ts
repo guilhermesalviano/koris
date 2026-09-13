@@ -20,11 +20,7 @@ export function agentMessagePresentation(message: AgentMessage): Pick<AgentMessa
   if (resolved) {
     return { senderAgentId: 'negotiator', content: `I've completed “${resolved[1]}”.\n\n${resolved[2]}` };
   }
-  const sent = /^📤 Errand "([\s\S]+?)" (started|resumed)\. Sent to contact: "([\s\S]*)"$/.exec(message.content);
-  if (sent) {
-    return { senderAgentId: 'negotiator', content: `I've ${sent[2]} “${sent[1]}”. I sent the contact:\n\n${sent[3]}` };
-  }
-  const failed =/^⚠️? Errand "([\s\S]+?)" failed: ([\s\S]+)$/.exec(message.content);
+  const failed = /^⚠️? Errand "([\s\S]+?)" failed: ([\s\S]+)$/.exec(message.content);
   if (failed) {
     return { senderAgentId: 'negotiator', content: `I couldn't complete “${failed[1]}”.\n\n${failed[2]}` };
   }

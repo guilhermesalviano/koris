@@ -3,7 +3,8 @@ import { Toast, useToast } from '../../../components/AdminUI';
 import { ReadOnlyAgentChat } from '../../../components/chat/ReadOnlyAgentChat';
 import { Button, Input } from '../../../components/ui';
 import { apiRequest } from '../../../lib/api';
-import { buildNegotiatorChat } from '../../../lib/subagent-chat';
+import { cn } from '../../../lib/cn';
+import { buildNegotiatorChat, headerErrand, negotiationSteps } from '../../../lib/subagent-chat';
 import { useAgentActivity } from '../../../lib/agent-activity-context';
 import type { ErrandItem, ErrandState } from '../../../lib/types';
 
@@ -104,10 +105,41 @@ export function ErrandActions({ errand, onChanged, notify, initialAnswering = fa
   );
 }
 
+/** Header of the history aside: the followed errand's goal and where its negotiation stands, left to right. */
+export function NegotiationStepsHeader({ errand }: { errand: Pick<ErrandItem, 'goal' | 'state'> }) {
+  const steps = negotiationSteps(errand.state);
+  return (
+    <header className="flex-shrink-0 border-b border-subtle px-4 py-3">
+      <p className="truncate text-caption font-medium text-txt" title={errand.goal}>{errand.goal}</p>
+      <ol aria-label="Negotiation steps" className="mt-2.5 flex items-center">
+        {steps.map((step, index) => (
+          <li key={step.label} aria-current={step.status === 'current' ? 'step' : undefined} className={cn('flex min-w-0 items-center', index > 0 && 'flex-1')}>
+            {index > 0 && <span aria-hidden className={cn('mx-2 h-px min-w-3 flex-1', step.status === 'upcoming' ? 'bg-bg-4' : 'bg-accent')} />}
+            <span className="flex items-center gap-1.5 whitespace-nowrap">
+              <span aria-hidden className={cn(
+                'h-2 w-2 flex-shrink-0 rounded-full border',
+                step.status === 'upcoming' && 'border-strong bg-transparent',
+                step.status === 'current' && 'border-accent bg-accent ring-2 ring-accent-muted',
+                step.status === 'done' && (step.unsuccessful ? 'border-danger bg-danger' : 'border-accent bg-accent'),
+              )} />
+              <span className={cn(
+                'text-micro',
+                step.status === 'upcoming' ? 'text-txt-3' : step.unsuccessful ? 'text-danger' : 'text-txt',
+                step.status === 'current' && 'font-medium',
+              )}>{step.label}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </header>
+  );
+}
+
 export default function NegotiatorPanel() {
   const { negotiator: { data, loading, error, refresh } } = useAgentActivity();
   const entries = useMemo(() => buildNegotiatorChat(data ?? []), [data]);
   const errands = useMemo(() => new Map((data ?? []).map(({ errand }) => [`errand:${errand.id}`, errand])), [data]);
+  const followed = useMemo(() => headerErrand([...errands.values()]), [errands]);
   const [toastMsg, showToast, isError] = useToast();
 
   return (
@@ -122,6 +154,8 @@ export default function NegotiatorPanel() {
         onRefresh={() => void refresh()}
         emptyText="No errands yet. Start an errand from the Orchestrator to see its conversation here."
         historyLabel="Available conversations from the latest 50 errands · up to 100 messages per contact"
+        historyAside
+        asideHeader={followed && <NegotiationStepsHeader errand={followed} />}
         renderEntryActions={(entry) => {
           const errand = errands.get(entry.id);
           return errand && <ErrandActions key={errand.id} errand={errand} notify={showToast} onChanged={() => void refresh()} />;
