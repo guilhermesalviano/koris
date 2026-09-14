@@ -1,6 +1,6 @@
 import { apiRequest } from './api';
 import { agentMessagePresentation } from './agent-message';
-import type { BeatRunItem, BeatRunsResponse, ErrandItem, ErrandState, ErrandsResponse, ErrandTranscriptMessage, ErrandTranscriptResponse, HeartbeatItem, ImageAttachment, HeartbeatsResponse, NegotiatorNotice, NegotiatorNoticesResponse, NegotiatorPendingQuestion } from './types';
+import type { AuditItem, AuditResponse, BeatRunItem, BeatRunsResponse, ErrandItem, ErrandState, ErrandsResponse, ErrandTranscriptMessage, ErrandTranscriptResponse, HeartbeatItem, ImageAttachment, HeartbeatsResponse, NegotiatorNotice, NegotiatorNoticesResponse, NegotiatorPendingQuestion } from './types';
 
 export interface ReadOnlyChatEntry {
   id: string;
@@ -277,4 +277,28 @@ export async function loadWatcherChat(signal: AbortSignal): Promise<WatcherHisto
     apiRequest<BeatRunsResponse>('/heartbeats/runs?limit=20', { signal }),
   ]);
   return { beats: beats.items, runs: runs.items };
+}
+
+/** A sub-agent without its own screen: each audited model call becomes the prompt it answered and its reply. */
+export function buildAgentAuditChat(items: readonly AuditItem[], author: string): ReadOnlyChatEntry[] {
+  return ordered(items.filter((item) => item.type === 'llm').map((item) => {
+    const failed = item.status === 'error';
+    return {
+      id: `audit:${item.id}`,
+      at: timestamp(item.createdAt),
+      kind: 'assistant',
+      author,
+      context: item.channel ?? '',
+      content: failed ? item.errorMessage || 'Call failed.' : item.responsePreview || item.response || 'No response recorded.',
+      error: failed,
+      ...(failed ? { status: 'Error' } : {}),
+      details: item.promptPreview ? [{ label: 'Prompt', content: item.promptPreview }] : [],
+      detailsLabel: 'Call details',
+    };
+  }));
+}
+
+export async function loadAgentAudit(agentId: string, signal: AbortSignal): Promise<AuditItem[]> {
+  const { items } = await apiRequest<AuditResponse>(`/audit?type=llm&limit=50&agentName=${encodeURIComponent(agentId)}`, { signal });
+  return items;
 }

@@ -1,9 +1,9 @@
 import type { IDatabaseService } from '../../infrastructure/db-sqlite';
-import type { ILogger } from '../../infrastructure/logger';
 import type { Errand } from '../../entities/errand';
 import type { ISessionManager } from '../session-manager';
 import type { IErrandService } from './index';
-import { NegotiatorFactory } from '../agents/sub-agents/negotiator/sub-agent';
+import { SubAgentRegistrySingleton } from '../agents/sub-agents/registry';
+import { NEGOTIATOR } from '../agents/sub-agents/negotiator/key';
 
 export interface StartErrandInput {
   goal: string;
@@ -18,14 +18,13 @@ export interface StartErrandInput {
  * the errand is approved. Shared by the `/errand` command and the errand tools.
  */
 export async function startErrand(
-  logger: ILogger,
   db: IDatabaseService,
   sessionManager: ISessionManager,
   errandService: IErrandService,
   input: StartErrandInput,
 ): Promise<{ errand: Errand; openingMessage: string }> {
   const goal = input.goal.trim();
-  const negotiator = NegotiatorFactory.create(logger, db, sessionManager);
+  const negotiator = SubAgentRegistrySingleton.require().get(NEGOTIATOR, { db, sessionManager });
   const openingMessage = await negotiator.composeOpener({
     goal,
     channel: input.channel,

@@ -1,25 +1,21 @@
-import { config } from "../../../../config";
-import { DatabaseServiceFactory } from "../../../../infrastructure/db-sqlite";
-import { HeartbeatRepositoryFactory, IHeartbeatRepository } from "../../../../repositories/heartbeat";
+import { IHeartbeatRepository } from "../../../../repositories/heartbeat";
 import { Heartbeat as HeartbeatEntity } from "../../../../entities/heartbeat";
 import { isCronDue } from "../../../../utils/heartbeat";
-import { IPromptRepository, PromptRepositoryFactory } from "../../../../repositories/prompt";
-import { getAIProvider } from "../../../providers";
+import { IPromptRepository } from "../../../../repositories/prompt";
 import { replacePlaceholders } from "../../../../utils/prompt";
-import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
+import { IAICompletionService } from "../../../ai-completion-service";
 import { HEARTBEAT_INSTRUCTIONS, HEARTBEAT_DATA, SYSTEM_BEAT_CLEAR_IMAGES } from "../../../../constants";
 import type { ILogger } from "../../../../infrastructure/logger";
-import { IToolsQueue, ToolsQueue } from "../../../tools-queue";
-import { ISubAgent } from "../../../../types/agents";
-import { AgnosticExecutionToolFactory } from "../../../tools";
-import { IToolCallPipeline, ToolCallPipelineFactory } from "../../tool-call-pipeline";
-import { TaskQueue, sharedSubAgentQueue } from "../queue/task-queue";
-import { subAgentQueuesRegistry } from "../queue/sub-agent-queue-registry";
-import { IImageRepository, ImageRepositoryFactory } from "../../../../repositories/image";
-import { BeatRun, BeatRunRepositoryFactory, IBeatRunRepository } from "../../../../repositories/beat-run";
+import { IToolsQueue } from "../../../tools-queue";
+import { IToolCallPipeline } from "../../tool-call-pipeline";
+import { TaskQueue } from "../queue/task-queue";
+import { IImageRepository } from "../../../../repositories/image";
+import { BeatRun, IBeatRunRepository } from "../../../../repositories/beat-run";
 import { generateId } from "../../../../utils/generate-id";
+import type { SubAgentDescriptor } from "../contracts";
+import { HEARTBEAT } from "./key";
 
-class Heartbeat implements ISubAgent<Date> {
+class Heartbeat {
   constructor(
     private logger: ILogger,
     private promptRepository: IPromptRepository,
@@ -29,14 +25,11 @@ class Heartbeat implements ISubAgent<Date> {
     private pipeline: IToolCallPipeline,
     private imageRepository: IImageRepository,
     private beatRunRepository: IBeatRunRepository,
-  ) {
-    this.queue = config.AI.SUBAGENTS_PARALLEL ? new TaskQueue(1) : sharedSubAgentQueue;
-    subAgentQueuesRegistry.register('heartbeat', this.queue);
-  }
+    private queue: TaskQueue = new TaskQueue(1),
+    private descriptor: SubAgentDescriptor = HEARTBEAT,
+  ) {}
 
-  private queue: TaskQueue;
-
-  async handler(date: Date): Promise<void> {
+  async run(date: Date): Promise<void> {
     const beats = this.heartbeatRepository.getAll();
 
     this.logger.info('Heartbeat: Agent is alive and functioning.');
@@ -63,7 +56,7 @@ class Heartbeat implements ISubAgent<Date> {
     }
 
     const promises = dueBeats.map((beat) =>
-      this.queue.add(() => this.runBeat(beat, date), `heartbeat: ${beat.id}`),
+      this.queue.add(() => this.runBeat(beat, date), `${this.descriptor.id}: ${beat.id}`),
     );
 
     await Promise.all(promises);
@@ -127,7 +120,7 @@ class Heartbeat implements ISubAgent<Date> {
             signal: new AbortController().signal,
             onProgress: (progress: string) => this.logger.info(progress),
             options: { toolsEnabled: true, runId },
-            initiatedBy: 'heartbeat',
+            initiatedBy: this.descriptor.id,
           },
         );
       }
@@ -168,20 +161,4 @@ class Heartbeat implements ISubAgent<Date> {
   }
 }
 
-class HeartbeatFactory {
-  static create(logger: ILogger): Heartbeat {
-    const db = DatabaseServiceFactory.create();
-    const promptRepository = PromptRepositoryFactory.create(db, logger, getAIProvider(logger, 'embed'));
-    const heartbeatRepository = HeartbeatRepositoryFactory.create(db);
-    const agnosticExecutionTool = AgnosticExecutionToolFactory.create();
-    const toolsQueue = new ToolsQueue(logger, agnosticExecutionTool);
-
-    const completionService = new AICompletionService(() => getAIProvider(logger, 'worker', { background: true }), logger, { role: 'worker', agentName: 'heartbeat' });
-    const pipeline = ToolCallPipelineFactory.create(logger);
-    const imageRepository = ImageRepositoryFactory.create(db);
-    const beatRunRepository = BeatRunRepositoryFactory.create(db);
-    return new Heartbeat(logger, promptRepository, heartbeatRepository, toolsQueue, completionService, pipeline, imageRepository, beatRunRepository);
-  }
-}
-
-export { Heartbeat, HeartbeatFactory };
+export { Heartbeat };

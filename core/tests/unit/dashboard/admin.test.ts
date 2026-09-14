@@ -101,6 +101,10 @@ const {
   channelsCommands: { listInstalledChannelNames: vi.fn(() => [] as string[]) },
 }));
 
+import { makeSubAgentRegistry } from '../../helpers/sub-agents';
+import { SubAgentRegistrySingleton } from '../../../src/services/agents/sub-agents/registry';
+import { BUILTIN_SUB_AGENTS } from '../../../src/services/agents/sub-agents/builtins';
+import { defineSubAgent, defineSubAgentKey } from '../../../src/services/agents/sub-agents/contracts';
 vi.mock('../../../src/services/provider-health-service', () => ({
   healthCheck: mockHealthCheck,
 }));
@@ -1471,17 +1475,34 @@ describe('AdminRouterFactory chat/context', () => {
 });
 
 describe('AdminRouterFactory /agents', () => {
+  afterEach(() => {
+    SubAgentRegistrySingleton.setInstance(null);
+  });
+
   it('GET /agents returns the roster with the orchestrator as the only messageable root', () => {
+    makeSubAgentRegistry(BUILTIN_SUB_AGENTS.map(({ key }) => defineSubAgent(key, () => ({ api: {} }))), { install: true });
     const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
     const res = makeResponse();
     callRoute(router, makeRequest('GET', '/agents'), res);
 
     const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(body.items.map((a: { id: string }) => a.id)).toEqual(['orchestrator', 'negotiator', 'watcher']);
+    expect(body.items.map((a: { id: string }) => a.id)).toEqual(['orchestrator', 'negotiator', 'heartbeat']);
     expect(body.items.filter((a: { parentId: string | null }) => a.parentId === null)).toHaveLength(1);
     expect(body.items.filter((a: { messageable: boolean }) => a.messageable).map((a: { id: string }) => a.id)).toEqual([
       'orchestrator',
     ]);
+    expect(Object.keys(body.items[1]).sort()).toEqual(['description', 'id', 'messageable', 'name', 'parentId']);
+  });
+
+  it('GET /agents lists any registered sub-agent that opts into the roster', () => {
+    const scout = defineSubAgentKey({ id: 'scout', name: 'Scout', description: 'Finds things.', parentId: 'orchestrator', messageable: false, listed: true, role: 'worker' });
+    makeSubAgentRegistry([defineSubAgent(scout, () => ({ api: {} }))], { install: true });
+    const router = AdminRouterFactory.create(logger, {} as never, {} as never, sessionManager as never);
+    const res = makeResponse();
+    callRoute(router, makeRequest('GET', '/agents'), res);
+
+    const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(body.items).toContainEqual({ id: 'scout', name: 'Scout', description: 'Finds things.', parentId: 'orchestrator', messageable: false });
   });
 });
 

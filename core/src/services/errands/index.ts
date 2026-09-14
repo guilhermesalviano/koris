@@ -16,6 +16,8 @@ import { nowISO } from '../../utils/date';
 import { ErrandDelivery, ErrandState, ERRAND_OPEN_STATES } from '../../types/errand';
 import { generateId } from '../../utils/generate-id';
 import { runErrandOperation } from './operations';
+import { SubAgentRegistrySingleton } from '../agents/sub-agents/registry';
+import { NEGOTIATOR } from '../agents/sub-agents/negotiator/key';
 
 const NEGOTIATING_STATES: ErrandState[] = ['open', 'awaiting_peer', 'awaiting_principal', 'awaiting_confirmation'];
 const NON_TERMINAL_STATES: ErrandState[] = ['draft', 'queued', 'open', 'awaiting_peer', 'awaiting_principal', 'awaiting_confirmation'];
@@ -263,8 +265,7 @@ class ErrandService implements IErrandService {
     const targetSessionService = this.sessionManager.getSessionServiceById(targetSessionIds[0]);
     const messageHistory = MessageServiceFactory.create(this.db, targetSessionService).getHistory();
 
-    const { NegotiatorFactory } = await import('../agents/sub-agents/negotiator/sub-agent');
-    const negotiator = NegotiatorFactory.create(this.logger, this.db, this.sessionManager);
+    const negotiator = SubAgentRegistrySingleton.require().get(NEGOTIATOR, { db: this.db, sessionManager: this.sessionManager });
     const reply = await negotiator.composeResume({
       errandId: errand.id,
       goal: errand.goal,
@@ -456,7 +457,7 @@ class ErrandService implements IErrandService {
     }
 
     // web/tui: nothing to deliver to, just record it in the transcript.
-    this.saveToSession(negotiation.id, { role: 'assistant', content, senderAgentId: 'negotiator' });
+    this.saveToSession(negotiation.id, { role: 'assistant', content, senderAgentId: NEGOTIATOR.id });
   }
 
   private negotiationSession(errand: Errand): Session {
@@ -469,7 +470,7 @@ class ErrandService implements IErrandService {
     return session;
   }
 
-  private saveToSession(sessionId: string, message: { role: 'user' | 'assistant'; content: string; senderAgentId?: 'negotiator' }): void {
+  private saveToSession(sessionId: string, message: { role: 'user' | 'assistant'; content: string; senderAgentId?: string }): void {
     const sessionService = this.sessionManager.getSessionServiceById(sessionId);
     MessageServiceFactory.create(this.db, sessionService).save(message);
   }

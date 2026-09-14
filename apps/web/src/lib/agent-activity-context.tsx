@@ -9,9 +9,14 @@ import type { AgentId } from './types';
 
 const STORAGE_KEY = 'koris-agent-read-state';
 
+interface AgentActivity {
+  latest: number;
+  failed: boolean;
+}
+
 function useAgentActivityState() {
   const negotiator = useReadOnlyData(loadNegotiatorChat);
-  const watcher = useReadOnlyData(loadWatcherChat);
+  const heartbeat = useReadOnlyData(loadWatcherChat);
   const { messages } = useChat();
   const { pathname } = useLocation();
   const [visible, setVisible] = useState(() => !document.hidden);
@@ -33,26 +38,36 @@ function useAgentActivityState() {
     if (!visible) return;
     const interval = window.setInterval(() => {
       if (!negotiator.loading) void negotiator.refresh();
-      if (!watcher.loading) void watcher.refresh();
+      if (!heartbeat.loading) void heartbeat.refresh();
     }, 15_000);
     return () => window.clearInterval(interval);
-  }, [visible, negotiator.loading, negotiator.refresh, watcher.loading, watcher.refresh]);
+  }, [visible, negotiator.loading, negotiator.refresh, heartbeat.loading, heartbeat.refresh]);
 
-  const latest = useMemo<Record<AgentId, number>>(() => ({
-    orchestrator: latestActivity(messages.filter((message) => message.role === 'assistant' && !message.pending).map((message) => message.at)),
-    negotiator: latestActivity((negotiator.data ?? []).flatMap(({ errand, messages: transcript }) => [
-      Date.parse(errand.createdAt), Date.parse(errand.lastProgressAt ?? ''), Date.parse(errand.closedAt ?? ''),
-      ...transcript.map((message) => Date.parse(message.createdAt)),
-    ])),
-    watcher: latestActivity((watcher.data?.runs ?? []).map((run) => Date.parse(run.finishedAt))),
-  }), [messages, negotiator.data, watcher.data]);
+  const activity = useMemo<Record<AgentId, AgentActivity>>(() => ({
+    orchestrator: {
+      latest: latestActivity(messages.filter((message) => message.role === 'assistant' && !message.pending).map((message) => message.at)),
+      failed: false,
+    },
+    negotiator: {
+      latest: latestActivity((negotiator.data ?? []).flatMap(({ errand, messages: transcript }) => [
+        Date.parse(errand.createdAt), Date.parse(errand.lastProgressAt ?? ''), Date.parse(errand.closedAt ?? ''),
+        ...transcript.map((message) => Date.parse(message.createdAt)),
+      ])),
+      failed: Boolean(negotiator.error || negotiator.data?.some((item) => item.error)),
+    },
+    heartbeat: {
+      latest: latestActivity((heartbeat.data?.runs ?? []).map((run) => Date.parse(run.finishedAt))),
+      failed: Boolean(heartbeat.error),
+    },
+  }), [messages, negotiator.data, negotiator.error, heartbeat.data, heartbeat.error]);
 
   useEffect(() => {
     if (!visible) return;
-    const id = (Object.keys(latest) as AgentId[]).find((agent) => pathname.replace(/\/$/, '') === agentPath(agent));
-    if (!id || (id === 'negotiator' && (negotiator.error || negotiator.data?.some((item) => item.error))) || (id === 'watcher' && watcher.error)) return;
-    setRead((previous) => hasUnreadActivity(latest[id], previous[id]) ? { ...previous, [id]: latest[id] } : previous);
-  }, [pathname, visible, latest, negotiator.error, negotiator.data, watcher.error]);
+    const id = Object.keys(activity).find((agent) => pathname.replace(/\/$/, '') === agentPath(agent));
+    if (!id || activity[id].failed) return;
+    const { latest } = activity[id];
+    setRead((previous) => hasUnreadActivity(latest, previous[id]) ? { ...previous, [id]: latest } : previous);
+  }, [pathname, visible, activity]);
 
   useEffect(() => {
     try {
@@ -62,12 +77,10 @@ function useAgentActivityState() {
 
   return {
     negotiator,
-    watcher,
-    unread: {
-      orchestrator: hasUnreadActivity(latest.orchestrator, read.orchestrator),
-      negotiator: hasUnreadActivity(latest.negotiator, read.negotiator),
-      watcher: hasUnreadActivity(latest.watcher, read.watcher),
-    },
+    heartbeat,
+    unread: Object.fromEntries(
+      Object.entries(activity).map(([id, { latest }]) => [id, hasUnreadActivity(latest, read[id])]),
+    ) as Partial<Record<AgentId, boolean>>,
   };
 }
 

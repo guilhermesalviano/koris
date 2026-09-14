@@ -1,12 +1,5 @@
-type FooterActivity = 'heartbeat' | 'summarizer';
+type FooterActivity = string;
 type FooterActivityListener = (note: string) => void;
-
-const ACTIVITY_LABELS: Record<FooterActivity, string> = {
-  heartbeat: 'heartbeat',
-  summarizer: 'summarizer',
-};
-
-const ACTIVITY_ORDER: FooterActivity[] = ['heartbeat', 'summarizer'];
 
 class FooterActivityStore {
   private counts = new Map<FooterActivity, number>();
@@ -38,9 +31,9 @@ class FooterActivityStore {
   }
 
   getNote(): string {
-    const active = ACTIVITY_ORDER
+    const active = Array.from(this.counts.keys())
       .filter((activity) => (this.counts.get(activity) ?? 0) > 0)
-      .map((activity) => ACTIVITY_LABELS[activity]);
+      .sort();
 
     if (active.length === 0) return '';
 

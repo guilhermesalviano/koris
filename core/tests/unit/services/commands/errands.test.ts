@@ -4,6 +4,7 @@ import { buildErrandService } from '../../../../src/services/errands';
 import { DatabaseServiceFactory } from '../../../../src/infrastructure/db-sqlite';
 import { Errand } from '../../../../src/entities/errand';
 import type { CommandContext } from '../../../../src/types/commands';
+import { makeSubAgentRegistry, stubNegotiator } from '../../../helpers/sub-agents';
 
 const { service, composeOpener, findTargets } = vi.hoisted(() => ({
   service: {
@@ -18,12 +19,11 @@ vi.mock('../../../../src/infrastructure/db-sqlite', () => ({
   DatabaseServiceFactory: { create: vi.fn(() => ({})) },
 }));
 vi.mock('../../../../src/services/errands', () => ({ buildErrandService: vi.fn() }));
-vi.mock('../../../../src/services/agents/sub-agents/negotiator/sub-agent', () => ({
-  NegotiatorFactory: { create: () => ({ composeOpener }) },
-}));
 vi.mock('../../../../src/repositories/errand', () => ({
   ErrandRepositoryFactory: { create: () => ({ findTargets }) },
 }));
+
+makeSubAgentRegistry([stubNegotiator({ composeOpener }, false)], { install: true });
 
 const context: CommandContext = { source: 'web', trusted: true, sessionId: 'parent' };
 const draft = new Errand({ id: 'e1', goal: 'Book a haircut', originSessionId: 'parent' });

@@ -4,7 +4,6 @@ import { SUMMARIZATION_INSTRUCTIONS, COMPACT_INSTRUCTIONS } from '../../../../..
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
 import * as providerRegistry from '../../../../../../src/services/providers';
 import { config } from '../../../../../../src/config';
-import { sharedSubAgentQueue } from '../../../../../../src/services/agents/sub-agents/queue/task-queue';
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
@@ -58,7 +57,7 @@ describe('Summarizer', () => {
     const summarizer = new Summarizer(logger, completionService as never, makeAuditService());
     const props = makeProps();
 
-    await summarizer.handler(props);
+    await summarizer.summarize(props);
 
     expect(completionService.complete).toHaveBeenCalledWith(
       {
@@ -90,7 +89,7 @@ describe('Summarizer', () => {
     const summarizer = new Summarizer(logger, completionService as never, makeAuditService());
     const props = makeProps();
 
-    await summarizer.handler(props);
+    await summarizer.summarize(props);
 
     expect(props.memoryService.save).toHaveBeenCalledWith({
       type: 'summary',
@@ -114,7 +113,7 @@ describe('Summarizer', () => {
     const summarizer = new Summarizer(logger, completionService as never, makeAuditService());
     const props = makeProps();
 
-    await summarizer.handler(props);
+    await summarizer.summarize(props);
 
     expect(embed).not.toHaveBeenCalled();
     expect(props.memoryService.save).toHaveBeenCalledWith({
@@ -136,7 +135,7 @@ describe('Summarizer', () => {
     const summarizer = new Summarizer(logger, completionService as never, makeAuditService());
     const props = makeProps();
 
-    await summarizer.handler(props);
+    await summarizer.summarize(props);
 
     expect(props.memoryService.save).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith(
@@ -155,7 +154,7 @@ it('logs an error when completion fails', async () => {
     const summarizer = new Summarizer(logger, completionService as never, auditService);
     const props = makeProps();
 
-    await summarizer.handler(props);
+    await summarizer.summarize(props);
 
     expect(props.memoryService.save).not.toHaveBeenCalled();
     expect(logger.error).toHaveBeenCalledWith(
@@ -188,7 +187,7 @@ it('logs an error when completion fails', async () => {
       memoryService: { save: vi.fn().mockImplementation(() => { throw new Error('db full'); }) },
     });
 
-    await summarizer.handler(props);
+    await summarizer.summarize(props);
 
     expect(auditService.record).toHaveBeenCalledTimes(1);
     const entry = auditService.record.mock.calls[0][0];
@@ -214,8 +213,8 @@ it('logs an error when completion fails', async () => {
     const propsA = makeProps({ sessionId: 'session-a' });
     const propsB = makeProps({ sessionId: 'session-b' });
 
-    const first = summarizer.handler(propsA);
-    const second = summarizer.handler(propsB);
+    const first = summarizer.summarize(propsA);
+    const second = summarizer.summarize(propsB);
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(completionService.complete).toHaveBeenCalledTimes(1);
@@ -236,22 +235,6 @@ it('logs an error when completion fails', async () => {
     );
   });
 
-  it('uses the shared sub-agent queue when subagents_parallel is false', async () => {
-    (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = false;
-    const logger = makeLogger();
-    const summarizer = new Summarizer(logger, { complete: vi.fn() } as never, makeAuditService());
-
-    expect((summarizer as unknown as { queue: unknown }).queue).toBe(sharedSubAgentQueue);
-  });
-
-  it('uses its own queue when subagents_parallel is true', async () => {
-    (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
-    const logger = makeLogger();
-    const summarizer = new Summarizer(logger, { complete: vi.fn() } as never, makeAuditService());
-
-    expect((summarizer as unknown as { queue: unknown }).queue).not.toBe(sharedSubAgentQueue);
-  });
-
   it('exposes queue state via snapshot', async () => {
     (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
     const originalEmbeddingEnabled = config.AI.EMBED.ENABLED;
@@ -261,8 +244,8 @@ it('logs an error when completion fails', async () => {
     const gated = () => new Promise<unknown>((resolve) => release.push(() => resolve({ kind: 'message', text: '{"type":"fact","content":"x"}' })));
     const summarizer = new Summarizer(makeLogger(), { complete: vi.fn().mockImplementation(gated) } as never, makeAuditService());
 
-    const first = summarizer.handler(makeProps({ sessionId: 'session-a' }));
-    const second = summarizer.handler(makeProps({ sessionId: 'session-b' }));
+    const first = summarizer.summarize(makeProps({ sessionId: 'session-a' }));
+    const second = summarizer.summarize(makeProps({ sessionId: 'session-b' }));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const queue = (summarizer as unknown as { queue: { snapshot(): unknown } }).queue;

@@ -8,9 +8,7 @@ import { useAgents } from '../../lib/use-agents';
 import { cn } from '../../lib/cn';
 import ConfigModal from './ConfigModal';
 import { useSaveStates } from '../../lib/config-save-context';
-import OrchestratorPage from './agents/OrchestratorPage';
-import NegotiatorPanel from './agents/NegotiatorPanel';
-import WatcherPanel from './agents/WatcherPanel';
+import AgentScreen from './agents/AgentScreen';
 import ActivityPage, { DEFAULT_ACTIVITY_TAB } from './ActivityPage';
 import { ChatProvider } from '../../lib/chat-context';
 import { AgentActivityProvider, useAgentActivity } from '../../lib/agent-activity-context';
@@ -235,9 +233,8 @@ export default function AdminLayout() {
                   <Routes>
                     <Route index element={<Navigate to={ORCHESTRATOR_PATH} replace />} />
                     <Route path="agents" element={<Navigate to={ORCHESTRATOR_PATH} replace />} />
-                    <Route path="agents/orchestrator" element={<OrchestratorPage />} />
-                    <Route path="agents/negotiator" element={<NegotiatorPanel />} />
-                    <Route path="agents/watcher" element={<WatcherPanel />} />
+                    <Route path="agents/watcher" element={<Navigate to={agentPath('heartbeat')} replace />} />
+                    <Route path="agents/:agentId" element={<AgentScreen />} />
                     <Route path="agents/*" element={<Navigate to={ORCHESTRATOR_PATH} replace />} />
                     {/* The session list is gone; old chat links open the Orchestrator thread. */}
                     <Route path="chat" element={<Navigate to={ORCHESTRATOR_PATH} replace />} />

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BackgroundDispatcher } from '../../../../src/services/agents/background-dispatcher';
 import { applyTestConfigDefaults } from '../../../helpers/test-config';
 import type { ILogger } from '../../../../src/infrastructure/logger';
+import { makeSubAgentRegistry, stubSummarizer } from '../../../helpers/sub-agents';
 
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
@@ -9,7 +10,7 @@ function makeLogger(): ILogger {
 
 function makeDispatcher(overrides: {
   conversationRun?: ReturnType<typeof vi.fn>;
-  summarizerHandler?: ReturnType<typeof vi.fn>;
+  onTurnComplete?: ReturnType<typeof vi.fn>;
   compact?: ReturnType<typeof vi.fn>;
 } = {}) {
   const logger = makeLogger();
@@ -17,14 +18,18 @@ function makeDispatcher(overrides: {
     run: overrides.conversationRun ?? vi.fn().mockResolvedValue(undefined),
   };
   const summarizerWorker = {
-    handler: overrides.summarizerHandler ?? vi.fn().mockResolvedValue(undefined),
+    onTurnComplete: overrides.onTurnComplete ?? vi.fn().mockResolvedValue(undefined),
     compact: overrides.compact ?? vi.fn().mockResolvedValue({ type: 'summary', content: 'a summary' }),
   };
+  const registry = makeSubAgentRegistry(
+    [stubSummarizer({ compact: summarizerWorker.compact }, summarizerWorker.onTurnComplete)],
+    { logger },
+  );
 
   const dispatcher = new BackgroundDispatcher(
     logger,
     conversationWorker as never,
-    summarizerWorker as never,
+    () => registry,
   );
 
   return { dispatcher, logger, conversationWorker, summarizerWorker };
@@ -64,55 +69,42 @@ describe('BackgroundDispatcher', () => {
     });
   });
 
-  it('summarizes the conversation when the summarizer is enabled', () => {
-    applyTestConfigDefaults({ summarizerMode: 'auto' });
+  it('notifies sub-agents that the turn completed', () => {
     const { dispatcher, summarizerWorker } = makeDispatcher();
     const memoryService = { upsert: vi.fn() };
 
     dispatcher.summarizeConversation({ ...persistProps, memoryService: memoryService as never });
 
-    expect(summarizerWorker.handler).toHaveBeenCalledWith(
+    expect(summarizerWorker.onTurnComplete).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-1', memoryService }),
     );
   });
 
-  it('does not summarize when the summarizer is disabled', () => {
-    applyTestConfigDefaults({ summarizerMode: 'manual' });
-    const { dispatcher, summarizerWorker } = makeDispatcher();
-
-    dispatcher.summarizeConversation({ ...persistProps, memoryService: { upsert: vi.fn() } as never });
-
-    expect(summarizerWorker.handler).not.toHaveBeenCalled();
-  });
-
-  it('does not summarize a failed provider turn', () => {
-    applyTestConfigDefaults({ summarizerMode: 'auto' });
+  it('does not notify sub-agents of a failed provider turn', () => {
     const { dispatcher, summarizerWorker } = makeDispatcher();
 
     dispatcher.summarizeConversation({ ...persistProps, answerErrorCode: 'unavailable', memoryService: { upsert: vi.fn() } as never });
 
-    expect(summarizerWorker.handler).not.toHaveBeenCalled();
+    expect(summarizerWorker.onTurnComplete).not.toHaveBeenCalled();
   });
 
-  it('does not summarize when the agent response is empty', () => {
-    applyTestConfigDefaults({ summarizerMode: 'auto' });
+  it('does not notify sub-agents when the agent response is empty', () => {
     const { dispatcher, summarizerWorker } = makeDispatcher();
 
     dispatcher.summarizeConversation({ ...persistProps, answer: '   ', memoryService: { upsert: vi.fn() } as never });
 
-    expect(summarizerWorker.handler).not.toHaveBeenCalled();
+    expect(summarizerWorker.onTurnComplete).not.toHaveBeenCalled();
   });
 
-  it('logs when summarization fails', async () => {
-    applyTestConfigDefaults({ summarizerMode: 'auto' });
+  it('logs when a sub-agent fails to handle the completed turn', async () => {
     const { dispatcher, logger } = makeDispatcher({
-      summarizerHandler: vi.fn().mockRejectedValue(new Error('summarizer down')),
+      onTurnComplete: vi.fn().mockRejectedValue(new Error('summarizer down')),
     });
 
     dispatcher.summarizeConversation({ ...persistProps, memoryService: { upsert: vi.fn() } as never });
     await vi.waitFor(() => {
       expect(logger.error).toHaveBeenCalledWith(
-        'Background summarizer failed',
+        'Sub-agent "summarizer" failed to handle a completed turn',
         expect.objectContaining({ err: expect.any(Error) }),
       );
     });

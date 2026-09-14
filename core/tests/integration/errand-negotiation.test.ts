@@ -8,7 +8,8 @@ import { OutboundMessageServiceFactory } from '../../src/services/outbound/messa
 import { MessageRepositoryFactory } from '../../src/repositories/message';
 import { ErrandRepositoryFactory } from '../../src/repositories/errand';
 import { PromptRepository } from '../../src/repositories/prompt';
-import { Negotiator, NegotiatorFactory } from '../../src/services/agents/sub-agents/negotiator/sub-agent';
+import { Negotiator } from '../../src/services/agents/sub-agents/negotiator/sub-agent';
+import { installNegotiator, makeSubAgentRegistry, stubNegotiator } from '../helpers/sub-agents';
 import { ChannelsSingleton } from '../../src/channels';
 import type { AIChatRequest } from '../../src/types/chat';
 import type { ILogger } from '../../src/infrastructure/logger';
@@ -138,12 +139,12 @@ describe('errand negotiation across contact and parent sessions', () => {
       {} as never, logger,
     );
     const negotiator = new Negotiator(logger, db, sessions, completion as never, prompts);
-    vi.spyOn(NegotiatorFactory, 'create').mockReturnValue(negotiator);
+    installNegotiator(negotiator);
     const mainAgent = { run: vi.fn() };
     const gateway = new MessageGateway(
       logger, 'whatsapp', db, sessions, SessionContextFactory.create(logger, db, sessions),
       { persistConversation: vi.fn() } as never,
-      mainAgent as never, { record: vi.fn() } as never, {} as never, negotiator,
+      mainAgent as never, { record: vi.fn() } as never, {} as never, () => makeSubAgentRegistry([stubNegotiator(negotiator)]),
     );
 
     const draft = await negotiator.composeOpener({ goal, channel: 'whatsapp', peerId: '555', originSessionId: parent.id });

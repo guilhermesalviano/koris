@@ -52,22 +52,22 @@ describe('BeatCard', () => {
 describe('Watcher chat messages', () => {
   it('shows the task that ran and the full response with the Watcher avatar', () => {
     const [task, reply] = buildWatcherChat({ beats: [beat], runs: [run({ result: '**Sunny**, 24°C with clear skies all day.', tools: [{ name: 'search_engine', status: 'success' }] })] });
-    const taskHtml = renderToStaticMarkup(<ReadOnlyChatMessage entry={task} agentId="watcher" />);
+    const taskHtml = renderToStaticMarkup(<ReadOnlyChatMessage entry={task} agentId="heartbeat" />);
     expect(taskHtml).toContain('Send me the weather forecast');
     expect(taskHtml).toContain('Current status: Completed');
     expect(taskHtml).toContain('Run details');
     expect(taskHtml).toContain('search_engine');
-    expect(taskHtml).not.toContain('/agents/watcher.jpg');
+    expect(taskHtml).not.toContain('/agents/heartbeat.jpg');
 
-    const html = renderToStaticMarkup(<ReadOnlyChatMessage entry={reply} agentId="watcher" />);
+    const html = renderToStaticMarkup(<ReadOnlyChatMessage entry={reply} agentId="heartbeat" />);
     expect(html).toContain('<strong>Sunny</strong>');
     expect(html).toContain('clear skies all day.');
-    expect(html).toContain('/agents/watcher.jpg');
+    expect(html).toContain('/agents/heartbeat.jpg');
   });
 
   it('shows a failed run of a deleted beat without offering resend', () => {
     const entries = buildWatcherChat({ beats: [], runs: [run({ status: 'error', result: null, errorMessage: 'timeout', beat: 'Old one-time reminder', type: 'reminder' })] });
-    const html = entries.map((entry) => renderToStaticMarkup(<ReadOnlyChatMessage entry={entry} agentId="watcher" />)).join('');
+    const html = entries.map((entry) => renderToStaticMarkup(<ReadOnlyChatMessage entry={entry} agentId="heartbeat" />)).join('');
     expect(html).toContain('Old one-time reminder');
     expect(html).toContain('timeout');
     expect(html).toContain('Current status: Failed');

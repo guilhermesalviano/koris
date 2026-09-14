@@ -4,13 +4,10 @@ import { Errand } from '../../../../src/entities/errand';
 import { THIRD_PARTY_CONVERSATION_CONTEXT } from '../../../../src/constants';
 import { applyTestConfigDefaults } from '../../../helpers/test-config';
 import { config } from '../../../../src/config';
+import { makeSubAgentRegistry, stubNegotiator } from '../../../helpers/sub-agents';
 
 const { mockComposeResume } = vi.hoisted(() => ({ mockComposeResume: vi.fn().mockResolvedValue('resumed reply') }));
-vi.mock('../../../../src/services/agents/sub-agents/negotiator/sub-agent', () => ({
-  NegotiatorFactory: {
-    create: () => ({ composeResume: mockComposeResume }),
-  },
-}));
+makeSubAgentRegistry([stubNegotiator({ composeResume: mockComposeResume }, false)], { install: true });
 
 function makeDb() {
   return { transaction: vi.fn((fn: () => unknown) => fn()), run: vi.fn(), get: vi.fn(), query: vi.fn(() => []) };

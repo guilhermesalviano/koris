@@ -7,6 +7,8 @@ import type { ILogger } from '../../../../src/infrastructure/logger';
 import { buildErrandService } from '../../../../src/services/errands';
 import { Errand } from '../../../../src/entities/errand';
 
+import { makeSubAgentRegistry, stubNegotiator } from '../../../helpers/sub-agents';
+
 vi.mock('../../../../src/services/errands', () => ({ buildErrandService: vi.fn() }));
 
 function makeLogger(): ILogger {
@@ -62,7 +64,7 @@ function makeGateway(channel = 'tui') {
     deps.mainAgent as never,
     deps.channelService as never,
     deps.auditLogRepo as never,
-    negotiator as never,
+    () => makeSubAgentRegistry([stubNegotiator(negotiator)]),
   );
 
   return { gateway, logger, deps, negotiator };

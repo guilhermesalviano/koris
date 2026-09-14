@@ -13,5 +13,5 @@ export interface LoopContext {
   signal: AbortSignal;
   onProgress: (msg: string) => void;
   options?: ProcessOptions;
-  initiatedBy?: 'manager' | 'heartbeat' | 'summarizer';
+  initiatedBy?: string;
 }

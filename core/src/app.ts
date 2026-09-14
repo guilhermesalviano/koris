@@ -8,7 +8,9 @@ if (process.argv.includes('tui') || process.argv.includes('--tui')) {
 import { startTUI } from '../../apps/tui';
 import { LoggerFactory, ILogger } from './infrastructure/logger';
 import { MessageGatewayFactory, IMessageGateway } from './services/agents/message-gateway';
-import { IHeartbeatRunner, HeartbeatSingleton } from './services/agents/sub-agents/heartbeat/runner';
+import { rescheduleHeartbeat } from './services/agents/sub-agents/heartbeat';
+import { ISubAgentRegistry, SubAgentRegistrySingleton } from './services/agents/sub-agents/registry';
+import { BUILTIN_SUB_AGENTS } from './services/agents/sub-agents/builtins';
 import { ChannelsSingleton, ADAPTERS, ChannelHandlerFactory, configureChannelHandler, applyChannelOverrides, type IChannelsManager } from './channels';
 import { loadChannelOverrides } from './config/channel-overrides';
 import { SHUTDOWN_SIGNALS } from './constants/tui';
@@ -16,7 +18,6 @@ import { hasFlag, logError } from './utils/runtime';
 import { SessionManager } from './services/session-manager';
 import { DatabaseServiceFactory } from './infrastructure/db-sqlite';
 import { HeartbeatRepositoryFactory } from './repositories/heartbeat';
-import { HeartbeatRunRepositoryFactory } from './repositories/heartbeat-run';
 import { seedDefaultBeats } from './services/agents/sub-agents/heartbeat/default-beats';
 import { SkillsRepositoryFactory } from './repositories/skills';
 import { LearnedSkillsRepositoryFactory } from './repositories/learned-skills';
@@ -93,7 +94,7 @@ function createErrandsGateway(logger: ILogger, db: IDatabaseService): IErrandsGa
     listForSession: (sessionId) => resolve().errandService.listByOrigin(sessionId).map(toErrandRecord),
     start: async (input) => {
       const { sessionManager, errandService } = resolve();
-      const { errand, openingMessage } = await startErrand(logger, db, sessionManager, errandService, input);
+      const { errand, openingMessage } = await startErrand(db, sessionManager, errandService, input);
       return { errand: toErrandRecord(errand), openingMessage };
     },
     approve: async (id) => toErrandRecord(await resolve().errandService.approve(id)),
@@ -138,7 +139,7 @@ function createToolPluginContext(logger: ILogger, db: IDatabaseService): ToolPlu
         runOnce: input.runOnce,
       }),
       deleteById: (id) => HeartbeatRepositoryFactory.create(db).deleteById(id),
-      reschedule: () => { HeartbeatSingleton.getExistingInstance()?.reschedule(); },
+      reschedule: () => { rescheduleHeartbeat(); },
     },
     channels: {
       sendMessage: async (channel, target, content) => {
@@ -221,7 +222,7 @@ type RuntimeModes = Record<Mode, boolean>;
 interface IRuntime {
   gateway: IMessageGateway;
   channels: IChannelsManager;
-  heartbeat: IHeartbeatRunner;
+  subAgents: ISubAgentRegistry;
   webServer: WebServerHandle | null;
 };
 
@@ -269,6 +270,7 @@ class Application implements IApplication {
     const db = DatabaseServiceFactory.create();
     seedDefaultBeats(db, this.logger);
     const sessionManager = new SessionManager(db);
+    const subAgents = SubAgentRegistrySingleton.getInstance(this.logger, { db, sessionManager }, BUILTIN_SUB_AGENTS);
     configureChannelHandler({ sessionManager, logger: this.logger });
     const gateway = MessageGatewayFactory.create(this.logger, this.source, db, sessionManager);
     const channelPlugins = createPlugins({
@@ -295,11 +297,6 @@ class Application implements IApplication {
     void mcpManager.startAll();
     const registeredChannels = applyChannelOverrides(registry.collect(ADAPTERS), loadChannelOverrides());
     const channels = ChannelsSingleton.getInstance(this.logger, gateway, registeredChannels);
-    const heartbeat = HeartbeatSingleton.getInstance(
-      this.logger,
-      HeartbeatRepositoryFactory.create(db),
-      HeartbeatRunRepositoryFactory.create(db),
-    );
     const skillSync = SkillSyncSingleton.getInstance(
       this.logger,
       SkillsRepositoryFactory.create(this.logger),
@@ -329,7 +326,7 @@ class Application implements IApplication {
     );
 
     channels.startAll();
-    heartbeat.start();
+    subAgents.startAll();
     skillSync.start();
     toolSync.start();
     mcpSync.start();
@@ -340,10 +337,10 @@ class Application implements IApplication {
         ? await DashboardServerFactory.create(this.logger, gateway, db, sessionManager, this.webListen).start()
         : null;
 
-      return { gateway, channels, heartbeat, webServer };
+      return { gateway, channels, subAgents, webServer };
     } catch (error) {
       channels.stopAll();
-      heartbeat.stop();
+      subAgents.stopAll();
       await mcpManager.stopAll();
       throw error;
     }
@@ -388,7 +385,7 @@ class Application implements IApplication {
     this.logger.info(`Shutting down application (${reason})...`);
 
     this.runtime.channels.stopAll();
-    this.runtime.heartbeat.stop();
+    this.runtime.subAgents.stopAll();
     SkillSyncSingleton.getExistingInstance()?.stop();
     ToolSyncSingleton.getExistingInstance()?.stop();
     McpSyncSingleton.getExistingInstance()?.stop();

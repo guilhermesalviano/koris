@@ -101,7 +101,7 @@ async function createErrand(rest: string, context: CommandContext): Promise<Comm
   const target = { channel: channel.toLowerCase(), peerId };
 
   try {
-    const { errand, openingMessage } = await startErrand(resolved.logger, resolved.db, resolved.sessionManager, resolved.errandService, {
+    const { errand, openingMessage } = await startErrand(resolved.db, resolved.sessionManager, resolved.errandService, {
       goal,
       ...target,
       originSessionId: context.sessionId,

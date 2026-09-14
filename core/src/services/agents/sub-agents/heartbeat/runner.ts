@@ -1,11 +1,14 @@
 import { config } from '../../../../config';
 import type { ILogger } from '../../../../infrastructure/logger';
-import { HeartbeatFactory } from './sub-agent';
 import { beginFooterActivity } from '../../../../utils/footer-activity';
 import { isOneTimeBeatExpired, nextCronFire } from '../../../../utils/heartbeat';
 import { formatISO } from '../../../../utils/date';
 import { IHeartbeatRepository } from '../../../../repositories/heartbeat';
 import { IHeartbeatRunRepository } from '../../../../repositories/heartbeat-run';
+
+interface IHeartbeatAgent {
+  run(date: Date): Promise<void>;
+}
 
 interface IHeartbeatRunner {
   start(): void;
@@ -21,6 +24,8 @@ class HeartbeatRunner implements IHeartbeatRunner {
     private logger: ILogger,
     private heartbeatRepository: IHeartbeatRepository,
     private heartbeatRunRepository: IHeartbeatRunRepository,
+    private createAgent: () => IHeartbeatAgent,
+    private activity = 'heartbeat',
   ) {}
 
   start(): void {
@@ -99,15 +104,14 @@ class HeartbeatRunner implements IHeartbeatRunner {
     }
 
     this.isRunning = true;
-    const endFooterActivity = beginFooterActivity('heartbeat');
+    const endFooterActivity = beginFooterActivity(this.activity);
     const date = new Date();
     this.logger.info(`[${formatISO(date)}] Agent waking up...`);
 
     let errorMessage: string | undefined;
 
     try {
-      const agent = HeartbeatFactory.create(this.logger);
-      await agent.handler(date);
+      await this.createAgent().run(date);
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error('Heartbeat failed.', { error: errorMessage });
@@ -124,27 +128,4 @@ class HeartbeatRunner implements IHeartbeatRunner {
   }
 }
 
-class HeartbeatSingleton {
-  private static instance: HeartbeatRunner | null = null;
-
-  static getInstance(
-    logger: ILogger,
-    heartbeatRepository: IHeartbeatRepository,
-    heartbeatRunRepository: IHeartbeatRunRepository,
-  ): HeartbeatRunner {
-    if (!HeartbeatSingleton.instance) {
-      HeartbeatSingleton.instance = new HeartbeatRunner(
-        logger,
-        heartbeatRepository,
-        heartbeatRunRepository,
-      );
-    }
-    return HeartbeatSingleton.instance;
-  }
-
-  static getExistingInstance(): HeartbeatRunner | null {
-    return HeartbeatSingleton.instance;
-  }
-}
-
-export { IHeartbeatRunner, HeartbeatSingleton };
+export { IHeartbeatAgent, IHeartbeatRunner, HeartbeatRunner };

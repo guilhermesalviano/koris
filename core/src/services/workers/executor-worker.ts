@@ -83,7 +83,7 @@ class ExecutorWorker implements IWorker<ExecutorWorkerArgs, ProcessedMessage> {
       ...toolResults,
     ];
 
-    const isBackground = ctx.initiatedBy === 'heartbeat' || ctx.initiatedBy === 'summarizer';
+    const isBackground = ctx.initiatedBy !== undefined && ctx.initiatedBy !== 'manager';
     const chatService = isBackground ? this.workerChatService : this.managerChatService;
     const response = await chatService.complete(
       userMessage,

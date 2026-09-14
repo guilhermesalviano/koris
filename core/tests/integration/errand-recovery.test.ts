@@ -10,7 +10,8 @@ import { MessageRepositoryFactory } from '../../src/repositories/message';
 import { MessageServiceFactory } from '../../src/services/message-service';
 import { ErrandServiceFactory } from '../../src/services/errands';
 import { OutboundMessageServiceFactory } from '../../src/services/outbound/message-service';
-import { Negotiator, NegotiatorFactory } from '../../src/services/agents/sub-agents/negotiator/sub-agent';
+import { Negotiator } from '../../src/services/agents/sub-agents/negotiator/sub-agent';
+import { installNegotiator, makeSubAgentRegistry, stubNegotiator } from '../helpers/sub-agents';
 import { MessageGateway } from '../../src/services/agents/message-gateway';
 import { SessionContextFactory } from '../../src/services/agents/session-context';
 import { ChannelHandler, ChannelsSingleton } from '../../src/channels';
@@ -60,7 +61,7 @@ describe('errand recovery and privacy', () => {
     const mainAgent = { run: vi.fn() };
     const result = new MessageGateway(logger, 'whatsapp', db, manager,
       SessionContextFactory.create(logger, db, manager), { persistConversation: vi.fn(), summarizeConversation: vi.fn() } as never,
-      mainAgent as never, { record: vi.fn() } as never, {} as never, negotiator);
+      mainAgent as never, { record: vi.fn() } as never, {} as never, () => makeSubAgentRegistry([stubNegotiator(negotiator)]));
     return { gateway: result, completion, prompts, mainAgent };
   }
 
@@ -73,7 +74,7 @@ describe('errand recovery and privacy', () => {
     const negotiator = new Negotiator(logger, db, manager,
       { complete: vi.fn().mockRejectedValue(new Error('provider unavailable')) } as never,
       { build: vi.fn().mockResolvedValue({ messages: [] }) });
-    vi.spyOn(NegotiatorFactory, 'create').mockReturnValue(negotiator);
+    installNegotiator(negotiator);
     await expect(service.resumeWithPrincipalAnswer(errand.id, 'Offer 80; private ceiling 100, do not reveal it.'))
       .rejects.toThrow('Nothing was sent');
     expect(channels.sendMessage).not.toHaveBeenCalled();
@@ -173,7 +174,7 @@ describe('errand recovery and privacy', () => {
     await service.approve(errand.id);
     service.escalate(errand.id, 'Would 11 work?');
     const composeResume = vi.fn().mockResolvedValue('Please book 11.');
-    vi.spyOn(NegotiatorFactory, 'create').mockReturnValue({ composeResume } as never);
+    installNegotiator({ composeResume } as never);
     channels.sendMessage.mockRejectedValueOnce(new Error('offline'));
     await expect(service.resumeWithPrincipalAnswer(errand.id, '11 works')).rejects.toThrow('/errand retry');
     expect(service.get(errand.id)).toMatchObject({ state: 'awaiting_principal', pendingMessage: 'Would 11 work?' });
@@ -266,7 +267,7 @@ describe('errand recovery and privacy', () => {
     ]);
     expect(channels.sendMessage).toHaveBeenLastCalledWith('whatsapp', '999', expect.stringContaining('Would 11 work?'));
     await vi.waitFor(() => expect(messages.getBySessionId(negotiation.id)).toHaveLength(1));
-    vi.spyOn(NegotiatorFactory, 'create').mockReturnValue({ composeResume: vi.fn().mockResolvedValue('Please book 11.') } as never);
+    installNegotiator({ composeResume: vi.fn().mockResolvedValue('Please book 11.') } as never);
     await service.resumeWithPrincipalAnswer(errand.id, '11 works');
     expect(messages.getBySessionId(principal.id)).toEqual([]);
     expect(messages.getBySessionId(negotiation.id).map((message) => [message.role, message.content])).toEqual([
@@ -315,7 +316,7 @@ describe('errand recovery and privacy', () => {
     expect(await runtime.gateway.handle('Hello?', '555', { isTrustedSender: false })).toBe('');
     expect(service.get(errand.id)?.state).toBe('awaiting_principal');
 
-    vi.spyOn(NegotiatorFactory, 'create').mockReturnValue({ composeResume: vi.fn().mockResolvedValue('Yes, a juice please.') } as never);
+    installNegotiator({ composeResume: vi.fn().mockResolvedValue('Yes, a juice please.') } as never);
     await service.resumeWithPrincipalAnswer(errand.id, 'yes, a juice');
     expect(channels.sendMessage).toHaveBeenCalledExactlyOnceWith('whatsapp', '555', 'Yes, a juice please.');
     expect(service.get(errand.id)?.state).toBe('awaiting_peer');

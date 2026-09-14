@@ -11,6 +11,11 @@ export function agentPath(id: AgentId): string {
   return `/admin/agents/${id}`;
 }
 
+/** The roster's display name for an agent, or its id in title case while the roster is unavailable. */
+export function agentName(id: AgentId, roster: readonly AgentSummary[]): string {
+  return roster.find((agent) => agent.id === id)?.name ?? id.charAt(0).toUpperCase() + id.slice(1);
+}
+
 /** Portrait served from `apps/web/public/agents/`. */
 export function agentAvatarUrl(id: AgentId): string {
   return `/agents/${id}.jpg`;

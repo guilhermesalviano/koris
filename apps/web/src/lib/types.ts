@@ -29,7 +29,7 @@ export interface OverviewResponse {
   recentErrors: AuditItem[];
 }
 
-export type AgentId = 'orchestrator' | 'negotiator' | 'watcher';
+export type AgentId = string;
 
 export interface AgentSummary {
   id: AgentId;

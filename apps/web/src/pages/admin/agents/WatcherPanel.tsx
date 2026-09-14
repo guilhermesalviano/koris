@@ -36,12 +36,12 @@ export function BeatCard({ beat, now }: { beat: HeartbeatItem; now?: Date }) {
 
 export default function WatcherPanel() {
   const { openConfig } = useUi();
-  const { watcher: { data, loading, error, refresh } } = useAgentActivity();
+  const { heartbeat: { data, loading, error, refresh } } = useAgentActivity();
   const entries = useMemo(() => buildWatcherChat(data ?? { beats: [], runs: [] }), [data]);
 
   return (
     <ReadOnlyAgentChat
-      agentId="watcher"
+      agentId="heartbeat"
       title="Watcher (Heartbeat)"
       entries={entries}
       loading={loading}

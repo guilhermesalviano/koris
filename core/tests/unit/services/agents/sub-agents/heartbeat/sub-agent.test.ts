@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Heartbeat } from '../../../../../../src/services/agents/sub-agents/heartbeat/sub-agent';
 import { config } from '../../../../../../src/config';
 import type { ILogger } from '../../../../../../src/infrastructure/logger';
-import { sharedSubAgentQueue } from '../../../../../../src/services/agents/sub-agents/queue/task-queue';
 import { SYSTEM_BEAT_CLEAR_IMAGES } from '../../../../../../src/constants';
 
 function makeLogger(): ILogger {
@@ -76,7 +75,7 @@ describe('Heartbeat', () => {
     it('logs when there are no scheduled beats', async () => {
       const { heartbeat, logger } = makeHeartbeat({ beats: [] });
 
-      await heartbeat.handler(localDate(12));
+      await heartbeat.run(localDate(12));
 
       expect(logger.info).toHaveBeenCalledWith('Heartbeat: No scheduled beats found.');
     });
@@ -94,7 +93,7 @@ describe('Heartbeat', () => {
         }],
       });
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       expect(completionService.complete).not.toHaveBeenCalled();
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('not due yet'));
@@ -112,7 +111,7 @@ describe('Heartbeat', () => {
         completionResponse: { kind: 'message', text: 'status ok' },
       });
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       expect(completionService.complete).toHaveBeenCalled();
       expect(beatRunRepository.save).toHaveBeenCalledWith(expect.objectContaining({ beatId: 'morning', status: 'success', result: 'status ok' }));
@@ -133,7 +132,7 @@ describe('Heartbeat', () => {
         completionResponse: { kind: 'message', text: 'call mom' },
       });
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       expect(beatRunRepository.save).toHaveBeenCalledWith(expect.objectContaining({ beatId: 'once', status: 'success', result: 'call mom' }));
       expect(heartbeatRepository.deleteById).toHaveBeenCalledWith('once');
@@ -153,7 +152,7 @@ describe('Heartbeat', () => {
       });
       completionService.complete.mockRejectedValueOnce(new Error('provider down'));
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       expect(heartbeatRepository.deleteById).toHaveBeenCalledWith('once');
     });
@@ -164,7 +163,7 @@ describe('Heartbeat', () => {
         beats: [{ id: 'daily', beat: 'send status', cronExpression: '0 9 * * *', type: 'reminder' }],
       });
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('daily', now);
       expect(heartbeatRepository.deleteById).not.toHaveBeenCalled();
@@ -184,7 +183,7 @@ describe('Heartbeat', () => {
         pipelineResult: 'hi',
       });
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       expect(pipeline.execute).toHaveBeenCalledWith(
         toolCalls,
@@ -221,7 +220,7 @@ describe('Heartbeat', () => {
         .mockRejectedValueOnce(new Error('model failed'))
         .mockResolvedValueOnce({ kind: 'message', text: 'all good' });
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       expect(completionService.complete).toHaveBeenCalledTimes(2);
       expect(logger.error).toHaveBeenCalledWith(
@@ -245,7 +244,7 @@ describe('Heartbeat', () => {
       });
       completionService.complete.mockRejectedValue(new Error('model failed'));
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       expect(logger.error).toHaveBeenCalledWith(
         'Heartbeat: Beat "failing" failed.',
@@ -265,7 +264,7 @@ describe('Heartbeat', () => {
       });
       completionService.complete.mockRejectedValue(new Error('model failed'));
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       expect(heartbeatRepository.updateLastRun).toHaveBeenCalledWith('failing', now);
       expect(logger.error).toHaveBeenCalledWith(
@@ -298,7 +297,7 @@ describe('Heartbeat', () => {
       });
       completionService.complete.mockImplementation(gated);
 
-      const run = heartbeat.handler(now);
+      const run = heartbeat.run(now);
 
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(completionService.complete).toHaveBeenCalledTimes(1);
@@ -313,20 +312,6 @@ describe('Heartbeat', () => {
       expect(beatRunRepository.save.mock.calls.map(([run]) => run.beatId)).toEqual(['beat-a', 'beat-b']);
     });
 
-    it('uses the shared sub-agent queue when subagents_parallel is false', async () => {
-      (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = false;
-      const { heartbeat } = makeHeartbeat();
-
-      expect((heartbeat as unknown as { queue: unknown }).queue).toBe(sharedSubAgentQueue);
-    });
-
-    it('uses its own queue when subagents_parallel is true', async () => {
-      (config.AI as { SUBAGENTS_PARALLEL: boolean }).SUBAGENTS_PARALLEL = true;
-      const { heartbeat } = makeHeartbeat();
-
-      expect((heartbeat as unknown as { queue: unknown }).queue).not.toBe(sharedSubAgentQueue);
-    });
-
     it('executes a system cleanup beat natively without the LLM or a stored run', async () => {
       const now = localDate(0, 0);
       const { heartbeat, imageRepository, completionService, promptRepository, beatRunRepository, heartbeatRepository } = makeHeartbeat({
@@ -338,7 +323,7 @@ describe('Heartbeat', () => {
         }],
       });
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       expect(imageRepository.deleteAll).toHaveBeenCalledTimes(1);
       expect(completionService.complete).not.toHaveBeenCalled();
@@ -360,7 +345,7 @@ describe('Heartbeat', () => {
       });
       completionService.complete.mockImplementation(gated);
 
-      const run = heartbeat.handler(now);
+      const run = heartbeat.run(now);
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       const queue = (heartbeat as unknown as { queue: { snapshot(): unknown } }).queue;
@@ -383,7 +368,7 @@ describe('Heartbeat', () => {
         completionResponse: { kind: 'message', text: 'status ok' },
       });
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       const [run] = beatRunRepository.save.mock.calls[0];
       expect(run).toMatchObject({
@@ -404,7 +389,7 @@ describe('Heartbeat', () => {
       });
       completionService.complete.mockRejectedValueOnce(new Error('model failed')).mockResolvedValueOnce({ kind: 'message', text: 'all good' });
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       const runs = beatRunRepository.save.mock.calls.map(([run]) => run);
       expect(runs).toEqual([
@@ -425,7 +410,7 @@ describe('Heartbeat', () => {
       });
       beatRunRepository.save.mockImplementation(() => { throw new Error('disk full'); });
 
-      await heartbeat.handler(now);
+      await heartbeat.run(now);
 
       expect(beatRunRepository.save).toHaveBeenCalledTimes(1);
       expect(logger.error).toHaveBeenCalledWith('Heartbeat: Could not record the run of beat "morning".', expect.anything());

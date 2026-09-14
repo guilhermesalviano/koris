@@ -1,8 +1,7 @@
 import { IDatabaseService } from "../../../../infrastructure/db-sqlite";
 import type { ILogger } from "../../../../infrastructure/logger";
-import { IPromptRepository, PromptRepositoryFactory } from "../../../../repositories/prompt";
-import { getAIProvider } from "../../../providers";
-import { AICompletionService, IAICompletionService } from "../../../ai-completion-service";
+import { IPromptRepository } from "../../../../repositories/prompt";
+import { IAICompletionService } from "../../../ai-completion-service";
 import { NEGOTIATOR_INSTRUCTIONS, NEGOTIATOR_IMAGE_INSTRUCTION, ERRAND_ACTION_FOLLOWUPS, ERRAND_FOLLOWUP_CONTEXT, ERRAND_OPENER_INSTRUCTIONS, ERRAND_RESUME_INSTRUCTIONS, THIRD_PARTY_CONVERSATION_CONTEXT } from "../../../../constants";
 import { config } from "../../../../config";
 import { replacePlaceholders } from "../../../../utils/prompt";
@@ -217,17 +216,4 @@ class Negotiator {
   }
 }
 
-class NegotiatorFactory {
-  static create(logger: ILogger, db: IDatabaseService, sessionManager: ISessionManager): Negotiator {
-    const embedProvider = getAIProvider(logger, 'embed');
-    const promptRepository = PromptRepositoryFactory.create(db, logger, embedProvider);
-    const completionService = new AICompletionService(
-      () => getAIProvider(logger, 'worker', { background: true }),
-      logger,
-      { role: 'worker', agentName: 'negotiator' },
-    );
-    return new Negotiator(logger, db, sessionManager, completionService, promptRepository);
-  }
-}
-
-export { Negotiator, NegotiatorFactory };
+export { Negotiator };

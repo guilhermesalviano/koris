@@ -14,6 +14,7 @@ vi.mock('../../src/repositories/learned-skills', () => ({
 }));
 import { ChannelHandlerFactory } from '../../src/channels/handler';
 import { MessageGateway } from '../../src/services/agents/message-gateway';
+import { makeSubAgentRegistry, stubNegotiator } from '../helpers/sub-agents';
 import { splitMessage } from '../../../plugins/channels/contracts';
 import type {
   ChannelReply,
@@ -59,7 +60,7 @@ function makeGatewayWithFakeAgent(mainAgentReply: string) {
     mainAgent as never,
     { record: vi.fn() } as never,
     { findAll: vi.fn().mockReturnValue([]) } as never,
-    negotiator as never,
+    () => makeSubAgentRegistry([stubNegotiator(negotiator)]),
   );
 
   return { gateway, mainAgent };

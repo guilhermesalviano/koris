@@ -48,7 +48,8 @@ import { Session } from '../entities/session';
 import { NEGOTIATION_CHANNEL, SESSION_START_REASONS, type SessionKey, type SessionStartReason } from '../types/session';
 import { carryForwardMetadata } from '../utils/session';
 import { BEAT_TYPES, BeatType } from '../types/beat';
-import { HeartbeatSingleton } from '../services/agents/sub-agents/heartbeat/runner';
+import { rescheduleHeartbeat } from '../services/agents/sub-agents/heartbeat';
+import { SubAgentRegistrySingleton } from '../services/agents/sub-agents/registry';
 import { hasSpecificHour, isEveryMinute, isOneTimeCron, isValidCronExpression, nextCronFire } from '../utils/heartbeat';
 import { formatISO } from '../utils/date';
 import { activeRunsRegistry } from './active-runs';
@@ -63,7 +64,7 @@ import { ErrandRepositoryFactory } from '../repositories/errand';
 import { buildErrandService } from '../services/errands';
 import { ERRAND_STATES, ErrandState } from '../types/errand';
 import { Errand } from '../entities/errand';
-import { AGENTS } from '../constants/agents';
+import { buildAgentRoster } from '../constants/agents';
 import { PluginSettingsRepositoryFactory, type IPluginSettingsRepository } from '../repositories/plugin-settings';
 import { resolvePluginEnabled } from '../services/plugins/plugin-enablement';
 import { PluginCatalogSingleton } from '../services/plugins/plugin-catalog-singleton';
@@ -489,7 +490,7 @@ class AdminRouterFactory {
     });
 
     router.get('/agents', (_req: Request, res: Response) => {
-      res.json({ items: AGENTS });
+      res.json({ items: buildAgentRoster(SubAgentRegistrySingleton.getExistingInstance()?.descriptors() ?? []) });
     });
 
     // The Orchestrator thread: messages across every web session, paged from
@@ -1181,7 +1182,7 @@ class AdminRouterFactory {
         runOnce,
       });
       heartbeatRepo.save(heartbeat);
-      HeartbeatSingleton.getExistingInstance()?.reschedule();
+      rescheduleHeartbeat();
 
       res.status(201).json(heartbeat);
     });
@@ -1233,7 +1234,7 @@ class AdminRouterFactory {
         target: target === undefined ? undefined : target,
         runOnce,
       });
-      HeartbeatSingleton.getExistingInstance()?.reschedule();
+      rescheduleHeartbeat();
 
       res.json(updated);
     });
@@ -1245,7 +1246,7 @@ class AdminRouterFactory {
         return;
       }
 
-      HeartbeatSingleton.getExistingInstance()?.reschedule();
+      rescheduleHeartbeat();
       res.json({ success: true });
     });
 

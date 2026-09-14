@@ -8,7 +8,7 @@ import type { AgentId, AgentSummary } from '../../lib/types';
 const ROSTER: AgentSummary[] = [
   { id: 'orchestrator', name: 'Orchestrator', description: 'Main', parentId: null, messageable: true },
   { id: 'negotiator', name: 'Negotiator', description: '', parentId: 'orchestrator', messageable: false },
-  { id: 'watcher', name: 'Watcher (Heartbeat)', description: '', parentId: 'orchestrator', messageable: false },
+  { id: 'heartbeat', name: 'Watcher (Heartbeat)', description: '', parentId: 'orchestrator', messageable: false },
 ];
 
 function render(path: string, unread: Partial<Record<AgentId, boolean>> = {}): string {
@@ -49,19 +49,19 @@ describe('AgentTree', () => {
   });
 
   it('highlights the agent matching the current route', () => {
-    const html = render('/admin/agents/watcher');
+    const html = render('/admin/agents/heartbeat');
 
     const active = html.match(/<a[^>]*aria-current="page"[^>]*>/g) ?? [];
     expect(active).toHaveLength(1);
-    expect(active[0]).toContain('href="/admin/agents/watcher"');
+    expect(active[0]).toContain('href="/admin/agents/heartbeat"');
   });
 
   it('marks only unread avatars and removes the effect once read', () => {
-    const unread = render('/admin/agents/orchestrator', { watcher: true });
+    const unread = render('/admin/agents/orchestrator', { heartbeat: true });
     expect(unread.match(/Unread activity/g)).toHaveLength(1);
     expect(unread).toContain('ring-2 ring-accent');
     expect(unread).toContain('motion-safe:animate-ping');
-    const read = render('/admin/agents/orchestrator', { watcher: false });
+    const read = render('/admin/agents/orchestrator', { heartbeat: false });
     expect(read).not.toContain('Unread activity');
     expect(read).not.toContain('motion-safe:animate-ping');
   });

@@ -1,11 +1,12 @@
-import { config } from '../../config';
 import { IDatabaseService } from '../../infrastructure/db-sqlite';
 import { ILogger } from '../../infrastructure/logger';
 import { ISessionManager } from '../session-manager';
 import { IMemoryService } from '../memory-service';
 import { ConversationWorkerFactory, ConversationWorkerProps } from '../workers/conversation-worker';
-import { SummarizerFactory, SummarizerWorkerProps, CompactWorkerProps, CompactResult } from './sub-agents/summarizer/sub-agent';
-import { ISubAgent } from '../../types/agents';
+import type { CompactWorkerProps, CompactResult } from './sub-agents/summarizer/sub-agent';
+import { SUMMARIZER } from './sub-agents/summarizer/key';
+import { ISubAgentRegistry, SubAgentRegistrySingleton } from './sub-agents/registry';
+import type { SubAgentScope } from './sub-agents/contracts';
 import { IWorker } from '../../types/workers';
 import { ImageAttachment } from '../../types/messages';
 
@@ -29,11 +30,14 @@ interface IBackgroundDispatcher {
   compactConversation(props: CompactWorkerProps): Promise<CompactResult | null>;
 }
 
+type SubAgentAccess = Pick<ISubAgentRegistry, 'get' | 'notifyTurnComplete'>;
+
 class BackgroundDispatcher implements IBackgroundDispatcher {
   constructor(
     private logger: ILogger,
     private conversationWorker: IWorker<ConversationWorkerProps, void>,
-    private summarizerWorker: ISubAgent<SummarizerWorkerProps> & { compact(props: CompactWorkerProps): Promise<CompactResult> },
+    private subAgents: () => SubAgentAccess,
+    private scope?: SubAgentScope,
   ) {}
 
   persistConversation(props: PersistConversationProps): void {
@@ -44,21 +48,17 @@ class BackgroundDispatcher implements IBackgroundDispatcher {
   }
 
   summarizeConversation(props: SummarizeConversationProps): void {
-    if (config.SESSION.SUMMARIZER_MODE !== 'auto') return;
     if (props.answerErrorCode) return;
     if (!props.answer || !props.answer.trim()) return;
 
-    this.summarizerWorker.handler(props)
-      .catch((err: unknown) =>
-        this.logger.error('Background summarizer failed', { err })
-      );
+    this.subAgents().notifyTurnComplete(props, this.scope);
   }
 
   async compactConversation(props: CompactWorkerProps): Promise<CompactResult | null> {
     if (!props.messages.length) return null;
 
     try {
-      return await this.summarizerWorker.compact(props);
+      return await this.subAgents().get(SUMMARIZER, this.scope).compact(props);
     } catch (err: unknown) {
       this.logger.error('Compaction failed', { err });
       return null;
@@ -69,8 +69,7 @@ class BackgroundDispatcher implements IBackgroundDispatcher {
 class BackgroundDispatcherFactory {
   static create(logger: ILogger, db: IDatabaseService, sessionManager: ISessionManager): IBackgroundDispatcher {
     const conversationWorker = ConversationWorkerFactory.create(logger, db, sessionManager);
-    const summarizerWorker = SummarizerFactory.create(logger);
-    return new BackgroundDispatcher(logger, conversationWorker, summarizerWorker);
+    return new BackgroundDispatcher(logger, conversationWorker, () => SubAgentRegistrySingleton.require(), { db, sessionManager });
   }
 }
 

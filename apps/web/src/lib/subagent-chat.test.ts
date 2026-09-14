@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildNegotiationCenter, buildNegotiatorChat, buildWatcherChat, headerErrand, loadNegotiatorChat, loadNegotiatorNotices, loadWatcherChat, negotiationCenterVersion, negotiationSteps } from './subagent-chat';
-import type { BeatRunItem, ErrandItem, ErrandTranscriptMessage } from './types';
+import { buildAgentAuditChat, buildNegotiationCenter, buildNegotiatorChat, buildWatcherChat, headerErrand, loadAgentAudit, loadNegotiatorChat, loadNegotiatorNotices, loadWatcherChat, negotiationCenterVersion, negotiationSteps } from './subagent-chat';
+import type { AuditItem, BeatRunItem, ErrandItem, ErrandTranscriptMessage } from './types';
 
 const errand: ErrandItem = {
   id: 'e1', goal: 'Arrange lunch', state: 'open', originSessionId: 'origin', pendingMessage: null,
@@ -182,6 +182,39 @@ describe('read-only history loading', () => {
     const result = await loadWatcherChat(new AbortController().signal);
     expect(result.runs).toHaveLength(1);
     expect(fetch.mock.calls.map(([url]) => url)).toEqual(['/api/admin/heartbeats', '/api/admin/heartbeats/runs?limit=20']);
+  });
+});
+
+describe('generic sub-agent chat', () => {
+  const audit = (overrides: Partial<AuditItem>): AuditItem => ({
+    id: 'a1', type: 'llm', role: 'worker', agentName: 'scout', durationMs: 10, status: 'success',
+    createdAt: '2026-09-13T10:00:00Z', ...overrides,
+  } as AuditItem);
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('turns model calls into replies in time order, skipping tool calls and flagging failures', () => {
+    const entries = buildAgentAuditChat([
+      audit({ id: 'late', createdAt: '2026-09-13T10:05:00Z', responsePreview: 'Found it.', promptPreview: 'Find the shop hours' }),
+      audit({ id: 'tool', type: 'tool', toolName: 'curl' }),
+      audit({ id: 'early', status: 'error', errorMessage: 'provider down' }),
+    ], 'Scout');
+
+    expect(entries.map((entry) => [entry.id, entry.author, entry.content, entry.error])).toEqual([
+      ['audit:early', 'Scout', 'provider down', true],
+      ['audit:late', 'Scout', 'Found it.', false],
+    ]);
+    expect(entries[1].details).toEqual([{ label: 'Prompt', content: 'Find the shop hours' }]);
+  });
+
+  it('loads the latest model calls audited under the agent id', async () => {
+    const fetch = vi.fn(async (_url: string) => Response.json({ total: 1, limit: 50, offset: 0, items: [audit({})] }));
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(loadAgentAudit('scout agent', new AbortController().signal)).resolves.toHaveLength(1);
+    expect(fetch.mock.calls[0][0]).toBe('/api/admin/audit?type=llm&limit=50&agentName=scout%20agent');
   });
 });
 
