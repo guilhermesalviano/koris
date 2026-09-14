@@ -97,6 +97,11 @@ class ChannelHandler implements IChannelHandler {
       }
       return true;
     } catch (err) {
+      handlerLogger?.error(`[ChannelHandler] ${this.channel} turn from ${target} failed`, { err });
+      // Internal failures (provider timeouts, stack messages) only go back to
+      // the principal. An untrusted sender — e.g. an errand contact talking to
+      // the Negotiator — must never see them.
+      if (!message.isTrustedSender) return true;
       const error = err instanceof Error
         ? err.message
         : 'Sorry, I ran into an unexpected problem. Could you try again?';

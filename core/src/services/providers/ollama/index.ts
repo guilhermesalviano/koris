@@ -5,6 +5,7 @@ import { validateBaseUrl } from '../../../utils/provider';
 import type { ProviderRegistration } from '../manifest';
 import { THINK_START, THINK_END } from '../../../constants/thinking';
 import { extractToolCalls } from '../../../utils/tool-calls';
+import { providerDispatcher } from '../http-dispatcher';
 
 type OllamaChatChunk = {
   message?: {
@@ -57,7 +58,7 @@ class OllamaAIProvider implements AIProvider {
         hasTools: !!request.tools?.length,
       });
 
-      const { content, promptEvalCount, evalCount } = await this.postChat(request, controller.signal);
+      const { content, promptEvalCount, evalCount } = await this.postChat(request, controller);
       options?.onUsage?.({ inputTokens: promptEvalCount, outputTokens: evalCount });
       return content;
     } catch (err) {
@@ -66,7 +67,7 @@ class OllamaAIProvider implements AIProvider {
         cause: err instanceof Error ? (err as { cause?: unknown }).cause : undefined,
       });
       if (this.isAbortError(err)) {
-        throw new Error(options?.signal?.aborted ? 'Ollama request aborted' : 'Ollama request timed out during non-stream /api/chat request');
+        throw new Error(options?.signal?.aborted ? 'Ollama request aborted' : 'Ollama request timed out during /api/chat request');
       }
       throw err;
     } finally {
@@ -97,8 +98,8 @@ class OllamaAIProvider implements AIProvider {
       const body = res.body;
 
       if (!body) {
-        this.logger.debug('Ollama stream body is null, falling back to non-stream');
-        const { content: full, promptEvalCount, evalCount } = await this.postChat(request, controller.signal);
+        this.logger.debug('Ollama stream body is null, retrying the request');
+        const { content: full, promptEvalCount, evalCount } = await this.postChat(request, controller);
         options?.onUsage?.({ inputTokens: promptEvalCount, outputTokens: evalCount });
         totalCharsYielded = full.length;
         yield full;
@@ -178,8 +179,9 @@ class OllamaAIProvider implements AIProvider {
       }
 
       if (!producedAnswer) {
-        this.logger.debug('No answer parsed from stream, retrying in non-stream mode');
-        const { content: full, promptEvalCount, evalCount } = await this.postChat(request, controller.signal);
+        this.logger.debug('No answer parsed from stream, retrying the request');
+        clearTimeout(idleTimer);
+        const { content: full, promptEvalCount, evalCount } = await this.postChat(request, controller);
         options?.onUsage?.({ inputTokens: promptEvalCount, outputTokens: evalCount });
         if (full) {
           totalCharsYielded += full.length;
@@ -240,7 +242,8 @@ class OllamaAIProvider implements AIProvider {
     const res = await fetch(`${this.baseUrl}/api/embeddings`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body
+      body,
+      dispatcher: providerDispatcher(),
     });
 
     if (!res.ok) {
@@ -251,26 +254,59 @@ class OllamaAIProvider implements AIProvider {
     return data.embedding;
   }
 
+  /**
+   * One whole answer, read from a streamed /api/chat. With `stream: false`
+   * Ollama sends nothing until generation ends, so a slow model runs into
+   * HTTP header timeouts; streaming starts the response at the first token and
+   * lets `ai.timeouts.idle_ms` catch a stall instead.
+   */
   private async postChat(
     request: AIChatRequest,
-    signal: AbortSignal,
+    controller: AbortController,
   ): Promise<{ content: string; promptEvalCount?: number; evalCount?: number }> {
-    const res = await this.post(request, signal, false);
-    const data = await res.json() as OllamaChatChunk;
+    const res = await this.post(request, controller.signal, true);
+    if (!res.body) throw new Error('Ollama /api/chat returned an empty body');
 
-    const usage = { promptEvalCount: data.prompt_eval_count, evalCount: data.eval_count };
+    let idleTimer: NodeJS.Timeout | undefined;
+    const bumpIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => controller.abort(), config.AI.TIMEOUTS.IDLE_MS);
+    };
 
-    if (data.message?.tool_calls?.length && !data.message?.content?.trim()) {
-      this.logger.debug('Tool calls in non-stream response', { count: data.message.tool_calls.length });
-      return { content: JSON.stringify({ tool_calls: data.message.tool_calls }), ...usage };
+    let content = '';
+    let thinking = '';
+    const toolCalls: NonNullable<NonNullable<OllamaChatChunk['message']>['tool_calls']> = [];
+    let promptEvalCount: number | undefined;
+    let evalCount: number | undefined;
+
+    bumpIdle();
+    try {
+      for await (const chunk of this.readNDJSON(res.body, bumpIdle)) {
+        if (chunk.error) throw new Error(chunk.error);
+        if (chunk.message?.tool_calls?.length) toolCalls.push(...chunk.message.tool_calls);
+        content += chunk.message?.content || chunk.response || '';
+        thinking += chunk.message?.thinking ?? '';
+        promptEvalCount = chunk.prompt_eval_count ?? promptEvalCount;
+        evalCount = chunk.eval_count ?? evalCount;
+        if (chunk.done) break;
+      }
+    } finally {
+      clearTimeout(idleTimer);
     }
 
-    const content = this.parseChunk(data);
-    if (!content) {
-      this.logger.warn('Ollama response content was empty, returning empty string', { data });
-      return { content: '', ...usage };
+    const usage = { promptEvalCount, evalCount };
+
+    if (toolCalls.length) {
+      this.logger.debug('Tool calls in chat response', { count: toolCalls.length });
+      return { content: JSON.stringify({ tool_calls: toolCalls }), ...usage };
     }
-    return { content, ...usage };
+
+    // A thinking-only answer is returned as-is, as the non-stream response was.
+    const text = content || thinking;
+    if (!text) {
+      this.logger.warn('Ollama response content was empty, returning empty string');
+    }
+    return { content: text, ...usage };
   }
 
   private makeController(outerSignal?: AbortSignal): { controller: AbortController; cleanup: () => void } {
@@ -375,6 +411,7 @@ class OllamaAIProvider implements AIProvider {
       headers: { 'content-type': 'application/json' },
       body,
       signal,
+      dispatcher: providerDispatcher(),
     });
 
     this.logger.debug('Ollama /api/chat response', { status: res.status, stream, url: `${this.baseUrl}/api/chat` });

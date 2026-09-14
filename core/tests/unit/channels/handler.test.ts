@@ -273,21 +273,31 @@ describe('channels/handler', () => {
     expect(reply.sendText).toHaveBeenCalledWith('jid', '42');
   });
 
-  it('sends an error reply when the agent throws', async () => {
+  it('sends an error reply to a trusted sender when the agent throws', async () => {
     const { handler, gateway, reply } = makeHandler();
     gateway.handle.mockRejectedValue(new Error('boom'));
 
-    await handler.handle('jid', message({}));
+    await handler.handle('jid', message({ isTrustedSender: true }));
 
     expect(reply.sendText).not.toHaveBeenCalled();
     expect(reply.sendError).toHaveBeenCalledWith('jid', '❌ boom');
+  });
+
+  it('never sends an error reply to an untrusted sender', async () => {
+    const { handler, gateway, reply } = makeHandler();
+    gateway.handle.mockRejectedValue(new Error('fetch failed'));
+
+    await expect(handler.handle('jid', message({ isTrustedSender: false }))).resolves.toBe(true);
+
+    expect(reply.sendText).not.toHaveBeenCalled();
+    expect(reply.sendError).not.toHaveBeenCalled();
   });
 
   it('uses a friendly fallback when the error has no message', async () => {
     const { handler, gateway, reply } = makeHandler();
     gateway.handle.mockRejectedValue('raw failure');
 
-    await handler.handle('jid', message({}));
+    await handler.handle('jid', message({ isTrustedSender: true }));
 
     expect(reply.sendError).toHaveBeenCalledWith('jid', '❌ Sorry, I ran into an unexpected problem. Could you try again?');
   });

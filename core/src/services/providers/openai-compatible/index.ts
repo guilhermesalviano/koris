@@ -5,6 +5,7 @@ import { ILogger } from '../../../infrastructure/logger';
 import { THINK_START, THINK_END } from '../../../constants/thinking';
 import { extractToolCalls } from '../../../utils/tool-calls';
 import type { ProviderRegistration } from '../manifest';
+import { providerDispatcher } from '../http-dispatcher';
 import { OPENAI_COMPATIBLE_PRESETS, type OpenAICompatiblePreset } from './presets';
 
 type OpenAIContentBlock =
@@ -321,7 +322,8 @@ class OpenAICompatibleAIProvider implements AIProvider {
     const res = await fetch(`${this.baseUrl}/embeddings`, {
       method: 'POST',
       headers: this.authHeaders(),
-      body
+      body,
+      dispatcher: providerDispatcher(),
     });
 
     if (!res.ok) {
@@ -453,6 +455,7 @@ class OpenAICompatibleAIProvider implements AIProvider {
       headers: this.authHeaders(),
       body: JSON.stringify(body),
       signal,
+      dispatcher: providerDispatcher(),
     });
 
     this.logger.debug(`${this.name} /chat/completions response`, {

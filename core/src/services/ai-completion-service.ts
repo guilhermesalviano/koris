@@ -206,7 +206,11 @@ export class AICompletionService implements IAICompletionService {
     if (signal?.aborted || normalized.includes('aborted')) {
       return new AIServiceError('aborted', userMessage, error, statusCode);
     }
-    if (normalized.includes('timeout') || normalized.includes('timed out') || statusCode === 408 || statusCode === 504) {
+    // Undici's own header/body timeouts surface as a bare "fetch failed"; they
+    // must not read as `unavailable`, or a slow model gets the same prompt again.
+    const causeCode = (error as { cause?: { code?: unknown } } | null)?.cause?.code;
+    const httpClientTimeout = causeCode === 'UND_ERR_HEADERS_TIMEOUT' || causeCode === 'UND_ERR_BODY_TIMEOUT';
+    if (httpClientTimeout || normalized.includes('timeout') || normalized.includes('timed out') || statusCode === 408 || statusCode === 504) {
       return new AIServiceError('timeout', userMessage, error, statusCode);
     }
     if (

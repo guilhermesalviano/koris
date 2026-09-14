@@ -271,6 +271,15 @@ describe('AICompletionService', () => {
     expect(auditService.record.mock.calls[0][0]).toMatchObject({ status: 'error', errorCode: 'unavailable' });
   });
 
+  it.each(['UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT'])('maps an HTTP client %s to timeout without retrying', async (causeCode) => {
+    const complete = vi.fn().mockRejectedValue(Object.assign(new Error('fetch failed'), { cause: { code: causeCode } }));
+    const { service } = makeService(complete, { retryAttempts: 2, retryBackoffMs: 1 });
+
+    await expect(service.complete(request)).rejects.toMatchObject({ code: 'timeout' });
+
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+
   it('retries a transient 429 (rate_limited) error and succeeds', async () => {
     const expected: AIResponse = { kind: 'message', text: 'world', finishReason: 'stop' };
     const complete = vi.fn()

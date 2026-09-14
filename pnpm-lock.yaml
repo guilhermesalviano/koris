@@ -50,6 +50,9 @@ importers:
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
+      undici:
+        specifier: ^7.29.1
+        version: 7.29.1
       winston:
         specifier: ^3.19.0
         version: 3.19.0
@@ -7050,8 +7053,7 @@ snapshots:
 
   undici@6.28.1: {}
 
-  undici@7.29.1:
-    optional: true
+  undici@7.29.1: {}
 
   unicorn-magic@0.3.0: {}
 

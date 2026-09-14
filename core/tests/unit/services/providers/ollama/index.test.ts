@@ -49,6 +49,77 @@ describe('OllamaAIProvider', () => {
     expect(out).toBe('Hello');
   });
 
+  it('streams chat() from /api/chat and joins the chunks, tool calls and usage', async () => {
+    const encoder = new TextEncoder();
+    const toolCalls = [{ function: { name: 'lookup', arguments: '{"q":"moto"}' } }];
+    const ndjson =
+      JSON.stringify({ message: { role: 'assistant', content: '' }, done: false }) + '\n' +
+      JSON.stringify({ message: { role: 'assistant', content: '', tool_calls: toolCalls }, done: false }) + '\n' +
+      JSON.stringify({ message: { role: 'assistant', content: '' }, done: true, prompt_eval_count: 30, eval_count: 7 }) + '\n';
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(ndjson));
+          controller.close();
+        },
+      }), { status: 200, headers: { 'content-type': 'application/x-ndjson' } }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const onUsage = vi.fn();
+
+    const provider = new OllamaAIProvider(logger, { baseUrl: 'http://localhost:11434', model: 'test' });
+    const out = await provider.chat({ messages: [{ role: 'user', content: 'hi' }] }, { onUsage });
+
+    expect(out).toBe(JSON.stringify({ tool_calls: toolCalls }));
+    expect(onUsage).toHaveBeenCalledWith({ inputTokens: 30, outputTokens: 7 });
+    const init = fetchMock.mock.calls[0][1] as RequestInit & { dispatcher?: unknown };
+    expect(JSON.parse(init.body as string)).toMatchObject({ stream: true });
+    expect(init.dispatcher).toBeDefined();
+  });
+
+  it('joins streamed text chunks in chat()', async () => {
+    const encoder = new TextEncoder();
+    const ndjson =
+      JSON.stringify({ message: { role: 'assistant', content: 'Boa' }, done: false }) + '\n' +
+      JSON.stringify({ message: { role: 'assistant', content: ' tarde' }, done: true }) + '\n';
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(ndjson.slice(0, 25)));
+          controller.enqueue(encoder.encode(ndjson.slice(25)));
+          controller.close();
+        },
+      }), { status: 200, headers: { 'content-type': 'application/x-ndjson' } }),
+    ) as unknown as typeof fetch;
+
+    const provider = new OllamaAIProvider(logger, { baseUrl: 'http://localhost:11434', model: 'test' });
+
+    await expect(provider.chat({ messages: [{ role: 'user', content: 'hi' }] })).resolves.toBe('Boa tarde');
+  });
+
+  it('times out chat() when the stream stalls past idle_ms', async () => {
+    vi.useFakeTimers();
+    try {
+      globalThis.fetch = vi.fn().mockImplementation(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            init?.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')), { once: true });
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/x-ndjson' } },
+      )) as unknown as typeof fetch;
+
+      const provider = new OllamaAIProvider(logger, { baseUrl: 'http://localhost:11434', model: 'test' });
+      const pending = provider.chat({ messages: [{ role: 'user', content: 'hi' }] });
+      const assertion = expect(pending).rejects.toThrow('Ollama request timed out during /api/chat request');
+
+      await vi.advanceTimersByTimeAsync(config.AI.TIMEOUTS.IDLE_MS);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('returns full response from chat() using non-streaming fallback', async () => {
     const responseBody = JSON.stringify({
       message: { role: 'assistant', content: 'Hello' },
@@ -295,7 +366,7 @@ describe('OllamaAIProvider', () => {
       const provider = new OllamaAIProvider(logger, { baseUrl: 'http://localhost:11434', model: 'test' });
       await expect(
         provider.chat({ messages: [{ role: 'user', content: 'hi' }] })
-      ).rejects.toThrow('Ollama request timed out during non-stream /api/chat request');
+      ).rejects.toThrow('Ollama request timed out during /api/chat request');
     });
 
     it('handles non-stream abort error when caller signal aborted', async () => {
