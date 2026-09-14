@@ -7,6 +7,12 @@ import * as providers from '../../../../../src/services/providers';
 import { config } from '../../../../../src/config';
 import type { ILogger } from '../../../../../src/infrastructure/logger';
 
+// The real audit service writes to the app database (memory/database.db).
+const { recordAudit } = vi.hoisted(() => ({ recordAudit: vi.fn() }));
+vi.mock('../../../../../src/services/audit/audit-service', () => ({
+  AuditServiceFactory: { create: () => ({ record: recordAudit }) },
+}));
+
 function makeLogger(): ILogger {
   return { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() };
 }
@@ -110,6 +116,7 @@ describe('SubAgentRegistry', () => {
     await completion?.complete({ messages: [] }).catch(() => undefined);
 
     expect(getAIProvider).toHaveBeenCalledWith(expect.anything(), 'manager', { background: true });
+    expect(recordAudit).toHaveBeenCalledWith(expect.objectContaining({ role: 'manager', agentName: 'alpha' }));
   });
 
   it('routes an inbound message to the first sub-agent that claims it', async () => {
