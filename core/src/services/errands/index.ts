@@ -52,6 +52,8 @@ interface IErrandService {
   approve(id: string): Promise<Errand>;
   retryDelivery(id: string): Promise<Errand>;
   recordPeerReply(id: string, notes?: string): Errand;
+  /** Tells the principal a contact message got no reply; the errand state is unchanged. */
+  reportUnansweredPeerMessage(id: string, reason: string): void;
   escalate(id: string, question: string, notes?: string): Errand;
   resolve(id: string, result: string, notes?: string): Errand;
   proposeResolution(id: string, result: string, closingReply: string, notes?: string): Errand;
@@ -141,6 +143,11 @@ class ErrandService implements IErrandService {
       notes: notes ?? errand.notes,
       lastProgressAt: nowISO(),
     });
+  }
+
+  reportUnansweredPeerMessage(id: string, reason: string): void {
+    const errand = this.mustFind(id);
+    this.pushToSession(errand, `⚠️ Errand "${errand.goal}": the contact's latest message got no reply — ${reason}. Nothing was sent to them.`);
   }
 
   escalate(id: string, question: string, notes?: string): Errand {

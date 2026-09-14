@@ -5,10 +5,12 @@ import { IAICompletionService } from "../../../ai-completion-service";
 import { NEGOTIATOR_INSTRUCTIONS, NEGOTIATOR_IMAGE_INSTRUCTION, ERRAND_ACTION_FOLLOWUPS, ERRAND_FOLLOWUP_CONTEXT, ERRAND_OPENER_INSTRUCTIONS, ERRAND_RESUME_INSTRUCTIONS, THIRD_PARTY_CONVERSATION_CONTEXT } from "../../../../constants";
 import { config } from "../../../../config";
 import { replacePlaceholders } from "../../../../utils/prompt";
-import { parseNegotiatorResponse } from "../../../../utils/negotiator-response";
+import { NEGOTIATOR_VERDICT_SCHEMA, parseNegotiatorResponse } from "../../../../utils/negotiator-response";
 import { ISessionManager } from "../../../session-manager";
-import { buildErrandService } from "../../../errands";
+import { buildErrandService, type IErrandService } from "../../../errands";
+import type { Errand } from "../../../../entities/errand";
 import type { Message } from "../../../../entities/message";
+import type { AIResponse } from "../../../../types/chat";
 import type { ImageAttachment } from "../../../../types/messages";
 
 export interface NegotiatorTurnProps {
@@ -177,15 +179,23 @@ class Negotiator {
       extraSystemBlocks: [this.sessionInstructions(props.sessionId), instructions, followupContext],
     });
 
-    const response = await this.completionService.complete(payload, {
-      audit: { sessionId: props.sessionId, channel: props.channel, runId: errand.id },
-    });
+    let response: AIResponse;
+    try {
+      response = await this.completionService.complete(
+        { ...payload, responseSchema: NEGOTIATOR_VERDICT_SCHEMA },
+        { audit: { sessionId: props.sessionId, channel: props.channel, runId: errand.id } },
+      );
+    } catch (err) {
+      this.reportUnanswered(errandService, errand, `the model call failed (${err instanceof Error ? err.message : String(err)})`);
+      throw err;
+    }
 
     const verdict = response.kind === 'message'
       ? parseNegotiatorResponse(response.text)
       : null;
     if (!verdict) {
       this.logger.warn('Negotiator: invalid verdict; no reply sent or state changed');
+      this.reportUnanswered(errandService, errand, 'the Negotiator did not return a valid decision');
       return { reply: '', applied: 'skipped' };
     }
 
@@ -198,7 +208,10 @@ class Negotiator {
     switch (verdict.action) {
       case 'escalate':
         errandService.escalate(errand.id, verdict.detail || 'The negotiator needs your input.', verdict.notes);
-        break;
+        // Nothing reaches the contact while the principal decides: an escalation
+        // is written about the principal, and its reply has leaked that question
+        // (their limits, their approval) to the contact.
+        return { reply: '', applied: 'escalate' };
       case 'resolved':
         // The closing message is held until the principal confirms the result.
         errandService.proposeResolution(errand.id, verdict.detail || verdict.reply || 'Resolved.', reply, verdict.notes);
@@ -213,6 +226,18 @@ class Negotiator {
     }
 
     return { reply, applied: verdict.action };
+  }
+
+  // A contact turn that produced nothing must not vanish silently: tell the
+  // principal, unless the errand moved on (e.g. was cancelled) meanwhile.
+  private reportUnanswered(errandService: IErrandService, errand: Errand, reason: string): void {
+    try {
+      const latest = errandService.get(errand.id);
+      if (!latest || latest.state !== errand.state) return;
+      errandService.reportUnansweredPeerMessage(errand.id, reason);
+    } catch (err) {
+      this.logger.warn(`Negotiator: could not report an unanswered contact message: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }
 

@@ -20,6 +20,9 @@ export interface AIChatRequest {
   tools?: AIToolDefinition[];
   /** When true, instructs the provider to emit a thinking/reasoning block. */
   think?: boolean;
+  /** JSON Schema the answer must follow. Enforced by providers with structured
+   * output (Ollama `format`); others ignore it, so callers still validate. */
+  responseSchema?: Record<string, unknown>;
 }
 
 export interface AIChatOptions {

@@ -9,6 +9,18 @@ export interface NegotiatorVerdict {
 
 const NEGOTIATOR_ACTIONS = new Set<NegotiatorAction>(['continue', 'escalate', 'resolved', 'failed']);
 
+/** Structured-output schema for a negotiator turn; mirrors what `parseNegotiatorResponse` accepts. */
+export const NEGOTIATOR_VERDICT_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    action: { type: 'string', enum: [...NEGOTIATOR_ACTIONS] },
+    reply: { type: 'string' },
+    notes: { type: 'string' },
+    detail: { type: 'string' },
+  },
+  required: ['action', 'reply'],
+};
+
 function isNegotiatorAction(value: string): value is NegotiatorAction {
   return NEGOTIATOR_ACTIONS.has(value as NegotiatorAction);
 }

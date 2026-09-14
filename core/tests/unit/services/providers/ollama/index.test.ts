@@ -77,6 +77,23 @@ describe('OllamaAIProvider', () => {
     expect(init.dispatcher).toBeDefined();
   });
 
+  it('sends responseSchema as Ollama structured-output format, and omits format otherwise', async () => {
+    const schema = { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] };
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(
+      JSON.stringify({ message: { role: 'assistant', content: '{"action":"continue"}' }, done: true }),
+      { status: 200 },
+    ));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const provider = new OllamaAIProvider(logger, { baseUrl: 'http://localhost:11434', model: 'test' });
+
+    await provider.chat({ messages: [{ role: 'user', content: 'hi' }], responseSchema: schema });
+    await provider.chat({ messages: [{ role: 'user', content: 'hi' }] });
+
+    const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse((init as RequestInit).body as string));
+    expect(bodies[0].format).toEqual(schema);
+    expect(bodies[1]).not.toHaveProperty('format');
+  });
+
   it('joins streamed text chunks in chat()', async () => {
     const encoder = new TextEncoder();
     const ndjson =

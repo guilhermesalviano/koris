@@ -228,6 +228,39 @@ describe('ErrandService', () => {
     });
   });
 
+  describe('reportUnansweredPeerMessage', () => {
+    it('records a notice in the negotiation thread without changing the errand', () => {
+      const { service, db, errandRepo, sessionRepo, outbound } = makeService();
+      errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'buy milk', state: 'awaiting_peer', originSessionId: 'origin-1' }));
+      sessionRepo.findById.mockReturnValue({ id: 'origin-1', channel: 'web', peerId: 'web', kind: 'user' });
+
+      service.reportUnansweredPeerMessage('e1', 'the Negotiator did not return a valid decision');
+
+      const negotiation = sessionRepo.save.mock.calls[0][0];
+      expect(errandRepo.update).not.toHaveBeenCalled();
+      expect(outbound.send).not.toHaveBeenCalled();
+      expect(db.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO messages'), [
+        expect.any(String), negotiation.id, 'assistant',
+        '⚠️ Errand "buy milk": the contact\'s latest message got no reply — the Negotiator did not return a valid decision. Nothing was sent to them.',
+        null, null, expect.any(String), 'negotiator',
+      ]);
+    });
+
+    it('delivers the notice to a principal chatting from WhatsApp', () => {
+      const { service, errandRepo, sessionRepo, outbound } = makeService();
+      errandRepo.findById.mockReturnValue(new Errand({ id: 'e1', goal: 'buy milk', state: 'awaiting_peer', originSessionId: 'origin-1' }));
+      sessionRepo.findById.mockReturnValue({ id: 'origin-1', channel: 'whatsapp', peerId: '999', kind: 'user' });
+
+      service.reportUnansweredPeerMessage('e1', 'the model call failed (fetch failed)');
+
+      expect(outbound.send).toHaveBeenCalledWith(expect.objectContaining({
+        channel: 'whatsapp',
+        target: '999',
+        content: expect.stringContaining('the model call failed (fetch failed)'),
+      }));
+    });
+  });
+
   describe('escalate', () => {
     it('moves to awaiting_principal and pushes a question into the origin session', () => {
       const { service, errandRepo, sessionRepo, outbound } = makeService();

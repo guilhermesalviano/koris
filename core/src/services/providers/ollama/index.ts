@@ -403,6 +403,7 @@ class OllamaAIProvider implements AIProvider {
       options: {
         num_ctx: this.numCtx
       },
+      ...(request.responseSchema ? { format: request.responseSchema } : {}),
       stream
     });
 

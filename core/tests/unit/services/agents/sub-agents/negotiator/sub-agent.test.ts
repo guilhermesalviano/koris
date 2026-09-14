@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Negotiator } from '../../../../../../src/services/agents/sub-agents/negotiator/sub-agent';
 import { buildErrandService } from '../../../../../../src/services/errands';
 import { NEGOTIATOR_IMAGE_INSTRUCTION, THIRD_PARTY_CONVERSATION_CONTEXT } from '../../../../../../src/constants';
+import { NEGOTIATOR_VERDICT_SCHEMA } from '../../../../../../src/utils/negotiator-response';
 
 vi.mock('../../../../../../src/services/errands', () => ({ buildErrandService: vi.fn() }));
 
@@ -13,6 +14,7 @@ function makeErrandService(overrides: Record<string, unknown> = {}) {
   return {
     get: vi.fn().mockReturnValue({ id: 'errand-1', state: 'awaiting_peer', goal: 'buy milk', notes: 'previous notes' }),
     recordPeerReply: vi.fn(),
+    reportUnansweredPeerMessage: vi.fn(),
     escalate: vi.fn(),
     resolve: vi.fn(),
     proposeResolution: vi.fn().mockReturnValue({ state: 'awaiting_confirmation' }),
@@ -108,6 +110,50 @@ describe('Negotiator', () => {
       expect(errandService.recordPeerReply).not.toHaveBeenCalled();
     },
   );
+
+  it('asks the provider for a structured verdict', async () => {
+    const { negotiator, completionService } = makeNegotiator();
+
+    await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'hi', messageHistory: [] });
+
+    expect(completionService.complete).toHaveBeenCalledWith(
+      expect.objectContaining({ responseSchema: NEGOTIATOR_VERDICT_SCHEMA }),
+      expect.anything(),
+    );
+  });
+
+  it('tells the principal when the verdict is not valid JSON, and sends nothing', async () => {
+    const { negotiator, errandService } = makeNegotiator({ completionText: 'Combinado então! Posso finalizar?' });
+
+    const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'pode ser', messageHistory: [] });
+
+    expect(result).toEqual({ reply: '', applied: 'skipped' });
+    expect(errandService.recordPeerReply).not.toHaveBeenCalled();
+    expect(errandService.reportUnansweredPeerMessage).toHaveBeenCalledExactlyOnceWith('errand-1', 'the Negotiator did not return a valid decision');
+  });
+
+  it('tells the principal when the model call fails, then rethrows', async () => {
+    const { negotiator, completionService, errandService } = makeNegotiator();
+    completionService.complete.mockRejectedValueOnce(new Error('fetch failed'));
+
+    await expect(
+      negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: '19500', messageHistory: [] }),
+    ).rejects.toThrow('fetch failed');
+
+    expect(errandService.reportUnansweredPeerMessage).toHaveBeenCalledExactlyOnceWith('errand-1', 'the model call failed (fetch failed)');
+  });
+
+  it('does not report an unanswered message when the errand moved on during the call', async () => {
+    const { negotiator, completionService, errandService } = makeNegotiator();
+    completionService.complete.mockImplementationOnce(async () => {
+      errandService.get.mockReturnValue({ id: 'errand-1', state: 'cancelled' });
+      return { kind: 'message', text: 'not json' };
+    });
+
+    await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'hi', messageHistory: [] });
+
+    expect(errandService.reportUnansweredPeerMessage).not.toHaveBeenCalled();
+  });
 
   it('discards a verdict if the errand was cancelled during the LLM call', async () => {
     const { negotiator, completionService, errandService } = makeNegotiator();
@@ -257,14 +303,19 @@ describe('Negotiator', () => {
     expect(result).toEqual({ reply: '', applied: 'escalate' });
   });
 
-  it('"escalate": sends the model\'s own reply when one was given', async () => {
-    const { negotiator } = makeNegotiator({
-      completionText: JSON.stringify({ action: 'escalate', reply: 'Let me check with them.', detail: 'need budget approval' }),
+  it('"escalate": never sends the model\'s reply to the contact, even when one was given', async () => {
+    const { negotiator, errandService } = makeNegotiator({
+      completionText: JSON.stringify({
+        action: 'escalate',
+        reply: 'Guilherme, o preço ficou 300 acima do seu limite de 19 mil, preciso de sua aprovação. Pode confirmar?',
+        detail: 'Preço fechado em 19.300; aprova 300 acima do limite?',
+      }),
     });
 
-    const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'how much?', messageHistory: [] });
+    const result = await negotiator.run({ errandId: 'errand-1', sessionId: 's1', channel: 'whatsapp', peerMessage: 'pode ser amanhã', messageHistory: [] });
 
-    expect(result.reply).toBe('Let me check with them.');
+    expect(errandService.escalate).toHaveBeenCalledWith('errand-1', 'Preço fechado em 19.300; aprova 300 acima do limite?', undefined);
+    expect(result).toEqual({ reply: '', applied: 'escalate' });
   });
 
   it('"resolved": proposes the result for the principal to confirm, holding the thank-you instead of sending it', async () => {
